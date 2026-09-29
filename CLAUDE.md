@@ -10,8 +10,8 @@ A Windows 11 desktop cockpit for Claude Code and Codex, built on Tauri 2 and Rea
 
 ## Workflow
 
-- Each ticket (a GitHub issue) gets its own branch and pull request, and the pull request closes the ticket.
+- The whole foundation is built on one integration branch, `foundation`, with one draft pull request that is merged when every ticket is done.
+- Work the tickets in order. After each ticket: commit, push, and tick it off, so a session can end at any point without losing work.
 - Build test-first with /tdd.
-- Before opening the pull request, review the diff with /code-review. Run its Standards and Spec axes yourself, one after the other, with separate reports: this repo works in a single agent, without subagents.
-- Squash-merge once CI is green.
+- At the end, review the full diff with /code-review. Run its Standards and Spec axes yourself, one after the other, with separate reports: this repo works in a single agent, without subagents.
 - Write Conventional Commits.
