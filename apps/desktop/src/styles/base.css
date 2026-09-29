@@ -1,0 +1,55 @@
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply bg-background font-sans text-sm text-foreground;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply m-0 antialiased;
+  }
+
+  /* Code uses ligatures only when the user turns them on (the --code-ligatures setting). */
+  code,
+  kbd,
+  pre,
+  samp {
+    @apply font-mono;
+    font-variant-ligatures: var(--code-ligatures, none);
+  }
+
+  ::selection {
+    background: var(--selection);
+  }
+}
+
+/*
+ * Focus is shown for the keyboard only: a 1px outline with a 1px offset, no glow and no animation.
+ * This rule is outside any layer on purpose, so it wins over component utilities such as
+ * outline-none and ring-1.
+ */
+*:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+/* In a Windows contrast theme, a selected item is underlined because fills are not available. */
+@media (forced-colors: active) {
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  [aria-current="page"],
+  [aria-checked="true"],
+  [data-state="checked"],
+  [data-state="active"] {
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+  }
+}

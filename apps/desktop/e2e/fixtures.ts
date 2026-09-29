@@ -62,6 +62,7 @@ export const test = base.extend<{ appPage: Page }>({
       const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
       const page = browser.contexts()[0]?.pages()[0];
       if (!page) throw new Error("the app has no page to attach to");
+      await page.waitForLoadState("load");
       await provide(page);
       await browser.close();
     } finally {

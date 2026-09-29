@@ -58,6 +58,9 @@ jobs:
       - name: UI tests
         run: pnpm test
 
+      - name: Design system screenshots and interaction tests
+        run: pnpm test:visual
+
       - name: Rust tests
         run: pnpm test:rust
 

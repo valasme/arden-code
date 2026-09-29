@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Permissions for the main window. Grow this list only when a feature needs it.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:window:allow-show"]
 }

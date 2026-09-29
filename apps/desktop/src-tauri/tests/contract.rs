@@ -63,3 +63,73 @@ fn committed_bindings_match_the_rust_commands() {
         "bindings.ts has drifted from the Rust commands; run `pnpm bindings` and commit the result"
     );
 }
+
+/// The value of a token in the first rule that starts with `selector`, such as `:root` or `.dark`.
+fn token(css: &str, selector: &str, name: &str) -> String {
+    let rule = &css[css.find(&format!("{selector} {{")).expect("rule exists")..];
+    let rule = &rule[..rule.find("\n}").expect("rule ends")];
+    let start = rule.find(&format!("{name}:")).expect("token exists") + name.len() + 1;
+    let value = &rule[start
+        ..rule[start..]
+            .find(';')
+            .map(|end| start + end)
+            .expect("token ends")];
+    value.trim().to_owned()
+}
+
+/// A neutral `oklch(L 0 0)` color as 0 to 255 gray, using the standard `OKLab` and `sRGB` formulas.
+// The value is clamped to 0..=255 before the cast, so it can neither truncate nor lose a sign.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn neutral_oklch_to_gray(value: &str) -> u8 {
+    let inner = value
+        .strip_prefix("oklch(")
+        .and_then(|v| v.strip_suffix(')'))
+        .expect("oklch()");
+    let parts: Vec<&str> = inner.split_whitespace().collect();
+    assert_eq!(
+        &parts[1..],
+        ["0", "0"],
+        "only neutral colors are supported: {value}"
+    );
+    let lightness: f64 = parts[0].parse().expect("lightness is a number");
+    let linear = lightness.powi(3);
+    let encoded = if linear <= 0.003_130_8 {
+        12.92 * linear
+    } else {
+        1.055 * linear.powf(1.0 / 2.4) - 0.055
+    };
+    (encoded * 255.0).round().clamp(0.0, 255.0) as u8
+}
+
+#[test]
+fn startup_background_matches_the_theme_background_token() {
+    // If these drift apart, the window flashes the wrong color before the UI has drawn.
+    let css = fs::read_to_string(crate_dir().join("../src/styles/tokens.css"))
+        .expect("tokens.css exists");
+    for (dark, selector) in [(false, ":root"), (true, ".dark")] {
+        let gray = neutral_oklch_to_gray(&token(&css, selector, "--background"));
+        assert_eq!(
+            arden_desktop_lib::startup_background(dark),
+            (gray, gray, gray, 255),
+            "{selector}"
+        );
+    }
+}
+
+#[test]
+fn startup_background_is_white_in_light_and_near_black_in_dark() {
+    assert_eq!(
+        arden_desktop_lib::startup_background(false),
+        (255, 255, 255, 255)
+    );
+    assert_eq!(
+        arden_desktop_lib::startup_background(true),
+        (10, 10, 10, 255)
+    );
+}
+
+#[test]
+fn the_main_window_starts_hidden_until_the_ui_has_drawn() {
+    let conf = read_tauri_conf();
+    assert_eq!(conf["app"]["windows"][0]["visible"], false);
+}

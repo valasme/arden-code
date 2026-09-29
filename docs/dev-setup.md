@@ -81,3 +81,7 @@ pnpm typos    # spelling
 ```
 
 `pnpm test:e2e` builds a debug app and drives it through WebView2 with Playwright.
+
+`pnpm test:visual` runs screenshot and interaction tests of the design system page
+(`/dev/design-system`, development builds only). After an intended visual change, update the baselines with
+`pnpm test:visual:update` and look at the new images before committing them.

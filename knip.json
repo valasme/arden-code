@@ -1,9 +1,13 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": ["typos"],
+  "ignoreExportsUsedInFile": true,
   "workspaces": {
     "apps/desktop": {
-      "entry": ["isolation/index.js", "i18next.config.ts"]
+      "entry": ["isolation/index.js", "i18next.config.ts", "visual/*.spec.ts"],
+      // shadcn's CLI expects this helper at the path in components.json, even when no component
+      // imports it yet.
+      "ignore": ["src/lib/utils.ts"]
     },
     "brand": {
       "ignoreDependencies": ["opentype.js"]

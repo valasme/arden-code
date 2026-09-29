@@ -11,21 +11,33 @@
     "tauri": "tauri",
     "test:e2e": "playwright test",
     "build:debug": "tauri build --debug --no-bundle",
-    "i18n:lint": "i18next-cli lint && i18next-cli extract --ci"
+    "i18n:lint": "i18next-cli lint && i18next-cli extract --ci",
+    "test:visual": "playwright test -c playwright.visual.config.ts",
+    "test:visual:update": "playwright test -c playwright.visual.config.ts --update-snapshots"
   },
   "dependencies": {
+    "@fontsource-variable/cascadia-code": "catalog:",
+    "@fontsource-variable/inter": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@tauri-apps/api": "catalog:",
+    "class-variance-authority": "catalog:",
+    "cn": "catalog:",
     "i18next": "catalog:",
+    "lucide-react": "catalog:",
+    "radix-ui": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "react-i18next": "catalog:"
+    "react-i18next": "catalog:",
+    "shadcn": "catalog:",
+    "tw-animate-css": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@babel/core": "catalog:",
     "@playwright/test": "catalog:",
     "@rolldown/plugin-babel": "catalog:",
+    "@tailwindcss/vite": "catalog:",
     "@tanstack/router-plugin": "catalog:",
     "@tauri-apps/cli": "catalog:",
     "@testing-library/dom": "catalog:",
@@ -39,6 +51,7 @@
     "axe-core": "catalog:",
     "babel-plugin-react-compiler": "catalog:",
     "i18next-cli": "catalog:",
+    "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"

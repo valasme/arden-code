@@ -29,7 +29,9 @@
     "i18n:lint": "pnpm --filter @arden/desktop i18n:lint",
     "typos": "typos",
     "deny": "cargo deny check",
-    "brand:check": "node scripts/check-brand-outputs.mjs"
+    "brand:check": "node scripts/check-brand-outputs.mjs",
+    "test:visual": "pnpm --filter @arden/desktop test:visual",
+    "test:visual:update": "pnpm --filter @arden/desktop test:visual:update"
   },
   "devDependencies": {
     "@commitlint/cli": "catalog:",

@@ -1,6 +1,9 @@
 //! The Arden Code desktop app.
 
 mod commands;
+mod window;
+
+pub use window::startup_background;
 
 use std::path::Path;
 
@@ -33,6 +36,7 @@ pub fn run() {
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
+            window::prepare_main_window(app)?;
             Ok(())
         })
         .run(tauri::generate_context!())

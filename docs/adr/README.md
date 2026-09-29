@@ -29,3 +29,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0019](0019-testing-and-quality-gates.md) | Testing and quality gates | Accepted |
 | [0020](0020-security-and-supply-chain.md) | Security and supply chain | Accepted |
 | [0021](0021-terminal-command.md) | The `arden-code` terminal command | Accepted |
+| [0022](0022-high-contrast-and-component-adjustments.md) | High contrast and component adjustments | Accepted |
