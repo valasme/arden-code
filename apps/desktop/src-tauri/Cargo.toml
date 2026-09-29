@@ -1,0 +1,32 @@
+[package]
+name = "arden-desktop"
+description = "Arden Code: a Windows cockpit for Claude Code and Codex"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+default-run = "arden-code"
+
+[lib]
+name = "arden_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "arden-code"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6", features = ["isolation"] }
+
+[dependencies]
+arden-core.workspace = true
+serde_json.workspace = true
+specta.workspace = true
+specta-typescript = "=0.0.12"
+tauri = { version = "2.12", features = ["isolation"] }
+tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+
+[lints]
+workspace = true

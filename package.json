@@ -1,0 +1,34 @@
+{
+  "name": "arden-code",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Windows cockpit for Claude Code and Codex",
+  "license": "MIT",
+  "repository": "github:valasme/arden-code",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @arden/desktop tauri dev",
+    "build": "pnpm --filter @arden/desktop tauri build --no-bundle",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --type-aware --deny-warnings",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "test:rust": "cargo test --workspace",
+    "lint:rust": "cargo clippy --workspace --all-targets -- -D warnings",
+    "format:rust": "cargo fmt --all",
+    "format:rust:check": "cargo fmt --all --check",
+    "bindings": "cargo run -p arden-desktop --example export_bindings",
+    "bindings:check": "cargo test -p arden-desktop --test contract committed_bindings",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm format:rust:check && pnpm lint:rust && pnpm test:rust && pnpm bindings:check"
+  },
+  "devDependencies": {
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:"
+  },
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
+  "packageManager": "pnpm@12.6.0"
+}

@@ -51,3 +51,17 @@ Commit with your GitHub noreply address if you don't want your email in public h
 ```powershell
 git config user.email "<id>+<username>@users.noreply.github.com"
 ```
+
+## Build and run
+
+Install dependencies once, then use the root scripts:
+
+```powershell
+pnpm install
+pnpm dev          # the app with hot reload
+pnpm build        # release build without an installer
+pnpm check        # every check CI runs: format, lint, types, tests, bindings
+pnpm bindings     # regenerate apps/desktop/src/ipc/bindings.ts after changing a Rust command
+```
+
+The Tauri CLI rejects `CI=1`; if your shell sets it, run `$env:CI = "true"` first.

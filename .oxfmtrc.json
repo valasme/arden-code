@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "ignorePatterns": [
+    "dist",
+    "**/*.md",
+    "target",
+    "pnpm-lock.yaml",
+    "Cargo.lock",
+    "apps/desktop/src/ipc/bindings.ts",
+    "apps/desktop/src/routeTree.gen.ts",
+    "apps/desktop/src-tauri/gen",
+    "apps/desktop/src-tauri/icons"
+  ]
+}
