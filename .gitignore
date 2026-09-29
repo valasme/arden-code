@@ -32,3 +32,6 @@ desktop.ini
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Vitest browser-mode failure screenshots
+.vitest/

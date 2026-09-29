@@ -31,7 +31,7 @@ Tauri 2 (Rust) · React 19 · TypeScript 7 · TanStack Router and Query · shadc
 
 ## Development
 
-Setup notes are in [docs/dev-setup.md](docs/dev-setup.md). Build instructions arrive with the first code milestone.
+Setup, build and test instructions are in [docs/dev-setup.md](docs/dev-setup.md). See also [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md).
 
 Design decisions are recorded in [docs/adr](docs/adr/README.md).
 

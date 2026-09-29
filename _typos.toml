@@ -1,0 +1,12 @@
+[default.extend-words]
+# "PNGs" is split into "PN" + "Gs" by the tokenizer.
+PN = "PN"
+
+[files]
+extend-exclude = [
+  "pnpm-lock.yaml",
+  "Cargo.lock",
+  "**/icons/**",
+  "**/bindings.ts",
+  "**/routeTree.gen.ts",
+]

@@ -8,7 +8,10 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:e2e": "playwright test",
+    "build:debug": "tauri build --debug --no-bundle",
+    "i18n:lint": "i18next-cli lint && i18next-cli extract --ci"
   },
   "dependencies": {
     "@tanstack/react-query": "catalog:",
@@ -21,17 +24,21 @@
   },
   "devDependencies": {
     "@babel/core": "catalog:",
+    "@playwright/test": "catalog:",
     "@rolldown/plugin-babel": "catalog:",
     "@tanstack/router-plugin": "catalog:",
     "@tauri-apps/cli": "catalog:",
+    "@testing-library/dom": "catalog:",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "axe-core": "catalog:",
     "babel-plugin-react-compiler": "catalog:",
-    "jsdom": "catalog:",
+    "i18next-cli": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"

@@ -37,6 +37,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Install the browser for component tests
+        run: pnpm --filter @arden/desktop exec playwright install chromium-headless-shell
+
       - name: Format
         run: pnpm format:check && pnpm format:rust:check
 
@@ -45,6 +48,12 @@ jobs:
 
       - name: Type-check
         run: pnpm typecheck
+
+      - name: Unused code and dependencies
+        run: pnpm knip
+
+      - name: Hard-coded UI text
+        run: pnpm i18n:lint
 
       - name: UI tests
         run: pnpm test
@@ -60,3 +69,17 @@ jobs:
 
       - name: Build the app
         run: pnpm build
+
+      - name: End-to-end test against the real app
+        run: pnpm test:e2e
+
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Spelling
+        uses: crate-ci/typos@v1.50.3
+      - name: Dependency advisories and licenses
+        uses: EmbarkStudios/cargo-deny-action@v2

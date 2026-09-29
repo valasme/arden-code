@@ -8,6 +8,3 @@ afterEach(() => {
   cleanup();
   clearMocks();
 });
-
-// jsdom does not implement scrolling; the router restores scroll positions on navigation.
-window.scrollTo = () => {};

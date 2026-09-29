@@ -1,0 +1,20 @@
+# Git hooks (installed by `pnpm install` through the `prepare` script).
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      glob: "*.{js,mjs,cjs,ts,tsx,json,jsonc,css,html,yml,yaml}"
+      run: pnpm exec oxfmt --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+    lint:
+      glob: "*.{js,mjs,cjs,ts,tsx}"
+      run: pnpm exec oxlint --type-aware --deny-warnings {staged_files}
+    rustfmt:
+      glob: "*.rs"
+      run: cargo fmt --all
+      stage_fixed: true
+
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm exec commitlint --edit {1}

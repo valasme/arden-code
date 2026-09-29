@@ -1,0 +1,35 @@
+name: Bug report
+description: Something in Arden Code doesn't work as expected
+labels: [needs-triage]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Settings
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: error-code
+    attributes:
+      label: Error code
+      description: If an error screen showed a code such as ARD-SET-002, paste it here.
+  - type: textarea
+    id: system
+    attributes:
+      label: System information
+      description: In the app, use Settings → About → Copy system info. Please don't paste logs here; they can contain private paths.
+      render: text
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?

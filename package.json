@@ -20,9 +20,20 @@
     "format:rust:check": "cargo fmt --all --check",
     "bindings": "cargo run -p arden-desktop --example export_bindings",
     "bindings:check": "cargo test -p arden-desktop --test contract committed_bindings",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm format:rust:check && pnpm lint:rust && pnpm test:rust && pnpm bindings:check"
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm knip && pnpm i18n:lint && pnpm test && pnpm format:rust:check && pnpm lint:rust && pnpm test:rust",
+    "prepare": "lefthook install",
+    "build:debug": "pnpm --filter @arden/desktop build:debug",
+    "test:e2e": "pnpm build:debug && pnpm --filter @arden/desktop test:e2e",
+    "knip": "knip",
+    "i18n:lint": "pnpm --filter @arden/desktop i18n:lint",
+    "typos": "typos",
+    "deny": "cargo deny check"
   },
   "devDependencies": {
+    "@commitlint/cli": "catalog:",
+    "@commitlint/config-conventional": "catalog:",
+    "knip": "catalog:",
+    "lefthook": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:"

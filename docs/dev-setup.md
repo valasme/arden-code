@@ -65,3 +65,19 @@ pnpm bindings     # regenerate apps/desktop/src/ipc/bindings.ts after changing a
 ```
 
 The Tauri CLI rejects `CI=1`; if your shell sets it, run `$env:CI = "true"` first.
+
+## Checks and tools
+
+`pnpm check` runs formatting, linting, type-checking, unused-code and hard-coded-text checks, and every test
+(component tests run in a real Chromium; install it once with
+`pnpm --filter @arden/desktop exec playwright install chromium-headless-shell`).
+
+Two more checks run in CI and need tools installed with Cargo:
+
+```powershell
+cargo install cargo-deny typos-cli --locked
+pnpm deny     # security advisories and licenses
+pnpm typos    # spelling
+```
+
+`pnpm test:e2e` builds a debug app and drives it through WebView2 with Playwright.
