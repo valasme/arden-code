@@ -67,6 +67,9 @@ jobs:
           pnpm bindings
           git diff --exit-code -- apps/desktop/src/ipc/bindings.ts
 
+      - name: Brand outputs are up to date
+        run: pnpm brand:check
+
       - name: Build the app
         run: pnpm build
 

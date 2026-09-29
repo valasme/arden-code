@@ -1,4 +1,8 @@
 # Git hooks (installed by `pnpm install` through the `prepare` script).
+output:
+  - failure
+  - summary
+
 pre-commit:
   parallel: true
   commands:

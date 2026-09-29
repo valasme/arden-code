@@ -1,6 +1,11 @@
-# Arden Code
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/assets/github/readme-header-dark.png">
+    <img src="brand/assets/github/readme-header-light.png" alt="Arden Code" width="640">
+  </picture>
+</h1>
 
-A Windows cockpit for Claude Code and Codex.
+<p align="center">A Windows cockpit for Claude Code and Codex.</p>
 
 > **Status: pre-alpha, work in progress.** There is nothing to install yet.
 
