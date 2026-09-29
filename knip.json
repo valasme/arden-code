@@ -4,6 +4,9 @@
   "workspaces": {
     "apps/desktop": {
       "entry": ["isolation/index.js", "i18next.config.ts"]
+    },
+    "brand": {
+      "ignoreDependencies": ["opentype.js"]
     }
   }
 }

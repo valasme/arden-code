@@ -1,4 +1,7 @@
 {
+  "brand": {
+    "name": "Arden Code"
+  },
   "home": {
     "title": "{{name}} {{version}}"
   }

@@ -9,6 +9,7 @@
     "Cargo.lock",
     "apps/desktop/src/ipc/bindings.ts",
     "apps/desktop/src/routeTree.gen.ts",
+    "**/*.gen.ts",
     "apps/desktop/src-tauri/gen",
     "apps/desktop/src-tauri/icons"
   ]

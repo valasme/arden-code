@@ -15,6 +15,7 @@
     "react/react-in-jsx-scope": "off",
     "unicorn/filename-case": "off",
     "no-underscore-dangle": "off",
+    "vitest/valid-expect": ["error", { "maxArgs": 2 }],
     "vitest/expect-expect": [
       "error",
       { "assertFunctionNames": ["expect", "expectNoAccessibilityViolations"] }
@@ -27,6 +28,7 @@
     "**/node_modules/**",
     "**/src-tauri/gen/**",
     "**/src/ipc/bindings.ts",
-    "**/src/routeTree.gen.ts"
+    "**/src/routeTree.gen.ts",
+    "**/*.gen.ts"
   ]
 }

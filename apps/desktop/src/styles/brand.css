@@ -1,0 +1,15 @@
+/* Brand tokens (plan sections 7.1 and 8.2). The orange is for graphics only, never for text. */
+:root {
+  --brand: oklch(0.737 0.126 47.7);
+  --brand-wordmark: oklch(0.375 0.051 42.9);
+}
+
+.dark {
+  --brand-wordmark: oklch(0.937 0.014 57.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --brand-wordmark: oklch(0.937 0.014 57.6);
+  }
+}

@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "pnpm --filter @arden/desktop tauri dev",
     "build": "pnpm --filter @arden/desktop tauri build --no-bundle",
+    "brand:build": "pnpm --filter @arden/brand build",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --type-aware --deny-warnings",
