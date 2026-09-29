@@ -1,0 +1,31 @@
+# Text files use LF in the repository and in the working tree, on every machine.
+# This overrides Git for Windows' default core.autocrlf=true.
+* text=auto eol=lf
+
+# Windows batch files misbehave with LF line endings.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary files: never touch line endings, never diff as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.bmp binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.af binary
+*.zip binary
+*.exe binary
+*.dll binary
+*.msi binary
+
+# Generated files: collapsed in GitHub diffs, still reviewable.
+pnpm-lock.yaml linguist-generated=true
+Cargo.lock linguist-generated=true
+apps/desktop/src/ipc/bindings.ts linguist-generated=true

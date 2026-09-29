@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output
+target/
+dist/
+*.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+
+# Tauri generated files
+apps/desktop/src-tauri/gen/
+
+# Secrets. The Tauri updater private key must never be committed.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.pfx
+*.p12
+
+# Logs
+*.log
+
+# OS and editor files
+Thumbs.db
+desktop.ini
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
