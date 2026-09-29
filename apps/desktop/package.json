@@ -29,9 +29,11 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-i18next": "catalog:",
+    "react-resizable-panels": "catalog:",
     "shadcn": "catalog:",
     "tw-animate-css": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "zustand": "catalog:"
   },
   "devDependencies": {
     "@babel/core": "catalog:",

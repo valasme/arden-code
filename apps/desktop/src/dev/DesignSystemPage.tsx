@@ -186,6 +186,29 @@ export function DesignSystemPage({
         </div>
       </section>
 
+      <section aria-labelledby="ds-layout" className="flex flex-col gap-4">
+        <h2 id="ds-layout" className="text-lg font-semibold">
+          Layout
+        </h2>
+        <div className="grid h-64 grid-rows-[2rem_1fr_1.5rem] border border-border text-2xs">
+          <div className="flex items-center border-b border-border bg-background px-2">
+            Title bar
+          </div>
+          <div className="grid grid-cols-[10rem_1fr_8rem]">
+            <div className="border-r border-border bg-sidebar p-2 text-sidebar-foreground">
+              Sidebar
+            </div>
+            <div className="p-2">Session view</div>
+            <div className="border-l border-dashed border-border bg-card p-2 text-card-foreground">
+              Inspector (hidden by default)
+            </div>
+          </div>
+          <div className="flex items-center border-t border-border bg-background px-2 text-muted-foreground">
+            Status bar
+          </div>
+        </div>
+      </section>
+
       <section aria-labelledby="ds-brand" className="flex flex-col gap-4">
         <h2 id="ds-brand" className="text-lg font-semibold">
           Brand

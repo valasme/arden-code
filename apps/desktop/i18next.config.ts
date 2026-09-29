@@ -20,6 +20,9 @@ export default defineConfig({
     output: "src/i18n/locales/{{language}}.json",
     defaultNS: false,
     keySeparator: ".",
+    // Keys built at runtime, such as the title of each settings tab, cannot be found by reading the
+    // code, so they are listed here to keep the extractor from deleting them.
+    preservePatterns: ["settings.tabs.*"],
   },
   lint: { ignore },
 });

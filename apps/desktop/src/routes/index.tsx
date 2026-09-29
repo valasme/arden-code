@@ -14,8 +14,10 @@ function HomePage() {
   const { data } = useSuspenseQuery(appInfoQuery);
 
   return (
-    <main>
-      <h1>{t("home.title", { name: data.name, version: data.version })}</h1>
+    <main className="p-6">
+      <h1 className="text-xl font-semibold">
+        {t("home.title", { name: data.name, version: data.version })}
+      </h1>
     </main>
   );
 }

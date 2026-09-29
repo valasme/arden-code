@@ -12,8 +12,15 @@
     color-scheme: dark;
   }
 
+  /* A desktop app fills its window and never scrolls as a page: regions scroll inside themselves. */
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
   body {
-    @apply m-0 antialiased;
+    @apply m-0 overflow-hidden antialiased;
   }
 
   /* Code uses ligatures only when the user turns them on (the --code-ligatures setting). */

@@ -5,6 +5,42 @@
   "home": {
     "title": "{{name}} {{version}}"
   },
+  "inspector": {
+    "empty": "Details of the open session will appear here.",
+    "title": "Inspector"
+  },
+  "notFound": {
+    "home": "Go to the session view",
+    "message": "This page does not exist."
+  },
+  "regions": {
+    "inspector": "Inspector",
+    "sidebar": "Sidebar"
+  },
+  "settings": {
+    "tabs": {
+      "about": "About",
+      "advanced": "Advanced",
+      "agents": "Agents",
+      "appearance": "Appearance",
+      "general": "General",
+      "keyboard": "Keyboard",
+      "notifications": "Notifications"
+    }
+  },
+  "sidebar": {
+    "navigation": "Main navigation",
+    "noSessions": "No sessions yet.",
+    "projects": "Projects",
+    "settings": "Settings"
+  },
+  "statusBar": {
+    "hideInspector": "Hide inspector",
+    "hideSidebar": "Hide sidebar",
+    "showInspector": "Show inspector",
+    "showSidebar": "Show sidebar",
+    "version": "Version {{version}}"
+  },
   "titleBar": {
     "back": "Back",
     "close": "Close",

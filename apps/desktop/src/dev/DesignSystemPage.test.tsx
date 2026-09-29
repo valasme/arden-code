@@ -35,6 +35,23 @@ describe("the design system page", () => {
     expect(document.documentElement).toHaveClass("dark");
   });
 
+  it("shows the regions of the window layout", () => {
+    render(
+      <DesignSystemPage theme="light" zoom={1} onThemeChange={() => {}} onZoomChange={() => {}} />,
+    );
+    const layout = screen.getByRole("region", { name: "Layout" });
+
+    for (const region of [
+      "Title bar",
+      "Sidebar",
+      "Session view",
+      "Inspector (hidden by default)",
+      "Status bar",
+    ]) {
+      expect(layout).toHaveTextContent(region);
+    }
+  });
+
   it("reports theme and zoom choices", () => {
     const themes: string[] = [];
     const zooms: number[] = [];

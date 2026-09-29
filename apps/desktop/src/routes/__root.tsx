@@ -1,8 +1,10 @@
 import { createRootRouteWithContext } from "@tanstack/react-router";
 
 import type { RouterContext } from "@/app/router";
-import { RootLayout } from "@/components/RootLayout";
+import { AppShell } from "@/components/layout/AppShell";
+import { NotFound } from "@/components/NotFound";
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-  component: RootLayout,
+  component: AppShell,
+  notFoundComponent: NotFound,
 });
