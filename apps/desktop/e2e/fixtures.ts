@@ -1,5 +1,6 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { createServer } from "node:net";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,16 +13,46 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 export const executable =
   process.env["ARDEN_E2E_EXE"] ?? path.join(repoRoot, "target", "debug", "arden-code.exe");
 
-const debugPort = 9222;
+/** A port nothing is using, so each launch has its own debugging endpoint. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      server.close(() => {
+        resolve(port);
+      });
+    });
+  });
+}
 
 /** Runs the app with all of its files in a folder of its own, so tests never touch real data. */
-export function appEnvironment(dataDir: string, webViewProfile: string): NodeJS.ProcessEnv {
+export function appEnvironment(
+  dataDir: string,
+  webViewProfile: string,
+  debugPort: number,
+): NodeJS.ProcessEnv {
   return {
     ...process.env,
     ARDEN_CODE_DATA_DIR: dataDir,
     WEBVIEW2_USER_DATA_FOLDER: webViewProfile,
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
   };
+}
+
+/** The last lines of the app's own log files, to show what it was doing when a launch failed. */
+function logTail(dataDir: string): string {
+  const folder = path.join(dataDir, "local", "logs");
+  if (!existsSync(folder)) return "(the app wrote no log)";
+  const lines = readdirSync(folder).flatMap((name) =>
+    readFileSync(path.join(folder, name), "utf8").split("\n"),
+  );
+  return lines
+    .filter((line) => line.trim() !== "")
+    .slice(-25)
+    .join("\n");
 }
 
 /** What the app printed, so a failure can say why the app did not start. */
@@ -33,7 +64,7 @@ function collectOutput(app: ChildProcess): () => string {
 }
 
 /* oxlint-disable no-await-in-loop -- polling is sequential by nature */
-async function waitForDebugEndpoint(app: ChildProcess, output: () => string) {
+async function waitForDebugEndpoint(app: ChildProcess, output: () => string, debugPort: number) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (app.exitCode !== null) {
@@ -56,6 +87,8 @@ async function waitForDebugEndpoint(app: ChildProcess, output: () => string) {
 export interface RunningApp {
   process: ChildProcess;
   pid: number;
+  /** The folder holding all of the app's files: settings, logs and crash reports. */
+  dataDir: string;
   /** The app's web page, attached over the Chrome DevTools Protocol. */
   page: Page;
   /** Closes the window the way the user would, and waits for the app to save and exit. */
@@ -77,8 +110,9 @@ export async function launchApp({ dataDir }: LaunchOptions = {}): Promise<Runnin
   const profile = mkdtempSync(path.join(tmpdir(), "arden-e2e-webview-"));
   ownedFolders.push(profile);
 
+  const debugPort = await freePort();
   const app = spawn(executable, [], {
-    env: appEnvironment(data, profile),
+    env: appEnvironment(data, profile, debugPort),
     stdio: ["ignore", "pipe", "pipe"],
   });
   const output = collectOutput(app);
@@ -106,15 +140,19 @@ export async function launchApp({ dataDir }: LaunchOptions = {}): Promise<Runnin
   };
 
   try {
-    await waitForDebugEndpoint(app, output);
+    await waitForDebugEndpoint(app, output, debugPort);
     const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
     const page = browser.contexts()[0]?.pages()[0];
     if (!page) throw new Error("the app has no page to attach to");
+    // The page is attached while still blank; the app navigates to its own address a moment later.
+    // Tests must not start before that, or their own navigation would race the app's.
+    await page.waitForURL(/^https?:\/\/tauri\.localhost\//);
     await page.waitForLoadState("load");
 
     return {
       process: app,
       pid,
+      dataDir: data,
       page,
       async close() {
         // Imported lazily to keep this file free of PowerShell until a test needs it.
@@ -135,9 +173,11 @@ export async function launchApp({ dataDir }: LaunchOptions = {}): Promise<Runnin
       },
     };
   } catch (error) {
+    const tail = logTail(data);
     kill();
     cleanUp();
-    throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${message}\n--- the app's own log ---\n${tail}`, { cause: error });
   }
 }
 

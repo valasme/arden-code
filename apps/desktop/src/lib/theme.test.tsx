@@ -1,4 +1,6 @@
-import { applyTheme, resolveTheme } from "./theme";
+import { render, screen, waitFor } from "@testing-library/react";
+
+import { applyTheme, resolveTheme, useDocumentTheme } from "./theme";
 
 /** A dark-mode media query that the test can flip. */
 class FakeDarkQuery extends EventTarget implements MediaQueryList {
@@ -99,5 +101,24 @@ describe("applyTheme", () => {
     expect(system.listenerCount).toBe(0);
     system.setDark(true);
     expect(isDark()).toBe(false);
+  });
+});
+
+function ThemeName() {
+  return <span data-testid="theme">{useDocumentTheme()}</span>;
+}
+
+describe("useDocumentTheme", () => {
+  it("reports the theme on the page and follows changes to it", async () => {
+    fakeSystemTheme(false);
+    applyTheme("light");
+    render(<ThemeName />);
+    expect(screen.getByTestId("theme")).toHaveTextContent("light");
+
+    applyTheme("dark");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("theme")).toHaveTextContent("dark");
+    });
   });
 });

@@ -4,20 +4,86 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
-	/**  The product name and version, for the window and the About page. */
+	/**
+	 *  The product name and version, for the window and the About page.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command so the contract stays uniform.
+	 */
 	appInfo: () => __TAURI_INVOKE<AppInfo>("app_info"),
 	/**
 	 *  Opens the window's system menu (Restore, Move, Size, Minimize, Maximize, Close), like Alt+Space.
 	 * 
 	 *  The title bar is drawn by the UI, so Windows' own menu has to be asked for.
+	 * 
+	 *  # Errors
+	 * 
+	 *  `ARD-WIN-001` when the window handle is missing or Windows refuses the request.
 	 */
 	showSystemMenu: () => __TAURI_INVOKE<null>("show_system_menu"),
+	/**  Records a message from the UI in the same log files as Rust's own. */
+	logFromUi: (level: UiLogLevel, source: string, message: string, code: string | null) => __TAURI_INVOKE<void>("log_from_ui", { level, source, message, code }),
+	/**
+	 *  Opens the folder that holds the log files in Explorer.
+	 * 
+	 *  # Errors
+	 * 
+	 *  `ARD-LOG-001` when the folder cannot be created or opened.
+	 */
+	openLogsFolder: () => __TAURI_INVOKE<null>("open_logs_folder"),
+	/**
+	 *  Removes private details (the user's folder, email addresses, secrets) from text the user is about
+	 *  to share, using the same rules as the log files.
+	 */
+	redactText: (text: string) => __TAURI_INVOKE<string>("redact_text", { text }),
+	/**
+	 *  Fails on purpose, so tests and the development page can see what an error looks like. Debug
+	 *  builds only.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Always `ARD-APP-001`, with details that contain a user folder so redaction can be checked.
+	 */
+	debugFail: () => __TAURI_INVOKE<null>("debug_fail"),
+	/**  Panics on purpose, so tests can check that a crash report is written. Debug builds only. */
+	debugPanic: () => __TAURI_INVOKE<void>("debug_panic"),
 };
 
 /* Types */
+/**
+ *  The error every command returns: a code, the translation key of its message, and details for
+ *  the logs and for "Copy details".
+ */
+export type AppError = {
+	code: ErrorCode,
+	/**  The key in the UI's language file that says what happened, why, and what to do. */
+	messageKey: string,
+	/**  Technical detail that helps find the cause. Never shown as the message itself. */
+	details: string | null,
+};
+
 /**  What the app knows about itself. */
 export type AppInfo = {
 	name: string,
 	version: string,
 };
+
+/**
+ *  Every error a user can see. The written form, `ARD-<AREA>-<NNN>`, is stable and appears both on
+ *  the error screen and in the logs. Codes are listed in `docs/error-codes.md`, and a test keeps
+ *  that page in sync with this enum. Never reuse or renumber a code.
+ */
+export type ErrorCode = 
+/**  Something went wrong that nobody planned for. */
+"ARD-APP-001" | 
+/**  The UI hit an error it could not handle. */
+"ARD-APP-002" | 
+/**  The logs folder could not be opened. */
+"ARD-LOG-001" | 
+/**  Windows' window menu could not be opened. */
+"ARD-WIN-001";
+
+/**  How serious a message from the UI is. */
+export type UiLogLevel = "error" | "warn" | "info" | "debug";
 

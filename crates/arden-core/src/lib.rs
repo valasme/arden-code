@@ -1,5 +1,6 @@
 //! Domain types and identity constants shared by every Arden Code crate.
 
+pub mod error;
 pub mod paths;
 
 use serde::Serialize;

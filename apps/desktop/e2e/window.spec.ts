@@ -133,7 +133,7 @@ test("launching the app again brings the running window forward instead of openi
 
     const profile = mkdtempSync(path.join(tmpdir(), "arden-e2e-second-"));
     const second = spawn(executable, [], {
-      env: appEnvironment(dataDir, profile),
+      env: appEnvironment(dataDir, profile, 0),
       stdio: "ignore",
     });
     const exitCode = await new Promise<number | null>((resolve) => {

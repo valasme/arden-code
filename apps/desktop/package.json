@@ -10,10 +10,11 @@
     "test": "vitest run",
     "tauri": "tauri",
     "test:e2e": "playwright test",
-    "build:debug": "tauri build --debug --no-bundle",
+    "build:debug": "tauri build --debug --no-bundle --config src-tauri/tauri.debug.conf.json",
     "i18n:lint": "i18next-cli lint && i18next-cli extract --ci",
     "test:visual": "playwright test -c playwright.visual.config.ts",
-    "test:visual:update": "playwright test -c playwright.visual.config.ts --update-snapshots"
+    "test:visual:update": "playwright test -c playwright.visual.config.ts --update-snapshots",
+    "build:web:debug": "vite build --mode debug"
   },
   "dependencies": {
     "@fontsource-variable/cascadia-code": "catalog:",
@@ -31,6 +32,7 @@
     "react-i18next": "catalog:",
     "react-resizable-panels": "catalog:",
     "shadcn": "catalog:",
+    "sonner": "catalog:",
     "tw-animate-css": "catalog:",
     "zod": "catalog:",
     "zustand": "catalog:"

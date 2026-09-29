@@ -91,3 +91,13 @@ pnpm typos    # spelling
 Set `ARDEN_CODE_DATA_DIR` to a folder and Arden Code keeps all its files (settings, window position, later logs)
 inside it instead of in `%APPDATA%` and `%LOCALAPPDATA%`. The end-to-end tests use this so they never touch your
 real data. Only one Arden Code can run at a time, so close your own copy before running `pnpm test:e2e`.
+
+## Logs and crash reports
+
+Arden Code writes JSON-lines logs, one file per day (UTC), to `%LOCALAPPDATA%\io.github.valasme.arden\logs`.
+It keeps 14 days and at most 100 MB. Every line is redacted before it is written: your user folder, email
+addresses and secrets such as API keys and tokens are replaced. Messages from the UI land in the same files.
+
+- **More detail:** set `ARDEN_LOG=debug` (or `trace`) before starting the app.
+- **Crash reports:** a Rust panic writes `crash-<date>-<time>-<pid>.json` to `%LOCALAPPDATA%\io.github.valasme.arden\crashes`.
+- **Try it:** in a debug build (`pnpm build:debug`) or `pnpm dev`, open `/dev/errors` to make each kind of failure happen on purpose.

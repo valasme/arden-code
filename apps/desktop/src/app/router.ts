@@ -1,6 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createRouter, type RouterHistory } from "@tanstack/react-router";
 
+import { RouteError } from "@/components/RouteError";
+
 import { routeTree } from "../routeTree.gen";
 
 export interface RouterContext {
@@ -13,6 +15,8 @@ export function createAppRouter(queryClient: QueryClient, history?: RouterHistor
     context: { queryClient },
     ...(history ? { history } : {}),
     defaultPreload: "intent",
+    // Each page has its own boundary, so a failing page leaves the title bar and sidebar working.
+    defaultErrorComponent: RouteError,
   });
 }
 

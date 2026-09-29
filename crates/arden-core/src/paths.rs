@@ -35,6 +35,18 @@ impl AppPaths {
         }
     }
 
+    /// The folder for log files.
+    #[must_use]
+    pub fn logs_dir(&self) -> PathBuf {
+        self.local.join("logs")
+    }
+
+    /// The folder for crash reports.
+    #[must_use]
+    pub fn crashes_dir(&self) -> PathBuf {
+        self.local.join("crashes")
+    }
+
     /// The saved window position and size.
     #[must_use]
     pub fn window_state_file(&self) -> PathBuf {
@@ -67,6 +79,20 @@ mod tests {
 
         assert_eq!(paths.config, Path::new(r"C:\Temp\test-data\config"));
         assert_eq!(paths.local, Path::new(r"C:\Temp\test-data\local"));
+    }
+
+    #[test]
+    fn keeps_logs_and_crash_reports_with_the_local_files() {
+        let paths = AppPaths::resolve(None, Path::new(r"C:\Roaming"), Path::new(r"C:\Local"));
+
+        assert_eq!(
+            paths.logs_dir(),
+            Path::new(r"C:\Local\io.github.valasme.arden\logs")
+        );
+        assert_eq!(
+            paths.crashes_dir(),
+            Path::new(r"C:\Local\io.github.valasme.arden\crashes")
+        );
     }
 
     #[test]

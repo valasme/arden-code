@@ -1,6 +1,8 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { devPagesEnabled } from "@/lib/devPages";
+
 import { DesignSystemPage } from "@/dev/DesignSystemPage";
 
 const searchSchema = z.object({
@@ -10,9 +12,9 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/dev/design-system")({
   validateSearch: searchSchema,
-  // The design system page exists in development builds only.
+  // This page exists while developing and in debug builds, never in a release.
   beforeLoad: () => {
-    if (!import.meta.env.DEV) throw notFound();
+    if (!devPagesEnabled) throw notFound();
   },
   component: DesignSystemRoute,
 });

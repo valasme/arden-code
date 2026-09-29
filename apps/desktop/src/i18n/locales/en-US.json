@@ -2,6 +2,39 @@
   "brand": {
     "name": "Arden Code"
   },
+  "errors": {
+    "ARD-APP-001": {
+      "action": "Try again. If it keeps happening, copy the details and report it.",
+      "what": "Something unexpected went wrong inside Arden Code.",
+      "why": "This is a bug in Arden Code, not something you did."
+    },
+    "ARD-APP-002": {
+      "action": "Reload the window. If it keeps happening, copy the details and report it.",
+      "what": "The interface hit an error it could not handle.",
+      "why": "A part of the screen failed to draw or to respond."
+    },
+    "ARD-LOG-001": {
+      "action": "Open it yourself in Explorer, at %LOCALAPPDATA%\\io.github.valasme.arden\\logs.",
+      "what": "The logs folder could not be opened.",
+      "why": "Windows refused, or the folder could not be created."
+    },
+    "ARD-WIN-001": {
+      "action": "Use the buttons at the right of the title bar instead.",
+      "what": "Windows' window menu could not be opened.",
+      "why": "Windows did not accept the request."
+    }
+  },
+  "errorScreen": {
+    "code": "Error code",
+    "copied": "Copied",
+    "copyDetails": "Copy details",
+    "openLogs": "Open logs",
+    "reload": "Reload",
+    "title": "Something went wrong",
+    "whatHappened": "What happened",
+    "whatToDo": "What to do",
+    "why": "Why"
+  },
   "home": {
     "title": "{{name}} {{version}}"
   },
@@ -12,6 +45,9 @@
   "notFound": {
     "home": "Go to the session view",
     "message": "This page does not exist."
+  },
+  "notices": {
+    "uiError": "Something went wrong ({{code}})"
   },
   "regions": {
     "inspector": "Inspector",

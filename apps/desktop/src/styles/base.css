@@ -32,6 +32,14 @@
     font-variant-ligatures: var(--code-ligatures, none);
   }
 
+  /* Toasts look like the app's other floating surfaces. */
+  .toaster {
+    --normal-bg: var(--popover);
+    --normal-text: var(--popover-foreground);
+    --normal-border: var(--border);
+    --border-radius: var(--radius);
+  }
+
   ::selection {
     background: var(--selection);
   }
