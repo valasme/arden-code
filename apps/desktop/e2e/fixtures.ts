@@ -14,12 +14,20 @@ const executable =
 
 const debugPort = 9222;
 
+/** What the app printed, so a failure can say why the app did not start. */
+function collectOutput(app: ChildProcess): () => string {
+  const chunks: string[] = [];
+  app.stdout?.on("data", (chunk: Buffer) => chunks.push(chunk.toString()));
+  app.stderr?.on("data", (chunk: Buffer) => chunks.push(chunk.toString()));
+  return () => chunks.join("").trim();
+}
+
 /* oxlint-disable no-await-in-loop -- polling is sequential by nature */
-async function waitForDebugEndpoint(app: ChildProcess) {
+async function waitForDebugEndpoint(app: ChildProcess, output: () => string) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (app.exitCode !== null) {
-      throw new Error(`Arden Code exited early with code ${app.exitCode}`);
+      throw new Error(`Arden Code exited early with code ${app.exitCode}\n${output()}`);
     }
     try {
       const response = await fetch(`http://127.0.0.1:${debugPort}/json/version`);
@@ -29,12 +37,13 @@ async function waitForDebugEndpoint(app: ChildProcess) {
     }
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error("Arden Code did not open its debugging port within 30 seconds");
+  throw new Error(
+    `Arden Code did not open its debugging port within 30 seconds\n${output() || "(no output)"}`,
+  );
 }
 /* oxlint-enable no-await-in-loop */
 
 export const test = base.extend<{ appPage: Page }>({
-  // Playwright attaches to the app's own WebView2 over the Chrome DevTools Protocol.
   // Playwright requires fixtures to destructure their first argument, even when empty.
   // oxlint-disable-next-line no-empty-pattern
   appPage: async ({}, provide) => {
@@ -45,10 +54,11 @@ export const test = base.extend<{ appPage: Page }>({
         WEBVIEW2_USER_DATA_FOLDER: profile,
         WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
       },
-      stdio: "ignore",
+      stdio: ["ignore", "pipe", "pipe"],
     });
+    const output = collectOutput(app);
     try {
-      await waitForDebugEndpoint(app);
+      await waitForDebugEndpoint(app, output);
       const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
       const page = browser.contexts()[0]?.pages()[0];
       if (!page) throw new Error("the app has no page to attach to");
@@ -63,7 +73,13 @@ export const test = base.extend<{ appPage: Page }>({
           // Already gone.
         }
       }
-      rmSync(profile, { recursive: true, force: true });
+      // Cleaning up the temporary profile is best effort. It must never hide the test's own error,
+      // and the web engine can hold files for a moment after it is told to stop.
+      try {
+        rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      } catch {
+        // The system's temporary folder is cleaned up eventually.
+      }
     }
   },
 });
