@@ -1,5 +1,7 @@
 //! Domain types and identity constants shared by every Arden Code crate.
 
+pub mod paths;
+
 use serde::Serialize;
 use specta::Type;
 

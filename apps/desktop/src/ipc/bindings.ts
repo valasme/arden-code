@@ -6,6 +6,12 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 export const commands = {
 	/**  The product name and version, for the window and the About page. */
 	appInfo: () => __TAURI_INVOKE<AppInfo>("app_info"),
+	/**
+	 *  Opens the window's system menu (Restore, Move, Size, Minimize, Maximize, Close), like Alt+Space.
+	 * 
+	 *  The title bar is drawn by the UI, so Windows' own menu has to be asked for.
+	 */
+	showSystemMenu: () => __TAURI_INVOKE<null>("show_system_menu"),
 };
 
 /* Types */

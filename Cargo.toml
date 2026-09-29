@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/arden-core", "apps/desktop/src-tauri"]
+members = ["crates/arden-core", "crates/arden-windows", "apps/desktop/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,12 +12,13 @@ authors = ["valasme"]
 
 [workspace.dependencies]
 arden-core = { path = "crates/arden-core" }
+arden-windows = { path = "crates/arden-windows" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }

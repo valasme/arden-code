@@ -4,5 +4,16 @@
   },
   "home": {
     "title": "{{name}} {{version}}"
+  },
+  "titleBar": {
+    "back": "Back",
+    "close": "Close",
+    "forward": "Forward",
+    "maximize": "Maximize",
+    "menu": "Window menu",
+    "minimize": "Minimize",
+    "restore": "Restore",
+    "search": "Search or run a command",
+    "searchShortcut": "Ctrl+K"
   }
 }

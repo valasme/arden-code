@@ -133,3 +133,9 @@ fn the_main_window_starts_hidden_until_the_ui_has_drawn() {
     let conf = read_tauri_conf();
     assert_eq!(conf["app"]["windows"][0]["visible"], false);
 }
+
+#[test]
+fn the_main_window_draws_its_own_title_bar() {
+    let conf = read_tauri_conf();
+    assert_eq!(conf["app"]["windows"][0]["decorations"], false);
+}

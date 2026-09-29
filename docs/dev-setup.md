@@ -85,3 +85,9 @@ pnpm typos    # spelling
 `pnpm test:visual` runs screenshot and interaction tests of the design system page
 (`/dev/design-system`, development builds only). After an intended visual change, update the baselines with
 `pnpm test:visual:update` and look at the new images before committing them.
+
+## Keeping test data separate
+
+Set `ARDEN_CODE_DATA_DIR` to a folder and Arden Code keeps all its files (settings, window position, later logs)
+inside it instead of in `%APPDATA%` and `%LOCALAPPDATA%`. The end-to-end tests use this so they never touch your
+real data. Only one Arden Code can run at a time, so close your own copy before running `pnpm test:e2e`.

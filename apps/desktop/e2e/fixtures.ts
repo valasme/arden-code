@@ -9,10 +9,20 @@ import { type Page, chromium, test as base } from "@playwright/test";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 /** The debug build from `pnpm build:debug`. Set ARDEN_E2E_EXE to test another build. */
-const executable =
+export const executable =
   process.env["ARDEN_E2E_EXE"] ?? path.join(repoRoot, "target", "debug", "arden-code.exe");
 
 const debugPort = 9222;
+
+/** Runs the app with all of its files in a folder of its own, so tests never touch real data. */
+export function appEnvironment(dataDir: string, webViewProfile: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    ARDEN_CODE_DATA_DIR: dataDir,
+    WEBVIEW2_USER_DATA_FOLDER: webViewProfile,
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
+  };
+}
 
 /** What the app printed, so a failure can say why the app did not start. */
 function collectOutput(app: ChildProcess): () => string {
@@ -43,44 +53,103 @@ async function waitForDebugEndpoint(app: ChildProcess, output: () => string) {
 }
 /* oxlint-enable no-await-in-loop */
 
+export interface RunningApp {
+  process: ChildProcess;
+  pid: number;
+  /** The app's web page, attached over the Chrome DevTools Protocol. */
+  page: Page;
+  /** Closes the window the way the user would, and waits for the app to save and exit. */
+  close(): Promise<void>;
+  /** Ends the app and everything it started. Safe to call after `close`. */
+  kill(): void;
+}
+
+export interface LaunchOptions {
+  /** The folder for the app's files. Defaults to a new empty one. */
+  dataDir?: string;
+}
+
+/** Starts the app and attaches to its web page. */
+export async function launchApp({ dataDir }: LaunchOptions = {}): Promise<RunningApp> {
+  const ownedFolders: string[] = [];
+  const data = dataDir ?? mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
+  if (!dataDir) ownedFolders.push(data);
+  const profile = mkdtempSync(path.join(tmpdir(), "arden-e2e-webview-"));
+  ownedFolders.push(profile);
+
+  const app = spawn(executable, [], {
+    env: appEnvironment(data, profile),
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const output = collectOutput(app);
+  const pid = app.pid;
+  if (pid === undefined) throw new Error("Arden Code did not start");
+
+  const kill = () => {
+    try {
+      // The app's web engine runs as child processes; end the whole tree.
+      execFileSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+    } catch {
+      // Already gone.
+    }
+  };
+  const cleanUp = () => {
+    // Cleaning up temporary folders is best effort. It must never hide a test's own error, and the
+    // web engine can hold files for a moment after it is told to stop.
+    for (const folder of ownedFolders) {
+      try {
+        rmSync(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      } catch {
+        // The system's temporary folder is cleaned up eventually.
+      }
+    }
+  };
+
+  try {
+    await waitForDebugEndpoint(app, output);
+    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
+    const page = browser.contexts()[0]?.pages()[0];
+    if (!page) throw new Error("the app has no page to attach to");
+    await page.waitForLoadState("load");
+
+    return {
+      process: app,
+      pid,
+      page,
+      async close() {
+        // Imported lazily to keep this file free of PowerShell until a test needs it.
+        const { closeMainWindow } = await import("./windows");
+        closeMainWindow(pid);
+        await new Promise<void>((resolve) => {
+          if (app.exitCode !== null) resolve();
+          else app.once("exit", () => resolve());
+          setTimeout(resolve, 10_000);
+        });
+        await browser.close().catch(() => {});
+        kill();
+        cleanUp();
+      },
+      kill() {
+        kill();
+        cleanUp();
+      },
+    };
+  } catch (error) {
+    kill();
+    cleanUp();
+    throw error;
+  }
+}
+
 export const test = base.extend<{ appPage: Page }>({
   // Playwright requires fixtures to destructure their first argument, even when empty.
   // oxlint-disable-next-line no-empty-pattern
   appPage: async ({}, provide) => {
-    const profile = mkdtempSync(path.join(tmpdir(), "arden-e2e-"));
-    const app = spawn(executable, [], {
-      env: {
-        ...process.env,
-        WEBVIEW2_USER_DATA_FOLDER: profile,
-        WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const output = collectOutput(app);
+    const app = await launchApp();
     try {
-      await waitForDebugEndpoint(app, output);
-      const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
-      const page = browser.contexts()[0]?.pages()[0];
-      if (!page) throw new Error("the app has no page to attach to");
-      await page.waitForLoadState("load");
-      await provide(page);
-      await browser.close();
+      await provide(app.page);
     } finally {
-      if (app.pid !== undefined) {
-        // The app's web engine runs as child processes; end the whole tree.
-        try {
-          execFileSync("taskkill", ["/pid", String(app.pid), "/T", "/F"], { stdio: "ignore" });
-        } catch {
-          // Already gone.
-        }
-      }
-      // Cleaning up the temporary profile is best effort. It must never hide the test's own error,
-      // and the web engine can hold files for a moment after it is told to stop.
-      try {
-        rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
-      } catch {
-        // The system's temporary folder is cleaned up eventually.
-      }
+      app.kill();
     }
   },
 });

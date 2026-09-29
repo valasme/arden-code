@@ -76,8 +76,20 @@ jobs:
       - name: Build the app
         run: pnpm build
 
+      - name: WebView2 runtime version
+        shell: pwsh
+        run: |
+          $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+          if (Test-Path $key) { "WebView2 runtime $((Get-ItemProperty $key).pv)" } else { "WebView2 runtime is NOT installed" }
+
       - name: End-to-end test against the real app
         run: pnpm test:e2e
+
+      - name: What was running when the end-to-end test failed
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-Process | Where-Object { $_.ProcessName -match "arden|webview2" } | Format-Table Id, ProcessName, MainWindowTitle
 
   audit:
     name: Audit
