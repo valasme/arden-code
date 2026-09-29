@@ -17,7 +17,7 @@ from one place. The goals:
 - **Native to Windows 11:** Snap Layouts, regional formats, text scaling, and Windows keyboard conventions.
 
 The first build is the app foundation: the window shell, settings, keyboard system,
-diagnostics, accessibility, and a chat placeholder driven by a built-in demo agent.
+diagnostics, accessibility, and a placeholder session view driven by a built-in Demo agent.
 Real Claude Code and Codex integration comes after that. See [the plan](docs/PLAN.md).
 
 ## Tech

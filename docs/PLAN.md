@@ -38,13 +38,13 @@ The first build is the **foundation**:
 - diagnostics and accessibility
 - internationalization and updater plumbing
 - brand assets
-- a chat placeholder driven by a built-in **Demo agent**
+- a placeholder session view driven by a built-in **Demo agent**
 
 All of it is production-grade, so real features plug into it later.
 
 **Out of scope for the foundation:**
 - Real Claude Code or Codex sessions.
-- Saving chats (no database yet).
+- Saving sessions (no database yet).
 - Tray icon and background mode.
 - App links and Explorer integration.
 - Agent-specific colors.
@@ -106,7 +106,7 @@ arden-code/
 │     ├─ src/
 │     │  ├─ app/                providers, router, root layout
 │     │  ├─ routes/             TanStack Router file routes
-│     │  ├─ features/           chat, settings, commands, diagnostics, updates, …
+│     │  ├─ features/           sessions, settings, commands, diagnostics, updates, …
 │     │  ├─ components/         app components (TitleBar, Sidebar, StatusBar, …)
 │     │  ├─ components/ui/      shadcn components (radix-lyra)
 │     │  ├─ ipc/                generated bindings.ts + typed helpers
@@ -183,7 +183,7 @@ Versions are current at the time of writing. Renovate keeps them fresh.
 
 ### 5.6 Data and persistence
 
-- The foundation stores only `settings.json`. Chats live in memory and disappear on restart.
+- The foundation stores only `settings.json`. Sessions live in memory and disappear on restart.
 - SQLite arrives with the first feature that needs persistence.
 - Timestamps are stored in UTC and shown in local time.
 
@@ -196,7 +196,7 @@ Project   a folder on disk, where agents work
       └─ Item   text · thinking · tool call · file change · error · status marker
 ```
 
-The sidebar lists sessions grouped by project. The foundation ships one in-memory "Playground" project with Demo agent sessions.
+The sidebar lists sessions grouped by project. The foundation ships one built-in project, the **Playground**: a real folder the app creates for itself on first launch, in `%LOCALAPPDATA%io.github.valasme.ardenplayground`. It holds the Demo agent sessions, so every project, including this one, is a folder on disk.
 
 ### 5.8 Agent integration (direction only; not built in the foundation)
 
@@ -216,8 +216,8 @@ The sidebar lists sessions grouped by project. The foundation ships one in-memor
   - Runs child processes inside a Windows Job Object, so they close when the app closes.
   - Logs each child process's output to its own file.
 - **Detection (in the foundation):** Settings → Agents shows whether `claude` and `codex` are installed, where, and which version. This screen is read-only.
-- **Provider terms:** Anthropic's rules on using subscriptions from other tools changed several times in 2026. Arden Code only ever launches the user's own CLI, which handles the user's own login.
-  - With the first integration, `docs/providers.md` will summarize the current terms.
+- **Vendor terms:** Anthropic's rules on using subscriptions from other tools changed several times in 2026. Arden Code only ever launches the user's own CLI, which handles the user's own login.
+  - With the first integration, `docs/vendors.md` will summarize the current terms.
 
 ## 6. User experience
 
@@ -226,7 +226,7 @@ The sidebar lists sessions grouped by project. The foundation ships one in-memor
 ```text
 ┌ Title bar: logo menu · back/forward · search / command palette ··········· ─ □ ✕ ┐
 ├ Sidebar ─────────┬ Main ─────────────────────────────────┬ Inspector (hidden) ─┤
-│ New chat         │ Chat (or Settings)                    │ later: diffs,       │
+│ New session      │ Session view (or Settings)            │ later: diffs,       │
 │ Projects         │                                       │ files, terminal     │
 │  └ Sessions      │                                       │                     │
 │ Settings         │ Message box                           │                     │
@@ -284,7 +284,7 @@ A single **command registry** drives the command palette, menus, tooltips, the c
 | Action | Default |
 |---|---|
 | Command palette | Ctrl+K (also Ctrl+Shift+P) |
-| New chat | Ctrl+N |
+| New session | Ctrl+N |
 | Settings | Ctrl+, |
 | Toggle sidebar / inspector | Ctrl+B / Ctrl+J |
 | Focus the message box | Ctrl+L |
@@ -303,7 +303,7 @@ A single **command registry** drives the command palette, menus, tooltips, the c
 - **Windows keys stay untouched:** Alt+F4, Alt+Space and Win+… keep their Windows meaning.
 - **Context menus** open with Shift+F10 and the Menu key, as well as right-click.
 
-### 6.5 Chat placeholder and the Demo agent
+### 6.5 Session view placeholder and the Demo agent
 
 - **Message box:**
   - Enter sends; Shift+Enter adds a line.
@@ -322,7 +322,7 @@ A single **command registry** drives the command palette, menus, tooltips, the c
 
 ### 6.6 First launch
 
-There is no setup wizard. The chat area shows a welcome state:
+There is no setup wizard. The session view shows the welcome state:
 - the logo
 - one line: "Real agents are coming. Try the Demo agent."
 - three shortcut hints: Ctrl+K, Ctrl+N and Ctrl+,
@@ -453,7 +453,7 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
 - **Code:** Cascadia Code Variable, with ligatures off by default. Fallbacks: Cascadia Mono, Consolas, monospace.
 - **Brand serif:** Lora appears only inside the outlined logo, so it isn't shipped with the app.
 - **Loading:** all fonts are bundled through Fontsource, never loaded from the network. Each character subset loads only when those characters appear on screen.
-- **Scale:** 11 / 12 / **13 (the UI default)** / 14 (chat text) / 16 / 20 / 24 px. Tables and the status bar use tabular numbers.
+- **Scale:** 11 / 12 / **13 (the UI default)** / 14 (message text) / 16 / 20 / 24 px. Tables and the status bar use tabular numbers.
 
 ### 7.3 Color use
 
@@ -556,7 +556,7 @@ These are release gates: no release ships unless they all pass.
 - **Focus:** visible but quiet (§7.4).
 - **Screen readers:** tested with NVDA and Narrator.
   - Every control has a name, role and state.
-  - Streaming chat is announced politely and throttled.
+  - Streaming replies are announced politely and throttled.
 - **Windows settings honored:** contrast themes (forced colors), "Animation effects: off", and the text-size setting.
 - **Zoom:** 80% to 200% without breaking the layout.
 - **Pointer targets:** at least 24×24 px.
@@ -664,10 +664,10 @@ The foundation is built in this order. Each milestone ends with green CI and a c
 | M0 | **Tooling:** workspaces, toolchain pins, Oxlint and oxfmt, TypeScript 7, lefthook, commitlint, CI, Renovate, `SECURITY.md` / `CONTRIBUTING.md` / `PRIVACY.md`, issue templates | An empty app builds and passes CI |
 | M1 | **Brand:** the `@arden/brand` pipeline, every asset in §8.4, the pixel test, the Affinity library | `pnpm brand:build` gives identical output on every run, and the Affinity document exists |
 | M2 | **Shell:** Tauri 2.12 app with the identifier and per-user installer config, security policy, capabilities, isolation, single instance, window memory, custom title bar with Snap Layouts, no-flash startup, theme and fonts, layout and routing | The window behaves like a native Windows 11 app, and the theme passes the contrast checks |
-| M3 | **Rust services:** settings, logging and redaction, error codes, diagnostics export, crash handling, process supervisor and CLI detection, notifications, updater wiring, regional format and text scale, the `arden-code` launcher and argument forwarding | Every service has tests, and the bindings are generated |
+| M3 | **Rust services:** settings, logging and redaction, error codes, diagnostics bundle, crash handling, process supervisor and CLI detection, notifications, updater wiring, regional format and text scale, the `arden-code` launcher and argument forwarding | Every service has tests, and the bindings are generated |
 | M4 | **Settings UI:** all seven tabs, search, instant apply, reset, shortcut rebinding | Every setting in §6.3 works and survives a restart |
 | M5 | **Commands:** command registry, palette, default shortcuts, F6 areas, context menus, cheat sheet | Everything is reachable by keyboard |
-| M6 | **Chat placeholder:** domain model, Demo agent, streaming pipeline, virtualized list, safe markdown, message box, welcome state | The Demo agent streams at 60 fps with 10,000 messages |
+| M6 | **Session view placeholder:** domain model, Demo agent, streaming pipeline, virtualized list, safe markdown, message box, welcome state | The Demo agent streams at 60 fps with 10,000 messages |
 | M7 | **Quality:** design system page, axe checks and screen-reader checklist, Playwright end-to-end tests, performance checks, pseudo-language | Every gate in §10, §11 and §15 is automated or on a checklist |
 | M8 | **Release pipeline (switched off):** update-signing keys, release-please, tauri-action, winget template, signing hook, installer PATH option | A dry-run release produces an installer and `latest.json` |
 

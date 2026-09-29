@@ -1,0 +1,124 @@
+# Arden Code
+
+A Windows desktop cockpit where a developer runs and supervises coding agents on their projects.
+
+## Language
+
+### Work
+
+**Project**:
+A folder on the user's disk that agents work in.
+_Avoid_: workspace, repo, directory
+
+**Playground**:
+The built-in project, a folder Arden Code creates for itself, that holds Demo agent sessions.
+_Avoid_: sandbox, demo project
+
+**Session**:
+An ongoing exchange of turns between the user and one agent, inside one project.
+_Avoid_: chat, conversation, thread
+
+**Turn**:
+One message from the user together with the agent's reply to it, whether the reply finished, was stopped or failed.
+_Avoid_: exchange, round
+
+**Item**:
+One piece of an agent's reply within a turn: text, thinking, a tool call, a file change, an error or a status marker.
+_Avoid_: event, chunk, block
+
+**Tool call**:
+An item recording an action the agent takes, such as running a command or reading a file.
+
+**File change**:
+An item recording an edit the agent made, or proposes to make, to a file in the project.
+_Avoid_: diff, patch
+
+**Approval request**:
+A point where an agent pauses and asks the user to allow or deny an action.
+_Avoid_: permission prompt, confirmation
+
+### Agents
+
+**Agent**:
+A coding assistant that works in a session: Claude Code, Codex, or the built-in Demo agent.
+_Avoid_: model, bot, AI, assistant
+
+**Demo agent**:
+The built-in agent that produces realistic but fake replies, used before real agents are integrated.
+_Avoid_: mock agent, fake agent
+
+**Vendor**:
+The company behind an agent: Anthropic for Claude Code, OpenAI for Codex.
+_Avoid_: provider
+
+**Agent CLI**:
+A vendor's own command-line program (`claude` or `codex`) through which Arden Code runs that agent. It owns the user's sign-in.
+_Avoid_: SDK, backend
+
+**Raw mode**:
+Running an agent's own terminal interface inside Arden Code, instead of the session view.
+_Avoid_: terminal mode, console mode
+
+### The window
+
+**Session view**:
+The main area of the window, showing the open session's turns and the message box.
+_Avoid_: chat area, chat view
+
+**Message box**:
+Where the user writes the next message of a session.
+_Avoid_: composer, input, prompt box
+
+**Inspector**:
+The right-hand pane showing details of the open session. Hidden by default.
+_Avoid_: right panel, details pane
+
+**Welcome state**:
+What the session view shows when no session is open.
+_Avoid_: splash screen, empty page
+
+### Control
+
+**Command**:
+A named action the user can trigger from the command palette, a menu or a shortcut.
+_Avoid_: action
+
+**Command palette**:
+The searchable list of every command.
+_Avoid_: quick open, launcher
+
+**Shortcut**:
+A key combination bound to a command. Users can rebind shortcuts.
+_Avoid_: hotkey, keybinding
+
+**Setting**:
+A user preference that Arden Code stores and applies immediately.
+_Avoid_: option, preference, config
+
+**Terminal command**:
+The `arden-code` command that opens Arden Code, or a project in it, from a terminal.
+_Avoid_: CLI (reserved for agent CLIs)
+
+### Health
+
+**Diagnostics bundle**:
+A zip file the user exports for bug reports, containing logs, redacted settings and system information.
+_Avoid_: debug dump, diagnostics export
+
+**Error code**:
+The short identifier, such as `ARD-SET-002`, shown with an error message and written to the logs.
+_Avoid_: error number, error ID
+
+### Brand
+
+**Mark**:
+The logo's symbol: the orange grid of rounded cells. On its own, it is the app icon.
+_Avoid_: icon, emblem
+
+**Wordmark**:
+The words "Arden Code" set in Lora, as part of the logo.
+_Avoid_: logotype, text logo
+
+**Lockup**:
+A fixed arrangement of the mark and the wordmark, horizontal or stacked.
+_Avoid_: logo variant
