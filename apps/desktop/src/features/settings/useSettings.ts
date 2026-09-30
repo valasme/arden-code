@@ -21,6 +21,18 @@ function applyChange(settings: Settings, change: SettingChange): Settings {
   if (change.generalCheckForUpdates !== undefined) {
     return { ...settings, general: { ...general, checkForUpdates: change.generalCheckForUpdates } };
   }
+  if (change.generalRegionalFormat !== undefined) {
+    return {
+      ...settings,
+      general: { ...general, regionalFormat: change.generalRegionalFormat },
+    };
+  }
+  if (change.appearanceFollowTextSize !== undefined) {
+    return {
+      ...settings,
+      appearance: { ...appearance, followTextSize: change.appearanceFollowTextSize },
+    };
+  }
   if (change.appearanceTheme !== undefined) {
     return { ...settings, appearance: { ...appearance, theme: change.appearanceTheme } };
   }

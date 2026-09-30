@@ -2,10 +2,18 @@ import type { ParseKeys } from "i18next";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { OnStartup, ReduceMotion, SettingKey, Settings, Theme } from "@/ipc/bindings";
+import type {
+  OnStartup,
+  ReduceMotion,
+  RegionalFormat,
+  SettingKey,
+  Settings,
+  Theme,
+} from "@/ipc/bindings";
 import { defaultSettings } from "@/ipc/defaults.gen";
 
 import { ChoiceControl, RangeControl, ToggleControl } from "./controls";
+import { RegionalPreview } from "./RegionalPreview";
 import type { SettingsTab } from "./tabs";
 import type { useChangeSetting } from "./useSettings";
 import { zoomRange } from "./zoom";
@@ -37,6 +45,7 @@ const same = defaultSettings;
 
 const startupChoices = ["restore", "fresh"] as const satisfies readonly OnStartup[];
 const themeChoices = ["system", "light", "dark"] as const satisfies readonly Theme[];
+const regionChoices = ["windows", "english"] as const satisfies readonly RegionalFormat[];
 const motionChoices = ["system", "on", "off"] as const satisfies readonly ReduceMotion[];
 
 export const settingDefinitions: readonly SettingDefinition[] = [
@@ -80,6 +89,33 @@ export const settingDefinitions: readonly SettingDefinition[] = [
         }}
       />
     ),
+  },
+  {
+    id: "regional-format",
+    tab: "general",
+    key: "generalRegionalFormat",
+    labelKey: "settings.general.regionalFormat.label",
+    descriptionKey: "settings.general.regionalFormat.description",
+    isDefault: (settings) => settings.general.regionalFormat === same.general.regionalFormat,
+    Control: function RegionalFormatControl({ id, settings, change }) {
+      const { t } = useTranslation();
+      return (
+        <div className="flex flex-col gap-3">
+          <ChoiceControl
+            id={id}
+            value={settings.general.regionalFormat}
+            options={regionChoices.map((value) => ({
+              value,
+              label: t(`settings.general.regionalFormat.${value}`),
+            }))}
+            onChange={(value) => {
+              change.mutate({ generalRegionalFormat: value });
+            }}
+          />
+          <RegionalPreview />
+        </div>
+      );
+    },
   },
   {
     id: "theme",
@@ -131,6 +167,23 @@ export const settingDefinitions: readonly SettingDefinition[] = [
         />
       );
     },
+  },
+  {
+    id: "follow-text-size",
+    tab: "appearance",
+    key: "appearanceFollowTextSize",
+    labelKey: "settings.appearance.followTextSize.label",
+    descriptionKey: "settings.appearance.followTextSize.description",
+    isDefault: (settings) => settings.appearance.followTextSize === same.appearance.followTextSize,
+    Control: ({ id, settings, change }) => (
+      <ToggleControl
+        id={id}
+        checked={settings.appearance.followTextSize}
+        onChange={(checked) => {
+          change.mutate({ appearanceFollowTextSize: checked });
+        }}
+      />
+    ),
   },
   {
     id: "code-font-size",

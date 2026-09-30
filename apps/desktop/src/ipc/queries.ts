@@ -3,6 +3,8 @@ import { isTauri } from "@tauri-apps/api/core";
 
 import { defaultSettings } from "@/ipc/defaults.gen";
 
+import { fallbackSystemPreferences } from "@/features/settings/systemPreferences";
+
 import { commands } from "./bindings";
 
 /** The product name and version. They never change while the app runs. */
@@ -19,5 +21,12 @@ export const appInfoQuery = queryOptions({
 export const settingsQuery = queryOptions({
   queryKey: ["settings"],
   queryFn: () => (isTauri() ? commands.getSettings() : defaultSettings),
+  staleTime: Number.POSITIVE_INFINITY,
+});
+
+/** The Windows text size and regional format. Rust announces every change, like the settings. */
+export const systemPreferencesQuery = queryOptions({
+  queryKey: ["system-preferences"],
+  queryFn: () => (isTauri() ? commands.getSystemPreferences() : fallbackSystemPreferences()),
   staleTime: Number.POSITIVE_INFINITY,
 });

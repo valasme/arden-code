@@ -5,11 +5,13 @@ export const defaultSettings: Settings = {
   "version": 1,
   "general": {
     "onStartup": "restore",
-    "checkForUpdates": true
+    "checkForUpdates": true,
+    "regionalFormat": "windows"
   },
   "appearance": {
     "theme": "system",
     "zoom": 100,
+    "followTextSize": true,
     "codeFontSize": 13,
     "codeLigatures": false,
     "reduceMotion": "system",

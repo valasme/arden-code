@@ -7,11 +7,13 @@ mod window_state;
 pub use window::startup_background;
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use arden_core::paths::{AppPaths, DATA_DIR_VARIABLE};
 use arden_diagnostics::redact::Redactor;
 use arden_diagnostics::{crash, logging};
 use arden_settings::service::SettingsService;
+use arden_windows::preferences;
 use specta_typescript::Typescript;
 use tauri::Manager;
 use tauri_specta::Event;
@@ -38,6 +40,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::change_setting,
         commands::reset_setting,
         commands::take_settings_notice,
+        commands::get_system_preferences,
         commands::debug_fail,
         commands::debug_panic,
     ];
@@ -52,11 +55,13 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::change_setting,
         commands::reset_setting,
         commands::take_settings_notice,
+        commands::get_system_preferences,
     ];
 
-    builder
-        .commands(commands)
-        .events(collect_events![commands::SettingsChanged])
+    builder.commands(commands).events(collect_events![
+        commands::SettingsChanged,
+        commands::SystemPreferencesChanged
+    ])
 }
 
 /// Writes the TypeScript bindings for every command to `path`.
@@ -128,6 +133,24 @@ fn start_diagnostics(app: &tauri::App, paths: &AppPaths) -> Redactor {
     redactor
 }
 
+/// How often Windows' text size and regional format are looked at for a change.
+const SYSTEM_PREFERENCES_INTERVAL: Duration = Duration::from_millis(1500);
+
+/// Tells the UI when the person changes the text size or the regional format in Windows.
+fn watch_system_preferences(handle: tauri::AppHandle) -> preferences::Watcher {
+    preferences::Watcher::start(
+        preferences::read(),
+        SYSTEM_PREFERENCES_INTERVAL,
+        preferences::read,
+        move |now| {
+            let _ = commands::SystemPreferencesChanged {
+                preferences: now.clone().into(),
+            }
+            .emit(&handle);
+        },
+    )
+}
+
 /// Starts the app.
 ///
 /// # Panics
@@ -165,6 +188,7 @@ pub fn run() {
             window::prepare_main_window(app, &paths, settings.get().appearance.theme)?;
             app.manage(settings);
             app.manage(paths);
+            app.manage(watch_system_preferences(app.handle().clone()));
             Ok(())
         })
         .run(tauri::generate_context!())

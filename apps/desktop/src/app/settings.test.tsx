@@ -5,7 +5,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
-import type { AppError, Settings } from "@/ipc/bindings";
+import type { AppError, Settings, SystemPreferences } from "@/ipc/bindings";
 import { settingsWith } from "@/test/settings";
 
 import { App } from "./App";
@@ -26,12 +26,15 @@ function startApp({
   notice = null,
   settings = settingsForTheme(theme),
   savedAs = settings,
+  system = { textScalePercent: 100, locale: "en-US" },
 }: {
   theme?: "system" | "light" | "dark";
   notice?: AppError | null;
   settings?: Settings;
   /** What saving a change answers with. */
   savedAs?: Settings;
+  /** What Windows says about the text size and the regional format. */
+  system?: SystemPreferences;
 } = {}) {
   Object.assign(globalThis, { isTauri: true });
   mockWindows("main");
@@ -41,6 +44,7 @@ function startApp({
       if (command === "get_settings") return settings;
       if (command === "change_setting") return savedAs;
       if (command === "take_settings_notice") return notice;
+      if (command === "get_system_preferences") return system;
       return null;
     },
     { shouldMockEvents: true },
@@ -305,7 +309,7 @@ describe("searching the settings", () => {
       within(results)
         .getAllByRole("heading", { level: 2 })
         .map((h) => h.textContent),
-    ).toEqual(["Theme", "Reduce motion"]);
+    ).toEqual(["Theme", "Follow Windows text size", "Reduce motion"]);
   });
 
   it("says when nothing matches, and goes back to the tab when the search is cleared", async () => {
@@ -328,5 +332,67 @@ describe("searching the settings", () => {
     await user.click(await screen.findByRole("radio", { name: "Start fresh" }));
 
     expect(screen.getByRole("radio", { name: "Start fresh" })).toBeChecked();
+  });
+});
+
+describe("the Windows text size", () => {
+  it("scales the whole window, on top of the zoom", async () => {
+    startApp({
+      settings: settingsWith({ appearance: { zoom: 150 } }),
+      system: { textScalePercent: 125, locale: "en-US" },
+    });
+    renderApp();
+
+    await waitFor(() => {
+      expect(property("--zoom")).toBe("1.875");
+    });
+    // 16px times 1.5 times 1.25.
+    expect(getComputedStyle(root).fontSize).toBe("30px");
+  });
+
+  it("is left out when the setting says not to follow it", async () => {
+    startApp({
+      settings: settingsWith({ appearance: { followTextSize: false } }),
+      system: { textScalePercent: 225, locale: "en-US" },
+    });
+    renderApp();
+
+    await waitFor(() => {
+      expect(property("--zoom")).toBe("1");
+    });
+    expect(getComputedStyle(root).fontSize).toBe("16px");
+  });
+
+  it("changes live, when the person changes it in Windows", async () => {
+    startApp();
+    renderApp();
+    await waitFor(() => {
+      expect(getComputedStyle(root).fontSize).toBe("16px");
+    });
+
+    await emit("system-preferences-changed", {
+      preferences: { textScalePercent: 150, locale: "en-US" },
+    });
+
+    await waitFor(() => {
+      expect(getComputedStyle(root).fontSize).toBe("24px");
+    });
+  });
+
+  it("follows the setting too: turning it off brings the normal size back at once", async () => {
+    startApp({ system: { textScalePercent: 150, locale: "en-US" } });
+    renderApp();
+    await waitFor(() => {
+      expect(getComputedStyle(root).fontSize).toBe("24px");
+    });
+
+    await emit("settings-changed", {
+      settings: settingsWith({ appearance: { followTextSize: false } }),
+      notice: null,
+    });
+
+    await waitFor(() => {
+      expect(getComputedStyle(root).fontSize).toBe("16px");
+    });
   });
 });

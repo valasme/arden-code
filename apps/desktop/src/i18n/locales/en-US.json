@@ -102,6 +102,10 @@
         "label": "Code ligatures"
       },
       "codePreview": "Code preview",
+      "followTextSize": {
+        "description": "Make everything larger when the Windows text size is larger.",
+        "label": "Follow Windows text size"
+      },
       "reduceMotion": {
         "description": "Play fewer animations. Follows the Windows Show animations setting by default.",
         "label": "Reduce motion",
@@ -136,6 +140,13 @@
         "fresh": "Start fresh",
         "label": "On startup",
         "restore": "Restore the last session"
+      },
+      "regionalFormat": {
+        "description": "How dates, numbers and times are written.",
+        "english": "English (US)",
+        "label": "Regional format",
+        "preview": "Example: {{date}}, {{number}}, {{relative}}",
+        "windows": "Same as Windows"
       }
     },
     "placeholder": "These settings arrive in a later update.",

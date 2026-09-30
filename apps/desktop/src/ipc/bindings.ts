@@ -71,6 +71,14 @@ export const commands = {
 	details: string | null,
 } | null>("take_settings_notice"),
 	/**
+	 *  The text size and the regional format in Windows now.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	getSystemPreferences: () => __TAURI_INVOKE<SystemPreferences>("get_system_preferences"),
+	/**
 	 *  Fails on purpose, so tests and the development page can see what an error looks like. Debug
 	 *  builds only.
 	 * 
@@ -86,6 +94,7 @@ export const commands = {
 /** Events */
 export const events = {
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
+	systemPreferencesChanged: makeEvent<SystemPreferencesChanged>("system-preferences-changed"),
 };
 
 /* Types */
@@ -113,6 +122,8 @@ export type Appearance = {
 	theme: Theme,
 	/**  How large everything is, from 80 to 200 percent. */
 	zoom: number,
+	/**  Make the app larger or smaller with the Windows text size setting, on top of the zoom. */
+	followTextSize: boolean,
 	/**  The size of code text, from 11 to 20 pixels. */
 	codeFontSize: number,
 	/**  Join characters such as `=>` into one symbol in code. */
@@ -148,6 +159,8 @@ export type General = {
 	onStartup: OnStartup,
 	/**  Look for a new version now and then, without asking. */
 	checkForUpdates: boolean,
+	/**  How dates and numbers are written. */
+	regionalFormat: RegionalFormat,
 };
 
 /**  How wide the side panels were left. */
@@ -174,11 +187,18 @@ export type ReduceMotion =
 /**  Never reduce motion. */
 "off";
 
+/**  Which regional format dates and numbers are written in. */
+export type RegionalFormat = 
+/**  The format chosen in Windows, even when it differs from the language of the interface. */
+"windows" | 
+/**  English (US), whatever Windows says. */
+"english";
+
 /**  One change to one setting. The UI sends these, so each setting keeps its own type. */
-export type SettingChange = ({ generalOnStartup: OnStartup }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ generalCheckForUpdates: boolean }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceTheme: Theme }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceZoom: number }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceCodeFontSize: number }) & { appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceCodeLigatures: boolean }) & { appearanceCodeFontSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceReduceMotion: ReduceMotion }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceShowStatusBar: boolean }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ layoutSidebarWidth: number }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never } | ({ layoutInspectorWidth: number }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutSidebarWidth?: never };
+export type SettingChange = ({ generalOnStartup: OnStartup }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ generalCheckForUpdates: boolean }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ generalRegionalFormat: RegionalFormat }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceTheme: Theme }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceZoom: number }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceFollowTextSize: boolean }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceCodeFontSize: number }) & { appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceCodeLigatures: boolean }) & { appearanceCodeFontSize?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceReduceMotion: ReduceMotion }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceShowStatusBar: boolean }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ layoutSidebarWidth: number }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never } | ({ layoutInspectorWidth: number }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutSidebarWidth?: never };
 
 /**  One setting, named so that it can be reset without saying its value. */
-export type SettingKey = "generalOnStartup" | "generalCheckForUpdates" | "appearanceTheme" | "appearanceZoom" | "appearanceCodeFontSize" | "appearanceCodeLigatures" | "appearanceReduceMotion" | "appearanceShowStatusBar" | "layoutSidebarWidth" | "layoutInspectorWidth";
+export type SettingKey = "generalOnStartup" | "generalCheckForUpdates" | "generalRegionalFormat" | "appearanceTheme" | "appearanceZoom" | "appearanceFollowTextSize" | "appearanceCodeFontSize" | "appearanceCodeLigatures" | "appearanceReduceMotion" | "appearanceShowStatusBar" | "layoutSidebarWidth" | "layoutInspectorWidth";
 
 /**
  *  Every setting, as stored in `settings.json`. Keys this version does not know are ignored. The
@@ -197,6 +217,19 @@ export type SettingsChanged = {
 	settings: Settings,
 	/**  Set when the file could not be used and the defaults took over (`ARD-SET-002`). */
 	notice: AppError | null,
+};
+
+/**  What Windows says about the text size and the regional format. */
+export type SystemPreferences = {
+	/**  The text size as a percentage: 100 is normal, and Windows goes up to 225. */
+	textScalePercent: number,
+	/**  The regional format as a language tag such as `el-GR`. */
+	locale: string,
+};
+
+/**  Sent to the UI whenever the text size or the regional format changes in Windows. */
+export type SystemPreferencesChanged = {
+	preferences: SystemPreferences,
 };
 
 /**  Which color scheme the window uses. */

@@ -7,6 +7,7 @@ use arden_diagnostics::logging::{self, UiLevel};
 use arden_diagnostics::redact::Redactor;
 use arden_settings::service::SettingsService;
 use arden_settings::settings::{SettingChange, SettingKey, Settings};
+use arden_windows::preferences;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, State};
@@ -135,6 +136,44 @@ pub fn reset_setting(
     settings: State<'_, SettingsService>,
 ) -> Result<Settings, AppError> {
     settings.reset(key)
+}
+
+/// What Windows says about the text size and the regional format.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemPreferences {
+    /// The text size as a percentage: 100 is normal, and Windows goes up to 225.
+    pub text_scale_percent: u16,
+    /// The regional format as a language tag such as `el-GR`.
+    pub locale: String,
+}
+
+impl From<preferences::SystemPreferences> for SystemPreferences {
+    fn from(preferences: preferences::SystemPreferences) -> Self {
+        Self {
+            text_scale_percent: preferences.text_scale_percent,
+            locale: preferences.locale,
+        }
+    }
+}
+
+/// Sent to the UI whenever the text size or the regional format changes in Windows.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct SystemPreferencesChanged {
+    pub preferences: SystemPreferences,
+}
+
+/// The text size and the regional format in Windows now.
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Every command returns a `Result` (ADR 0008), even one that cannot fail yet.
+#[allow(clippy::unnecessary_wraps)]
+#[tauri::command]
+#[specta::specta]
+pub fn get_system_preferences() -> Result<SystemPreferences, AppError> {
+    Ok(preferences::read().into())
 }
 
 /// The problem found with the settings file when the app started, if any. It is handed over once.

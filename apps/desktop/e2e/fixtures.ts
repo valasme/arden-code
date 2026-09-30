@@ -100,10 +100,12 @@ export interface RunningApp {
 export interface LaunchOptions {
   /** The folder for the app's files. Defaults to a new empty one. */
   dataDir?: string;
+  /** More environment variables for the app, such as the file that stands in for Windows' settings. */
+  env?: Record<string, string>;
 }
 
 /** Starts the app and attaches to its web page. */
-export async function launchApp({ dataDir }: LaunchOptions = {}): Promise<RunningApp> {
+export async function launchApp({ dataDir, env = {} }: LaunchOptions = {}): Promise<RunningApp> {
   const ownedFolders: string[] = [];
   const data = dataDir ?? mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
   if (!dataDir) ownedFolders.push(data);
@@ -112,7 +114,7 @@ export async function launchApp({ dataDir }: LaunchOptions = {}): Promise<Runnin
 
   const debugPort = await freePort();
   const app = spawn(executable, [], {
-    env: appEnvironment(data, profile, debugPort),
+    env: { ...appEnvironment(data, profile, debugPort), ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const output = collectOutput(app);

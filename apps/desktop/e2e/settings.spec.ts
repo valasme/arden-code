@@ -58,10 +58,11 @@ test.describe("settings in the real app", () => {
       expect(JSON.parse(readFileSync(settingsPath(app.dataDir), "utf8"))).toEqual({
         $schema: "./settings.schema.json",
         version: 1,
-        general: { onStartup: "restore", checkForUpdates: true },
+        general: { onStartup: "restore", checkForUpdates: true, regionalFormat: "windows" },
         appearance: {
           theme: "system",
           zoom: 100,
+          followTextSize: true,
           codeFontSize: 13,
           codeLigatures: false,
           reduceMotion: "system",

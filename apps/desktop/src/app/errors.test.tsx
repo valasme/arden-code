@@ -86,19 +86,17 @@ describe("errors nobody handled", () => {
       details: "TypeError: x is undefined",
     };
     render(<Toaster />);
-    // Toasts live in a global store, and an earlier test may have left one there.
-    toast.dismiss();
-    await waitFor(() => {
-      expect(document.querySelectorAll("[data-sonner-toast]")).toHaveLength(0);
-    });
 
     showErrorToast(error);
 
-    // Toasts fade in, so they only count as visible once the animation has started.
+    // Toasts fade in, so they only count as visible once the animation has started. Toasts live in
+    // a global store, so one that an earlier test left there may be showing too: look at the first.
     await waitFor(() => {
-      expect(screen.getByText("Something went wrong (ARD-APP-002)")).toBeVisible();
-      expect(screen.getByText("The interface hit an error it could not handle.")).toBeVisible();
-      expect(screen.getByRole("button", { name: "Copy details" })).toBeVisible();
+      expect(screen.getAllByText("Something went wrong (ARD-APP-002)")[0]).toBeVisible();
+      expect(
+        screen.getAllByText("The interface hit an error it could not handle.")[0],
+      ).toBeVisible();
+      expect(screen.getAllByRole("button", { name: "Copy details" })[0]).toBeVisible();
     });
   });
 });

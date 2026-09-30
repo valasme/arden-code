@@ -39,6 +39,17 @@ pub enum OnStartup {
     Fresh,
 }
 
+/// Which regional format dates and numbers are written in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum RegionalFormat {
+    /// The format chosen in Windows, even when it differs from the language of the interface.
+    #[default]
+    Windows,
+    /// English (US), whatever Windows says.
+    English,
+}
+
 /// Whether animations play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(rename_all = "lowercase")]
@@ -60,6 +71,8 @@ pub struct General {
     pub on_startup: OnStartup,
     /// Look for a new version now and then, without asking.
     pub check_for_updates: bool,
+    /// How dates and numbers are written.
+    pub regional_format: RegionalFormat,
 }
 
 impl Default for General {
@@ -67,6 +80,7 @@ impl Default for General {
         Self {
             on_startup: OnStartup::default(),
             check_for_updates: true,
+            regional_format: RegionalFormat::default(),
         }
     }
 }
@@ -79,6 +93,8 @@ pub struct Appearance {
     pub theme: Theme,
     /// How large everything is, from 80 to 200 percent.
     pub zoom: u16,
+    /// Make the app larger or smaller with the Windows text size setting, on top of the zoom.
+    pub follow_text_size: bool,
     /// The size of code text, from 11 to 20 pixels.
     pub code_font_size: u8,
     /// Join characters such as `=>` into one symbol in code.
@@ -94,6 +110,7 @@ impl Default for Appearance {
         Self {
             theme: Theme::default(),
             zoom: 100,
+            follow_text_size: true,
             code_font_size: 13,
             code_ligatures: false,
             reduce_motion: ReduceMotion::default(),
@@ -149,8 +166,10 @@ impl Default for Settings {
 pub enum SettingChange {
     GeneralOnStartup(OnStartup),
     GeneralCheckForUpdates(bool),
+    GeneralRegionalFormat(RegionalFormat),
     AppearanceTheme(Theme),
     AppearanceZoom(u16),
+    AppearanceFollowTextSize(bool),
     AppearanceCodeFontSize(u8),
     AppearanceCodeLigatures(bool),
     AppearanceReduceMotion(ReduceMotion),
@@ -165,8 +184,10 @@ pub enum SettingChange {
 pub enum SettingKey {
     GeneralOnStartup,
     GeneralCheckForUpdates,
+    GeneralRegionalFormat,
     AppearanceTheme,
     AppearanceZoom,
+    AppearanceFollowTextSize,
     AppearanceCodeFontSize,
     AppearanceCodeLigatures,
     AppearanceReduceMotion,
@@ -177,11 +198,13 @@ pub enum SettingKey {
 
 impl SettingKey {
     /// Every setting.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 12] = [
         Self::GeneralOnStartup,
         Self::GeneralCheckForUpdates,
+        Self::GeneralRegionalFormat,
         Self::AppearanceTheme,
         Self::AppearanceZoom,
+        Self::AppearanceFollowTextSize,
         Self::AppearanceCodeFontSize,
         Self::AppearanceCodeLigatures,
         Self::AppearanceReduceMotion,
@@ -198,8 +221,12 @@ impl Settings {
         match change {
             SettingChange::GeneralOnStartup(value) => self.general.on_startup = value,
             SettingChange::GeneralCheckForUpdates(value) => self.general.check_for_updates = value,
+            SettingChange::GeneralRegionalFormat(value) => self.general.regional_format = value,
             SettingChange::AppearanceTheme(value) => self.appearance.theme = value,
             SettingChange::AppearanceZoom(value) => self.appearance.zoom = value,
+            SettingChange::AppearanceFollowTextSize(value) => {
+                self.appearance.follow_text_size = value;
+            }
             SettingChange::AppearanceCodeFontSize(value) => self.appearance.code_font_size = value,
             SettingChange::AppearanceCodeLigatures(value) => self.appearance.code_ligatures = value,
             SettingChange::AppearanceReduceMotion(value) => self.appearance.reduce_motion = value,
@@ -220,8 +247,14 @@ impl Settings {
             SettingKey::GeneralCheckForUpdates => {
                 self.general.check_for_updates = defaults.general.check_for_updates;
             }
+            SettingKey::GeneralRegionalFormat => {
+                self.general.regional_format = defaults.general.regional_format;
+            }
             SettingKey::AppearanceTheme => self.appearance.theme = defaults.appearance.theme,
             SettingKey::AppearanceZoom => self.appearance.zoom = defaults.appearance.zoom,
+            SettingKey::AppearanceFollowTextSize => {
+                self.appearance.follow_text_size = defaults.appearance.follow_text_size;
+            }
             SettingKey::AppearanceCodeFontSize => {
                 self.appearance.code_font_size = defaults.appearance.code_font_size;
             }
@@ -273,8 +306,10 @@ mod tests {
         assert_eq!(settings.version, CURRENT_VERSION);
         assert_eq!(settings.general.on_startup, OnStartup::Restore);
         assert!(settings.general.check_for_updates);
+        assert_eq!(settings.general.regional_format, RegionalFormat::Windows);
         assert_eq!(settings.appearance.theme, Theme::System);
         assert_eq!(settings.appearance.zoom, 100);
+        assert!(settings.appearance.follow_text_size);
         assert_eq!(settings.appearance.code_font_size, 13);
         assert!(!settings.appearance.code_ligatures);
         assert_eq!(settings.appearance.reduce_motion, ReduceMotion::System);
@@ -289,10 +324,15 @@ mod tests {
             value,
             serde_json::json!({
                 "version": 1,
-                "general": { "onStartup": "restore", "checkForUpdates": true },
+                "general": {
+                    "onStartup": "restore",
+                    "checkForUpdates": true,
+                    "regionalFormat": "windows"
+                },
                 "appearance": {
                     "theme": "system",
                     "zoom": 100,
+                    "followTextSize": true,
                     "codeFontSize": 13,
                     "codeLigatures": false,
                     "reduceMotion": "system",
@@ -320,7 +360,11 @@ mod tests {
 
         settings.apply(SettingChange::GeneralOnStartup(OnStartup::Fresh));
         settings.apply(SettingChange::GeneralCheckForUpdates(false));
+        settings.apply(SettingChange::GeneralRegionalFormat(
+            RegionalFormat::English,
+        ));
         settings.apply(SettingChange::AppearanceZoom(150));
+        settings.apply(SettingChange::AppearanceFollowTextSize(false));
         settings.apply(SettingChange::AppearanceCodeFontSize(16));
         settings.apply(SettingChange::AppearanceCodeLigatures(true));
         settings.apply(SettingChange::AppearanceReduceMotion(ReduceMotion::On));
@@ -330,6 +374,8 @@ mod tests {
 
         assert_eq!(settings.general.on_startup, OnStartup::Fresh);
         assert!(!settings.general.check_for_updates);
+        assert_eq!(settings.general.regional_format, RegionalFormat::English);
+        assert!(!settings.appearance.follow_text_size);
         assert_eq!(settings.appearance.zoom, 150);
         assert_eq!(settings.appearance.code_font_size, 16);
         assert!(settings.appearance.code_ligatures);
@@ -376,8 +422,12 @@ mod tests {
         let mut settings = Settings::default();
         settings.apply(SettingChange::GeneralOnStartup(OnStartup::Fresh));
         settings.apply(SettingChange::GeneralCheckForUpdates(false));
+        settings.apply(SettingChange::GeneralRegionalFormat(
+            RegionalFormat::English,
+        ));
         settings.apply(SettingChange::AppearanceTheme(Theme::Dark));
         settings.apply(SettingChange::AppearanceZoom(150));
+        settings.apply(SettingChange::AppearanceFollowTextSize(false));
         settings.apply(SettingChange::AppearanceCodeFontSize(16));
         settings.apply(SettingChange::AppearanceCodeLigatures(true));
         settings.apply(SettingChange::AppearanceReduceMotion(ReduceMotion::On));
@@ -425,7 +475,7 @@ mod tests {
     #[test]
     fn unknown_keys_are_ignored_so_a_schema_reference_or_a_future_setting_does_no_harm() {
         let settings: Settings = serde_json::from_str(
-            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"future":1},"appearance":{"theme":"dark","zoom":100,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"extra":1}"#,
+            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"extra":1}"#,
         )
         .unwrap();
 
@@ -440,6 +490,7 @@ mod tests {
             text("appearance", "theme", r#""purple""#),
             text("general", "onStartup", r#""sometimes""#),
             text("appearance", "reduceMotion", r#""maybe""#),
+            text("general", "regionalFormat", r#""klingon""#),
         ] {
             assert!(serde_json::from_str::<Settings>(&bad).is_err(), "{bad}");
         }

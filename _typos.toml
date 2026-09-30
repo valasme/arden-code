@@ -1,6 +1,8 @@
 [default.extend-words]
 # "PNGs" is split into "PN" + "Gs" by the tokenizer.
 PN = "PN"
+# German, in the tests that check dates and relative times in other languages ("vor 5 Minuten").
+vor = "vor"
 
 [files]
 extend-exclude = [

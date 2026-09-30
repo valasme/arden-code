@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./app/App";
 import { defaultSettings } from "./ipc/defaults.gen";
-import { commands, type Settings } from "./ipc/bindings";
+import { fallbackSystemPreferences } from "./features/settings/systemPreferences";
+import { commands, type Settings, type SystemPreferences } from "./ipc/bindings";
 import {
   motionIsReduced,
   paintAppearance,
@@ -31,16 +32,25 @@ async function readSettings(): Promise<Settings> {
   }
 }
 
-const settings = await readSettings();
+async function readSystemPreferences(): Promise<SystemPreferences> {
+  if (!isTauri()) return fallbackSystemPreferences();
+  try {
+    return await commands.getSystemPreferences();
+  } catch {
+    return fallbackSystemPreferences();
+  }
+}
+
+const [settings, systemPreferences] = await Promise.all([readSettings(), readSystemPreferences()]);
 applyTheme(settings.appearance.theme);
-paintAppearance(document.documentElement, settings.appearance);
+paintAppearance(document.documentElement, settings.appearance, systemPreferences.textScalePercent);
 paintMotion(
   document.documentElement,
   motionIsReduced(settings.appearance.reduceMotion, windowsReducesMotion()),
 );
 createRoot(container).render(
   <StrictMode>
-    <App initialSettings={settings} />
+    <App initialSettings={settings} initialSystemPreferences={systemPreferences} />
   </StrictMode>,
 );
 showWindowWhenPainted().catch(() => {

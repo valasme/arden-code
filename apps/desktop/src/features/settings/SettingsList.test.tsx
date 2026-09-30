@@ -6,13 +6,14 @@ import userEvent from "@testing-library/user-event";
 import { z } from "zod";
 
 import { Toaster } from "@/components/ui/sonner";
-import type { SettingKey, Settings } from "@/ipc/bindings";
+import type { SettingKey, Settings, SystemPreferences } from "@/ipc/bindings";
 import { defaultSettings } from "@/ipc/defaults.gen";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 import { settingsWith } from "@/test/settings";
 
 import { SettingsList } from "./SettingsList";
 import { SettingsSync } from "./SettingsSync";
+import { SystemPreferencesSync } from "./SystemPreferencesSync";
 import type { SettingsTab } from "./tabs";
 
 import "@/styles/global.css";
@@ -21,8 +22,10 @@ import "@/styles/global.css";
 const places = {
   generalOnStartup: ["general", "onStartup"],
   generalCheckForUpdates: ["general", "checkForUpdates"],
+  generalRegionalFormat: ["general", "regionalFormat"],
   appearanceTheme: ["appearance", "theme"],
   appearanceZoom: ["appearance", "zoom"],
+  appearanceFollowTextSize: ["appearance", "followTextSize"],
   appearanceCodeFontSize: ["appearance", "codeFontSize"],
   appearanceCodeLigatures: ["appearance", "codeLigatures"],
   appearanceReduceMotion: ["appearance", "reduceMotion"],
@@ -53,6 +56,8 @@ function isSettingKey(key: string): key is SettingKey {
 
 interface Options {
   settings?: Settings;
+  /** What Windows says about the text size and the regional format. */
+  system?: SystemPreferences;
   /** How long saving takes, so a test can look at the screen while it is still in progress. */
   savingTakes?: number;
   /** Makes saving fail the way Rust reports it: JSON text carrying the error. */
@@ -61,6 +66,7 @@ interface Options {
 
 function startApp({
   settings = settingsWith(),
+  system = { textScalePercent: 100, locale: "en-US" },
   savingTakes = 0,
   failToSave = false,
 }: Options = {}) {
@@ -72,6 +78,7 @@ function startApp({
       calls.push({ command, payload });
       if (command === "get_settings") return current;
       if (command === "take_settings_notice") return null;
+      if (command === "get_system_preferences") return system;
       if (command === "change_setting") {
         await new Promise((resolve) => setTimeout(resolve, savingTakes));
         if (failToSave) {
@@ -105,6 +112,7 @@ function renderTab(tab: SettingsTab) {
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <SettingsSync />
+      <SystemPreferencesSync />
       <SettingsList tab={tab} />
       <Toaster />
     </QueryClientProvider>,
@@ -157,6 +165,66 @@ describe("General → Check for updates automatically", () => {
 
     await waitFor(() => {
       expect(savedChange(calls)).toEqual({ change: { generalCheckForUpdates: false } });
+    });
+    expect(toggle).not.toBeChecked();
+  });
+});
+
+describe("General → Regional format", () => {
+  it("follows Windows by default, and shows an example written that way", async () => {
+    startApp({ system: { textScalePercent: 100, locale: "el-GR" } });
+    renderTab("general");
+
+    const group = await screen.findByRole("radiogroup", { name: "Regional format" });
+
+    expect(within(group).getByRole("radio", { name: "Same as Windows" })).toBeChecked();
+    // A Greek regional format, although the text of the interface is English.
+    expect(
+      await screen.findByText("Example: 30/9/2026, 1.234.567,89, πριν από 5 λεπτά"),
+    ).toBeVisible();
+  });
+
+  it("can be set to English (US), which changes the example at once and is saved", async () => {
+    const calls = startApp({ system: { textScalePercent: 100, locale: "el-GR" } });
+    const user = userEvent.setup();
+    renderTab("general");
+    await screen.findByText(/^Example: 30\/9\/2026/);
+
+    await user.click(screen.getByRole("radio", { name: "English (US)" }));
+
+    expect(
+      await screen.findByText("Example: 9/30/2026, 1,234,567.89, 5 minutes ago"),
+    ).toBeVisible();
+    await waitFor(() => {
+      expect(savedChange(calls)).toEqual({ change: { generalRegionalFormat: "english" } });
+    });
+  });
+
+  it("follows a change of the Windows regional format while the app runs", async () => {
+    startApp({ system: { textScalePercent: 100, locale: "de-DE" } });
+    renderTab("general");
+    await screen.findByText(/^Example: 30\.9\.2026/);
+
+    await emit("system-preferences-changed", {
+      preferences: { textScalePercent: 100, locale: "en-GB" },
+    });
+
+    expect(await screen.findByText(/^Example: 30\/09\/2026, 1,234,567\.89/)).toBeVisible();
+  });
+});
+
+describe("Appearance → Follow Windows text size", () => {
+  it("is on by default, and saves a switch off", async () => {
+    const calls = startApp();
+    const user = userEvent.setup();
+    renderTab("appearance");
+    const toggle = await screen.findByRole("switch", { name: "Follow Windows text size" });
+    expect(toggle).toBeChecked();
+
+    await user.click(toggle);
+
+    await waitFor(() => {
+      expect(savedChange(calls)).toEqual({ change: { appearanceFollowTextSize: false } });
     });
     expect(toggle).not.toBeChecked();
   });
