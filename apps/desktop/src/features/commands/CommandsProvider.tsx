@@ -1,11 +1,16 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { createContext, type ReactNode, useContext, useEffect, useMemo } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo } from "react";
 
 import { useChangeSetting, useSettings } from "@/features/settings/useSettings";
 import { nextZoom } from "@/features/settings/zoom";
+import { commands as ipc } from "@/ipc/bindings";
 import { defaultSettings } from "@/ipc/defaults.gen";
+import { projectsQuery } from "@/ipc/queries";
+import { showErrorToast } from "@/lib/errorToasts";
+import { toAppError } from "@/lib/errors";
 import { moveToArea } from "./areas";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
 import { useLayoutStore } from "@/state/layout";
@@ -83,16 +88,28 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
   const { zoom } = appearance;
   const changed = keyboard.shortcuts;
   const { mutate: changeSetting } = useChangeSetting();
+  const queryClient = useQueryClient();
+
+  const startSession = useCallback(async () => {
+    try {
+      const session = await ipc.createSession();
+      await queryClient.invalidateQueries({ queryKey: projectsQuery.queryKey });
+      await navigate({ to: "/session/$id", params: { id: session.id } });
+    } catch (error) {
+      showErrorToast(toAppError(error));
+    }
+  }, [navigate, queryClient]);
 
   const value = useMemo<Commands>(() => {
     const actions: Record<CommandId, { run: () => void; enabled?: () => boolean }> = {
       "palette.open": { run: () => setPaletteOpen(true) },
+      "session.new": { run: () => void startSession() },
       "settings.open": {
         run: () => void navigate({ to: "/settings/$tab", params: { tab: "general" } }),
       },
       "sidebar.toggle": { run: toggleSidebar },
       "inspector.toggle": { run: toggleInspector },
-      // There is no message box until sessions exist; the command waits for one.
+      // Only a session has a message box; the command waits for one.
       "messageBox.focus": {
         run: () => findMessageBox()?.focus(),
         enabled: () => findMessageBox() !== null,
@@ -125,6 +142,7 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
     };
   }, [
     navigate,
+    startSession,
     history,
     toggleSidebar,
     toggleInspector,

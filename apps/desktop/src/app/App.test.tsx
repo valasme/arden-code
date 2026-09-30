@@ -28,7 +28,9 @@ describe("App", () => {
 
     renderApp();
 
-    expect(await screen.findByRole("heading", { name: "Arden Code 0.1.0" })).toBeVisible();
+    expect(
+      await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." }),
+    ).toBeVisible();
   });
 
   it("puts the title bar above every page", async () => {
@@ -44,7 +46,7 @@ describe("App", () => {
     mockAppInfo();
 
     const { container } = renderApp();
-    await screen.findByRole("heading", { name: "Arden Code 0.1.0" });
+    await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." });
 
     await expectNoAccessibilityViolations(container);
   });
@@ -61,7 +63,9 @@ describe("App", () => {
     expect(forward).toBeDisabled();
 
     await user.click(back);
-    expect(await screen.findByRole("heading", { name: "Arden Code 0.1.0" })).toBeVisible();
+    expect(
+      await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." }),
+    ).toBeVisible();
     expect(back).toBeDisabled();
     expect(forward).toBeEnabled();
 

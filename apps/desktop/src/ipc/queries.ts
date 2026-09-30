@@ -52,3 +52,22 @@ export const pendingCrashesQuery = queryOptions({
   queryFn: () => (isTauri() ? commands.pendingCrashes() : []),
   staleTime: Number.POSITIVE_INFINITY,
 });
+
+/** The projects and their sessions. Refetched after a session is made or gets its title. */
+export const projectsQuery = queryOptions({
+  queryKey: ["projects"],
+  queryFn: () => (isTauri() ? commands.listProjects() : []),
+  staleTime: Number.POSITIVE_INFINITY,
+});
+
+/**
+ * One session with its turns. While a reply streams the cache is updated from the channel, so it
+ * is never fetched again on its own.
+ */
+export const sessionQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["session", id],
+    queryFn: () => commands.getSession(id),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });

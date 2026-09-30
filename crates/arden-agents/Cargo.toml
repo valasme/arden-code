@@ -1,0 +1,22 @@
+[package]
+name = "arden-agents"
+description = "Arden Code's projects, sessions and agent drivers, with the built-in Demo agent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+specta.workspace = true
+time = { version = "0.3", features = ["formatting"] }
+
+[dev-dependencies]
+tempfile = "3"
+time = { version = "0.3", features = ["formatting", "parsing"] }
+
+[lints]
+workspace = true

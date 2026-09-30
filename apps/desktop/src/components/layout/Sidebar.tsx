@@ -2,6 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { SettingsIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { SessionsNav } from "@/features/sessions/SessionsNav";
+
 /** Projects and their sessions, with the way into Settings. */
 export function Sidebar({ hidden }: { hidden: boolean }) {
   const { t } = useTranslation();
@@ -14,10 +16,7 @@ export function Sidebar({ hidden }: { hidden: boolean }) {
       className="flex h-full min-w-0 flex-col bg-sidebar text-sidebar-foreground"
     >
       <nav aria-label={t("sidebar.navigation")} className="flex min-h-0 flex-1 flex-col gap-2 p-2">
-        <h2 className="px-2 pt-1 text-xs font-medium text-muted-foreground">
-          {t("sidebar.projects")}
-        </h2>
-        <p className="px-2 text-xs text-muted-foreground">{t("sidebar.noSessions")}</p>
+        <SessionsNav />
       </nav>
       <div className="border-t border-sidebar-border p-2">
         <Link

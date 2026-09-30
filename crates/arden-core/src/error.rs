@@ -41,6 +41,12 @@ pub enum ErrorCode {
     /// The diagnostics bundle could not be written.
     #[serde(rename = "ARD-LOG-002")]
     DiagnosticsExport,
+    /// A session or project does not exist any more.
+    #[serde(rename = "ARD-AGT-001")]
+    SessionNotFound,
+    /// A message was sent while the agent was still answering the last one.
+    #[serde(rename = "ARD-AGT-002")]
+    TurnRunning,
     /// Windows' window menu could not be opened.
     #[serde(rename = "ARD-WIN-001")]
     WindowsSystemMenu,
@@ -64,6 +70,8 @@ impl ErrorCode {
             Self::SettingsOpen => "ARD-SET-005",
             Self::LogsFolder => "ARD-LOG-001",
             Self::DiagnosticsExport => "ARD-LOG-002",
+            Self::SessionNotFound => "ARD-AGT-001",
+            Self::TurnRunning => "ARD-AGT-002",
             Self::WindowsSystemMenu => "ARD-WIN-001",
             Self::WebEngineFailed => "ARD-WIN-002",
         }

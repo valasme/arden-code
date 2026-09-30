@@ -47,6 +47,12 @@ impl AppPaths {
         self.local.join("crashes")
     }
 
+    /// The Playground, the built-in project: a real folder, made on the first launch.
+    #[must_use]
+    pub fn playground_dir(&self) -> PathBuf {
+        self.local.join("playground")
+    }
+
     /// The saved window position and size.
     #[must_use]
     pub fn window_state_file(&self) -> PathBuf {

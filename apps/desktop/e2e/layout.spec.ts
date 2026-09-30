@@ -2,7 +2,8 @@ import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
 
-const sessionView = (page: Page) => page.getByRole("heading", { level: 1, name: /^Arden Code / });
+const sessionView = (page: Page) =>
+  page.getByRole("heading", { level: 1, name: "Real agents are coming. Try the Demo agent." });
 const generalSettings = (page: Page) => page.getByRole("heading", { level: 1, name: "General" });
 
 /** Sends a click of a mouse side button, the way Windows reports one. */

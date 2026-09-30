@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+  "crates/arden-agents",
   "crates/arden-core",
   "crates/arden-diagnostics",
   "crates/arden-settings",
@@ -17,6 +18,7 @@ repository = "https://github.com/valasme/arden-code"
 authors = ["valasme"]
 
 [workspace.dependencies]
+arden-agents = { path = "crates/arden-agents" }
 arden-core = { path = "crates/arden-core" }
 arden-diagnostics = { path = "crates/arden-diagnostics" }
 arden-settings = { path = "crates/arden-settings" }

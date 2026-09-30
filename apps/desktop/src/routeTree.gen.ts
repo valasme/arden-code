@@ -14,6 +14,7 @@ import { Route as LogsRouteImport } from './routes/logs'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as DevDesignSystemRouteImport } from './routes/dev/design-system'
 import { Route as DevErrorsRouteImport } from './routes/dev/errors'
+import { Route as SessionIdRouteImport } from './routes/session/$id'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsTabRouteImport } from './routes/settings/$tab'
 
@@ -42,6 +43,11 @@ const DevErrorsRoute = DevErrorsRouteImport.update({
   path: '/dev/errors',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SessionIdRoute = SessionIdRouteImport.update({
+  id: '/session/$id',
+  path: '/session/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRouteWithChildren
   '/dev/design-system': typeof DevDesignSystemRoute
   '/dev/errors': typeof DevErrorsRoute
+  '/session/$id': typeof SessionIdRoute
   '/settings/$tab': typeof SettingsTabRoute
   '/settings/': typeof SettingsIndexRoute
 }
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/logs': typeof LogsRoute
   '/dev/design-system': typeof DevDesignSystemRoute
   '/dev/errors': typeof DevErrorsRoute
+  '/session/$id': typeof SessionIdRoute
   '/settings/$tab': typeof SettingsTabRoute
   '/settings': typeof SettingsIndexRoute
 }
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRouteWithChildren
   '/dev/design-system': typeof DevDesignSystemRoute
   '/dev/errors': typeof DevErrorsRoute
+  '/session/$id': typeof SessionIdRoute
   '/settings/$tab': typeof SettingsTabRoute
   '/settings/': typeof SettingsIndexRoute
 }
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/dev/design-system'
     | '/dev/errors'
+    | '/session/$id'
     | '/settings/$tab'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/logs'
     | '/dev/design-system'
     | '/dev/errors'
+    | '/session/$id'
     | '/settings/$tab'
     | '/settings'
   id:
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/dev/design-system'
     | '/dev/errors'
+    | '/session/$id'
     | '/settings/$tab'
     | '/settings/'
   fileRoutesById: FileRoutesById
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRouteWithChildren
   DevDesignSystemRoute: typeof DevDesignSystemRoute
   DevErrorsRoute: typeof DevErrorsRoute
+  SessionIdRoute: typeof SessionIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -154,6 +167,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevErrorsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/session/$id': {
+      id: '/session/$id'
+      path: '/session/$id'
+      fullPath: '/session/$id'
+      preLoaderRoute: typeof SessionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings/': {
       id: '/settings/'
       path: '/'
@@ -191,6 +211,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRouteWithChildren,
   DevDesignSystemRoute: DevDesignSystemRoute,
   DevErrorsRoute: DevErrorsRoute,
+  SessionIdRoute: SessionIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

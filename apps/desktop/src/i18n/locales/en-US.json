@@ -17,6 +17,7 @@
     "navigateBack": "Back",
     "navigateForward": "Forward",
     "paletteOpen": "Command palette",
+    "sessionNew": "New session",
     "settingsOpen": "Settings",
     "shortcutsShow": "Keyboard shortcuts",
     "sidebarToggle": "Toggle sidebar",
@@ -41,6 +42,16 @@
     "title": "Arden Code closed unexpectedly"
   },
   "errors": {
+    "ARD-AGT-001": {
+      "action": "Start a new session with New session.",
+      "what": "That session does not exist any more.",
+      "why": "Sessions live in memory for now, so they are gone after Arden Code restarts."
+    },
+    "ARD-AGT-002": {
+      "action": "Wait for the reply to finish, or stop it with Esc, then send your message again.",
+      "what": "Your message was not sent.",
+      "why": "The agent is still answering the last message."
+    },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
       "what": "Something unexpected went wrong inside Arden Code.",
@@ -113,9 +124,6 @@
     "whatToDo": "What to do",
     "why": "Why"
   },
-  "home": {
-    "title": "{{name}} {{version}}"
-  },
   "inspector": {
     "empty": "Details of the open session will appear here.",
     "title": "Inspector"
@@ -162,6 +170,22 @@
   "regions": {
     "inspector": "Inspector",
     "sidebar": "Sidebar"
+  },
+  "sessions": {
+    "demoAgent": "Demo agent",
+    "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
+    "messageBox": {
+      "label": "Message",
+      "placeholder": "Message the Demo agent",
+      "send": "Send"
+    },
+    "new": "New session",
+    "playground": "Playground",
+    "replying": "The Demo agent is replying…",
+    "stopped": "The reply stopped.",
+    "transcript": "Conversation",
+    "untitled": "New session",
+    "you": "You"
   },
   "settings": {
     "about": {
@@ -404,5 +428,11 @@
     "restore": "Restore",
     "search": "Search or run a command",
     "searchShortcut": "Ctrl+K"
+  },
+  "welcome": {
+    "line": "Real agents are coming. Try the Demo agent.",
+    "newSession": "New session",
+    "palette": "Command palette",
+    "settings": "Settings"
   }
 }

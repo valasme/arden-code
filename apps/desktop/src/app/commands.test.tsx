@@ -28,6 +28,7 @@ function renderApp(entries = ["/"], initialIndex = entries.length - 1) {
     (command, payload) => {
       calls.push({ command, payload });
       if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
+      if (command === "list_projects") return [];
       if (command === "get_settings") return startingSettings;
       if (command === "change_setting") {
         const { change } = z
@@ -110,9 +111,10 @@ describe("the command palette", () => {
     await user.keyboard("{Control>}k{/Control}");
     const palette = await screen.findByRole("dialog", { name: "Command palette" });
 
-    // "Focus the message box" needs a message box, which does not exist yet, so it is not offered.
+    // "Focus the message box" needs a message box, which only a session has, so it is not offered.
     for (const [label, shortcut] of [
       ["Command palette", "Ctrl+K"],
+      ["New session", "Ctrl+N"],
       ["Settings", "Ctrl+,"],
       ["Toggle sidebar", "Ctrl+B"],
       ["Toggle inspector", "Ctrl+J"],
@@ -246,7 +248,9 @@ describe("the default shortcuts", () => {
     await screen.findByRole("heading", { level: 1, name: "General" });
 
     await user.keyboard("{Alt>}{ArrowLeft}{/Alt}");
-    expect(await screen.findByRole("heading", { name: "Arden Code 0.1.0" })).toBeVisible();
+    expect(
+      await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." }),
+    ).toBeVisible();
 
     await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
     expect(await screen.findByRole("heading", { level: 1, name: "General" })).toBeVisible();

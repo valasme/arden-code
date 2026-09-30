@@ -1,6 +1,7 @@
 //! The Arden Code desktop app.
 
 mod commands;
+mod sessions;
 mod webview;
 mod window;
 mod window_state;
@@ -8,8 +9,11 @@ mod window_state;
 pub use window::startup_background;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
+use arden_agents::playground;
+use arden_agents::store::SessionStore;
 use arden_core::paths::{AppPaths, DATA_DIR_VARIABLE};
 use arden_diagnostics::logging::UiLevel;
 use arden_diagnostics::redact::Redactor;
@@ -60,6 +64,10 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::reset_settings,
         commands::reset_app,
         commands::restart_app,
+        sessions::list_projects,
+        sessions::create_session,
+        sessions::get_session,
+        sessions::send_message,
         commands::debug_fail,
         commands::debug_panic,
     ];
@@ -91,6 +99,10 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::reset_settings,
         commands::reset_app,
         commands::restart_app,
+        sessions::list_projects,
+        sessions::create_session,
+        sessions::get_session,
+        sessions::send_message,
     ];
 
     builder.commands(commands).events(collect_events![
@@ -166,6 +178,17 @@ fn start_diagnostics(app: &tauri::App, paths: &AppPaths, level: UiLevel) -> Reda
         tracing::info!(version = env!("CARGO_PKG_VERSION"), "Arden Code started");
     }
     redactor
+}
+
+/// Makes the Playground folder on the first launch, and starts the store of sessions.
+fn manage_sessions(app: &tauri::App, paths: &AppPaths) {
+    let folder = paths.playground_dir();
+    let playground = playground::ensure(&folder).unwrap_or_else(|error| {
+        tracing::error!(%error, "could not create the Playground folder");
+        playground::describe(&folder)
+    });
+    let store: sessions::Sessions = Arc::new(SessionStore::new(vec![playground]));
+    app.manage(store);
 }
 
 /// How often Windows' text size and regional format are looked at for a change.
@@ -277,6 +300,7 @@ pub fn run() {
             });
             window::prepare_main_window(app, &paths, &settings.get())?;
             app.manage(settings);
+            manage_sessions(app, &paths);
             app.manage(paths);
             app.manage(watch_system_preferences(app.handle().clone()));
             Ok(())

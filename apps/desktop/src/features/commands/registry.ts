@@ -10,6 +10,7 @@ import {
   PanelRightIcon,
   RotateCcwIcon,
   SettingsIcon,
+  SquarePenIcon,
   TextCursorInputIcon,
   ZoomInIcon,
   ZoomOutIcon,
@@ -19,6 +20,7 @@ import {
 /** The identity of every command. Later tickets add theirs here. */
 export type CommandId =
   | "palette.open"
+  | "session.new"
   | "settings.open"
   | "sidebar.toggle"
   | "inspector.toggle"
@@ -38,6 +40,7 @@ export interface CommandDefinition {
   /** The key of the command's name in the language file. */
   labelKey:
     | "commands.paletteOpen"
+    | "commands.sessionNew"
     | "commands.settingsOpen"
     | "commands.sidebarToggle"
     | "commands.inspectorToggle"
@@ -69,6 +72,12 @@ export const commandDefinitions = [
     labelKey: "commands.paletteOpen",
     icon: CommandIcon,
     shortcuts: ["Ctrl+K", "Ctrl+Shift+P"],
+  },
+  {
+    id: "session.new",
+    labelKey: "commands.sessionNew",
+    icon: SquarePenIcon,
+    shortcuts: ["Ctrl+N"],
   },
   {
     id: "settings.open",

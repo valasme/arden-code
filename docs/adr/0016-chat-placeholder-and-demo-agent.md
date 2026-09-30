@@ -21,3 +21,13 @@ sizes, render untrusted markdown safely, and remain accessible. The foundation h
 
 - Performance, accessibility and safety are proven before any vendor integration.
 - Chats disappear on restart until SQLite arrives.
+
+## The session pipeline (ticket 19)
+
+- **Rust owns the sessions.** The `arden-agents` crate holds the projects and sessions in a `SessionStore`, behind a Mutex, and defines the `AgentDriver` trait. The Demo driver is its only implementation. The UI never keeps the truth: it reads a session from Rust (`get_session`), so a reloaded page shows the same conversation.
+- **A reply is a stream of events.** `send_message` records the person's message as a running turn and returns the session at that moment. The driver runs on its own thread, and every event (`textDelta`, `finished`, `failed`) is first applied to the store and then sent through a Tauri channel. If the channel is closed, the reply stops and the turn is marked failed, so the session is never stuck waiting.
+- **The UI applies the same events to its cache.** Events that arrive before the answer to `send_message` wait for it, so the start of a fast reply is never lost. Nothing refetches a session while it streams, because the refetched copy would already contain text the channel is about to deliver again.
+- **The Playground** is the folder `playground` in the local data folder, made at startup when it is missing.
+- **Time** is stored in UTC (RFC 3339, whole seconds) and shown by the UI in local time, in the regional format.
+- **The welcome state** is the home route. Its shortcut hints read the command registry, so they follow the person's own shortcuts.
+- **Not built yet:** thinking, tool calls and file changes as items, markdown, stopping a reply with Esc, and long conversations (tickets 20 and 21). The transcript is a plain scrolling list until then.

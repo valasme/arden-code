@@ -41,6 +41,7 @@ function startApp({
   mockIPC(
     (command) => {
       if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
+      if (command === "list_projects") return [];
       if (command === "get_settings") return settings;
       if (command === "change_setting") return savedAs;
       if (command === "take_settings_notice") return notice;

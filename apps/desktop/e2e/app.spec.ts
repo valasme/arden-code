@@ -11,9 +11,20 @@ function visibleWindowTitle(): string {
   ).trim();
 }
 
-test("the real app shows its name and version from Rust", async ({ appPage }) => {
+test("the real app shows the welcome state", async ({ appPage }) => {
   await expect(appPage).toHaveTitle("Arden Code");
-  await expect(appPage.getByRole("heading", { level: 1 })).toHaveText(/^Arden Code \d+\.\d+\.\d+$/);
+  await expect(appPage.getByRole("heading", { level: 1 })).toHaveText(
+    "Real agents are coming. Try the Demo agent.",
+  );
+});
+
+test("the About page shows the version and build that Rust reports", async ({ appPage }) => {
+  await appPage.getByRole("link", { name: "Settings" }).click();
+  await appPage.getByRole("link", { name: "About", exact: true }).click();
+
+  const facts = appPage.locator("dd");
+  await expect(facts.first()).toHaveText(/^\d+\.\d+\.\d+$/);
+  await expect(facts.nth(1)).toHaveText(/^[0-9a-f]{12} \(\d{4}-\d{2}-\d{2}\)$/);
 });
 
 test("the window is shown once the UI has drawn its first frame", async ({ appPage }) => {
