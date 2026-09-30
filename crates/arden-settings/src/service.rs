@@ -9,7 +9,7 @@ use std::time::Duration;
 use arden_core::error::AppError;
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
-use crate::settings::{SettingChange, Settings};
+use crate::settings::{SettingChange, SettingKey, Settings};
 use crate::store;
 
 /// How long the file must stay quiet before a hand edit is read.
@@ -193,11 +193,28 @@ impl SettingsService {
     ///
     /// Panics only if another thread panicked while holding the settings, which nothing does.
     pub fn update(&self, change: SettingChange) -> Result<Settings, AppError> {
+        self.modify(|settings| settings.apply(change))
+    }
+
+    /// Puts one setting back to its default, saves it and announces it.
+    ///
+    /// # Errors
+    ///
+    /// `ARD-SET-001` when the file cannot be written. The setting then stays as it was.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if another thread panicked while holding the settings, which nothing does.
+    pub fn reset(&self, key: SettingKey) -> Result<Settings, AppError> {
+        self.modify(|settings| settings.reset(key))
+    }
+
+    fn modify(&self, change: impl FnOnce(&mut Settings)) -> Result<Settings, AppError> {
         let next = {
             // Held until the file is written, so that a reload cannot read a state in between.
             let mut state = self.inner.state.lock().expect("settings lock");
             let mut next = state.settings.clone();
-            next.apply(change);
+            change(&mut next);
             if next == state.settings {
                 return Ok(next);
             }
@@ -220,7 +237,7 @@ mod tests {
     use arden_core::error::ErrorCode;
 
     use super::*;
-    use crate::settings::{SettingChange, Settings, Theme};
+    use crate::settings::{SettingChange, SettingKey, Settings, Theme};
     use crate::store;
 
     type Announcements = Arc<Mutex<Vec<(Settings, Option<ErrorCode>)>>>;
@@ -298,6 +315,31 @@ mod tests {
         let seen = seen.lock().unwrap();
         assert_eq!(seen.len(), 1, "{seen:?}");
         assert_eq!(seen[0].0.appearance.theme, Theme::Dark);
+    }
+
+    #[test]
+    fn a_setting_can_be_reset_and_the_reset_is_saved_and_announced() {
+        let folder = tempfile::tempdir().unwrap();
+        let service = SettingsService::start(folder.path());
+        service.update(SettingChange::AppearanceZoom(150)).unwrap();
+        let seen = listen(&service);
+
+        let reset = service.reset(SettingKey::AppearanceZoom).unwrap();
+
+        assert_eq!(reset.appearance.zoom, 100);
+        assert_eq!(store::load(folder.path()).settings.appearance.zoom, 100);
+        assert_eq!(seen.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn resetting_a_setting_that_is_already_the_default_announces_nothing() {
+        let folder = tempfile::tempdir().unwrap();
+        let service = SettingsService::start(folder.path());
+        let seen = listen(&service);
+
+        service.reset(SettingKey::AppearanceZoom).unwrap();
+
+        assert!(seen.lock().unwrap().is_empty());
     }
 
     #[test]

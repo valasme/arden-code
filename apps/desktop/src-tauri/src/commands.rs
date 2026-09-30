@@ -6,7 +6,7 @@ use arden_core::paths::AppPaths;
 use arden_diagnostics::logging::{self, UiLevel};
 use arden_diagnostics::redact::Redactor;
 use arden_settings::service::SettingsService;
-use arden_settings::settings::{SettingChange, Settings};
+use arden_settings::settings::{SettingChange, SettingKey, Settings};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, State};
@@ -119,6 +119,22 @@ pub fn change_setting(
     settings: State<'_, SettingsService>,
 ) -> Result<Settings, AppError> {
     settings.update(change)
+}
+
+/// Puts one setting back to its default: saves it, and tells every window.
+///
+/// # Errors
+///
+/// `ARD-SET-001` when the settings file cannot be written.
+// Tauri hands commands their state by value.
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command]
+#[specta::specta]
+pub fn reset_setting(
+    key: SettingKey,
+    settings: State<'_, SettingsService>,
+) -> Result<Settings, AppError> {
+    settings.reset(key)
 }
 
 /// The problem found with the settings file when the app started, if any. It is handed over once.

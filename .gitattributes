@@ -29,3 +29,4 @@
 pnpm-lock.yaml linguist-generated=true
 Cargo.lock linguist-generated=true
 apps/desktop/src/ipc/bindings.ts linguist-generated=true
+apps/desktop/src/ipc/defaults.gen.ts linguist-generated=true

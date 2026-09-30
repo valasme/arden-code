@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { isTauri } from "@tauri-apps/api/core";
 
-import { defaultSettings } from "@/features/settings/defaults";
+import { defaultSettings } from "@/ipc/defaults.gen";
 
 import { commands } from "./bindings";
 

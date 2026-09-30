@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import { SettingsSync } from "@/features/settings/SettingsSync";
-import { ThemeFromSettings } from "@/features/settings/ThemeFromSettings";
+import { AppearanceFromSettings } from "@/features/settings/AppearanceFromSettings";
 import type { Settings } from "@/ipc/bindings";
 import { settingsQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
@@ -36,7 +36,7 @@ export function App({ history, initialSettings }: AppProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <SettingsSync />
-      <ThemeFromSettings />
+      <AppearanceFromSettings />
       <AppErrorBoundary>
         <RouterProvider router={router} />
       </AppErrorBoundary>

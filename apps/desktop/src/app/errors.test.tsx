@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
+import { toast } from "sonner";
 
 import { Toaster } from "@/components/ui/sonner";
 import type { AppError } from "@/ipc/bindings";
@@ -21,6 +22,8 @@ function mockRust() {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // Toasts live in a global store, so one test's notice would otherwise show up in the next.
+  toast.dismiss();
 });
 
 function Bomb(): never {
@@ -83,6 +86,11 @@ describe("errors nobody handled", () => {
       details: "TypeError: x is undefined",
     };
     render(<Toaster />);
+    // Toasts live in a global store, and an earlier test may have left one there.
+    toast.dismiss();
+    await waitFor(() => {
+      expect(document.querySelectorAll("[data-sonner-toast]")).toHaveLength(0);
+    });
 
     showErrorToast(error);
 

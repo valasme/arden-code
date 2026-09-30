@@ -64,6 +64,19 @@ fn committed_bindings_match_the_rust_commands() {
     );
 }
 
+#[test]
+fn committed_defaults_match_the_settings_defaults() {
+    let committed = crate_dir().join("../src/ipc/defaults.gen.ts");
+    let actual = fs::read_to_string(&committed)
+        .expect("apps/desktop/src/ipc/defaults.gen.ts exists; run `pnpm bindings`");
+
+    assert_eq!(
+        actual.replace("\r\n", "\n"),
+        arden_desktop_lib::defaults_module(),
+        "defaults.gen.ts has drifted from the settings defaults; run `pnpm bindings` and commit the result"
+    );
+}
+
 /// The value of a token in the first rule that starts with `selector`, such as `:root` or `.dark`.
 fn token(css: &str, selector: &str, name: &str) -> String {
     let rule = &css[css.find(&format!("{selector} {{")).expect("rule exists")..];

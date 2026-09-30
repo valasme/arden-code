@@ -14,6 +14,9 @@ const planned: Record<string, readonly string[]> = {
   "shortcuts.show": ["Ctrl+/"],
   "navigate.back": ["Alt+ArrowLeft"],
   "navigate.forward": ["Alt+ArrowRight"],
+  "zoom.in": ["Ctrl+="],
+  "zoom.out": ["Ctrl+-"],
+  "zoom.reset": ["Ctrl+0"],
 };
 
 /** Shortcuts that Windows keeps for itself. An app that takes them breaks the system. */

@@ -6,8 +6,11 @@ import {
   MaximizeIcon,
   PanelLeftIcon,
   PanelRightIcon,
+  RotateCcwIcon,
   SettingsIcon,
   TextCursorInputIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,7 +24,10 @@ export type CommandId =
   | "window.fullScreen"
   | "shortcuts.show"
   | "navigate.back"
-  | "navigate.forward";
+  | "navigate.forward"
+  | "zoom.in"
+  | "zoom.out"
+  | "zoom.reset";
 
 export interface CommandDefinition {
   id: CommandId;
@@ -35,7 +41,10 @@ export interface CommandDefinition {
     | "commands.windowFullScreen"
     | "commands.shortcutsShow"
     | "commands.navigateBack"
-    | "commands.navigateForward";
+    | "commands.navigateForward"
+    | "commands.zoomIn"
+    | "commands.zoomOut"
+    | "commands.zoomReset";
   icon: LucideIcon;
   /**
    * Default shortcuts, the first being the one shown. They never use Ctrl+Alt with a letter (AltGr
@@ -103,6 +112,9 @@ export const commandDefinitions = [
     icon: ArrowRightIcon,
     shortcuts: ["Alt+ArrowRight"],
   },
+  { id: "zoom.in", labelKey: "commands.zoomIn", icon: ZoomInIcon, shortcuts: ["Ctrl+="] },
+  { id: "zoom.out", labelKey: "commands.zoomOut", icon: ZoomOutIcon, shortcuts: ["Ctrl+-"] },
+  { id: "zoom.reset", labelKey: "commands.zoomReset", icon: RotateCcwIcon, shortcuts: ["Ctrl+0"] },
 ] as const satisfies readonly CommandDefinition[];
 
 export function definitionOf(id: CommandId): CommandDefinition {

@@ -73,21 +73,29 @@ function positionOf(character: string): string | undefined {
 const isAscii = (text: string) =>
   Array.from(text).every((character) => (character.codePointAt(0) ?? 0) <= 0x7f);
 
+/**
+ * "Ctrl+=" is also Ctrl and the plus sign, which is what zooming in means to most people. The plus
+ * is Shift and the equals key on most layouts, and its own key on the number pad.
+ */
+const isPlusForEquals = (event: KeyPress, shortcut: ParsedShortcut) =>
+  shortcut.key === "=" && event.key === "+";
+
 export function matchesShortcut(event: KeyPress, shortcut: ParsedShortcut): boolean {
   // A character being composed (an accent, an input method) is not a shortcut.
   if (event.isComposing || event.metaKey) return false;
   // The modifiers must be exactly the ones named. Windows reports AltGr as Ctrl and Alt together, so
   // AltGr typing a character never matches a shortcut that names only Ctrl or only Alt.
+  const plusForEquals = isPlusForEquals(event, shortcut);
   if (
     event.ctrlKey !== shortcut.ctrl ||
     event.altKey !== shortcut.alt ||
-    event.shiftKey !== shortcut.shift
+    (event.shiftKey !== shortcut.shift && !plusForEquals)
   ) {
     return false;
   }
 
   const typed = event.key.toLowerCase();
-  if (typed === shortcut.key) return true;
+  if (typed === shortcut.key || plusForEquals) return true;
   // Keys with names (arrows, function keys) are the same on every layout.
   if (shortcut.key.length > 1) return false;
   // The character typed is not ASCII, so this is a non-Latin layout: use the key's position.

@@ -3,17 +3,22 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
+import { z } from "zod";
 
 import { commandDefinitions } from "@/features/commands/registry";
 import { formatShortcut } from "@/features/commands/shortcuts";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
+import { settingsWith } from "@/test/settings";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { App } from "./App";
 
 import "@/styles/global.css";
+
+/** The settings the app starts with; a test sets it before drawing the app. */
+let startingSettings = settingsWith();
 
 function renderApp(entries = ["/"], initialIndex = entries.length - 1) {
   Object.assign(globalThis, { isTauri: true });
@@ -23,7 +28,13 @@ function renderApp(entries = ["/"], initialIndex = entries.length - 1) {
     (command, payload) => {
       calls.push({ command, payload });
       if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
-      if (command === "get_settings") return { version: 1, appearance: { theme: "system" } };
+      if (command === "get_settings") return startingSettings;
+      if (command === "change_setting") {
+        const { change } = z
+          .object({ change: z.object({ appearanceZoom: z.number() }) })
+          .parse(payload);
+        return settingsWith({ appearance: { zoom: change.appearanceZoom } });
+      }
       if (command === "plugin:window|is_fullscreen") return false;
       return null;
     },
@@ -34,6 +45,7 @@ function renderApp(entries = ["/"], initialIndex = entries.length - 1) {
 }
 
 beforeEach(async () => {
+  startingSettings = settingsWith();
   await page.viewport(1280, 800);
   useLayoutStore.setState(useLayoutStore.getInitialState());
   useOverlayStore.setState(useOverlayStore.getInitialState());
@@ -316,5 +328,74 @@ describe("tooltips", () => {
     await user.hover(screen.getByRole("button", { name: "Hide sidebar" }));
 
     expect(await screen.findByRole("tooltip")).toHaveTextContent("Ctrl+B");
+  });
+});
+
+const zoomChanges = (calls: { command: string; payload: unknown }[]) =>
+  calls.filter((call) => call.command === "change_setting").map((call) => call.payload);
+
+describe("the zoom shortcuts", () => {
+  it("zoom in with Ctrl+= and Ctrl and the plus sign, and the page follows", async () => {
+    const user = userEvent.setup();
+    const calls = renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}={/Control}");
+    await waitFor(() => {
+      expect(document.documentElement.style.getPropertyValue("--zoom")).toBe("1.1");
+    });
+    await user.keyboard("{Control>}{Shift>}+{/Shift}{/Control}");
+
+    await waitFor(() => {
+      expect(document.documentElement.style.getPropertyValue("--zoom")).toBe("1.25");
+    });
+    expect(zoomChanges(calls)).toEqual([
+      { change: { appearanceZoom: 110 } },
+      { change: { appearanceZoom: 125 } },
+    ]);
+    // Everything is sized in rem, so the root size is what scales the whole window.
+    expect(getComputedStyle(document.documentElement).fontSize).toBe("20px");
+  });
+
+  it("zoom out with Ctrl+-", async () => {
+    const user = userEvent.setup();
+    const calls = renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}-{/Control}");
+
+    await waitFor(() => {
+      expect(zoomChanges(calls)).toEqual([{ change: { appearanceZoom: 90 } }]);
+    });
+  });
+
+  it("goes back to 100% with Ctrl+0", async () => {
+    startingSettings = settingsWith({ appearance: { zoom: 150 } });
+    const user = userEvent.setup();
+    const calls = renderApp();
+    await screen.findByRole("main");
+    await waitFor(() => {
+      expect(document.documentElement.style.getPropertyValue("--zoom")).toBe("1.5");
+    });
+
+    await user.keyboard("{Control>}0{/Control}");
+
+    await waitFor(() => {
+      expect(zoomChanges(calls)).toEqual([{ change: { appearanceZoom: 100 } }]);
+    });
+    expect(document.documentElement.style.getPropertyValue("--zoom")).toBe("1");
+  });
+
+  it("are in the command palette with their shortcuts", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+
+    expect(within(palette).getByRole("option", { name: /Zoom in/ })).toHaveTextContent("Ctrl+=");
+    expect(within(palette).getByRole("option", { name: /Zoom out/ })).toHaveTextContent("Ctrl+-");
+    expect(within(palette).getByRole("option", { name: /Reset zoom/ })).toHaveTextContent("Ctrl+0");
   });
 });

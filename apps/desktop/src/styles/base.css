@@ -3,8 +3,14 @@
     @apply border-border;
   }
 
+  /*
+   * The root size is what every rem is measured against, so the zoom setting (--zoom, set from the
+   * settings) scales the whole UI by scaling it. The default text size is set on the body: on the
+   * root it would shrink every rem to 13px and make the whole scale too small.
+   */
   html {
-    @apply bg-background font-sans text-sm text-foreground;
+    @apply bg-background font-sans text-foreground;
+    font-size: calc(100% * var(--zoom, 1));
     color-scheme: light;
   }
 
@@ -20,7 +26,7 @@
   }
 
   body {
-    @apply m-0 overflow-hidden antialiased;
+    @apply m-0 overflow-hidden text-sm antialiased;
   }
 
   /* Code uses ligatures only when the user turns them on (the --code-ligatures setting). */
@@ -30,6 +36,13 @@
   samp {
     @apply font-mono;
     font-variant-ligatures: var(--code-ligatures, none);
+  }
+
+  /* Code is as large as the code font size setting says. Key caps keep the size of their text. */
+  code,
+  pre,
+  samp {
+    font-size: var(--code-font-size, 0.8125rem);
   }
 
   /* Toasts look like the app's other floating surfaces. */
@@ -67,4 +80,20 @@
     text-decoration: underline;
     text-underline-offset: 0.25em;
   }
+}
+
+/*
+ * With reduced motion (the setting, or Windows asking for it) nothing animates. The setting can
+ * turn animations on even when Windows asks for fewer, so this follows the attribute the app sets
+ * and not the media query.
+ */
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  animation-delay: 0s !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
 }

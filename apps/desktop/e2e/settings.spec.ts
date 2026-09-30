@@ -54,10 +54,20 @@ test.describe("settings in the real app", () => {
     try {
       await expect(app.page.getByRole("main")).toBeVisible();
 
-      expect(readSettings(app.dataDir)).toEqual({
+      // The defaults from the plan (section 6.3), written out here as an independent check.
+      expect(JSON.parse(readFileSync(settingsPath(app.dataDir), "utf8"))).toEqual({
         $schema: "./settings.schema.json",
         version: 1,
-        appearance: { theme: "system" },
+        general: { onStartup: "restore", checkForUpdates: true },
+        appearance: {
+          theme: "system",
+          zoom: 100,
+          codeFontSize: 13,
+          codeLigatures: false,
+          reduceMotion: "system",
+          showStatusBar: true,
+        },
+        layout: { sidebarWidth: 260, inspectorWidth: 320 },
       });
       const schema = z
         .object({ type: z.literal("object") })
@@ -108,7 +118,10 @@ test.describe("settings in the real app", () => {
       await openAppearance(app.page);
       const before = readFileSync(settingsPath(app.dataDir), "utf8");
 
-      writeFileSync(settingsPath(app.dataDir), before.replace('"system"', '"dark"'));
+      writeFileSync(
+        settingsPath(app.dataDir),
+        before.replace('"theme": "system"', '"theme": "dark"'),
+      );
 
       await expect(app.page.locator("html")).toHaveClass(/dark/);
       await expect(app.page.getByRole("radio", { name: "Dark" })).toBeChecked();
@@ -150,7 +163,11 @@ test.describe("settings in the real app", () => {
       writeFileSync(settingsPath(app.dataDir), '{"appearance":{"theme":"purple"}}');
 
       await expect(app.page.getByText(/ARD-SET-002/)).toBeVisible();
-      await expect(app.page.getByRole("radio", { name: "Same as Windows" })).toBeChecked();
+      await expect(
+        app.page
+          .getByRole("radiogroup", { name: "Theme" })
+          .getByRole("radio", { name: "Same as Windows" }),
+      ).toBeChecked();
       expect(invalidCopies(app.dataDir)).toHaveLength(1);
     } finally {
       app.kill();

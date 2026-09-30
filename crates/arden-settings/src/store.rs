@@ -132,8 +132,10 @@ fn parse(text: &str) -> Result<(Settings, Value, bool), String> {
     let mut complete = serde_json::to_value(Settings::default())
         .map_err(|error| format!("the defaults could not be read: {error}"))?;
     merge(&mut complete, &upgraded);
-    let settings = serde_json::from_value(complete)
+    let mut settings: Settings = serde_json::from_value(complete)
         .map_err(|error| format!("a setting has a value that is not allowed: {error}"))?;
+    // A number outside its limits is brought back to the nearest allowed one, not refused.
+    settings.clamp();
     Ok((settings, upgraded, !was_current))
 }
 
@@ -453,6 +455,22 @@ mod tests {
             assert_eq!(loaded.settings, Settings::default(), "{text}");
             assert!(loaded.notice.is_none(), "{text}");
         }
+    }
+
+    #[test]
+    fn a_number_outside_its_limits_is_brought_to_the_nearest_allowed_one() {
+        let folder = tempfile::tempdir().unwrap();
+        fs::write(
+            folder.path().join("settings.json"),
+            r#"{"version":1,"appearance":{"zoom":900,"codeFontSize":1}}"#,
+        )
+        .unwrap();
+
+        let loaded = load_at(folder.path(), NOW);
+
+        assert_eq!(loaded.settings.appearance.zoom, 200);
+        assert_eq!(loaded.settings.appearance.code_font_size, 11);
+        assert!(loaded.notice.is_none(), "this is not a broken file");
     }
 
     #[test]

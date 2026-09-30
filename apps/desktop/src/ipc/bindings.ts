@@ -54,6 +54,14 @@ export const commands = {
 	 *  `ARD-SET-001` when the settings file cannot be written.
 	 */
 	changeSetting: (change: SettingChange) => __TAURI_INVOKE<Settings>("change_setting", { change }),
+	/**
+	 *  Puts one setting back to its default: saves it, and tells every window.
+	 * 
+	 *  # Errors
+	 * 
+	 *  `ARD-SET-001` when the settings file cannot be written.
+	 */
+	resetSetting: (key: SettingKey) => __TAURI_INVOKE<Settings>("reset_setting", { key }),
 	/**  The problem found with the settings file when the app started, if any. It is handed over once. */
 	takeSettingsNotice: () => __TAURI_INVOKE<{
 	code: ErrorCode,
@@ -103,6 +111,16 @@ export type AppInfo = {
 export type Appearance = {
 	/**  Light, dark, or follow Windows. */
 	theme: Theme,
+	/**  How large everything is, from 80 to 200 percent. */
+	zoom: number,
+	/**  The size of code text, from 11 to 20 pixels. */
+	codeFontSize: number,
+	/**  Join characters such as `=>` into one symbol in code. */
+	codeLigatures: boolean,
+	/**  Play fewer animations. */
+	reduceMotion: ReduceMotion,
+	/**  Show the bar along the bottom of the window. */
+	showStatusBar: boolean,
 };
 
 /**
@@ -124,8 +142,43 @@ export type ErrorCode =
 /**  Windows' window menu could not be opened. */
 "ARD-WIN-001";
 
+/**  How the app behaves in general. */
+export type General = {
+	/**  Restore the last session, or start fresh. */
+	onStartup: OnStartup,
+	/**  Look for a new version now and then, without asking. */
+	checkForUpdates: boolean,
+};
+
+/**  How wide the side panels were left. */
+export type Layout = {
+	/**  The sidebar's width in pixels. */
+	sidebarWidth: number,
+	/**  The inspector's width in pixels. */
+	inspectorWidth: number,
+};
+
+/**  What the app does when it starts. */
+export type OnStartup = 
+/**  Open the session that was open last time. */
+"restore" | 
+/**  Start with no session open. */
+"fresh";
+
+/**  Whether animations play. */
+export type ReduceMotion = 
+/**  Follow the Windows "Show animations" setting. */
+"system" | 
+/**  Always reduce motion. */
+"on" | 
+/**  Never reduce motion. */
+"off";
+
 /**  One change to one setting. The UI sends these, so each setting keeps its own type. */
-export type SettingChange = { appearanceTheme: Theme };
+export type SettingChange = ({ generalOnStartup: OnStartup }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ generalCheckForUpdates: boolean }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceTheme: Theme }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceZoom: number }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceCodeFontSize: number }) & { appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceCodeLigatures: boolean }) & { appearanceCodeFontSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceReduceMotion: ReduceMotion }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ appearanceShowStatusBar: boolean }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ layoutSidebarWidth: number }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never } | ({ layoutInspectorWidth: number }) & { appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutSidebarWidth?: never };
+
+/**  One setting, named so that it can be reset without saying its value. */
+export type SettingKey = "generalOnStartup" | "generalCheckForUpdates" | "appearanceTheme" | "appearanceZoom" | "appearanceCodeFontSize" | "appearanceCodeLigatures" | "appearanceReduceMotion" | "appearanceShowStatusBar" | "layoutSidebarWidth" | "layoutInspectorWidth";
 
 /**
  *  Every setting, as stored in `settings.json`. Keys this version does not know are ignored. The
@@ -134,7 +187,9 @@ export type SettingChange = { appearanceTheme: Theme };
 export type Settings = {
 	/**  The version of this file's layout. Written by the app; do not change it by hand. */
 	version: number,
+	general: General,
 	appearance: Appearance,
+	layout: Layout,
 };
 
 /**  Sent to the UI whenever the settings change: through the UI, or by editing the file by hand. */

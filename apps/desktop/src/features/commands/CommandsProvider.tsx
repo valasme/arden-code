@@ -3,6 +3,9 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createContext, type ReactNode, useContext, useEffect, useMemo } from "react";
 
+import { useChangeSetting, useSettings } from "@/features/settings/useSettings";
+import { nextZoom } from "@/features/settings/zoom";
+import { defaultSettings } from "@/ipc/defaults.gen";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
@@ -50,6 +53,8 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
   const toggleInspector = useLayoutStore((state) => state.toggleInspector);
   const setPaletteOpen = useOverlayStore((state) => state.setPaletteOpen);
   const setCheatSheetOpen = useOverlayStore((state) => state.setCheatSheetOpen);
+  const { zoom } = useSettings().appearance;
+  const { mutate: changeSetting } = useChangeSetting();
 
   const value = useMemo<Commands>(() => {
     const actions: Record<CommandId, { run: () => void; enabled?: () => boolean }> = {
@@ -68,6 +73,11 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
       "shortcuts.show": { run: () => setCheatSheetOpen(true) },
       "navigate.back": { run: history.onBack, enabled: () => history.canGoBack },
       "navigate.forward": { run: history.onForward, enabled: () => history.canGoForward },
+      "zoom.in": { run: () => changeSetting({ appearanceZoom: nextZoom(zoom, "in") }) },
+      "zoom.out": { run: () => changeSetting({ appearanceZoom: nextZoom(zoom, "out") }) },
+      "zoom.reset": {
+        run: () => changeSetting({ appearanceZoom: defaultSettings.appearance.zoom }),
+      },
     };
     return {
       commands: commandDefinitions.map((definition) => ({
@@ -79,7 +89,16 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
         if (action.enabled?.() ?? true) action.run();
       },
     };
-  }, [navigate, history, toggleSidebar, toggleInspector, setPaletteOpen, setCheatSheetOpen]);
+  }, [
+    navigate,
+    history,
+    toggleSidebar,
+    toggleInspector,
+    setPaletteOpen,
+    setCheatSheetOpen,
+    zoom,
+    changeSetting,
+  ]);
 
   useEffect(() => {
     const parsed = commandDefinitions.flatMap((definition) =>

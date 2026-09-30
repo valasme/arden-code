@@ -109,6 +109,21 @@ describe("matchesShortcut", () => {
     );
   });
 
+  it("treats Ctrl and + as the zoom in shortcut too, as browsers do", () => {
+    const zoomIn = parseShortcut("Ctrl+=");
+    expect(matchesShortcut(press("=", "Equal", { ctrlKey: true }), zoomIn)).toBe(true);
+    // The plus sign on the main keys needs Shift; on the number pad it does not.
+    expect(matchesShortcut(press("+", "Equal", { ctrlKey: true, shiftKey: true }), zoomIn)).toBe(
+      true,
+    );
+    expect(matchesShortcut(press("+", "NumpadAdd", { ctrlKey: true }), zoomIn)).toBe(true);
+    expect(matchesShortcut(press("+", "Equal", { shiftKey: true }), zoomIn)).toBe(false);
+    // Shift alone still changes what other shortcuts mean.
+    expect(matchesShortcut(press("=", "Equal", { ctrlKey: true, shiftKey: true }), zoomIn)).toBe(
+      false,
+    );
+  });
+
   it("never matches while a character is being composed", () => {
     expect(matchesShortcut(press("k", "KeyK", { ctrlKey: true, isComposing: true }), ctrlK)).toBe(
       false,

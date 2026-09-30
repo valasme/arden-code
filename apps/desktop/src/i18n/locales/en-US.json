@@ -17,7 +17,10 @@
     "settingsOpen": "Settings",
     "shortcutsShow": "Keyboard shortcuts",
     "sidebarToggle": "Toggle sidebar",
-    "windowFullScreen": "Full screen"
+    "windowFullScreen": "Full screen",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomReset": "Reset zoom"
   },
   "errors": {
     "ARD-APP-001": {
@@ -89,15 +92,61 @@
   },
   "settings": {
     "appearance": {
+      "codeFontSize": {
+        "description": "The size of code in replies, from 11 to 20 pixels.",
+        "label": "Code font size",
+        "value": "{{value}} px"
+      },
+      "codeLigatures": {
+        "description": "Join characters such as => and != into one symbol in code.",
+        "label": "Code ligatures"
+      },
+      "codePreview": "Code preview",
+      "reduceMotion": {
+        "description": "Play fewer animations. Follows the Windows Show animations setting by default.",
+        "label": "Reduce motion",
+        "off": "Do not reduce",
+        "on": "Reduce",
+        "system": "Same as Windows"
+      },
+      "showStatusBar": {
+        "description": "The bar along the bottom of the window.",
+        "label": "Show status bar"
+      },
       "theme": {
         "dark": "Dark",
         "description": "Light or dark, or the same as Windows.",
         "label": "Theme",
         "light": "Light",
         "system": "Same as Windows"
+      },
+      "zoom": {
+        "description": "Makes everything larger or smaller, from 80 to 200 percent.",
+        "label": "Zoom",
+        "value": "{{value}}%"
+      }
+    },
+    "general": {
+      "checkForUpdates": {
+        "description": "Look for a new version in the background. Nothing installs without you.",
+        "label": "Check for updates automatically"
+      },
+      "onStartup": {
+        "description": "What Arden Code opens when it starts.",
+        "fresh": "Start fresh",
+        "label": "On startup",
+        "restore": "Restore the last session"
       }
     },
     "placeholder": "These settings arrive in a later update.",
+    "reset": "Reset {{name}} to its default",
+    "resetButton": "Reset",
+    "search": {
+      "empty": "No setting matches.",
+      "label": "Search settings",
+      "placeholder": "Search settings",
+      "resultsLabel": "Search results"
+    },
     "tabs": {
       "about": "About",
       "advanced": "Advanced",
