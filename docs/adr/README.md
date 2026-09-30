@@ -33,3 +33,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0023](0023-zoom-and-the-root-size.md) | Zoom, and the size of one rem | Accepted |
 | [0024](0024-areas-context-menus-and-browser-features.md) | Areas, context menus and the browser's own features | Accepted |
 | [0025](0025-diagnostics.md) | Diagnostics: logs, bundles and crash recovery | Accepted |
+| [0026](0026-markdown-links-and-images.md) | Markdown, links and images in an agent's reply | Accepted |

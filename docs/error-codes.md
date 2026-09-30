@@ -16,6 +16,7 @@ do), and add a row here. Never reuse or renumber a code.
 | `ARD-APP-001` | Something unexpected went wrong inside the app | Any command that fails in a way nobody planned for |
 | `ARD-APP-002` | The interface hit an error it could not handle | An uncaught error or rejected promise in the UI |
 | `ARD-APP-003` | Arden Code could not get ready to reset itself | Settings → Advanced → Reset Arden Code |
+| `ARD-APP-004` | A link was not opened: it is not allowed, or Windows could not open it | Choosing a link in an agent's reply |
 | `ARD-SET-001` | The settings could not be saved | Changing any setting |
 | `ARD-SET-002` | The settings file was not valid, so defaults are in use | Starting the app, or editing `settings.json` by hand |
 | `ARD-SET-003` | A settings file could not be imported | Settings → Advanced → Import settings |

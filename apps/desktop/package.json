@@ -20,6 +20,7 @@
   "dependencies": {
     "@fontsource-variable/cascadia-code": "catalog:",
     "@fontsource-variable/inter": "catalog:",
+    "@streamdown/code": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@tauri-apps/api": "catalog:",
@@ -36,6 +37,7 @@
     "react-resizable-panels": "catalog:",
     "shadcn": "catalog:",
     "sonner": "catalog:",
+    "streamdown": "catalog:",
     "tw-animate-css": "catalog:",
     "zod": "catalog:",
     "zustand": "catalog:"

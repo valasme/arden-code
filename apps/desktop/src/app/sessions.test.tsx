@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
 import { z } from "zod";
 
-import type { ProjectListing, Session, TurnEvent } from "@/ipc/bindings";
+import type { Item, ProjectListing, Session, TurnEvent } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { expectNoAccessibilityViolations } from "@/test/axe";
@@ -125,6 +125,8 @@ function startRust({
 function renderApp(entry = "/") {
   render(<App history={createMemoryHistory({ initialEntries: [entry] })} />);
 }
+
+const item = (value: Item): TurnEvent => ({ type: "itemAdded", turnId: "turn-1", item: value });
 
 const delta = (text: string, turn = "turn-1"): TurnEvent => ({
   type: "textDelta",
@@ -331,6 +333,61 @@ describe("Sending a message", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
     });
+  });
+
+  it("shows every kind of item as the reply streams in", async () => {
+    const rust = startRust();
+    const { user } = await openSession(rust);
+    await user.keyboard("show me everything{Enter}");
+    await screen.findByText("The Demo agent is replying…");
+
+    rust.emit(item({ type: "status", id: "s", kind: "started" }));
+    rust.emit(item({ type: "thinking", id: "t", text: "" }));
+    rust.emit({ type: "textDelta", turnId: "turn-1", itemId: "t", text: "Let me look." });
+    rust.emit(
+      item({
+        type: "toolCall",
+        id: "c",
+        name: "read_file",
+        input: "README.md",
+        status: "running",
+        output: null,
+      }),
+    );
+    expect(await screen.findByText("Running…")).toBeVisible();
+    rust.emit({
+      type: "toolCallEnded",
+      turnId: "turn-1",
+      itemId: "c",
+      status: "done",
+      output: "42 lines",
+    });
+    rust.emit(delta("Here is **the answer**."));
+    rust.emit(
+      item({
+        type: "fileChange",
+        id: "f",
+        path: "src/main.ts",
+        change: "modified",
+        added: 3,
+        removed: 1,
+      }),
+    );
+    rust.emit(item({ type: "error", id: "e", message: "Something broke." }));
+    rust.emit({ type: "failed", turnId: "turn-1" });
+
+    expect(await screen.findByText("The agent started working")).toBeVisible();
+    expect(screen.getByText("Thinking")).toBeVisible();
+    expect(screen.getByText("Let me look.")).toBeInTheDocument();
+    expect(screen.getByText("read_file")).toBeVisible();
+    expect(await screen.findByText("42 lines")).toBeVisible();
+    expect(screen.queryByText("Running…")).toBeNull();
+    // Markdown is drawn, not printed.
+    expect(await screen.findByText("the answer")).toBeVisible();
+    expect(screen.queryByText(/\*\*/u)).toBeNull();
+    expect(screen.getByText("src/main.ts")).toBeVisible();
+    expect(screen.getByText("Something broke.", { exact: false })).toBeVisible();
+    expect(screen.getByText("The reply stopped.")).toBeVisible();
   });
 
   it("marks a reply that stopped", async () => {

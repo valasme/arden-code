@@ -2,6 +2,7 @@
 
 use arden_core::AppInfo;
 use arden_core::error::{AppError, ErrorCode};
+use arden_core::links;
 use arden_core::paths::AppPaths;
 use arden_core::reset;
 use arden_diagnostics::logging::{self, UiLevel};
@@ -238,6 +239,32 @@ pub fn open_project_page(app: AppHandle, page: ProjectPage) -> Result<(), AppErr
     app.opener()
         .open_url(page.url(), None::<&str>)
         .map_err(|error| AppError::new(ErrorCode::Unexpected).with_details(error.to_string()))
+}
+
+/// Opens a link from an agent's reply in the program Windows uses for it. A web address opens
+/// straight away; other kinds only when `confirmed` says the person agreed; some never (see
+/// `arden_core::links`). The decision is made here, whatever the page asked for.
+///
+/// # Errors
+///
+/// Returns `ARD-APP-004` when the link is not allowed or cannot be opened.
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command]
+#[specta::specta]
+pub fn open_link(app: AppHandle, url: String, confirmed: bool) -> Result<(), AppError> {
+    let url = url.trim();
+    let allowed = match links::classify(url) {
+        links::LinkKind::Open => true,
+        links::LinkKind::Confirm => confirmed,
+        links::LinkKind::Blocked => false,
+    };
+    if !allowed {
+        tracing::warn!("a link was not opened because its kind is not allowed");
+        return Err(AppError::new(ErrorCode::LinkNotOpened));
+    }
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|error| AppError::new(ErrorCode::LinkNotOpened).with_details(error.to_string()))
 }
 
 /// What is known about this build and this computer, as text for a bug report. It holds nothing

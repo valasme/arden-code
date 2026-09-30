@@ -1,6 +1,7 @@
 //! The Arden Code desktop app.
 
 mod commands;
+mod navigation;
 mod sessions;
 mod webview;
 mod window;
@@ -53,6 +54,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::get_system_info,
         commands::open_settings_file,
         commands::open_project_page,
+        commands::open_link,
         commands::open_bug_report,
         commands::read_logs,
         commands::export_diagnostics,
@@ -88,6 +90,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::get_system_info,
         commands::open_settings_file,
         commands::open_project_page,
+        commands::open_link,
         commands::open_bug_report,
         commands::read_logs,
         commands::export_diagnostics,
@@ -271,6 +274,7 @@ pub fn run() {
                 window::focus_main_window(app);
             },
         ))
+        .plugin(navigation::guard())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())

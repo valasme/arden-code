@@ -648,9 +648,57 @@
     "kind": "npm"
   },
   {
+    "name": "@shikijs/core",
+    "version": "3.23.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@shikijs/engine-javascript",
+    "version": "3.23.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@shikijs/engine-oniguruma",
+    "version": "3.23.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@shikijs/langs",
+    "version": "3.23.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@shikijs/themes",
+    "version": "3.23.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@shikijs/types",
+    "version": "3.23.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@shikijs/vscode-textmate",
+    "version": "10.0.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "@sindresorhus/merge-streams",
     "version": "4.0.0",
     "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@streamdown/code",
+    "version": "1.1.1",
+    "license": "Apache-2.0",
     "kind": "npm"
   },
   {
@@ -714,9 +762,63 @@
     "kind": "npm"
   },
   {
+    "name": "@types/debug",
+    "version": "4.1.13",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@types/estree",
+    "version": "1.0.9",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@types/estree-jsx",
+    "version": "1.0.5",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@types/hast",
+    "version": "3.0.5",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@types/mdast",
+    "version": "4.0.4",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@types/ms",
+    "version": "2.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@types/unist",
+    "version": "2.0.11",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@types/unist",
+    "version": "3.0.3",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "@types/validate-npm-package-name",
     "version": "4.0.2",
     "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@ungap/structured-clone",
+    "version": "1.4.0",
+    "license": "ISC",
     "kind": "npm"
   },
   {
@@ -836,6 +938,12 @@
   {
     "name": "atomically",
     "version": "1.7.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "bail",
+    "version": "2.0.2",
     "license": "MIT",
     "kind": "npm"
   },
@@ -1014,6 +1122,12 @@
     "kind": "crate"
   },
   {
+    "name": "ccount",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "cfb",
     "version": "0.14.0",
     "license": "MIT",
@@ -1028,6 +1142,30 @@
   {
     "name": "chalk",
     "version": "5.6.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "character-entities",
+    "version": "2.0.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "character-entities-html4",
+    "version": "2.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "character-entities-legacy",
+    "version": "3.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "character-reference-invalid",
+    "version": "2.0.1",
     "license": "MIT",
     "kind": "npm"
   },
@@ -1088,6 +1226,12 @@
   {
     "name": "code-block-writer",
     "version": "13.0.3",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "comma-separated-tokens",
+    "version": "2.0.3",
     "license": "MIT",
     "kind": "npm"
   },
@@ -1284,6 +1428,12 @@
     "kind": "npm"
   },
   {
+    "name": "decode-named-character-reference",
+    "version": "1.3.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "dedent",
     "version": "1.7.2",
     "license": "MIT",
@@ -1326,6 +1476,12 @@
     "kind": "npm"
   },
   {
+    "name": "dequal",
+    "version": "2.0.3",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "deranged",
     "version": "0.5.8",
     "license": "MIT OR Apache-2.0",
@@ -1345,6 +1501,12 @@
   },
   {
     "name": "detect-node-es",
+    "version": "1.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "devlop",
     "version": "1.1.0",
     "license": "MIT",
     "kind": "npm"
@@ -1464,6 +1626,12 @@
     "kind": "npm"
   },
   {
+    "name": "entities",
+    "version": "6.0.1",
+    "license": "BSD-2-Clause",
+    "kind": "npm"
+  },
+  {
     "name": "env-paths",
     "version": "2.2.1",
     "license": "MIT",
@@ -1524,9 +1692,21 @@
     "kind": "npm"
   },
   {
+    "name": "escape-string-regexp",
+    "version": "5.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "esprima",
     "version": "4.0.1",
     "license": "BSD-2-Clause",
+    "kind": "npm"
+  },
+  {
+    "name": "estree-util-is-identifier-name",
+    "version": "3.0.0",
+    "license": "MIT",
     "kind": "npm"
   },
   {
@@ -1568,6 +1748,12 @@
   {
     "name": "express-rate-limit",
     "version": "8.7.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "extend",
+    "version": "3.0.2",
     "license": "MIT",
     "kind": "npm"
   },
@@ -1818,6 +2004,60 @@
     "kind": "npm"
   },
   {
+    "name": "hast-util-from-parse5",
+    "version": "8.0.3",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "hast-util-parse-selector",
+    "version": "4.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "hast-util-raw",
+    "version": "9.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "hast-util-sanitize",
+    "version": "5.0.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "hast-util-to-html",
+    "version": "9.0.5",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "hast-util-to-jsx-runtime",
+    "version": "2.3.6",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "hast-util-to-parse5",
+    "version": "8.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "hast-util-whitespace",
+    "version": "3.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "hastscript",
+    "version": "9.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "heck",
     "version": "0.5.0",
     "license": "MIT OR Apache-2.0",
@@ -1832,6 +2072,18 @@
   {
     "name": "html-parse-stringify",
     "version": "4.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "html-url-attributes",
+    "version": "3.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "html-void-elements",
+    "version": "3.0.0",
     "license": "MIT",
     "kind": "npm"
   },
@@ -1992,6 +2244,12 @@
     "kind": "npm"
   },
   {
+    "name": "inline-style-parser",
+    "version": "0.2.7",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "inout",
     "version": "0.1.4",
     "license": "MIT OR Apache-2.0",
@@ -2010,8 +2268,26 @@
     "kind": "npm"
   },
   {
+    "name": "is-alphabetical",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "is-alphanumerical",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "is-arrayish",
     "version": "0.2.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "is-decimal",
+    "version": "2.0.1",
     "license": "MIT",
     "kind": "npm"
   },
@@ -2036,6 +2312,12 @@
   {
     "name": "is-glob",
     "version": "4.0.3",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "is-hexadecimal",
+    "version": "2.0.1",
     "license": "MIT",
     "kind": "npm"
   },
@@ -2292,6 +2574,12 @@
     "kind": "npm"
   },
   {
+    "name": "longest-streak",
+    "version": "3.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "lru-cache",
     "version": "5.1.1",
     "license": "ISC",
@@ -2301,6 +2589,18 @@
     "name": "lucide-react",
     "version": "1.48.0",
     "license": "ISC",
+    "kind": "npm"
+  },
+  {
+    "name": "markdown-table",
+    "version": "3.0.4",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "marked",
+    "version": "17.0.6",
+    "license": "MIT",
     "kind": "npm"
   },
   {
@@ -2318,6 +2618,96 @@
   {
     "name": "math-intrinsics",
     "version": "1.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-find-and-replace",
+    "version": "3.0.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-from-markdown",
+    "version": "2.0.3",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-gfm",
+    "version": "3.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-gfm-autolink-literal",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-gfm-footnote",
+    "version": "2.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-gfm-strikethrough",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-gfm-table",
+    "version": "2.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-gfm-task-list-item",
+    "version": "2.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-mdx-expression",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-mdx-jsx",
+    "version": "3.2.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-mdxjs-esm",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-phrasing",
+    "version": "4.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-to-hast",
+    "version": "13.2.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-to-markdown",
+    "version": "2.1.3",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "mdast-util-to-string",
+    "version": "4.0.0",
     "license": "MIT",
     "kind": "npm"
   },
@@ -2348,6 +2738,180 @@
   {
     "name": "merge2",
     "version": "1.4.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark",
+    "version": "4.0.3",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-core-commonmark",
+    "version": "2.0.4",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-extension-gfm",
+    "version": "3.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-extension-gfm-autolink-literal",
+    "version": "2.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-extension-gfm-footnote",
+    "version": "2.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-extension-gfm-strikethrough",
+    "version": "2.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-extension-gfm-table",
+    "version": "2.1.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-extension-gfm-tagfilter",
+    "version": "2.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-extension-gfm-task-list-item",
+    "version": "2.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-factory-destination",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-factory-label",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-factory-space",
+    "version": "2.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-factory-title",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-factory-whitespace",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-character",
+    "version": "2.1.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-chunked",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-classify-character",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-combine-extensions",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-decode-numeric-character-reference",
+    "version": "2.0.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-decode-string",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-edit-map",
+    "version": "1.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-encode",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-html-tag-name",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-normalize-identifier",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-resolve-all",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-sanitize-uri",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-subtokenize",
+    "version": "2.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-symbol",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "micromark-util-types",
+    "version": "2.0.3",
     "license": "MIT",
     "kind": "npm"
   },
@@ -2556,6 +3120,18 @@
     "kind": "npm"
   },
   {
+    "name": "oniguruma-parser",
+    "version": "0.12.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "oniguruma-to-es",
+    "version": "4.3.6",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "opaque-debug",
     "version": "0.3.1",
     "license": "MIT OR Apache-2.0",
@@ -2628,6 +3204,12 @@
     "kind": "crate"
   },
   {
+    "name": "parse-entities",
+    "version": "4.0.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "parse-json",
     "version": "5.2.0",
     "license": "MIT",
@@ -2636,6 +3218,12 @@
   {
     "name": "parse-ms",
     "version": "4.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "parse5",
+    "version": "7.3.0",
     "license": "MIT",
     "kind": "npm"
   },
@@ -2832,6 +3420,12 @@
     "kind": "npm"
   },
   {
+    "name": "property-information",
+    "version": "7.2.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "proxy-addr",
     "version": "2.0.8",
     "license": "MIT",
@@ -2964,16 +3558,82 @@
     "kind": "crate"
   },
   {
+    "name": "regex",
+    "version": "6.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "regex-automata",
     "version": "0.4.18",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
   {
+    "name": "regex-recursion",
+    "version": "6.0.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "regex-syntax",
     "version": "0.8.11",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
+  },
+  {
+    "name": "regex-utilities",
+    "version": "2.3.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "rehype-harden",
+    "version": "1.1.8",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "rehype-raw",
+    "version": "7.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "rehype-sanitize",
+    "version": "6.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "remark-gfm",
+    "version": "4.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "remark-parse",
+    "version": "11.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "remark-rehype",
+    "version": "11.1.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "remark-stringify",
+    "version": "11.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "remend",
+    "version": "1.3.1",
+    "license": "Apache-2.0",
+    "kind": "npm"
   },
   {
     "name": "require-from-string",
@@ -3246,6 +3906,12 @@
     "kind": "npm"
   },
   {
+    "name": "shiki",
+    "version": "3.23.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "side-channel",
     "version": "1.1.1",
     "license": "MIT",
@@ -3348,6 +4014,12 @@
     "kind": "npm"
   },
   {
+    "name": "space-separated-tokens",
+    "version": "2.0.2",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "specta",
     "version": "2.0.0-rc.25",
     "license": "MIT (*)",
@@ -3396,6 +4068,12 @@
     "kind": "npm"
   },
   {
+    "name": "streamdown",
+    "version": "2.6.0",
+    "license": "Apache-2.0",
+    "kind": "npm"
+  },
+  {
     "name": "string_cache",
     "version": "0.9.0",
     "license": "MIT OR Apache-2.0",
@@ -3404,6 +4082,12 @@
   {
     "name": "string-width",
     "version": "7.2.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "stringify-entities",
+    "version": "4.0.4",
     "license": "MIT",
     "kind": "npm"
   },
@@ -3462,6 +4146,18 @@
     "kind": "crate"
   },
   {
+    "name": "style-to-js",
+    "version": "1.1.21",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "style-to-object",
+    "version": "1.0.14",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "subtle",
     "version": "2.6.1",
     "license": "BSD-3-Clause",
@@ -3488,6 +4184,12 @@
   {
     "name": "systeminformation",
     "version": "5.33.13",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "tailwind-merge",
+    "version": "3.7.0",
     "license": "MIT",
     "kind": "npm"
   },
@@ -3708,6 +4410,18 @@
     "kind": "crate"
   },
   {
+    "name": "trim-lines",
+    "version": "3.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "trough",
+    "version": "2.2.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "ts-morph",
     "version": "26.0.0",
     "license": "MIT",
@@ -3770,6 +4484,42 @@
   {
     "name": "unicorn-magic",
     "version": "0.3.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "unified",
+    "version": "11.0.5",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "unist-util-is",
+    "version": "6.0.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "unist-util-position",
+    "version": "5.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "unist-util-stringify-position",
+    "version": "4.0.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "unist-util-visit",
+    "version": "5.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "unist-util-visit-parents",
+    "version": "6.0.2",
     "license": "MIT",
     "kind": "npm"
   },
@@ -3858,6 +4608,24 @@
     "kind": "npm"
   },
   {
+    "name": "vfile",
+    "version": "6.0.3",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "vfile-location",
+    "version": "5.0.3",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "vfile-message",
+    "version": "4.0.3",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "walkdir",
     "version": "2.5.0",
     "license": "Unlicense/MIT (*)",
@@ -3868,6 +4636,12 @@
     "version": "0.2.6",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
+  },
+  {
+    "name": "web-namespaces",
+    "version": "2.0.1",
+    "license": "MIT",
+    "kind": "npm"
   },
   {
     "name": "web-time",
@@ -4142,6 +4916,12 @@
   {
     "name": "zustand",
     "version": "5.0.15",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "zwitch",
+    "version": "2.0.4",
     "license": "MIT",
     "kind": "npm"
   }

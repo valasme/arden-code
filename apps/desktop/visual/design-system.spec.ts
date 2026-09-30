@@ -11,6 +11,10 @@ async function openDesignSystem(page: Page, search = "") {
   await page.goto(`/dev/design-system${search}`);
   await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
+  // The code sample is colored when its grammar has loaded, a moment after the page.
+  await expect(
+    page.locator('[data-streamdown="code-block-body"] code span[style]').first(),
+  ).toBeVisible();
 }
 
 for (const { name, colorScheme, forcedColors } of themes) {

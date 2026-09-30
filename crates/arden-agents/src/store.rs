@@ -7,7 +7,7 @@ use time::format_description::well_known::Rfc3339;
 
 use crate::driver::{AgentDriver, Flow};
 use crate::model::{
-    AgentKind, Item, Project, ProjectListing, Session, SessionSummary, Turn, TurnEvent, TurnStatus,
+    AgentKind, Project, ProjectListing, Session, SessionSummary, Turn, TurnEvent, TurnStatus,
 };
 
 /// How many characters of the first message become the session's title.
@@ -179,27 +179,12 @@ impl SessionStore {
         let Ok(session) = inner.session_mut(session_id) else {
             return;
         };
-        let turn_id = match event {
-            TurnEvent::TextDelta { turn_id, .. }
-            | TurnEvent::Finished { turn_id }
-            | TurnEvent::Failed { turn_id } => turn_id,
-        };
-        let Some(turn) = session.turns.iter_mut().find(|turn| turn.id == *turn_id) else {
-            return;
-        };
-        match event {
-            TurnEvent::TextDelta { item_id, text, .. } => {
-                let existing = turn.items.iter_mut().find(|item| item.id() == item_id);
-                match existing {
-                    Some(Item::Text { text: whole, .. }) => whole.push_str(text),
-                    None => turn.items.push(Item::Text {
-                        id: item_id.clone(),
-                        text: text.clone(),
-                    }),
-                }
-            }
-            TurnEvent::Finished { .. } => turn.status = TurnStatus::Done,
-            TurnEvent::Failed { .. } => turn.status = TurnStatus::Failed,
+        if let Some(turn) = session
+            .turns
+            .iter_mut()
+            .find(|turn| turn.id == event.turn_id())
+        {
+            turn.apply(event);
         }
     }
 
@@ -250,6 +235,7 @@ mod tests {
 
     use super::*;
     use crate::demo::DemoDriver;
+    use crate::model::Item;
     use crate::playground;
 
     fn store() -> SessionStore {
@@ -392,15 +378,22 @@ mod tests {
         let saved = store.session(&session.id).expect("the session");
         let reply = &saved.turns[0];
         assert_eq!(reply.status, TurnStatus::Done);
-        assert_eq!(reply.items.len(), 1);
-        let Item::Text { text, .. } = &reply.items[0];
-        assert!(text.starts_with("This is the Demo agent."));
-        assert!(text.contains("You wrote: hello"));
-        // What the listener heard, put together, is what was saved.
+        let Some(Item::Text { text, .. }) = reply
+            .items
+            .iter()
+            .find(|item| matches!(item, Item::Text { .. }))
+        else {
+            panic!("the reply has text");
+        };
+        assert!(text.starts_with("This is the **Demo agent**."));
+        assert!(text.contains("> hello"));
+        // What the listener heard of the text, put together, is what was saved.
         let heard_text: String = heard
             .iter()
             .filter_map(|event| match event {
-                TurnEvent::TextDelta { text, .. } => Some(text.as_str()),
+                TurnEvent::TextDelta { item_id, text, .. } if item_id.ends_with("-text") => {
+                    Some(text.as_str())
+                }
                 _ => None,
             })
             .collect();

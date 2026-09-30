@@ -1,6 +1,7 @@
 //! Domain types and identity constants shared by every Arden Code crate.
 
 pub mod error;
+pub mod links;
 pub mod paths;
 pub mod reset;
 

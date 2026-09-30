@@ -5,6 +5,7 @@ import { Logo, Mark, Wordmark } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
 import { applyTheme, type ThemeMode } from "@/lib/theme";
 
+import { SessionItemsSample } from "./SessionItemsSample";
 import { colorTokens, textSamples, typeScale } from "./tokens";
 
 export const themeChoices = ["system", "light", "dark"] as const satisfies readonly ThemeMode[];
@@ -207,6 +208,13 @@ export function DesignSystemPage({
             Status bar
           </div>
         </div>
+      </section>
+
+      <section aria-labelledby="ds-items" className="flex flex-col gap-4">
+        <h2 id="ds-items" className="text-lg font-semibold">
+          Session items
+        </h2>
+        <SessionItemsSample />
       </section>
 
       <section aria-labelledby="ds-brand" className="flex flex-col gap-4">

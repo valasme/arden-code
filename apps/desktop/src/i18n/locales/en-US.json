@@ -67,6 +67,11 @@
       "what": "Arden Code could not get ready to reset itself.",
       "why": "The file that asks for the reset could not be written."
     },
+    "ARD-APP-004": {
+      "action": "Copy the address and open it yourself if you trust it.",
+      "what": "That link was not opened.",
+      "why": "Arden Code does not open some kinds of link, such as programs and scripts, or Windows could not open it."
+    },
     "ARD-LOG-001": {
       "action": "Open it yourself in Explorer, at %LOCALAPPDATA%\\io.github.valasme.arden\\logs.",
       "what": "The logs folder could not be opened.",
@@ -128,6 +133,30 @@
     "empty": "Details of the open session will appear here.",
     "title": "Inspector"
   },
+  "items": {
+    "error": {
+      "label": "Error:"
+    },
+    "file": {
+      "created": "Created",
+      "deleted": "Deleted",
+      "lines": "{{added}} lines added, {{removed}} lines removed",
+      "modified": "Changed"
+    },
+    "status": {
+      "started": "The agent started working",
+      "stopped": "You stopped the reply"
+    },
+    "thinking": {
+      "done": "Thinking",
+      "running": "Thinking…"
+    },
+    "tool": {
+      "done": "Done",
+      "failed": "Failed",
+      "running": "Running…"
+    }
+  },
   "logs": {
     "description": "The newest entries of the log files. Private details were removed when they were written.",
     "empty": "No entry matches.",
@@ -152,6 +181,26 @@
     "sourceAll": "All sources",
     "time": "Time",
     "title": "Logs"
+  },
+  "markdown": {
+    "codeRegion": "Code ({{language}})",
+    "copied": "Copied",
+    "copyCode": "Copy code",
+    "copyTable": "Copy table",
+    "copyTableAsCsv": "Copy as CSV",
+    "copyTableAsMarkdown": "Copy as Markdown",
+    "copyTableAsTsv": "Copy as TSV",
+    "image": {
+      "blocked": "Image not shown",
+      "blockedWithName": "Image not shown: {{name}}"
+    },
+    "link": {
+      "blocked": "link not opened",
+      "confirmDescription": "This link is not a web address, so Windows would open it in another program: {{url}}",
+      "confirmTitle": "Open this link?",
+      "open": "Open link"
+    },
+    "tableRegion": "Table"
   },
   "notFound": {
     "home": "Go to the session view",

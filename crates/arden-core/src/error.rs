@@ -20,6 +20,9 @@ pub enum ErrorCode {
     /// Arden Code could not get ready to reset itself.
     #[serde(rename = "ARD-APP-003")]
     ResetApp,
+    /// A link was not opened: it is not allowed, or Windows could not open it.
+    #[serde(rename = "ARD-APP-004")]
+    LinkNotOpened,
     /// The settings could not be saved.
     #[serde(rename = "ARD-SET-001")]
     SettingsSave,
@@ -63,6 +66,7 @@ impl ErrorCode {
             Self::Unexpected => "ARD-APP-001",
             Self::UiFailure => "ARD-APP-002",
             Self::ResetApp => "ARD-APP-003",
+            Self::LinkNotOpened => "ARD-APP-004",
             Self::SettingsSave => "ARD-SET-001",
             Self::SettingsInvalid => "ARD-SET-002",
             Self::SettingsImport => "ARD-SET-003",

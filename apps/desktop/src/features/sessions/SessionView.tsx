@@ -9,6 +9,7 @@ import type { Turn } from "@/ipc/bindings";
 import { sessionQuery } from "@/ipc/queries";
 import { toAppError } from "@/lib/errors";
 
+import { ItemView } from "./items/ItemView";
 import { MessageBox } from "./MessageBox";
 import { useSendMessage } from "./useSendMessage";
 
@@ -34,9 +35,7 @@ function TurnView({ turn }: { turn: Turn }) {
       <div>
         <h3 className="text-xs font-medium text-muted-foreground">{t("sessions.demoAgent")}</h3>
         {turn.items.map((item) => (
-          <p key={item.id} className="mt-1 text-sm whitespace-pre-wrap">
-            {item.text}
-          </p>
+          <ItemView key={item.id} item={item} streaming={turn.status === "running"} />
         ))}
         {turn.status === "running" ? (
           <output className="mt-1 block text-xs text-muted-foreground">

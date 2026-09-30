@@ -120,6 +120,16 @@ export const commands = {
 	 */
 	openProjectPage: (page: ProjectPage) => __TAURI_INVOKE<null>("open_project_page", { page }),
 	/**
+	 *  Opens a link from an agent's reply in the program Windows uses for it. A web address opens
+	 *  straight away; other kinds only when `confirmed` says the person agreed; some never (see
+	 *  `arden_core::links`). The decision is made here, whatever the page asked for.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns `ARD-APP-004` when the link is not allowed or cannot be opened.
+	 */
+	openLink: (url: string, confirmed: boolean) => __TAURI_INVOKE<null>("open_link", { url, confirmed }),
+	/**
 	 *  Opens a new bug report in the browser, with the system information filled in and nothing else:
 	 *  no logs, no settings and no paths.
 	 * 
@@ -332,6 +342,8 @@ export type ErrorCode =
 "ARD-APP-002" | 
 /**  Arden Code could not get ready to reset itself. */
 "ARD-APP-003" | 
+/**  A link was not opened: it is not allowed, or Windows could not open it. */
+"ARD-APP-004" | 
 /**  The settings could not be saved. */
 "ARD-SET-001" | 
 /**  The settings file was not valid, so the defaults are in use. */
@@ -355,6 +367,9 @@ export type ErrorCode =
 /**  The web engine that draws the window stopped and was started again. */
 "ARD-WIN-002";
 
+/**  What happened to a file. */
+export type FileChangeKind = "created" | "modified" | "deleted";
+
 /**  How the app behaves in general. */
 export type General = {
 	/**  Restore the last session, or start fresh. */
@@ -365,10 +380,28 @@ export type General = {
 	regionalFormat: RegionalFormat,
 };
 
-/**  One part of an agent's reply. Thinking, tool calls and file changes join text later. */
+/**  One part of an agent's reply. */
 export type Item = 
-/**  Plain text, which grows while the reply streams. */
-{ type: "text"; id: string; text: string };
+/**  What the agent says, in Markdown. It grows while the reply streams. */
+{ type: "text"; id: string; text: string } | 
+/**  The agent's reasoning. It grows while the reply streams. */
+{ type: "thinking"; id: string; text: string } | 
+/**  The agent using a tool, such as reading a file or running a command. */
+{ type: "toolCall"; id: string; 
+/**  The tool's name, such as `read_file`. */
+name: string; 
+/**  What the tool was asked to do, in a line. */
+input: string; status: ToolStatus; 
+/**  What the tool answered, once it has. */
+output: string | null } | 
+/**  A file the agent created, changed or deleted. */
+{ type: "fileChange"; id: string; 
+/**  The file's path, relative to the project. */
+path: string; change: FileChangeKind; added: number; removed: number } | 
+/**  Something the agent reports as having gone wrong. */
+{ type: "error"; id: string; message: string } | 
+/**  A marker between the parts of a reply. */
+{ type: "status"; id: string; kind: StatusKind };
 
 /**  The shortcuts a person changed. A command that is not here has its default shortcuts. */
 export type Keyboard = {
@@ -500,6 +533,13 @@ export type SettingsChanged = {
 	notice: AppError | null,
 };
 
+/**  A moment in a reply that is not text, shown as a line of its own. */
+export type StatusKind = 
+/**  The agent started working on the message. */
+"started" | 
+/**  The person stopped the reply. */
+"stopped";
+
 /**  What the About page shows besides the app's own version. */
 export type SystemInfo = {
 	/**  The Windows version, such as `Windows 11 24H2 (build 26100.1234)`. */
@@ -526,6 +566,11 @@ export type Theme =
 /**  Follow the Windows light or dark setting. */
 "system" | "light" | "dark";
 
+/**  How a tool call ended. */
+export type ToolStatus = 
+/**  The agent is still using the tool. */
+"running" | "done" | "failed";
+
 /**  The person's message and the agent's reply to it. */
 export type Turn = {
 	id: string,
@@ -542,8 +587,12 @@ export type Turn = {
  *  channel.
  */
 export type TurnEvent = 
-/**  More text for an item. The first delta of an unknown item creates it. */
+/**  A new part of the reply, with whatever it holds so far. */
+{ type: "itemAdded"; turnId: string; item: Item } | 
+/**  More text for a text or thinking item. The first delta of an unknown item creates a text item. */
 { type: "textDelta"; turnId: string; itemId: string; text: string } | 
+/**  A tool call ended, with what the tool answered. */
+{ type: "toolCallEnded"; turnId: string; itemId: string; status: ToolStatus; output: string | null } | 
 /**  The reply is complete. */
 { type: "finished"; turnId: string } | 
 /**  The reply stopped because something went wrong. */
