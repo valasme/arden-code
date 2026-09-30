@@ -416,7 +416,9 @@ describe("shortcuts a person changed", () => {
     expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull();
     await user.keyboard("{Control>}{Shift>}o{/Shift}{/Control}");
 
-    expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeVisible();
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+    await animationsDone(palette);
+    expect(palette).toBeVisible();
   });
 
   it("leave a command without a shortcut when it was emptied", async () => {

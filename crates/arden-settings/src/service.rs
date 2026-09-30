@@ -235,6 +235,39 @@ impl SettingsService {
         self.modify(|settings| settings.reset_shortcuts(command))
     }
 
+    /// Replaces the settings with the ones in a file, saves them and announces them. The file is
+    /// checked first: when it is not valid the settings stay as they are.
+    ///
+    /// # Errors
+    ///
+    /// `ARD-SET-003` when the file is not valid settings, `ARD-SET-001` when saving fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if another thread panicked while holding the settings, which nothing does.
+    pub fn import_from(&self, path: &Path) -> Result<Settings, AppError> {
+        let imported = store::import_from(path)?;
+        self.modify(|settings| *settings = imported)
+    }
+
+    /// Writes the settings to a file of the person's choosing.
+    ///
+    /// # Errors
+    ///
+    /// `ARD-SET-004` when the file cannot be written.
+    pub fn export_to(&self, path: &Path) -> Result<(), AppError> {
+        store::export_to(path, &self.get())
+    }
+
+    /// Puts every setting back to its default, saves and announces them.
+    ///
+    /// # Errors
+    ///
+    /// `ARD-SET-001` when the file cannot be written. The settings then stay as they were.
+    pub fn reset_all(&self) -> Result<Settings, AppError> {
+        self.modify(|settings| *settings = Settings::default())
+    }
+
     fn modify(&self, change: impl FnOnce(&mut Settings)) -> Result<Settings, AppError> {
         let next = {
             // Held until the file is written, so that a reload cannot read a state in between.
@@ -412,6 +445,68 @@ mod tests {
                 .shortcuts
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn everything_can_be_reset_at_once() {
+        let folder = tempfile::tempdir().unwrap();
+        let service = SettingsService::start(folder.path());
+        service.update(SettingChange::AppearanceZoom(150)).unwrap();
+        service
+            .set_shortcuts("palette.open", &["Ctrl+Shift+O".to_owned()])
+            .unwrap();
+        let seen = listen(&service);
+
+        let reset = service.reset_all().unwrap();
+
+        assert_eq!(reset, Settings::default());
+        assert_eq!(store::load(folder.path()).settings, Settings::default());
+        assert_eq!(seen.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn settings_from_a_file_replace_the_current_ones_and_are_announced() {
+        let folder = tempfile::tempdir().unwrap();
+        let service = SettingsService::start(folder.path());
+        let mut wanted = Settings::default();
+        wanted.apply(SettingChange::AppearanceTheme(Theme::Light));
+        let file = folder.path().join("wanted.json");
+        store::export_to(&file, &wanted).unwrap();
+        let seen = listen(&service);
+
+        let imported = service.import_from(&file).unwrap();
+
+        assert_eq!(imported.appearance.theme, Theme::Light);
+        assert_eq!(service.get(), wanted);
+        assert_eq!(seen.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_file_that_is_not_settings_changes_nothing() {
+        let folder = tempfile::tempdir().unwrap();
+        let service = SettingsService::start(folder.path());
+        service.update(SettingChange::AppearanceZoom(150)).unwrap();
+        let file = folder.path().join("bad.json");
+        fs::write(&file, "not json").unwrap();
+        let seen = listen(&service);
+
+        let error = service.import_from(&file).unwrap_err();
+
+        assert_eq!(error.code, ErrorCode::SettingsImport);
+        assert_eq!(service.get().appearance.zoom, 150);
+        assert!(seen.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_settings_can_be_exported() {
+        let folder = tempfile::tempdir().unwrap();
+        let service = SettingsService::start(folder.path());
+        service.update(SettingChange::AppearanceZoom(150)).unwrap();
+        let file = folder.path().join("out.json");
+
+        service.export_to(&file).unwrap();
+
+        assert_eq!(store::import_from(&file).unwrap().appearance.zoom, 150);
     }
 
     #[test]

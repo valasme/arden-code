@@ -1,9 +1,11 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
+import { AboutTab } from "@/features/settings/AboutTab";
+import { AdvancedTab } from "@/features/settings/AdvancedTab";
 import { KeyboardTab } from "@/features/settings/KeyboardTab";
 import { SettingsList } from "@/features/settings/SettingsList";
-import { isSettingsTab } from "@/features/settings/tabs";
+import { isSettingsTab, type SettingsTab } from "@/features/settings/tabs";
 
 export const Route = createFileRoute("/settings/$tab")({
   beforeLoad: ({ params }) => {
@@ -12,8 +14,29 @@ export const Route = createFileRoute("/settings/$tab")({
   component: SettingsTabPage,
 });
 
-/** The tabs that have settings so far; the others say so. */
-const tabsWithSettings: ReadonlySet<string> = new Set(["general", "appearance", "keyboard"]);
+/** What a tab holds. Tabs that have nothing yet say so. */
+function TabContent({ tab }: { tab: SettingsTab }) {
+  const { t } = useTranslation();
+
+  switch (tab) {
+    case "general":
+    case "appearance": {
+      return <SettingsList tab={tab} />;
+    }
+    case "keyboard": {
+      return <KeyboardTab />;
+    }
+    case "advanced": {
+      return <AdvancedTab />;
+    }
+    case "about": {
+      return <AboutTab />;
+    }
+    default: {
+      return <p className="text-sm text-muted-foreground">{t("settings.placeholder")}</p>;
+    }
+  }
+}
 
 /** A settings tab. */
 function SettingsTabPage() {
@@ -25,15 +48,7 @@ function SettingsTabPage() {
   return (
     <main className="max-w-xl p-6">
       <h1 className="mb-2 text-xl font-semibold">{t(`settings.tabs.${tab}`)}</h1>
-      {tabsWithSettings.has(tab) ? (
-        tab === "keyboard" ? (
-          <KeyboardTab />
-        ) : (
-          <SettingsList tab={tab} />
-        )
-      ) : (
-        <p className="text-sm text-muted-foreground">{t("settings.placeholder")}</p>
-      )}
+      <TabContent tab={tab} />
     </main>
   );
 }

@@ -1,3 +1,6 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
 import { expect, launchApp, test } from "./fixtures";
 import { pressKey, virtualKeys } from "./windows";
 
@@ -58,6 +61,42 @@ test.describe("the release build behaves like an app, not like a browser", () =>
       await app.page.getByRole("main").click({ button: "right" });
 
       expect(await app.page.evaluate(() => Reflect.get(window, "menuCancelled"))).toBe(true);
+    } finally {
+      app.kill();
+    }
+  });
+
+  test("developer mode gives the browser's shortcuts back, and turning it off takes them away", async () => {
+    const app = await launchApp();
+    try {
+      await expect(app.page.getByRole("main")).toBeVisible();
+      const file = path.join(app.dataDir, "config", "settings.json");
+      const setDeveloperMode = (on: boolean) => {
+        const settings = JSON.parse(readFileSync(file, "utf8"));
+        settings.advanced.developerMode = on;
+        writeFileSync(file, JSON.stringify(settings));
+      };
+      const markPage = () =>
+        app.page.evaluate(() => {
+          Reflect.set(window, "notReloaded", true);
+        });
+      const stillMarked = () =>
+        app.page.evaluate(() => Reflect.get(window, "notReloaded") === true);
+
+      setDeveloperMode(true);
+      await app.page.waitForTimeout(1500);
+      await markPage();
+      expect(pressKey(app.pid, virtualKeys.f5), "the app's window was not in front").toBe(true);
+      await app.page.waitForTimeout(2500);
+      expect(await stillMarked(), "F5 reloads the page in developer mode").toBe(false);
+
+      await expect(app.page.getByRole("main")).toBeVisible();
+      setDeveloperMode(false);
+      await app.page.waitForTimeout(1500);
+      await markPage();
+      expect(pressKey(app.pid, virtualKeys.f5), "the app's window was not in front").toBe(true);
+      await app.page.waitForTimeout(2500);
+      expect(await stillMarked(), "F5 does nothing once developer mode is off").toBe(true);
     } finally {
       app.kill();
     }

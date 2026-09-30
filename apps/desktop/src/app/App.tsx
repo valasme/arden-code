@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import { SettingsSync } from "@/features/settings/SettingsSync";
+import { StartupSettingsProvider } from "@/features/settings/startup";
 import { AppearanceFromSettings } from "@/features/settings/AppearanceFromSettings";
 import { SystemPreferencesSync } from "@/features/settings/SystemPreferencesSync";
 import type { Settings, SystemPreferences } from "@/ipc/bindings";
@@ -41,13 +42,15 @@ export function App({ history, initialSettings, initialSystemPreferences }: AppP
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SettingsSync />
-      <SystemPreferencesSync />
-      <AppearanceFromSettings />
-      <AppErrorBoundary>
-        <RouterProvider router={router} />
-      </AppErrorBoundary>
-      <Toaster />
+      <StartupSettingsProvider settings={initialSettings}>
+        <SettingsSync />
+        <SystemPreferencesSync />
+        <AppearanceFromSettings />
+        <AppErrorBoundary>
+          <RouterProvider router={router} />
+        </AppErrorBoundary>
+        <Toaster />
+      </StartupSettingsProvider>
     </QueryClientProvider>
   );
 }

@@ -55,6 +55,40 @@ function logTail(dataDir: string): string {
     .join("\n");
 }
 
+/**
+ * What the web engine was doing when the app did not open its debugging port: which processes of
+ * this launch exist, the arguments they were given, and which ports they listen on.
+ */
+function describeWebView(profile: string): string {
+  try {
+    return execFileSync(
+      "powershell",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `
+        $processes = @(Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe' OR Name = 'arden-code.exe'")
+        foreach ($p in $processes) {
+          $line = [string]$p.CommandLine
+          if ($p.Name -eq 'arden-code.exe' -or $line -like '*${profile.replaceAll("'", "''")}*') {
+            "$($p.ProcessId) $($p.Name) $($line.Substring(0, [Math]::Min(300, $line.Length)))"
+          }
+        }
+        "--- listening ports of those processes ---"
+        $ids = $processes | ForEach-Object { $_.ProcessId }
+        Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+          Where-Object { $ids -contains $_.OwningProcess } |
+          ForEach-Object { "$($_.LocalAddress):$($_.LocalPort) pid $($_.OwningProcess)" }
+        `,
+      ],
+      { encoding: "utf8", timeout: 20_000 },
+    ).trim();
+  } catch (error) {
+    return `(could not look: ${error instanceof Error ? error.message : String(error)})`;
+  }
+}
+
 /** What the app printed, so a failure can say why the app did not start. */
 function collectOutput(app: ChildProcess): () => string {
   const chunks: string[] = [];
@@ -89,6 +123,8 @@ export interface RunningApp {
   pid: number;
   /** The folder holding all of the app's files: settings, logs and crash reports. */
   dataDir: string;
+  /** The folder the web engine keeps its files in for this launch. */
+  webViewProfile: string;
   /** The app's web page, attached over the Chrome DevTools Protocol. */
   page: Page;
   /** Closes the window the way the user would, and waits for the app to save and exit. */
@@ -155,6 +191,7 @@ export async function launchApp({ dataDir, env = {} }: LaunchOptions = {}): Prom
       process: app,
       pid,
       dataDir: data,
+      webViewProfile: profile,
       page,
       async close() {
         // Imported lazily to keep this file free of PowerShell until a test needs it.
@@ -176,10 +213,14 @@ export async function launchApp({ dataDir, env = {} }: LaunchOptions = {}): Prom
     };
   } catch (error) {
     const tail = logTail(data);
+    const webView = describeWebView(profile);
     kill();
     cleanUp();
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`${message}\n--- the app's own log ---\n${tail}`, { cause: error });
+    throw new Error(
+      `${message}\n--- the app's own log ---\n${tail}\n--- the web engine (port ${debugPort}) ---\n${webView}`,
+      { cause: error },
+    );
   }
 }
 

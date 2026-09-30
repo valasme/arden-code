@@ -15,8 +15,12 @@ do), and add a row here. Never reuse or renumber a code.
 |---|---|---|
 | `ARD-APP-001` | Something unexpected went wrong inside the app | Any command that fails in a way nobody planned for |
 | `ARD-APP-002` | The interface hit an error it could not handle | An uncaught error or rejected promise in the UI |
+| `ARD-APP-003` | Arden Code could not get ready to reset itself | Settings → Advanced → Reset Arden Code |
 | `ARD-SET-001` | The settings could not be saved | Changing any setting |
 | `ARD-SET-002` | The settings file was not valid, so defaults are in use | Starting the app, or editing `settings.json` by hand |
+| `ARD-SET-003` | A settings file could not be imported | Settings → Advanced → Import settings |
+| `ARD-SET-004` | The settings could not be exported | Settings → Advanced → Export settings |
+| `ARD-SET-005` | `settings.json` could not be opened | Settings → Advanced → Open settings.json |
 | `ARD-LOG-001` | The logs folder could not be opened | Settings → Advanced → Open logs; the error screen's "Open logs" |
 | `ARD-WIN-001` | Windows' window menu could not be opened | The title bar's logo button and Alt+Space |
 

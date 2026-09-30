@@ -2,6 +2,7 @@
 
 pub mod error;
 pub mod paths;
+pub mod reset;
 
 use serde::Serialize;
 use specta::Type;
@@ -15,9 +16,14 @@ pub const APP_IDENTIFIER: &str = "io.github.valasme.arden";
 
 /// What the app knows about itself.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct AppInfo {
     pub name: String,
     pub version: String,
+    /// The short id of the commit this build was made from, or `unknown`.
+    pub commit: String,
+    /// The date of that commit as `YYYY-MM-DD`, or `unknown`.
+    pub build_date: String,
 }
 
 /// Returns the product name and the version this build was compiled from.
@@ -26,6 +32,8 @@ pub fn app_info() -> AppInfo {
     AppInfo {
         name: APP_NAME.to_owned(),
         version: env!("CARGO_PKG_VERSION").to_owned(),
+        commit: env!("ARDEN_BUILD_COMMIT").to_owned(),
+        build_date: env!("ARDEN_BUILD_DATE").to_owned(),
     }
 }
 
@@ -36,6 +44,23 @@ mod tests {
     #[test]
     fn app_info_reports_the_product_name() {
         assert_eq!(app_info().name, "Arden Code");
+    }
+
+    #[test]
+    fn app_info_says_which_commit_and_day_the_build_is_from() {
+        let info = app_info();
+
+        // In a checkout these are a commit id and a date; without git they say so.
+        assert!(!info.commit.is_empty());
+        let date_ok = info.build_date == "unknown"
+            || (info.build_date.len() == 10
+                && info.build_date.chars().filter(|c| *c == '-').count() == 2);
+        assert!(date_ok, "unexpected date {}", info.build_date);
+        assert!(
+            info.commit == "unknown" || info.commit.chars().all(|c| c.is_ascii_hexdigit()),
+            "unexpected commit {}",
+            info.commit
+        );
     }
 
     #[test]

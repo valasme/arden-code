@@ -119,6 +119,54 @@ pub fn save(dir: &Path, settings: &Settings) -> Result<(), AppError> {
     write(dir, existing(dir), settings)
 }
 
+/// The settings as text for a file that is shared or backed up, laid out like `settings.json`.
+///
+/// # Panics
+///
+/// Never in practice: the settings are plain data that always serialize.
+#[must_use]
+pub fn export_text(settings: &Settings) -> String {
+    let mut text = serde_json::to_string_pretty(settings).expect("settings are JSON");
+    text.push('\n');
+    text
+}
+
+/// Writes the settings to a file of the person's choosing.
+///
+/// # Errors
+///
+/// `ARD-SET-004` when the file cannot be written.
+pub fn export_to(path: &Path, settings: &Settings) -> Result<(), AppError> {
+    fs::write(path, export_text(settings))
+        .map_err(|error| AppError::new(ErrorCode::SettingsExport).with_details(error.to_string()))
+}
+
+/// Reads settings from text that was exported (or written by hand). Unknown keys are ignored,
+/// missing settings take their defaults and numbers are brought inside their limits, like when
+/// the app starts.
+///
+/// # Errors
+///
+/// `ARD-SET-003` when the text is not valid settings.
+pub fn import(text: &str) -> Result<Settings, AppError> {
+    parse(text)
+        .map(|(settings, _, _)| settings)
+        .map_err(|reason| AppError::new(ErrorCode::SettingsImport).with_details(reason))
+}
+
+/// Reads settings from a file of the person's choosing.
+///
+/// # Errors
+///
+/// `ARD-SET-003` when the file cannot be read or is not valid settings.
+pub fn import_from(path: &Path) -> Result<Settings, AppError> {
+    let text = fs::read_to_string(path).map_err(|error| {
+        AppError::new(ErrorCode::SettingsImport)
+            .with_details(format!("the file could not be read: {error}"))
+    })?;
+    import(&text)
+}
+
 fn write_schema(dir: &Path) -> io::Result<()> {
     let text = schema();
     let path = dir.join(SCHEMA_FILE);
@@ -145,6 +193,14 @@ fn parse(text: &str) -> Result<(Settings, Value, bool), String> {
     // A number outside its limits is brought back to the nearest allowed one, not refused.
     settings.clamp();
     Ok((settings, upgraded, !was_current))
+}
+
+/// The settings as they are in the file now, without creating, moving or rewriting anything.
+/// `None` when there is no usable file. For things that must be known before the app is up.
+#[must_use]
+pub fn peek(dir: &Path) -> Option<Settings> {
+    let text = fs::read_to_string(dir.join(FILE)).ok()?;
+    parse(&text).ok().map(|(settings, _, _)| settings)
 }
 
 /// Whether the file can be used right now: it is missing (the defaults will be written) or valid.
@@ -502,6 +558,100 @@ mod tests {
         );
         assert_eq!(file["keyboard"]["comment"], "keep");
         assert_eq!(file["note"], "mine");
+    }
+
+    #[test]
+    fn exported_settings_can_be_imported_again() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut settings = Settings::default();
+        settings.apply(SettingChange::AppearanceTheme(Theme::Dark));
+        settings.apply(SettingChange::AppearanceZoom(150));
+        settings.set_shortcuts("palette.open", &["Ctrl+Shift+O".to_owned()]);
+        let path = folder.path().join("backup.json");
+
+        export_to(&path, &settings).unwrap();
+        let imported = import_from(&path).unwrap();
+
+        assert_eq!(imported, settings);
+    }
+
+    #[test]
+    fn an_export_is_readable_by_a_person() {
+        let text = export_text(&Settings::default());
+
+        assert!(text.contains("\n  "), "indented");
+        assert!(text.ends_with('\n'));
+        assert!(text.contains("\"appearance\""));
+    }
+
+    #[test]
+    fn importing_fills_in_what_is_missing_and_brings_numbers_inside_their_limits() {
+        let imported = import(r#"{"version":1,"appearance":{"zoom":900}}"#).unwrap();
+
+        assert_eq!(imported.appearance.zoom, 200);
+        assert_eq!(imported.appearance.theme, Theme::System);
+    }
+
+    #[test]
+    fn importing_something_that_is_not_settings_is_refused_with_the_import_code() {
+        for bad in [
+            "",
+            "not json",
+            "[]",
+            r#"{"appearance":{"theme":"purple"}}"#,
+            r#"{"version":999}"#,
+        ] {
+            let error = import(bad).expect_err(bad);
+
+            assert_eq!(error.code, ErrorCode::SettingsImport, "{bad}");
+            assert!(error.details.is_some(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn importing_a_file_that_is_not_there_is_refused_with_the_import_code() {
+        let folder = tempfile::tempdir().unwrap();
+
+        let error = import_from(&folder.path().join("missing.json")).unwrap_err();
+
+        assert_eq!(error.code, ErrorCode::SettingsImport);
+    }
+
+    #[test]
+    fn exporting_to_a_place_that_cannot_be_written_is_refused_with_the_export_code() {
+        let folder = tempfile::tempdir().unwrap();
+
+        let error = export_to(
+            &folder.path().join("no-such-folder").join("x.json"),
+            &Settings::default(),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, ErrorCode::SettingsExport);
+    }
+
+    #[test]
+    fn peeking_reads_the_file_and_changes_nothing() {
+        let folder = tempfile::tempdir().unwrap();
+        assert!(peek(folder.path()).is_none(), "no file, nothing is created");
+        assert!(names(folder.path()).is_empty());
+
+        fs::write(
+            folder.path().join("settings.json"),
+            r#"{"version":1,"advanced":{"hardwareAcceleration":false}}"#,
+        )
+        .unwrap();
+        let seen = peek(folder.path()).unwrap();
+
+        assert!(!seen.advanced.hardware_acceleration);
+        assert_eq!(names(folder.path()), ["settings.json"]);
+
+        fs::write(folder.path().join("settings.json"), "not json").unwrap();
+        assert!(
+            peek(folder.path()).is_none(),
+            "a broken file is left for load to deal with"
+        );
+        assert_eq!(names(folder.path()), ["settings.json"]);
     }
 
     #[test]

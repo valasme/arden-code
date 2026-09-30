@@ -22,3 +22,13 @@ keyboard can open, and an app that does not behave like a browser in release bui
 
 - Every area that is added marks itself with `data-area`, and F6 finds it.
 - A component that offers its own menu (a session in the sidebar, later) can add items to the host; today the host knows text fields and selections only.
+
+## Advanced and About (ticket 17)
+
+- **Developer mode** turns the web engine's developer tools, its own menu and its shortcuts back on, live. It is the only thing that lifts the release hardening.
+- **The Windows title bar** is a live switch: the window gets or loses Windows' own frame, and the title bar in the page keeps back, forward and search but drops the logo menu, the drag area and the window buttons that Windows now provides.
+- **Hardware acceleration** is read before the web engine starts, so it needs a restart: turning it off adds `--disable-gpu` to the engine's arguments at the next start. The row says a restart is waiting, and offers it, until the setting matches what the app started with.
+- **Resetting Arden Code** is done at the next start, not at once, because the logs and the engine's cache are in use until the app exits. The request is a marker file; the next start removes the app's folders before anything opens them. Only folders named like the app's own (`config`, `local` or the identifier) are removed, so a data folder pointed at someone's documents is refused.
+- **Export and import** use the system's file dialogs from Rust. A file that is not valid settings changes nothing (`ARD-SET-003`).
+- **About** shows the commit and its date (worked out when Rust is built, from git), the Windows version (from the registry, telling Windows 11 by its build number) and the version of the web engine. The open-source list is generated from the dependencies by `pnpm licenses:build`, and CI fails when it is out of date.
+- **Links** in About open fixed addresses of the project's GitHub page through a Rust command, so nothing the page is given can send the browser elsewhere.

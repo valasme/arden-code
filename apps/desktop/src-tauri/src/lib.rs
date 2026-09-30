@@ -44,6 +44,14 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::reset_shortcuts,
         commands::take_settings_notice,
         commands::get_system_preferences,
+        commands::get_system_info,
+        commands::open_settings_file,
+        commands::open_project_page,
+        commands::export_settings,
+        commands::import_settings,
+        commands::reset_settings,
+        commands::reset_app,
+        commands::restart_app,
         commands::debug_fail,
         commands::debug_panic,
     ];
@@ -61,6 +69,14 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::reset_shortcuts,
         commands::take_settings_notice,
         commands::get_system_preferences,
+        commands::get_system_info,
+        commands::open_settings_file,
+        commands::open_project_page,
+        commands::export_settings,
+        commands::import_settings,
+        commands::reset_settings,
+        commands::reset_app,
+        commands::restart_app,
     ];
 
     builder.commands(commands).events(collect_events![
@@ -156,12 +172,49 @@ fn watch_system_preferences(handle: tauri::AppHandle) -> preferences::Watcher {
     )
 }
 
+/// The folders of the app's files, worked out from Windows' environment. The window does not exist
+/// yet when this is needed, so Tauri cannot be asked.
+fn early_paths() -> AppPaths {
+    let folder =
+        |name: &str| std::env::var_os(name).map_or_else(|| PathBuf::from("."), PathBuf::from);
+    AppPaths::resolve(
+        std::env::var_os(DATA_DIR_VARIABLE)
+            .map(PathBuf::from)
+            .as_deref(),
+        &folder("APPDATA"),
+        &folder("LOCALAPPDATA"),
+    )
+}
+
+/// What has to happen before the web engine starts: a reset that was asked for, and the choice
+/// about hardware acceleration, which the engine only reads as it starts.
+fn prepare_before_start() {
+    let paths = early_paths();
+    if let Err(error) = arden_core::reset::apply_pending(&paths) {
+        eprintln!("Arden Code could not finish resetting itself: {error}");
+    }
+    let hardware_acceleration = arden_settings::store::peek(&paths.config)
+        .is_none_or(|settings| settings.advanced.hardware_acceleration);
+    if !hardware_acceleration {
+        let mut arguments =
+            std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
+        arguments.push_str(" --disable-gpu");
+        // SAFETY: this runs first in `run`, before the app starts any thread that could read the
+        // environment at the same time.
+        #[allow(unsafe_code)]
+        unsafe {
+            std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", arguments.trim());
+        }
+    }
+}
+
 /// Starts the app.
 ///
 /// # Panics
 ///
 /// Panics when the Tauri runtime fails to start.
 pub fn run() {
+    prepare_before_start();
     let builder = specta_builder();
 
     tauri::Builder::default()
@@ -172,6 +225,7 @@ pub fn run() {
             },
         ))
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .on_page_load(|_webview, payload| {
             tracing::info!(url = %payload.url(), event = ?payload.event(), "page load");
@@ -185,13 +239,14 @@ pub fn run() {
             let handle = app.handle().clone();
             settings.subscribe(move |settings, notice| {
                 window::apply_native_theme(&handle, settings.appearance.theme);
+                window::apply_advanced(&handle, &settings.advanced);
                 let _ = commands::SettingsChanged {
                     settings: settings.clone(),
                     notice: notice.cloned(),
                 }
                 .emit(&handle);
             });
-            window::prepare_main_window(app, &paths, settings.get().appearance.theme)?;
+            window::prepare_main_window(app, &paths, &settings.get())?;
             app.manage(settings);
             app.manage(paths);
             app.manage(watch_system_preferences(app.handle().clone()));

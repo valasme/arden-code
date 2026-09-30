@@ -14,7 +14,7 @@ export function useSettings(): Settings {
 
 /** What the settings look like once a change is applied. Rust applies the same change when saving. */
 function applyChange(settings: Settings, change: SettingChange): Settings {
-  const { general, appearance, layout } = settings;
+  const { general, appearance, layout, advanced } = settings;
   if (change.generalOnStartup !== undefined) {
     return { ...settings, general: { ...general, onStartup: change.generalOnStartup } };
   }
@@ -66,7 +66,22 @@ function applyChange(settings: Settings, change: SettingChange): Settings {
   if (change.layoutSidebarWidth !== undefined) {
     return { ...settings, layout: { ...layout, sidebarWidth: change.layoutSidebarWidth } };
   }
-  return { ...settings, layout: { ...layout, inspectorWidth: change.layoutInspectorWidth } };
+  if (change.layoutInspectorWidth !== undefined) {
+    return { ...settings, layout: { ...layout, inspectorWidth: change.layoutInspectorWidth } };
+  }
+  if (change.advancedDeveloperMode !== undefined) {
+    return { ...settings, advanced: { ...advanced, developerMode: change.advancedDeveloperMode } };
+  }
+  if (change.advancedNativeTitleBar !== undefined) {
+    return {
+      ...settings,
+      advanced: { ...advanced, nativeTitleBar: change.advancedNativeTitleBar },
+    };
+  }
+  return {
+    ...settings,
+    advanced: { ...advanced, hardwareAcceleration: change.advancedHardwareAcceleration },
+  };
 }
 
 /**

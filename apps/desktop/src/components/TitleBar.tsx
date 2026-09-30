@@ -19,6 +19,8 @@ interface TitleBarProps {
   onForward: () => void;
   /** Opens the command palette. */
   onSearch: () => void;
+  /** Windows draws the title bar's frame, its window buttons and its menu, so the bar keeps only what is the app's. */
+  native?: boolean;
 }
 
 function showSystemMenu() {
@@ -45,12 +47,21 @@ function BarButton({ className, ...props }: ComponentProps<"button">) {
  * the command palette, and the window buttons. Empty space drags the window, and a double click on
  * it maximizes or restores it, both handled by Tauri's drag region.
  */
-export function TitleBar({ canGoBack, canGoForward, onBack, onForward, onSearch }: TitleBarProps) {
+export function TitleBar({
+  canGoBack,
+  canGoForward,
+  onBack,
+  onForward,
+  onSearch,
+  native = false,
+}: TitleBarProps) {
   const { t } = useTranslation();
   const maximized = useWindowMaximized();
 
-  // Alt+Space opens the system menu, as in every Windows app.
+  // Alt+Space opens the system menu, as in every Windows app. With the title bar of Windows,
+  // Windows does it.
   useEffect(() => {
+    if (native) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (
         event.altKey &&
@@ -67,11 +78,11 @@ export function TitleBar({ canGoBack, canGoForward, onBack, onForward, onSearch 
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, []);
+  }, [native]);
 
   // A right click on the bar's empty space also opens it.
   const onContextMenu = (event: MouseEvent<HTMLElement>) => {
-    if (event.target === event.currentTarget) {
+    if (!native && event.target === event.currentTarget) {
       event.preventDefault();
       showSystemMenu();
     }
@@ -80,18 +91,20 @@ export function TitleBar({ canGoBack, canGoForward, onBack, onForward, onSearch 
   return (
     <header
       data-area="titlebar"
-      data-tauri-drag-region
+      {...(native ? {} : { "data-tauri-drag-region": true })}
       onContextMenu={onContextMenu}
       className="flex h-8 shrink-0 items-stretch gap-1 border-b border-border bg-background pl-1 text-foreground select-none"
     >
-      <BarButton
-        aria-label={t("titleBar.menu")}
-        aria-haspopup="menu"
-        className="w-8"
-        onClick={showSystemMenu}
-      >
-        <Mark decorative className="size-4" />
-      </BarButton>
+      {native ? null : (
+        <BarButton
+          aria-label={t("titleBar.menu")}
+          aria-haspopup="menu"
+          className="w-8"
+          onClick={showSystemMenu}
+        >
+          <Mark decorative className="size-4" />
+        </BarButton>
+      )}
 
       <CommandTooltip command="navigate.back">
         <BarButton
@@ -124,30 +137,32 @@ export function TitleBar({ canGoBack, canGoForward, onBack, onForward, onSearch 
         <kbd className="ml-auto shrink-0 font-sans text-2xs">{t("titleBar.searchShortcut")}</kbd>
       </button>
 
-      <div className="flex">
-        <BarButton
-          aria-label={t("titleBar.minimize")}
-          className="w-[46px]"
-          onClick={() => void windowControls.minimize()}
-        >
-          <MinimizeGlyph />
-        </BarButton>
-        <BarButton
-          aria-label={maximized ? t("titleBar.restore") : t("titleBar.maximize")}
-          className="w-[46px]"
-          onClick={() => void windowControls.toggleMaximize()}
-        >
-          {maximized ? <RestoreGlyph /> : <MaximizeGlyph />}
-        </BarButton>
-        {/* Windows' Close turns red; white on #C42B1C is 5.9:1. */}
-        <BarButton
-          aria-label={t("titleBar.close")}
-          className="w-[46px] hover:bg-[#c42b1c] hover:text-white active:bg-[#b32b1c] active:text-white"
-          onClick={() => void windowControls.close()}
-        >
-          <CloseGlyph />
-        </BarButton>
-      </div>
+      {native ? null : (
+        <div className="flex">
+          <BarButton
+            aria-label={t("titleBar.minimize")}
+            className="w-[46px]"
+            onClick={() => void windowControls.minimize()}
+          >
+            <MinimizeGlyph />
+          </BarButton>
+          <BarButton
+            aria-label={maximized ? t("titleBar.restore") : t("titleBar.maximize")}
+            className="w-[46px]"
+            onClick={() => void windowControls.toggleMaximize()}
+          >
+            {maximized ? <RestoreGlyph /> : <MaximizeGlyph />}
+          </BarButton>
+          {/* Windows' Close turns red; white on #C42B1C is 5.9:1. */}
+          <BarButton
+            aria-label={t("titleBar.close")}
+            className="w-[46px] hover:bg-[#c42b1c] hover:text-white active:bg-[#b32b1c] active:text-white"
+            onClick={() => void windowControls.close()}
+          >
+            <CloseGlyph />
+          </BarButton>
+        </div>
+      )}
     </header>
   );
 }

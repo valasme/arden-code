@@ -25,6 +25,9 @@
     "zoomOut": "Zoom out",
     "zoomReset": "Reset zoom"
   },
+  "common": {
+    "cancel": "Cancel"
+  },
   "contextMenu": {
     "copy": "Copy",
     "cut": "Cut",
@@ -42,6 +45,11 @@
       "what": "The interface hit an error it could not handle.",
       "why": "A part of the screen failed to draw or to respond."
     },
+    "ARD-APP-003": {
+      "action": "Try again. If it keeps happening, delete the folders named io.github.valasme.arden in %APPDATA% and %LOCALAPPDATA% yourself.",
+      "what": "Arden Code could not get ready to reset itself.",
+      "why": "The file that asks for the reset could not be written."
+    },
     "ARD-LOG-001": {
       "action": "Open it yourself in Explorer, at %LOCALAPPDATA%\\io.github.valasme.arden\\logs.",
       "what": "The logs folder could not be opened.",
@@ -56,6 +64,21 @@
       "action": "Your old file was kept next to it as settings.invalid-<date>.json. Fix it there and copy it back, or keep the defaults.",
       "what": "The settings file was not valid, so the default settings are in use.",
       "why": "The file was damaged, or it was edited into something Arden Code cannot read."
+    },
+    "ARD-SET-003": {
+      "action": "Choose a file that was exported from Arden Code, or fix the file and try again. Your current settings were not changed.",
+      "what": "That settings file could not be imported.",
+      "why": "The file is not valid JSON, or a setting in it has a value that is not allowed."
+    },
+    "ARD-SET-004": {
+      "action": "Choose another folder, and check that it is writable.",
+      "what": "Your settings could not be exported.",
+      "why": "The file could not be written. The folder may be read-only, or the disk full."
+    },
+    "ARD-SET-005": {
+      "action": "Open it yourself in Explorer, at %APPDATA%\\io.github.valasme.arden\\settings.json.",
+      "what": "settings.json could not be opened.",
+      "why": "Windows refused, or no program is set to open JSON files."
     },
     "ARD-WIN-001": {
       "action": "Use the buttons at the right of the title bar instead.",
@@ -100,6 +123,87 @@
     "sidebar": "Sidebar"
   },
   "settings": {
+    "about": {
+      "build": "Build",
+      "buildValue": "{{commit}} ({{date}})",
+      "copied": "System information copied",
+      "copy": "Copy system info",
+      "license": "MIT license",
+      "notAffiliated": "Arden Code is not affiliated with Anthropic or OpenAI.",
+      "openSource": {
+        "description": "Arden Code is built with these open-source packages.",
+        "license": "License",
+        "more": "Showing {{shown}} of {{total}}. Type to narrow the list.",
+        "none": "No package matches.",
+        "package": "Package",
+        "search": "Search packages",
+        "title": "Open-source licenses ({{count}} packages)"
+      },
+      "privacy": {
+        "detail": "There is no telemetry, no analytics and no crash uploading. Your settings and logs stay on this computer.",
+        "read": "Read the privacy statement",
+        "statement": "Arden Code collects nothing.",
+        "title": "Privacy"
+      },
+      "releaseNotes": "Release notes",
+      "reportBug": "Report a bug",
+      "systemInfoTemplate": "{{name}} {{version}}\nBuild: {{commit}} ({{date}})\nWindows: {{windows}}\nWebView2: {{webview}}",
+      "version": "Version",
+      "webview": "WebView2",
+      "windows": "Windows"
+    },
+    "advanced": {
+      "developerMode": {
+        "description": "Turns on the developer tools (F12) and the browser's own menu. For people who work on Arden Code.",
+        "label": "Developer mode"
+      },
+      "export": {
+        "button": "Export…",
+        "description": "Save a copy of your settings to a file.",
+        "done": "Settings exported to {{path}}",
+        "label": "Export settings"
+      },
+      "files": "Files",
+      "hardwareAcceleration": {
+        "description": "Lets your graphics card draw the window. Turn it off to work around graphics problems. It takes a restart.",
+        "label": "Hardware acceleration",
+        "restartNote": "Restart Arden Code to apply this.",
+        "restartPrompt": "Hardware acceleration changes the next time Arden Code starts."
+      },
+      "import": {
+        "button": "Import…",
+        "description": "Replace your settings with the ones in a file you exported.",
+        "done": "Settings imported",
+        "label": "Import settings"
+      },
+      "nativeTitleBar": {
+        "description": "Lets Windows draw the title bar and the window buttons. Use it if the window does not behave well on your setup.",
+        "label": "Use the Windows title bar"
+      },
+      "openFile": {
+        "button": "Open",
+        "description": "Edit the settings file by hand. Changes apply while Arden Code runs.",
+        "label": "Open settings.json"
+      },
+      "reset": {
+        "button": "Reset…",
+        "confirm": "Reset settings",
+        "confirmDescription": "Every setting, including your shortcuts, goes back to its default. This cannot be undone.",
+        "confirmTitle": "Reset all settings?",
+        "description": "Put every setting, including your shortcuts, back to its default.",
+        "done": "Settings reset",
+        "label": "Reset settings",
+        "title": "Reset"
+      },
+      "resetApp": {
+        "button": "Reset…",
+        "confirm": "Reset Arden Code",
+        "confirmDescription": "This deletes your settings, logs, crash reports and caches, and starts Arden Code again. This cannot be undone.",
+        "confirmTitle": "Reset Arden Code?",
+        "description": "Delete your settings, logs, crash reports and caches, and start again as if it were new.",
+        "label": "Reset Arden Code"
+      }
+    },
     "appearance": {
       "codeFontSize": {
         "description": "The size of code in replies, from 11 to 20 pixels.",
@@ -187,6 +291,11 @@
     "placeholder": "These settings arrive in a later update.",
     "reset": "Reset {{name}} to its default",
     "resetButton": "Reset",
+    "restart": {
+      "later": "Later",
+      "now": "Restart now",
+      "title": "Restart Arden Code?"
+    },
     "search": {
       "empty": "No setting matches.",
       "label": "Search settings",

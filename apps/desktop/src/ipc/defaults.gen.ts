@@ -23,5 +23,10 @@ export const defaultSettings: Settings = {
   },
   "keyboard": {
     "shortcuts": {}
+  },
+  "advanced": {
+    "developerMode": false,
+    "nativeTitleBar": false,
+    "hardwareAcceleration": true
   }
 };

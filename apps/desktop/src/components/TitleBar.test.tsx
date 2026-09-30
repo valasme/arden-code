@@ -160,3 +160,47 @@ describe("TitleBar", () => {
     expect(calls).toEqual(["back", "forward", "search"]);
   });
 });
+
+describe("TitleBar with the title bar of Windows", () => {
+  it("leaves the window buttons, the logo menu and the drag area to Windows", () => {
+    startWindow();
+    render(<TitleBar {...navigation} native />);
+
+    for (const name of ["Minimize", "Maximize", "Close", "Window menu"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    expect(screen.getByRole("banner")).not.toHaveAttribute("data-tauri-drag-region");
+  });
+
+  it("keeps back, forward and the search field", async () => {
+    const onSearch = vi.fn<() => void>();
+    const onBack = vi.fn<() => void>();
+    startWindow();
+    const user = userEvent.setup();
+    render(<TitleBar {...navigation} onSearch={onSearch} onBack={onBack} native />);
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await user.click(screen.getByRole("button", { name: /^Search or run a command/ }));
+
+    expect(onBack).toHaveBeenCalledOnce();
+    expect(onSearch).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Forward" })).toBeVisible();
+  });
+
+  it("does not take Alt+Space, which Windows handles itself", async () => {
+    const window = startWindow();
+    const user = userEvent.setup();
+    render(<TitleBar {...navigation} native />);
+
+    await user.keyboard("{Alt>} {/Alt}");
+
+    expect(window.commands).not.toContain("show_system_menu");
+  });
+
+  it("has no accessibility violations", async () => {
+    startWindow();
+    const { container } = render(<TitleBar {...navigation} native />);
+
+    await expectNoAccessibilityViolations(container);
+  });
+});

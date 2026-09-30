@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -36,7 +37,7 @@ function startApp(initial = ""): Rust {
 function Field({ readOnly = false, type = "text" }: { readOnly?: boolean; type?: string }) {
   const [value, setValue] = useState("hello world");
   return (
-    <>
+    <QueryClientProvider client={new QueryClient()}>
       <input
         aria-label="Name"
         type={type}
@@ -49,7 +50,7 @@ function Field({ readOnly = false, type = "text" }: { readOnly?: boolean; type?:
       <p>Some text that can be selected</p>
       <button type="button">A button</button>
       <ContextMenuHost />
-    </>
+    </QueryClientProvider>
   );
 }
 

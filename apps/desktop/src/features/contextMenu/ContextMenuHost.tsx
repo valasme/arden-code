@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useSettings } from "@/features/settings/useSettings";
 import { logger } from "@/lib/logger";
 
 import { readClipboard, writeClipboard } from "./clipboard";
@@ -77,6 +78,12 @@ export function ContextMenuHost() {
   // What the person chose, run once the menu has closed and the text has its focus back.
   const chosen = useRef<Action | undefined>(undefined);
   const content = useRef<HTMLDivElement>(null);
+  // In developer mode the browser's own menu (with Inspect) stays available.
+  const { developerMode } = useSettings().advanced;
+  const developing = useRef(developerMode);
+  useEffect(() => {
+    developing.current = developerMode;
+  }, [developerMode]);
 
   useEffect(() => {
     const onContextMenu = (event: MouseEvent) => {
@@ -86,7 +93,7 @@ export function ContextMenuHost() {
       }
       const target = menuTargetOf(event.target);
       // The browser's own menu has "Inspect", which developers want.
-      if (!target && !import.meta.env.PROD) return;
+      if (!target && (!import.meta.env.PROD || developing.current)) return;
       event.preventDefault();
       if (!target) return;
       returnFocusTo.current =

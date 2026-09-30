@@ -309,7 +309,7 @@ describe("searching the settings", () => {
       within(results)
         .getAllByRole("heading", { level: 2 })
         .map((h) => h.textContent),
-    ).toEqual(["Theme", "Follow Windows text size", "Reduce motion"]);
+    ).toEqual(["Theme", "Follow Windows text size", "Reduce motion", "Use the Windows title bar"]);
   });
 
   it("says when nothing matches, and goes back to the tab when the search is cleared", async () => {
@@ -394,5 +394,32 @@ describe("the Windows text size", () => {
     await waitFor(() => {
       expect(getComputedStyle(root).fontSize).toBe("16px");
     });
+  });
+});
+
+describe("the advanced settings", () => {
+  it("draw the app's own title bar by default, with its window buttons", async () => {
+    startApp();
+    renderApp();
+
+    expect(await screen.findByRole("button", { name: "Minimize" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Close" })).toBeVisible();
+  });
+
+  it("leave the title bar to Windows when told to, keeping back, forward and search", async () => {
+    startApp({ settings: settingsWith({ advanced: { nativeTitleBar: true } }) });
+    renderApp();
+    await screen.findByRole("main");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Minimize" })).toBeNull();
+    });
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Back" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Search or run a command/ })).toBeVisible();
+
+    await emit("settings-changed", { settings: settingsWith(), notice: null });
+
+    expect(await screen.findByRole("button", { name: "Minimize" })).toBeVisible();
   });
 });

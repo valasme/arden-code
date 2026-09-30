@@ -1,0 +1,164 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Button } from "@/components/ui/button";
+import { commands } from "@/ipc/bindings";
+import { settingsQuery } from "@/ipc/queries";
+import { showErrorToast } from "@/lib/errorToasts";
+import { toAppError } from "@/lib/errors";
+
+import { SettingsList } from "./SettingsList";
+
+interface ActionRowProps {
+  id: string;
+  label: string;
+  description: string;
+  button: string;
+  onClick: () => void;
+}
+
+/** Something to do rather than something to set: a name, what it does, and its button. */
+function ActionRow({ id, label, description, button, onClick }: ActionRowProps) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-border py-4 last:border-b-0">
+      <div className="flex flex-col gap-0.5">
+        <h3 id={`${id}-label`} className="text-sm font-medium">
+          {label}
+        </h3>
+        <p id={`${id}-description`} className="text-xs text-muted-foreground">
+          {description}
+        </p>
+      </div>
+      <Button
+        variant="outline"
+        aria-labelledby={`${id}-label`}
+        aria-describedby={`${id}-description`}
+        onClick={onClick}
+      >
+        {button}
+      </Button>
+    </div>
+  );
+}
+
+function report(error: unknown) {
+  showErrorToast(toAppError(error));
+}
+
+function openSettingsFile() {
+  commands.openSettingsFile().catch(report);
+}
+
+function resetArdenCode() {
+  commands.resetApp().catch(report);
+}
+
+/** Advanced: the settings for people who look under the hood, and the ways to back up or reset. */
+export function AdvancedTab() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState<"settings" | "app" | undefined>(undefined);
+
+  const exportSettings = () => {
+    commands
+      .exportSettings()
+      .then((path) => {
+        if (path) toast.success(t("settings.advanced.export.done", { path }));
+      })
+      .catch(report);
+  };
+
+  const importSettings = () => {
+    commands
+      .importSettings()
+      .then((imported) => {
+        if (!imported) return;
+        queryClient.setQueryData(settingsQuery.queryKey, imported);
+        toast.success(t("settings.advanced.import.done"));
+      })
+      .catch(report);
+  };
+
+  const resetSettings = () => {
+    commands
+      .resetSettings()
+      .then((saved) => {
+        queryClient.setQueryData(settingsQuery.queryKey, saved);
+        toast.success(t("settings.advanced.reset.done"));
+      })
+      .catch(report);
+  };
+
+  return (
+    <div>
+      <SettingsList tab="advanced" />
+      <h2 className="mt-4 text-sm font-medium">{t("settings.advanced.files")}</h2>
+      <ActionRow
+        id="open-settings-file"
+        label={t("settings.advanced.openFile.label")}
+        description={t("settings.advanced.openFile.description")}
+        button={t("settings.advanced.openFile.button")}
+        onClick={openSettingsFile}
+      />
+      <ActionRow
+        id="export-settings"
+        label={t("settings.advanced.export.label")}
+        description={t("settings.advanced.export.description")}
+        button={t("settings.advanced.export.button")}
+        onClick={exportSettings}
+      />
+      <ActionRow
+        id="import-settings"
+        label={t("settings.advanced.import.label")}
+        description={t("settings.advanced.import.description")}
+        button={t("settings.advanced.import.button")}
+        onClick={importSettings}
+      />
+      <h2 className="mt-4 text-sm font-medium">{t("settings.advanced.reset.title")}</h2>
+      <ActionRow
+        id="reset-settings"
+        label={t("settings.advanced.reset.label")}
+        description={t("settings.advanced.reset.description")}
+        button={t("settings.advanced.reset.button")}
+        onClick={() => {
+          setConfirming("settings");
+        }}
+      />
+      <ActionRow
+        id="reset-app"
+        label={t("settings.advanced.resetApp.label")}
+        description={t("settings.advanced.resetApp.description")}
+        button={t("settings.advanced.resetApp.button")}
+        onClick={() => {
+          setConfirming("app");
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirming === "settings"}
+        onOpenChange={(open) => {
+          if (!open) setConfirming(undefined);
+        }}
+        title={t("settings.advanced.reset.confirmTitle")}
+        description={t("settings.advanced.reset.confirmDescription")}
+        confirmLabel={t("settings.advanced.reset.confirm")}
+        destructive
+        onConfirm={resetSettings}
+      />
+      <ConfirmDialog
+        open={confirming === "app"}
+        onOpenChange={(open) => {
+          if (!open) setConfirming(undefined);
+        }}
+        title={t("settings.advanced.resetApp.confirmTitle")}
+        description={t("settings.advanced.resetApp.confirmDescription")}
+        confirmLabel={t("settings.advanced.resetApp.confirm")}
+        destructive
+        onConfirm={resetArdenCode}
+      />
+    </div>
+  );
+}

@@ -17,12 +17,24 @@ pub enum ErrorCode {
     /// The UI hit an error it could not handle.
     #[serde(rename = "ARD-APP-002")]
     UiFailure,
+    /// Arden Code could not get ready to reset itself.
+    #[serde(rename = "ARD-APP-003")]
+    ResetApp,
     /// The settings could not be saved.
     #[serde(rename = "ARD-SET-001")]
     SettingsSave,
     /// The settings file was not valid, so the defaults are in use.
     #[serde(rename = "ARD-SET-002")]
     SettingsInvalid,
+    /// A settings file could not be imported.
+    #[serde(rename = "ARD-SET-003")]
+    SettingsImport,
+    /// The settings could not be exported.
+    #[serde(rename = "ARD-SET-004")]
+    SettingsExport,
+    /// `settings.json` could not be opened.
+    #[serde(rename = "ARD-SET-005")]
+    SettingsOpen,
     /// The logs folder could not be opened.
     #[serde(rename = "ARD-LOG-001")]
     LogsFolder,
@@ -38,8 +50,12 @@ impl ErrorCode {
         match self {
             Self::Unexpected => "ARD-APP-001",
             Self::UiFailure => "ARD-APP-002",
+            Self::ResetApp => "ARD-APP-003",
             Self::SettingsSave => "ARD-SET-001",
             Self::SettingsInvalid => "ARD-SET-002",
+            Self::SettingsImport => "ARD-SET-003",
+            Self::SettingsExport => "ARD-SET-004",
+            Self::SettingsOpen => "ARD-SET-005",
             Self::LogsFolder => "ARD-LOG-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",
         }

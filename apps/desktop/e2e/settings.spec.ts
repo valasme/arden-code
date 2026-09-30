@@ -70,6 +70,7 @@ test.describe("settings in the real app", () => {
         },
         layout: { sidebarWidth: 260, inspectorWidth: 320 },
         keyboard: { shortcuts: {} },
+        advanced: { developerMode: false, nativeTitleBar: false, hardwareAcceleration: true },
       });
       const schema = z
         .object({ type: z.literal("object") })

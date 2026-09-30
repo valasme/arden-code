@@ -32,6 +32,9 @@ const places = {
   appearanceShowStatusBar: ["appearance", "showStatusBar"],
   layoutSidebarWidth: ["layout", "sidebarWidth"],
   layoutInspectorWidth: ["layout", "inspectorWidth"],
+  advancedDeveloperMode: ["advanced", "developerMode"],
+  advancedNativeTitleBar: ["advanced", "nativeTitleBar"],
+  advancedHardwareAcceleration: ["advanced", "hardwareAcceleration"],
 } as const satisfies Record<SettingKey, readonly [keyof Settings, string]>;
 
 const changeSchema = z.object({ change: z.record(z.string(), z.unknown()) });

@@ -48,6 +48,8 @@ public static class W {
   [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
+  [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] public static extern IntPtr GetWindowLongPtr(IntPtr h, int index);
+  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
@@ -149,3 +151,36 @@ export function pressKey(pid: number, virtualKey: number): boolean {
 
 /** Virtual key codes of the keys the tests press. */
 export const virtualKeys = { f5: 0x74 } as const;
+
+/**
+ * How much of the window's height is frame and title bar that Windows draws: the window's height
+ * minus the height of what is inside it. The app draws its own title bar inside the window, so
+ * with it this is close to nothing; with the title bar of Windows it is the height of that bar.
+ */
+export function frameHeight(pid: number): number {
+  return Number(
+    powershell(`
+      $window = Main-Window ${pid}
+      $outer = New-Object W+RECT; $inner = New-Object W+RECT
+      [void][W]::GetWindowRect($window, [ref]$outer)
+      [void][W]::GetClientRect($window, [ref]$inner)
+      ($outer.Bottom - $outer.Top) - ($inner.Bottom - $inner.Top)
+    `),
+  );
+}
+
+/** The command lines of the web engine's processes that use the given profile folder. */
+export function webViewCommandLines(profileFolder: string): string[] {
+  const output = powershell(`
+    $lines = Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe'" |
+      Where-Object { $_.CommandLine -like "*${profileFolder.replaceAll("'", "''")}*" } |
+      ForEach-Object { $_.CommandLine }
+    ConvertTo-Json -InputObject @($lines) -Compress
+  `);
+  return z.array(z.string()).parse(JSON.parse(output || "[]"));
+}
+
+/** Ends every Arden Code process, also one the app started for itself by restarting. */
+export function killAllApps() {
+  powershell(`Get-Process arden-code -ErrorAction SilentlyContinue | Stop-Process -Force`);
+}

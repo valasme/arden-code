@@ -74,6 +74,9 @@ jobs:
       - name: Brand outputs are up to date
         run: pnpm brand:check
 
+      - name: The list of open-source licenses is up to date
+        run: pnpm licenses:check
+
       - name: Build the app
         run: pnpm build
 

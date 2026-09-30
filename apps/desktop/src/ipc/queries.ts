@@ -30,3 +30,10 @@ export const systemPreferencesQuery = queryOptions({
   queryFn: () => (isTauri() ? commands.getSystemPreferences() : fallbackSystemPreferences()),
   staleTime: Number.POSITIVE_INFINITY,
 });
+
+/** The Windows and WebView2 versions. They do not change while the app runs. */
+export const systemInfoQuery = queryOptions({
+  queryKey: ["system-info"],
+  queryFn: () => commands.getSystemInfo(),
+  staleTime: Number.POSITIVE_INFINITY,
+});

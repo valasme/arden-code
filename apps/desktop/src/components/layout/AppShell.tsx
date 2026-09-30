@@ -61,7 +61,7 @@ export function AppShell() {
   const setSidebarOpen = useLayoutStore((state) => state.setSidebarOpen);
   const setInspectorOpen = useLayoutStore((state) => state.setInspectorOpen);
   const { startingWidths, remember } = useRememberedLayout();
-  const { appearance, layout } = useSettings();
+  const { appearance, layout, advanced } = useSettings();
   const sidebarPanel = usePanelOpen(sidebarOpen, layout.sidebarWidth);
   const inspectorPanel = usePanelOpen(inspectorOpen, layout.inspectorWidth);
   const { showStatusBar } = appearance;
@@ -71,6 +71,7 @@ export function AppShell() {
       <div className="flex h-full flex-col bg-background text-foreground">
         <TitleBar
           {...navigation}
+          native={advanced.nativeTitleBar}
           onSearch={() => {
             openPalette(true);
           }}

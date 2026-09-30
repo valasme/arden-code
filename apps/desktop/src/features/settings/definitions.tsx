@@ -1,5 +1,5 @@
 import type { ParseKeys } from "i18next";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type {
@@ -14,6 +14,8 @@ import { defaultSettings } from "@/ipc/defaults.gen";
 
 import { ChoiceControl, RangeControl, ToggleControl } from "./controls";
 import { RegionalPreview } from "./RegionalPreview";
+import { RestartNote, RestartPrompt } from "./RestartControls";
+import { useStartupSettings } from "./startup";
 import type { SettingsTab } from "./tabs";
 import type { useChangeSetting } from "./useSettings";
 import { zoomRange } from "./zoom";
@@ -269,5 +271,74 @@ export const settingDefinitions: readonly SettingDefinition[] = [
         }}
       />
     ),
+  },
+  {
+    id: "developer-mode",
+    tab: "advanced",
+    key: "advancedDeveloperMode",
+    labelKey: "settings.advanced.developerMode.label",
+    descriptionKey: "settings.advanced.developerMode.description",
+    isDefault: (settings) => settings.advanced.developerMode === same.advanced.developerMode,
+    Control: ({ id, settings, change }) => (
+      <ToggleControl
+        id={id}
+        checked={settings.advanced.developerMode}
+        onChange={(checked) => {
+          change.mutate({ advancedDeveloperMode: checked });
+        }}
+      />
+    ),
+  },
+  {
+    id: "native-title-bar",
+    tab: "advanced",
+    key: "advancedNativeTitleBar",
+    labelKey: "settings.advanced.nativeTitleBar.label",
+    descriptionKey: "settings.advanced.nativeTitleBar.description",
+    isDefault: (settings) => settings.advanced.nativeTitleBar === same.advanced.nativeTitleBar,
+    Control: ({ id, settings, change }) => (
+      <ToggleControl
+        id={id}
+        checked={settings.advanced.nativeTitleBar}
+        onChange={(checked) => {
+          change.mutate({ advancedNativeTitleBar: checked });
+        }}
+      />
+    ),
+  },
+  {
+    id: "hardware-acceleration",
+    tab: "advanced",
+    key: "advancedHardwareAcceleration",
+    labelKey: "settings.advanced.hardwareAcceleration.label",
+    descriptionKey: "settings.advanced.hardwareAcceleration.description",
+    isDefault: (settings) =>
+      settings.advanced.hardwareAcceleration === same.advanced.hardwareAcceleration,
+    Control: function HardwareAccelerationControl({ id, settings, change }) {
+      const { t } = useTranslation();
+      const startedWith = useStartupSettings().advanced.hardwareAcceleration;
+      const [asking, setAsking] = useState(false);
+      const waiting = settings.advanced.hardwareAcceleration !== startedWith;
+      return (
+        <div className="flex flex-col gap-2">
+          <ToggleControl
+            id={id}
+            checked={settings.advanced.hardwareAcceleration}
+            onChange={(checked) => {
+              change.mutate({ advancedHardwareAcceleration: checked });
+              setAsking(checked !== startedWith);
+            }}
+          />
+          {waiting ? (
+            <RestartNote note={t("settings.advanced.hardwareAcceleration.restartNote")} />
+          ) : null}
+          <RestartPrompt
+            open={asking}
+            onOpenChange={setAsking}
+            description={t("settings.advanced.hardwareAcceleration.restartPrompt")}
+          />
+        </div>
+      );
+    },
   },
 ];

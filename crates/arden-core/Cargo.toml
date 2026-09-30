@@ -9,6 +9,8 @@ repository.workspace = true
 publish = false
 authors.workspace = true
 
+build = "build.rs"
+
 [dependencies]
 serde.workspace = true
 specta.workspace = true
@@ -16,6 +18,7 @@ strum.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+tempfile = "3"
 
 [lints]
 workspace = true

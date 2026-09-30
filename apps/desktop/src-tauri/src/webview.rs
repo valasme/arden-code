@@ -4,7 +4,14 @@
 //! Release builds only. A debug build keeps the browser's shortcuts and menu, which developers use.
 //! The code is built in both, so that it is checked and linted every time.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use tauri::WebviewWindow;
+
+/// Whether developer mode is on. The key handler reads it on every key press.
+static DEVELOPER_MODE: AtomicBool = AtomicBool::new(false);
+/// Whether the key handler has been added to the web engine. It is added once.
+static KEYS_CAUGHT: AtomicBool = AtomicBool::new(false);
 
 /// Virtual key codes of the keys in [`is_browser_shortcut`].
 mod key {
@@ -58,18 +65,24 @@ pub fn is_browser_shortcut(key: u32, ctrl: bool, shift: bool, alt: bool) -> bool
     }
 }
 
-/// Turns off the browser features that do not belong in an app window (plan sections 6.9 and 12).
+/// Turns off the browser features that do not belong in an app window (plan sections 6.9 and 12),
+/// or, in developer mode, turns them back on: the developer tools, the browser's own menu and its
+/// shortcuts. It can be called again whenever developer mode changes.
 ///
 /// # Errors
 ///
 /// Returns an error when the window's web engine cannot be reached.
 #[cfg(windows)]
 #[cfg_attr(debug_assertions, allow(dead_code))]
-pub fn harden(window: &WebviewWindow) -> tauri::Result<()> {
-    window.with_webview(|webview| match apply(&webview) {
-        Ok(()) => tracing::info!("turned off the browser features of the web engine"),
+pub fn harden(window: &WebviewWindow, developer_mode: bool) -> tauri::Result<()> {
+    DEVELOPER_MODE.store(developer_mode, Ordering::Relaxed);
+    window.with_webview(move |webview| match apply(&webview, developer_mode) {
+        Ok(()) => tracing::info!(
+            developer_mode,
+            "set up the browser features of the web engine"
+        ),
         Err(error) => {
-            tracing::warn!(%error, "could not turn off the browser features of the web engine");
+            tracing::warn!(%error, "could not set up the browser features of the web engine");
         }
     })
 }
@@ -78,7 +91,7 @@ pub fn harden(window: &WebviewWindow) -> tauri::Result<()> {
 #[cfg(not(windows))]
 #[allow(clippy::unnecessary_wraps)]
 #[cfg_attr(debug_assertions, allow(dead_code))]
-pub fn harden(_window: &WebviewWindow) -> tauri::Result<()> {
+pub fn harden(_window: &WebviewWindow, _developer_mode: bool) -> tauri::Result<()> {
     Ok(())
 }
 
@@ -94,7 +107,10 @@ fn held(virtual_key: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY) -
 }
 
 #[cfg(windows)]
-fn apply(webview: &tauri::webview::PlatformWebview) -> windows::core::Result<()> {
+fn apply(
+    webview: &tauri::webview::PlatformWebview,
+    developer_mode: bool,
+) -> windows::core::Result<()> {
     use webview2_com::AcceleratorKeyPressedEventHandler;
     use webview2_com::Microsoft::Web::WebView2::Win32::{
         COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN, COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN,
@@ -110,19 +126,20 @@ fn apply(webview: &tauri::webview::PlatformWebview) -> windows::core::Result<()>
     #[allow(unsafe_code)]
     unsafe {
         let settings = controller.CoreWebView2()?.Settings()?;
-        // The browser's own menu (Back, Save as, Inspect ...) is replaced by the app's menus.
-        settings.SetAreDefaultContextMenusEnabled(false)?;
+        // The browser's own menu (Back, Save as, Inspect ...) is replaced by the app's menus,
+        // except in developer mode, where it has Inspect.
+        settings.SetAreDefaultContextMenusEnabled(developer_mode)?;
         // Nothing to see in a status bar that shows link addresses, and no zoom by mouse wheel:
         // zoom is a setting.
         settings.SetIsStatusBarEnabled(false)?;
         settings.SetIsZoomControlEnabled(false)?;
         // Dev tools are for developer mode, which turns them on when it is on.
-        settings.SetAreDevToolsEnabled(false)?;
+        settings.SetAreDevToolsEnabled(developer_mode)?;
 
         // Reload, print, find, zoom keys, save, view source and the like.
         settings
             .cast::<ICoreWebView2Settings3>()?
-            .SetAreBrowserAcceleratorKeysEnabled(false)?;
+            .SetAreBrowserAcceleratorKeysEnabled(developer_mode)?;
         // Nothing the person types is offered back to them.
         let autofill = settings.cast::<ICoreWebView2Settings4>()?;
         autofill.SetIsGeneralAutofillEnabled(false)?;
@@ -136,12 +153,18 @@ fn apply(webview: &tauri::webview::PlatformWebview) -> windows::core::Result<()>
 
         // The setting above does not stop every one of these keys when Windows sends them to the
         // window (F5 still reloaded), so the keys are also caught here, before the engine acts.
+        if KEYS_CAUGHT.swap(true, Ordering::Relaxed) {
+            return Ok(());
+        }
         let mut token = Default::default();
         controller.add_AcceleratorKeyPressed(
             &AcceleratorKeyPressedEventHandler::create(Box::new(|_controller, arguments| {
                 let Some(arguments) = arguments else {
                     return Ok(());
                 };
+                if DEVELOPER_MODE.load(Ordering::Relaxed) {
+                    return Ok(());
+                }
                 let mut kind = COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN;
                 arguments.KeyEventKind(&raw mut kind)?;
                 if kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN

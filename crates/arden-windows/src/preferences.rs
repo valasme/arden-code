@@ -64,10 +64,26 @@ pub fn normalize_locale(name: &str) -> String {
     }
 }
 
+/// The Windows version as people say it: `Windows 11 24H2 (build 26100.1234)`. Windows 11 still
+/// calls itself "Windows 10" in some places, so the product is told from the build number.
+#[must_use]
+pub fn describe_windows(build: u32, revision: Option<u32>, release: Option<&str>) -> String {
+    let product = if build >= 22_000 {
+        "Windows 11"
+    } else {
+        "Windows 10"
+    };
+    let release = release.map_or_else(String::new, |release| format!(" {release}"));
+    let revision = revision.map_or_else(String::new, |revision| format!(".{revision}"));
+    format!("{product}{release} (build {build}{revision})")
+}
+
 #[cfg(windows)]
 mod system {
     use windows::Win32::Globalization::GetUserDefaultLocaleName;
-    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
+    use windows::Win32::System::Registry::{
+        HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RRF_RT_REG_SZ, RegGetValueW,
+    };
     use windows::core::w;
 
     /// The regional format the person chose in Windows, as a language tag.
@@ -79,6 +95,58 @@ mod system {
         let length = unsafe { GetUserDefaultLocaleName(&mut buffer) };
         let length = usize::try_from(length).ok().filter(|length| *length > 1)?;
         String::from_utf16(&buffer[..length - 1]).ok()
+    }
+
+    /// A text value of the current Windows version's registry key.
+    fn version_text(name: windows::core::PCWSTR) -> Option<String> {
+        let mut buffer = [0u16; 64];
+        let mut size = u32::try_from(size_of_val(&buffer)).ok()?;
+        // SAFETY: the buffer is valid for writes and `size` is its size in bytes.
+        #[allow(unsafe_code)]
+        let result = unsafe {
+            RegGetValueW(
+                HKEY_LOCAL_MACHINE,
+                w!("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"),
+                name,
+                RRF_RT_REG_SZ,
+                None,
+                Some(buffer.as_mut_ptr().cast()),
+                Some(&raw mut size),
+            )
+        };
+        result.is_ok().then_some(())?;
+        let length = usize::try_from(size).ok()? / 2;
+        String::from_utf16(&buffer[..length.saturating_sub(1)]).ok()
+    }
+
+    /// A number value of the current Windows version's registry key.
+    fn version_number(name: windows::core::PCWSTR) -> Option<u32> {
+        let mut value = 0u32;
+        let mut size = u32::try_from(size_of::<u32>()).ok()?;
+        // SAFETY: `value` and `size` are valid for writes and `size` is the size of `value`.
+        #[allow(unsafe_code)]
+        let result = unsafe {
+            RegGetValueW(
+                HKEY_LOCAL_MACHINE,
+                w!("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"),
+                name,
+                RRF_RT_REG_DWORD,
+                None,
+                Some((&raw mut value).cast()),
+                Some(&raw mut size),
+            )
+        };
+        result.is_ok().then_some(value)
+    }
+
+    /// The Windows version as text.
+    pub fn version() -> Option<String> {
+        let build: u32 = version_text(w!("CurrentBuild"))?.parse().ok()?;
+        Some(super::describe_windows(
+            build,
+            version_number(w!("UBR")),
+            version_text(w!("DisplayVersion")).as_deref(),
+        ))
     }
 
     /// The text size as Windows stored it, when the person changed it.
@@ -100,6 +168,16 @@ mod system {
         };
         result.is_ok().then_some(value)
     }
+}
+
+/// The Windows version, such as `Windows 11 24H2 (build 26100.1234)`.
+#[must_use]
+pub fn windows_version() -> String {
+    #[cfg(windows)]
+    if let Some(version) = system::version() {
+        return version;
+    }
+    "Windows (version unknown)".to_owned()
 }
 
 /// Reads the preferences from Windows.
@@ -268,6 +346,37 @@ mod tests {
         .unwrap();
 
         assert_eq!(text, r#"{"textScalePercent":125,"locale":"el-GR"}"#);
+    }
+
+    #[test]
+    fn the_windows_version_is_told_as_people_say_it() {
+        assert_eq!(
+            describe_windows(26100, Some(1234), Some("24H2")),
+            "Windows 11 24H2 (build 26100.1234)"
+        );
+        assert_eq!(
+            describe_windows(19045, Some(5000), Some("22H2")),
+            "Windows 10 22H2 (build 19045.5000)"
+        );
+    }
+
+    #[test]
+    fn windows_11_is_told_from_the_build_number_although_it_calls_itself_windows_10() {
+        assert!(describe_windows(22000, None, None).starts_with("Windows 11"));
+        assert!(describe_windows(21999, None, None).starts_with("Windows 10"));
+        assert_eq!(
+            describe_windows(22631, None, None),
+            "Windows 11 (build 22631)"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_answers_with_its_own_version() {
+        let version = windows_version();
+
+        assert!(version.starts_with("Windows 1"), "{version}");
+        assert!(version.contains("build"), "{version}");
     }
 
     #[cfg(windows)]

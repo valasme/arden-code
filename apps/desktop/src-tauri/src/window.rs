@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use arden_core::paths::AppPaths;
-use arden_settings::settings::Theme as ThemeSetting;
+use arden_settings::settings::{Advanced, Settings, Theme as ThemeSetting};
 use tauri::window::Color;
 use tauri::{AppHandle, Manager, Theme};
 
@@ -53,6 +53,22 @@ pub fn apply_native_theme(app: &AppHandle, theme: ThemeSetting) {
     }
 }
 
+/// Applies the advanced settings that show in the window itself: the title bar of Windows instead
+/// of the one the app draws, and the browser features developer mode turns on.
+pub fn apply_advanced(app: &AppHandle, advanced: &Advanced) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    if let Err(error) = window.set_decorations(advanced.native_title_bar) {
+        tracing::warn!(%error, "could not switch the title bar");
+    }
+    // A debug build keeps the browser's menu and shortcuts, which developers use.
+    #[cfg(not(debug_assertions))]
+    if let Err(error) = crate::webview::harden(&window, advanced.developer_mode) {
+        tracing::warn!(%error, "could not set up the web engine");
+    }
+}
+
 /// Puts the hidden main window where it was last time, paints it in the current Windows theme, and
 /// makes sure it appears.
 ///
@@ -66,15 +82,13 @@ pub fn apply_native_theme(app: &AppHandle, theme: ThemeSetting) {
 pub fn prepare_main_window(
     app: &tauri::App,
     paths: &AppPaths,
-    theme: ThemeSetting,
+    settings: &Settings,
 ) -> tauri::Result<()> {
+    let theme = settings.appearance.theme;
+    apply_advanced(app.handle(), &settings.advanced);
     let window = app
         .get_webview_window("main")
         .ok_or(tauri::Error::WindowNotFound)?;
-
-    // A debug build keeps the browser's menu and shortcuts, which developers use.
-    #[cfg(not(debug_assertions))]
-    crate::webview::harden(&window)?;
 
     window.set_theme(native_theme(theme))?;
     let (r, g, b, a) = startup_background(starts_dark(theme, window.theme()? == Theme::Dark));

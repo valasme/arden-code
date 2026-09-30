@@ -140,6 +140,29 @@ impl Default for Layout {
     }
 }
 
+/// Settings for people who want to look under the hood.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Advanced {
+    /// Turns on the web engine's developer tools (F12).
+    pub developer_mode: bool,
+    /// Use the title bar of Windows instead of the one Arden Code draws.
+    pub native_title_bar: bool,
+    /// Let the graphics card draw the window. Turning it off works around graphics problems and
+    /// needs a restart.
+    pub hardware_acceleration: bool,
+}
+
+impl Default for Advanced {
+    fn default() -> Self {
+        Self {
+            developer_mode: false,
+            native_title_bar: false,
+            hardware_acceleration: true,
+        }
+    }
+}
+
 /// The most shortcuts one command can have.
 pub const MAX_SHORTCUTS_PER_COMMAND: usize = 3;
 
@@ -192,6 +215,7 @@ pub struct Settings {
     pub appearance: Appearance,
     pub layout: Layout,
     pub keyboard: Keyboard,
+    pub advanced: Advanced,
 }
 
 impl Default for Settings {
@@ -202,6 +226,7 @@ impl Default for Settings {
             appearance: Appearance::default(),
             layout: Layout::default(),
             keyboard: Keyboard::default(),
+            advanced: Advanced::default(),
         }
     }
 }
@@ -222,6 +247,9 @@ pub enum SettingChange {
     AppearanceShowStatusBar(bool),
     LayoutSidebarWidth(u16),
     LayoutInspectorWidth(u16),
+    AdvancedDeveloperMode(bool),
+    AdvancedNativeTitleBar(bool),
+    AdvancedHardwareAcceleration(bool),
 }
 
 /// One setting, named so that it can be reset without saying its value.
@@ -240,11 +268,14 @@ pub enum SettingKey {
     AppearanceShowStatusBar,
     LayoutSidebarWidth,
     LayoutInspectorWidth,
+    AdvancedDeveloperMode,
+    AdvancedNativeTitleBar,
+    AdvancedHardwareAcceleration,
 }
 
 impl SettingKey {
     /// Every setting.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 15] = [
         Self::GeneralOnStartup,
         Self::GeneralCheckForUpdates,
         Self::GeneralRegionalFormat,
@@ -257,6 +288,9 @@ impl SettingKey {
         Self::AppearanceShowStatusBar,
         Self::LayoutSidebarWidth,
         Self::LayoutInspectorWidth,
+        Self::AdvancedDeveloperMode,
+        Self::AdvancedNativeTitleBar,
+        Self::AdvancedHardwareAcceleration,
     ];
 }
 
@@ -281,6 +315,11 @@ impl Settings {
             }
             SettingChange::LayoutSidebarWidth(value) => self.layout.sidebar_width = value,
             SettingChange::LayoutInspectorWidth(value) => self.layout.inspector_width = value,
+            SettingChange::AdvancedDeveloperMode(value) => self.advanced.developer_mode = value,
+            SettingChange::AdvancedNativeTitleBar(value) => self.advanced.native_title_bar = value,
+            SettingChange::AdvancedHardwareAcceleration(value) => {
+                self.advanced.hardware_acceleration = value;
+            }
         }
         self.clamp();
     }
@@ -345,6 +384,15 @@ impl Settings {
             SettingKey::LayoutInspectorWidth => {
                 self.layout.inspector_width = defaults.layout.inspector_width;
             }
+            SettingKey::AdvancedDeveloperMode => {
+                self.advanced.developer_mode = defaults.advanced.developer_mode;
+            }
+            SettingKey::AdvancedNativeTitleBar => {
+                self.advanced.native_title_bar = defaults.advanced.native_title_bar;
+            }
+            SettingKey::AdvancedHardwareAcceleration => {
+                self.advanced.hardware_acceleration = defaults.advanced.hardware_acceleration;
+            }
         }
     }
 
@@ -391,6 +439,9 @@ mod tests {
         assert!(!settings.appearance.code_ligatures);
         assert_eq!(settings.appearance.reduce_motion, ReduceMotion::System);
         assert!(settings.appearance.show_status_bar);
+        assert!(!settings.advanced.developer_mode);
+        assert!(!settings.advanced.native_title_bar);
+        assert!(settings.advanced.hardware_acceleration);
     }
 
     #[test]
@@ -416,7 +467,12 @@ mod tests {
                     "showStatusBar": true
                 },
                 "layout": { "sidebarWidth": 260, "inspectorWidth": 320 },
-                "keyboard": { "shortcuts": {} }
+                "keyboard": { "shortcuts": {} },
+                "advanced": {
+                    "developerMode": false,
+                    "nativeTitleBar": false,
+                    "hardwareAcceleration": true
+                }
             })
         );
     }
@@ -449,7 +505,13 @@ mod tests {
         settings.apply(SettingChange::AppearanceShowStatusBar(false));
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
+        settings.apply(SettingChange::AdvancedDeveloperMode(true));
+        settings.apply(SettingChange::AdvancedNativeTitleBar(true));
+        settings.apply(SettingChange::AdvancedHardwareAcceleration(false));
 
+        assert!(settings.advanced.developer_mode);
+        assert!(settings.advanced.native_title_bar);
+        assert!(!settings.advanced.hardware_acceleration);
         assert_eq!(settings.general.on_startup, OnStartup::Fresh);
         assert!(!settings.general.check_for_updates);
         assert_eq!(settings.general.regional_format, RegionalFormat::English);
@@ -512,6 +574,9 @@ mod tests {
         settings.apply(SettingChange::AppearanceShowStatusBar(false));
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
+        settings.apply(SettingChange::AdvancedDeveloperMode(true));
+        settings.apply(SettingChange::AdvancedNativeTitleBar(true));
+        settings.apply(SettingChange::AdvancedHardwareAcceleration(false));
         settings
     }
 
@@ -665,7 +730,7 @@ mod tests {
     #[test]
     fn unknown_keys_are_ignored_so_a_schema_reference_or_a_future_setting_does_no_harm() {
         let settings: Settings = serde_json::from_str(
-            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"keyboard":{"shortcuts":{}},"extra":1}"#,
+            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"keyboard":{"shortcuts":{}},"advanced":{"developerMode":false,"nativeTitleBar":false,"hardwareAcceleration":true},"extra":1}"#,
         )
         .unwrap();
 
