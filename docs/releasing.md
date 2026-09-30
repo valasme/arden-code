@@ -1,0 +1,53 @@
+# Releasing Arden Code
+
+How a release is made, what is switched off until you switch it on, and the steps only a person can
+do. The decisions behind it are in ADR 0018 (distribution, updates and signing) and ADR 0030 (updates).
+
+## What exists
+
+| Piece | Where | State |
+|---|---|---|
+| The installer | `apps/desktop/src-tauri/installer/` and `tauri.conf.json` | Per-user (no administrator), Windows 11 only, "Also delete my settings and logs" on uninstall |
+| The update signature | `tauri build` with the update key in the environment | Made for every installer |
+| `latest.json` | `scripts/latest-json.ts` | Made from the installer's signature |
+| Trial release | `.github/workflows/release-trial.yml` | **On.** Builds all of it, publishes nothing |
+| Release | `.github/workflows/release.yml` | **Off** until `RELEASES_ENABLED` is `true` |
+| Version and changelog | `.github/workflows/release-please.yml`, `release-please-config.json` | **Off** until `RELEASES_ENABLED` is `true` |
+| Build provenance | `actions/attest-build-provenance` in the release workflow | Runs with the release |
+| Code signing | A step in the release workflow | **Off** until the certificate secrets exist |
+| winget | `packaging/winget/` | Templates; filled in by hand for each release |
+
+## Try it: the trial release
+
+Run **Release trial** from the Actions tab, or open a pull request that changes a file that shapes a
+release. It builds the installer, its update signature and `latest.json`, checks that they exist, and
+keeps them as a build artifact for three days. It signs with a throwaway key until the real key is a
+secret, and says so as a warning.
+
+## Steps only a person can do
+
+1. **Back up the update signing key.** It is at `%USERPROFILE%\.tauri\arden-code-update.key` on the
+   computer that made it. Put a copy in your password manager. Lose it, and no installed copy can ever
+   be updated: an update signed with another key is refused.
+2. **Add the key as repository secrets** (Settings → Secrets and variables → Actions):
+   `TAURI_SIGNING_PRIVATE_KEY` (the whole contents of the key file) and
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty, as the key has no password).
+3. **Switch releases on** when the trial is green: add the repository variable `RELEASES_ENABLED` with
+   the value `true`. From then on, release-please keeps a release pull request open. Merging it tags
+   the version and the release workflow uploads the installer, its signature and `latest.json`.
+4. **Code signing (optional, later).** Buy or get a certificate, and add
+   `WINDOWS_CODE_SIGNING_CERTIFICATE` (the .pfx file as base64) and `WINDOWS_CODE_SIGNING_PASSWORD`.
+   The step in the release workflow then signs the installer and remakes its update signature. Without
+   it Windows SmartScreen warns about an unknown publisher.
+5. **winget (optional, later).** For each release, fill in the three files in `packaging/winget/`
+   (`{{version}}`, `{{installerUrl}}` and `{{sha256}}` of the installer) and send them to
+   `microsoft/winget-pkgs`, or use `wingetcreate`.
+
+## Known gaps
+
+- release-please updates the version in `Cargo.toml` and the `package.json` files, not in
+  `Cargo.lock`. After merging a release pull request, `cargo update --workspace` and a commit make the
+  lock file match. Until then `cargo build --locked` in CI fails on the release pull request, which is
+  the reminder.
+- The installer refuses Windows 10 when it reaches its install step, after Windows' WebView2 check, not
+  before its first page. Nothing is installed either way.

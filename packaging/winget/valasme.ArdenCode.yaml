@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json
+# The template for the winget manifest of a release. Fill the {{placeholders}} in and send the three
+# files to https://github.com/microsoft/winget-pkgs. See docs/releasing.md.
+PackageIdentifier: valasme.ArdenCode
+PackageVersion: "{{version}}"
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

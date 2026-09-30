@@ -45,9 +45,17 @@
     "active": true,
     "targets": ["nsis"],
     "createUpdaterArtifacts": true,
+    "publisher": "valasme",
+    "copyright": "MIT license",
+    "category": "DeveloperTool",
+    "shortDescription": "A Windows desktop app for working with Claude Code and Codex",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
     "windows": {
       "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English"],
+        "customLanguageFiles": { "English": "installer/English.nsh" },
+        "installerHooks": "installer/hooks.nsh",
         "installerIcon": "icons/icon.ico",
         "headerImage": "installer/header.bmp",
         "sidebarImage": "installer/sidebar.bmp"

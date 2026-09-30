@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: valasme.ArdenCode
+PackageVersion: "{{version}}"
+PackageLocale: en-US
+Publisher: valasme
+PublisherUrl: https://github.com/valasme
+PackageName: Arden Code
+PackageUrl: https://github.com/valasme/arden-code
+License: MIT
+LicenseUrl: https://github.com/valasme/arden-code/blob/main/LICENSE
+ShortDescription: A Windows desktop app for working with Claude Code and Codex.
+Description: Arden Code is a Windows cockpit for coding agents. It runs on your computer, collects nothing, and is not affiliated with Anthropic or OpenAI.
+Tags:
+  - agents
+  - claude-code
+  - codex
+  - developer-tools
+ReleaseNotesUrl: "https://github.com/valasme/arden-code/releases/tag/v{{version}}"
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

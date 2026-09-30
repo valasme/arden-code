@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: valasme.ArdenCode
+PackageVersion: "{{version}}"
+Platform:
+  - Windows.Desktop
+# Windows 11, which is what the installer asks for.
+MinimumOSVersion: 10.0.22000.0
+InstallerType: nsis
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+InstallerSwitches:
+  Silent: /S
+  SilentWithProgress: /S
+UpgradeBehavior: install
+Installers:
+  - Architecture: x64
+    InstallerUrl: "{{installerUrl}}"
+    InstallerSha256: "{{sha256}}"
+ManifestType: installer
+ManifestVersion: 1.6.0
