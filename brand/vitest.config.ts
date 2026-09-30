@@ -5,7 +5,8 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["src/**/*.test.ts"],
-    // Some tests compare rendered images pixel by pixel, which is slow on CI machines.
-    testTimeout: 30_000,
+    // Some tests compare rendered images pixel by pixel. That is slow on a CI machine, and slower
+    // still when the UI tests run beside them.
+    testTimeout: 120_000,
   },
 });
