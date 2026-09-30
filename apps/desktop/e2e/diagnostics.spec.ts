@@ -1,24 +1,15 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { chromium, type Page } from "@playwright/test";
 
-import { expect, launchApp, test } from "./fixtures";
+import { expect, launchApp, logText, openDevPage, test } from "./fixtures";
 import { killWebViewRenderers } from "./windows";
 
 /** The debug build takes the answer of the file dialog from here, so no dialog has to be clicked. */
 const dialogAnswer = "ARDEN_CODE_FILE_DIALOG_ANSWER";
-
-/** Every line of every log file the app has written so far, as text. */
-function logText(dataDir: string): string {
-  const folder = path.join(dataDir, "local", "logs");
-  if (!existsSync(folder)) return "";
-  return readdirSync(folder)
-    .map((name) => readFileSync(path.join(folder, name), "utf8"))
-    .join("\n");
-}
 
 /** The names of the files in a zip, one per line. */
 function zipEntries(zip: string): string {
@@ -102,7 +93,7 @@ test.describe("diagnostics in the real app", () => {
       const file = path.join(folder, "diagnostics.zip");
       const app = await launchApp({ env: { [dialogAnswer]: file } });
       try {
-        await app.page.goto("http://tauri.localhost/dev/errors");
+        await openDevPage(app, "/dev/errors");
         await app.page.getByRole("button", { name: "Panic on a Rust thread" }).click();
         await expect.poll(() => existsSync(path.join(app.dataDir, "local", "crashes"))).toBe(true);
         await openAdvanced(app.page);
@@ -126,7 +117,7 @@ test.describe("diagnostics in the real app", () => {
     withFolder(async (folder) => {
       const first = await launchApp({ dataDir: folder });
       try {
-        await first.page.goto("http://tauri.localhost/dev/errors");
+        await openDevPage(first, "/dev/errors");
         await first.page.getByRole("button", { name: "Panic on a Rust thread" }).click();
         await expect.poll(() => existsSync(path.join(folder, "local", "crashes"))).toBe(true);
       } finally {

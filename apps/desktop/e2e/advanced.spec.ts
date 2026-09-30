@@ -5,7 +5,7 @@ import path from "node:path";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 
-import { expect, launchApp, test } from "./fixtures";
+import { expect, launchApp, logText, test } from "./fixtures";
 import { frameHeight, killAllApps, webViewCommandLines } from "./windows";
 
 const settingsFile = z.object({
@@ -197,7 +197,10 @@ test.describe("Advanced settings in the real app", () => {
       const app = await launchApp();
       try {
         await openAdvanced(app.page);
-        expect(webViewCommandLines(app.webViewProfile).join("\n")).not.toContain("--disable-gpu");
+        // A machine with no graphics card turns acceleration off by itself, so the web engine's own
+        // command line cannot say what this setting did. What the app asked for is in its log.
+        expect(logText(app.dataDir)).toContain("the web engine's arguments");
+        expect(logText(app.dataDir)).not.toContain("--disable-gpu");
 
         await app.page.getByRole("switch", { name: "Hardware acceleration" }).click();
         const question = app.page.getByRole("alertdialog", { name: "Restart Arden Code?" });
@@ -213,6 +216,9 @@ test.describe("Advanced settings in the real app", () => {
           )
           .toBe(true);
         expect(readSettings(app.dataDir).advanced.hardwareAcceleration).toBe(false);
+        await expect
+          .poll(() => logText(app.dataDir), { timeout: 30_000 })
+          .toContain("--disable-gpu");
       } finally {
         killAllApps();
         app.kill();

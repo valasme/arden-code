@@ -110,13 +110,19 @@ test.describe("commands and shortcuts in the real app", () => {
         .toBe(true);
 
       await app.page.keyboard.press("F11");
+      // Back to the size it had. (On a small screen that may be as large as the screen, so the size
+      // is compared with the window's own, not with the screen's.)
       await expect
         .poll(() => {
           const window = getWindow(app.pid);
-          return window !== undefined && window.width < screen.width;
+          return (
+            window !== undefined &&
+            before !== undefined &&
+            Math.abs(window.width - before.width) <= 2 &&
+            Math.abs(window.height - before.height) <= 2
+          );
         })
         .toBe(true);
-      expect(before?.width).toBeLessThan(screen.width);
     } finally {
       app.kill();
     }

@@ -206,10 +206,26 @@ fn start_diagnostics(app: &tauri::App, paths: &AppPaths, level: UiLevel) -> Reda
 #[cfg(debug_assertions)]
 const DEBUG_PORT_VARIABLE: &str = "ARDEN_CODE_DEBUG_PORT";
 
-/// Makes the main window from its configuration. It is made here, and not by Tauri, so that a debug
-/// build can give the web engine its debugging port in the way that works everywhere: an
-/// environment variable for the engine is ignored by some runners.
-fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
+/// The arguments the web engine starts with: the ones Tauri gives every window, the choice about
+/// hardware acceleration, and in a debug build the port of its debugging endpoint.
+#[must_use]
+fn browser_arguments(hardware_acceleration: bool, debug_port: Option<&str>) -> String {
+    let mut arguments =
+        String::from("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection");
+    if !hardware_acceleration {
+        arguments.push_str(" --disable-gpu");
+    }
+    if let Some(port) = debug_port {
+        arguments.push_str(" --remote-debugging-port=");
+        arguments.push_str(port);
+    }
+    arguments
+}
+
+/// Makes the main window from its configuration. It is made here, and not by Tauri, so that the
+/// web engine's arguments are given in the way that works everywhere: an environment variable for
+/// the engine is ignored by some machines, such as a CI runner.
+fn create_main_window(app: &tauri::App, hardware_acceleration: bool) -> tauri::Result<()> {
     let config = app
         .config()
         .app
@@ -217,16 +233,15 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
         .iter()
         .find(|window| window.label == "main")
         .ok_or(tauri::Error::WindowNotFound)?;
-    let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), config)?;
     #[cfg(debug_assertions)]
-    let builder = match std::env::var(DEBUG_PORT_VARIABLE) {
-        // The arguments Tauri gives every window, and the port.
-        Ok(port) => builder.additional_browser_args(&format!(
-            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port}"
-        )),
-        Err(_) => builder,
-    };
-    builder.build()?;
+    let debug_port = std::env::var(DEBUG_PORT_VARIABLE).ok();
+    #[cfg(not(debug_assertions))]
+    let debug_port: Option<String> = None;
+    let arguments = browser_arguments(hardware_acceleration, debug_port.as_deref());
+    tracing::info!(%arguments, "the web engine's arguments");
+    tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
+        .additional_browser_args(&arguments)
+        .build()?;
     Ok(())
 }
 
@@ -295,25 +310,11 @@ fn early_paths() -> AppPaths {
     )
 }
 
-/// What has to happen before the web engine starts: a reset that was asked for, and the choice
-/// about hardware acceleration, which the engine only reads as it starts.
+/// What has to happen before the window is made: a reset that was asked for.
 fn prepare_before_start() {
     let paths = early_paths();
     if let Err(error) = arden_core::reset::apply_pending(&paths) {
         eprintln!("Arden Code could not finish resetting itself: {error}");
-    }
-    let hardware_acceleration = arden_settings::store::peek(&paths.config)
-        .is_none_or(|settings| settings.advanced.hardware_acceleration);
-    if !hardware_acceleration {
-        let mut arguments =
-            std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
-        arguments.push_str(" --disable-gpu");
-        // SAFETY: this runs first in `run`, before the app starts any thread that could read the
-        // environment at the same time.
-        #[allow(unsafe_code)]
-        unsafe {
-            std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", arguments.trim());
-        }
     }
 }
 
@@ -363,7 +364,7 @@ pub fn run() {
                 }
                 .emit(&handle);
             });
-            create_main_window(app)?;
+            create_main_window(app, settings.get().advanced.hardware_acceleration)?;
             window::prepare_main_window(app, &paths, &settings.get())?;
             app.manage(settings);
             manage_sessions(app, &paths);
@@ -376,4 +377,35 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("failed to run Arden Code");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_web_engine_gets_tauris_own_arguments_and_nothing_else_by_default() {
+        assert_eq!(
+            browser_arguments(true, None),
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
+        );
+    }
+
+    #[test]
+    fn turning_hardware_acceleration_off_adds_the_argument_that_does_it() {
+        let arguments = browser_arguments(false, None);
+
+        assert!(arguments.ends_with(" --disable-gpu"), "{arguments}");
+        assert!(!browser_arguments(true, None).contains("--disable-gpu"));
+    }
+
+    #[test]
+    fn a_debug_port_is_added_after_the_others() {
+        let arguments = browser_arguments(false, Some("9222"));
+
+        assert!(
+            arguments.ends_with(" --disable-gpu --remote-debugging-port=9222"),
+            "{arguments}"
+        );
+    }
 }

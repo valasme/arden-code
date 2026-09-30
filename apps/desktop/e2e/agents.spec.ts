@@ -5,7 +5,7 @@ import path from "node:path";
 
 import type { Page } from "@playwright/test";
 
-import { expect, launchApp, test } from "./fixtures";
+import { expect, launchApp, openDevPage, test } from "./fixtures";
 
 /** A folder with a fake agent program in it, so detection does not depend on this computer. */
 function fakeBin(files: Record<string, string> = {}) {
@@ -87,11 +87,15 @@ test.describe("agents in the real app", () => {
   test("a program the app started ends when the app is ended, however it is ended", async () => {
     const app = await launchApp();
     try {
-      await app.page.goto("http://tauri.localhost/dev/errors");
+      await openDevPage(app, "/dev/errors");
       await app.page
         .getByRole("button", { name: "Start a program that runs for two minutes" })
         .click();
-      const text = await app.page.getByText(/^Started program \d+$/).textContent();
+      // What the page says, whether the program started or the command failed.
+      const answer = app.page.getByText(/^(Started program \d+|The command failed with .*)$/);
+      await expect(answer).toBeVisible({ timeout: 15_000 });
+      const text = await answer.textContent();
+      expect(text, "the program could not be started").toMatch(/^Started program \d+$/);
       const pid = Number(/\d+/.exec(text ?? "")?.[0]);
       expect(pid).toBeGreaterThan(0);
       expect(isRunning(pid)).toBe(true);

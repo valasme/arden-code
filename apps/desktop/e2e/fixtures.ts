@@ -95,6 +95,16 @@ function describeWebView(profile: string): string {
   }
 }
 
+/** Everything the app has written to its log files so far, as text. */
+export function logText(dataDir: string): string {
+  const folder = path.join(dataDir, "local", "logs");
+  if (!existsSync(folder)) return "";
+  return readdirSync(folder)
+    .filter((name) => name.endsWith(".jsonl"))
+    .map((name) => readFileSync(path.join(folder, name), "utf8"))
+    .join("\n");
+}
+
 /** What the app printed, so a failure can say why the app did not start. */
 function collectOutput(app: ChildProcess): () => string {
   const chunks: string[] = [];
@@ -228,6 +238,31 @@ export async function launchApp({ dataDir, env = {} }: LaunchOptions = {}): Prom
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
       `${message}\n--- the app's own log ---\n${tail}\n--- the web engine (port ${debugPort}) ---\n${webView}`,
+      { cause: error },
+    );
+  }
+}
+
+/**
+ * Opens one of the development pages, such as `/dev/errors`. A page that does not come up says
+ * so within twenty seconds, with the end of the app's own log, and not only when the test's whole
+ * time has gone.
+ */
+export async function openDevPage(app: RunningApp, route: string) {
+  try {
+    await app.page.goto(`http://tauri.localhost${route}`, {
+      timeout: 20_000,
+      waitUntil: "domcontentloaded",
+    });
+    await app.page.getByRole("main").waitFor({ timeout: 20_000 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${message}
+--- the app's own log ---
+${logTail(app.dataDir)}
+--- the web engine ---
+${describeWebView(app.webViewProfile)}`,
       { cause: error },
     );
   }

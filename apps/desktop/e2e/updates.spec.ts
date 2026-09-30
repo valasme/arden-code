@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import type { Page } from "@playwright/test";
 
-import { expect, launchApp, test } from "./fixtures";
+import { expect, launchApp, logText, test } from "./fixtures";
 
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -97,15 +97,6 @@ async function checkFromAbout(page: Page) {
   await page.getByRole("link", { name: "Settings" }).click();
   await page.getByRole("link", { name: "About", exact: true }).click();
   await page.getByRole("button", { name: "Check for updates" }).click();
-}
-
-function logText(dataDir: string): string {
-  const folder = path.join(dataDir, "local", "logs");
-  if (!existsSync(folder)) return "";
-  return readdirSync(folder)
-    .filter((name) => name.endsWith(".jsonl"))
-    .map((name) => readFileSync(path.join(folder, name), "utf8"))
-    .join("\n");
 }
 
 test.describe("updates in the real app", () => {

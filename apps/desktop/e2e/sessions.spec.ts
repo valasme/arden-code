@@ -4,7 +4,7 @@ import path from "node:path";
 
 import type { Locator, Page } from "@playwright/test";
 
-import { expect, launchApp, test } from "./fixtures";
+import { expect, launchApp, openDevPage, test } from "./fixtures";
 
 /** Starts a session and sends a message, and returns the conversation. */
 async function ask(page: Page, message: string) {
@@ -238,7 +238,7 @@ test.describe("stopping a reply and long sessions in the real app", () => {
   test("a session of 10,000 messages draws only a screenful and scrolls smoothly", async () => {
     const app = await launchApp();
     try {
-      await app.page.goto("http://tauri.localhost/dev/errors");
+      await openDevPage(app, "/dev/errors");
       await app.page.getByRole("button", { name: "Make a session of 10,000 messages" }).click();
       const conversation = app.page.getByRole("main", { name: "Conversation" });
 
