@@ -11,15 +11,21 @@ use std::path::{Path, PathBuf};
 use arden_core::paths::{AppPaths, DATA_DIR_VARIABLE};
 use arden_diagnostics::redact::Redactor;
 use arden_diagnostics::{crash, logging};
+use arden_settings::service::SettingsService;
 use specta_typescript::Typescript;
 use tauri::Manager;
-use tauri_specta::{Builder, ErrorHandlingMode, collect_commands};
+use tauri_specta::Event;
+use tauri_specta::{Builder, ErrorHandlingMode, collect_commands, collect_events};
 
 /// The typed contract between Rust and the UI.
 fn specta_builder() -> Builder<tauri::Wry> {
     // A failed command makes the UI's promise reject with its `AppError`, instead of returning a
     // result object.
-    let builder = Builder::<tauri::Wry>::new().error_handling(ErrorHandlingMode::Throw);
+    let builder = Builder::<tauri::Wry>::new()
+        .error_handling(ErrorHandlingMode::Throw)
+        // One shape per type, the one Rust sends, instead of separate "serialize" and "deserialize"
+        // versions for types whose fields have defaults.
+        .disable_serde_phases();
 
     #[cfg(debug_assertions)]
     let commands = collect_commands![
@@ -28,6 +34,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::log_from_ui,
         commands::open_logs_folder,
         commands::redact_text,
+        commands::get_settings,
+        commands::change_setting,
+        commands::take_settings_notice,
         commands::debug_fail,
         commands::debug_panic,
     ];
@@ -38,9 +47,14 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::log_from_ui,
         commands::open_logs_folder,
         commands::redact_text,
+        commands::get_settings,
+        commands::change_setting,
+        commands::take_settings_notice,
     ];
 
-    builder.commands(commands)
+    builder
+        .commands(commands)
+        .events(collect_events![commands::SettingsChanged])
 }
 
 /// Writes the TypeScript bindings for every command to `path`.
@@ -109,7 +123,18 @@ pub fn run() {
             builder.mount_events(app);
             let paths = resolve_paths(app)?;
             app.manage(start_diagnostics(app, &paths));
-            window::prepare_main_window(app, &paths)?;
+            let settings = SettingsService::start(&paths.config);
+            let handle = app.handle().clone();
+            settings.subscribe(move |settings, notice| {
+                window::apply_native_theme(&handle, settings.appearance.theme);
+                let _ = commands::SettingsChanged {
+                    settings: settings.clone(),
+                    notice: notice.cloned(),
+                }
+                .emit(&handle);
+            });
+            window::prepare_main_window(app, &paths, settings.get().appearance.theme)?;
+            app.manage(settings);
             app.manage(paths);
             Ok(())
         })

@@ -101,3 +101,14 @@ addresses and secrets such as API keys and tokens are replaced. Messages from th
 - **More detail:** set `ARDEN_LOG=debug` (or `trace`) before starting the app.
 - **Crash reports:** a Rust panic writes `crash-<date>-<time>-<pid>.json` to `%LOCALAPPDATA%\io.github.valasme.arden\crashes`.
 - **Try it:** in a debug build (`pnpm build:debug`) or `pnpm dev`, open `/dev/errors` to make each kind of failure happen on purpose.
+
+## Settings
+
+Settings live in `%APPDATA%\io.github.valasme.arden\settings.json`, next to a generated `settings.schema.json` (add
+`"$schema": "./settings.schema.json"`, which the app writes for you, and editors autocomplete the file). You can edit the
+file by hand while the app runs: changes apply at once. If the file cannot be read, Arden Code keeps it as
+`settings.invalid-<date>.json`, uses the defaults, and shows a notice with the code `ARD-SET-002`. The file being
+replaced by each save is kept as `settings.backup.json`.
+
+Every change to the file's shape needs a new version in `crates/arden-settings/src/settings.rs`, a migration in
+`migrate.rs`, and a test.

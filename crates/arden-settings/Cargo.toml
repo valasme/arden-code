@@ -1,0 +1,27 @@
+[package]
+name = "arden-settings"
+description = "Arden Code's settings: schema, defaults, migrations, safe saving and live reloading"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+arden-core.workspace = true
+notify = "8"
+schemars = "1"
+serde.workspace = true
+serde_json.workspace = true
+specta.workspace = true
+time = { version = "0.3", features = ["formatting"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
+time = { version = "0.3", features = ["formatting", "macros"] }
+
+[lints]
+workspace = true

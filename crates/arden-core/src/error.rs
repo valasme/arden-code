@@ -2,14 +2,14 @@
 
 use std::fmt;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 use strum::EnumIter;
 
 /// Every error a user can see. The written form, `ARD-<AREA>-<NNN>`, is stable and appears both on
 /// the error screen and in the logs. Codes are listed in `docs/error-codes.md`, and a test keeps
 /// that page in sync with this enum. Never reuse or renumber a code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Type, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type, EnumIter)]
 pub enum ErrorCode {
     /// Something went wrong that nobody planned for.
     #[serde(rename = "ARD-APP-001")]
@@ -17,6 +17,12 @@ pub enum ErrorCode {
     /// The UI hit an error it could not handle.
     #[serde(rename = "ARD-APP-002")]
     UiFailure,
+    /// The settings could not be saved.
+    #[serde(rename = "ARD-SET-001")]
+    SettingsSave,
+    /// The settings file was not valid, so the defaults are in use.
+    #[serde(rename = "ARD-SET-002")]
+    SettingsInvalid,
     /// The logs folder could not be opened.
     #[serde(rename = "ARD-LOG-001")]
     LogsFolder,
@@ -32,6 +38,8 @@ impl ErrorCode {
         match self {
             Self::Unexpected => "ARD-APP-001",
             Self::UiFailure => "ARD-APP-002",
+            Self::SettingsSave => "ARD-SET-001",
+            Self::SettingsInvalid => "ARD-SET-002",
             Self::LogsFolder => "ARD-LOG-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",
         }
@@ -40,7 +48,7 @@ impl ErrorCode {
 
 /// The error every command returns: a code, the translation key of its message, and details for
 /// the logs and for "Copy details".
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AppError {
     pub code: ErrorCode,

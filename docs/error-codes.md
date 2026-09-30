@@ -15,6 +15,8 @@ do), and add a row here. Never reuse or renumber a code.
 |---|---|---|
 | `ARD-APP-001` | Something unexpected went wrong inside the app | Any command that fails in a way nobody planned for |
 | `ARD-APP-002` | The interface hit an error it could not handle | An uncaught error or rejected promise in the UI |
+| `ARD-SET-001` | The settings could not be saved | Changing any setting |
+| `ARD-SET-002` | The settings file was not valid, so defaults are in use | Starting the app, or editing `settings.json` by hand |
 | `ARD-LOG-001` | The logs folder could not be opened | Settings → Advanced → Open logs; the error screen's "Open logs" |
 | `ARD-WIN-001` | Windows' window menu could not be opened | The title bar's logo button and Alt+Space |
 

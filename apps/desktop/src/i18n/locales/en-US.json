@@ -18,6 +18,16 @@
       "what": "The logs folder could not be opened.",
       "why": "Windows refused, or the folder could not be created."
     },
+    "ARD-SET-001": {
+      "action": "Check that the folder is writable, then change the setting again.",
+      "what": "Your settings could not be saved.",
+      "why": "The settings file could not be written. The disk may be full, or the file may be locked by another program."
+    },
+    "ARD-SET-002": {
+      "action": "Your old file was kept next to it as settings.invalid-<date>.json. Fix it there and copy it back, or keep the defaults.",
+      "what": "The settings file was not valid, so the default settings are in use.",
+      "why": "The file was damaged, or it was edited into something Arden Code cannot read."
+    },
     "ARD-WIN-001": {
       "action": "Use the buttons at the right of the title bar instead.",
       "what": "Windows' window menu could not be opened.",
@@ -47,6 +57,7 @@
     "message": "This page does not exist."
   },
   "notices": {
+    "title": "Notice ({{code}})",
     "uiError": "Something went wrong ({{code}})"
   },
   "regions": {
@@ -54,6 +65,16 @@
     "sidebar": "Sidebar"
   },
   "settings": {
+    "appearance": {
+      "theme": {
+        "dark": "Dark",
+        "description": "Light or dark, or the same as Windows.",
+        "label": "Theme",
+        "light": "Light",
+        "system": "Same as Windows"
+      }
+    },
+    "placeholder": "These settings arrive in a later update.",
     "tabs": {
       "about": "About",
       "advanced": "Advanced",
@@ -62,7 +83,8 @@
       "general": "General",
       "keyboard": "Keyboard",
       "notifications": "Notifications"
-    }
+    },
+    "tabsLabel": "Settings sections"
   },
   "sidebar": {
     "navigation": "Main navigation",

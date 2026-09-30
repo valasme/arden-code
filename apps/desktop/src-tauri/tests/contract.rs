@@ -139,3 +139,23 @@ fn the_main_window_draws_its_own_title_bar() {
     let conf = read_tauri_conf();
     assert_eq!(conf["app"]["windows"][0]["decorations"], false);
 }
+
+#[test]
+fn every_error_code_has_its_words_in_the_ui() {
+    use strum::IntoEnumIterator;
+
+    let text = fs::read_to_string(crate_dir().join("../src/i18n/locales/en-US.json"))
+        .expect("en-US.json exists");
+    let strings: serde_json::Value = serde_json::from_str(&text).expect("en-US.json is JSON");
+
+    for code in arden_core::error::ErrorCode::iter() {
+        for part in ["what", "why", "action"] {
+            let words = &strings["errors"][code.as_str()][part];
+            assert!(
+                words.as_str().is_some_and(|words| !words.is_empty()),
+                "errors.{}.{part} is missing from en-US.json",
+                code.as_str()
+            );
+        }
+    }
+}

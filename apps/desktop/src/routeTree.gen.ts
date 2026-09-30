@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as DevDesignSystemRouteImport } from './routes/dev/design-system'
 import { Route as DevErrorsRouteImport } from './routes/dev/errors'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
@@ -18,6 +19,11 @@ import { Route as SettingsTabRouteImport } from './routes/settings/$tab'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevDesignSystemRoute = DevDesignSystemRouteImport.update({
@@ -31,18 +37,19 @@ const DevErrorsRoute = DevErrorsRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
-  id: '/settings/',
-  path: '/settings/',
-  getParentRoute: () => rootRouteImport,
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsTabRoute = SettingsTabRouteImport.update({
-  id: '/settings/$tab',
-  path: '/settings/$tab',
-  getParentRoute: () => rootRouteImport,
+  id: '/$tab',
+  path: '/$tab',
+  getParentRoute: () => SettingsRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/dev/design-system': typeof DevDesignSystemRoute
   '/dev/errors': typeof DevErrorsRoute
   '/settings/$tab': typeof SettingsTabRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/dev/design-system': typeof DevDesignSystemRoute
   '/dev/errors': typeof DevErrorsRoute
   '/settings/$tab': typeof SettingsTabRoute
@@ -66,13 +74,19 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/dev/design-system' | '/dev/errors' | '/settings/$tab' | '/settings/'
+    | '/'
+    | '/settings'
+    | '/dev/design-system'
+    | '/dev/errors'
+    | '/settings/$tab'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     '/' | '/dev/design-system' | '/dev/errors' | '/settings/$tab' | '/settings'
   id:
     | '__root__'
     | '/'
+    | '/settings'
     | '/dev/design-system'
     | '/dev/errors'
     | '/settings/$tab'
@@ -81,10 +95,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   DevDesignSystemRoute: typeof DevDesignSystemRoute
   DevErrorsRoute: typeof DevErrorsRoute
-  SettingsTabRoute: typeof SettingsTabRoute
-  SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -94,6 +107,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/design-system': {
@@ -112,27 +132,40 @@ declare module '@tanstack/react-router' {
     }
     '/settings/': {
       id: '/settings/'
-      path: '/settings'
+      path: '/'
       fullPath: '/settings/'
       preLoaderRoute: typeof SettingsIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof SettingsRoute
     }
     '/settings/$tab': {
       id: '/settings/$tab'
-      path: '/settings/$tab'
+      path: '/$tab'
       fullPath: '/settings/$tab'
       preLoaderRoute: typeof SettingsTabRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof SettingsRoute
     }
   }
 }
 
-const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  DevDesignSystemRoute: DevDesignSystemRoute,
-  DevErrorsRoute: DevErrorsRoute,
+interface SettingsRouteChildren {
+  SettingsTabRoute: typeof SettingsTabRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsTabRoute: SettingsTabRoute,
   SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
+const rootRouteChildren: RootRouteChildren = {
+  IndexRoute: IndexRoute,
+  SettingsRoute: SettingsRouteWithChildren,
+  DevDesignSystemRoute: DevDesignSystemRoute,
+  DevErrorsRoute: DevErrorsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

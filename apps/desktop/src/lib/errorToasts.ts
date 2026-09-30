@@ -11,17 +11,34 @@ function what(error: AppError): string {
   return t(key, { defaultValue: t("errors.ARD-APP-001.what") });
 }
 
+function copyAction(error: AppError, description: string) {
+  return {
+    label: t("errorScreen.copyDetails"),
+    onClick: () => {
+      copyErrorDetails(error, { what: description }).catch(() => {});
+    },
+  };
+}
+
 /** Tells the user about an error nobody handled, with its code and a way to copy the details. */
 export function showErrorToast(error: AppError) {
   const description = what(error);
   toast.error(t("notices.uiError", { code: error.code }), {
     description,
     duration: 12_000,
-    action: {
-      label: t("errorScreen.copyDetails"),
-      onClick: () => {
-        copyErrorDetails(error, { what: description }).catch(() => {});
-      },
-    },
+    action: copyAction(error, description),
+  });
+}
+
+/**
+ * Tells the user about something the app dealt with by itself, such as a settings file that had to
+ * be replaced by the defaults. Quieter than an error, and it still carries the code.
+ */
+export function showNoticeToast(error: AppError) {
+  const description = what(error);
+  toast.warning(t("notices.title", { code: error.code }), {
+    description,
+    duration: 12_000,
+    action: copyAction(error, description),
   });
 }

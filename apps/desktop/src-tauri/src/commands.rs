@@ -5,7 +5,9 @@ use arden_core::error::{AppError, ErrorCode};
 use arden_core::paths::AppPaths;
 use arden_diagnostics::logging::{self, UiLevel};
 use arden_diagnostics::redact::Redactor;
-use serde::Deserialize;
+use arden_settings::service::SettingsService;
+use arden_settings::settings::{SettingChange, Settings};
+use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
@@ -80,6 +82,52 @@ pub fn log_from_ui(level: UiLogLevel, source: String, message: String, code: Opt
 #[specta::specta]
 pub fn redact_text(text: String, redactor: State<'_, Redactor>) -> String {
     redactor.redact(&text)
+}
+
+/// Sent to the UI whenever the settings change: through the UI, or by editing the file by hand.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct SettingsChanged {
+    pub settings: Settings,
+    /// Set when the file could not be used and the defaults took over (`ARD-SET-002`).
+    pub notice: Option<AppError>,
+}
+
+/// The settings now.
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Tauri hands commands their state by value.
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
+#[tauri::command]
+#[specta::specta]
+pub fn get_settings(settings: State<'_, SettingsService>) -> Result<Settings, AppError> {
+    Ok(settings.get())
+}
+
+/// Changes one setting: applies it, saves it, and tells every window.
+///
+/// # Errors
+///
+/// `ARD-SET-001` when the settings file cannot be written.
+// Tauri hands commands their state by value.
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command]
+#[specta::specta]
+pub fn change_setting(
+    change: SettingChange,
+    settings: State<'_, SettingsService>,
+) -> Result<Settings, AppError> {
+    settings.update(change)
+}
+
+/// The problem found with the settings file when the app started, if any. It is handed over once.
+// Tauri hands commands their state by value.
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command]
+#[specta::specta]
+pub fn take_settings_notice(settings: State<'_, SettingsService>) -> Option<AppError> {
+    settings.take_notice()
 }
 
 /// Opens the folder that holds the log files in Explorer.
