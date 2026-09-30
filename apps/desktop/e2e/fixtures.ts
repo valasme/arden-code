@@ -141,6 +141,8 @@ export interface RunningApp {
   dataDir: string;
   /** The folder the web engine keeps its files in for this launch. */
   webViewProfile: string;
+  /** When the app was started, in milliseconds since 1970, for measuring how long it took. */
+  startedAt: number;
   /** The port the web engine listens on for the Chrome DevTools Protocol. */
   debugPort: number;
   /** The app's web page, attached over the Chrome DevTools Protocol. */
@@ -154,6 +156,8 @@ export interface RunningApp {
 export interface LaunchOptions {
   /** The folder for the app's files. Defaults to a new empty one. */
   dataDir?: string;
+  /** The folder for the web engine's files. Defaults to a new empty one; reuse one to start warm. */
+  webViewProfile?: string;
   /** More environment variables for the app, such as the file that stands in for Windows' settings. */
   env?: Record<string, string>;
   /** Arguments for the app, such as `--open <folder>`. */
@@ -163,16 +167,18 @@ export interface LaunchOptions {
 /** Starts the app and attaches to its web page. */
 export async function launchApp({
   dataDir,
+  webViewProfile,
   env = {},
   args = [],
 }: LaunchOptions = {}): Promise<RunningApp> {
   const ownedFolders: string[] = [];
   const data = dataDir ?? mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
   if (!dataDir) ownedFolders.push(data);
-  const profile = mkdtempSync(path.join(tmpdir(), "arden-e2e-webview-"));
-  ownedFolders.push(profile);
+  const profile = webViewProfile ?? mkdtempSync(path.join(tmpdir(), "arden-e2e-webview-"));
+  if (!webViewProfile) ownedFolders.push(profile);
 
   const debugPort = await freePort();
+  const startedAt = Date.now();
   const app = spawn(executable, args, {
     env: { ...appEnvironment(data, profile, debugPort), ...env },
     stdio: ["ignore", "pipe", "pipe"],
@@ -216,6 +222,7 @@ export async function launchApp({
       pid,
       dataDir: data,
       webViewProfile: profile,
+      startedAt,
       debugPort,
       page,
       async close() {

@@ -576,7 +576,8 @@ These are release gates. There are deliberately no installer or bundle size limi
 | Demo agent streaming | 60 fps with 10,000 messages in a session |
 | Applying a settings change | < 50 ms |
 
-Startup time is measured in CI. The rest is profiled before each release.
+Every row is measured by CI on the release build, and the ones that can fail the check are listed in
+[performance.md](performance.md).
 
 ## 12. Security
 

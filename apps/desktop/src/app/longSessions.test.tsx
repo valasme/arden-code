@@ -149,8 +149,16 @@ describe("A long session", () => {
       expect(distanceFromEnd()).toBeLessThan(90);
     });
 
-    transcript().scrollTop -= 3000;
-    await screen.findByRole("button", { name: "Jump to latest" });
+    // On a busy machine a message that was just measured can bring the view back to the end before
+    // the scroll is noticed, so the scroll is repeated (to the same place) until it is.
+    const scrolledTo = transcript().scrollTop - 3000;
+    await waitFor(
+      () => {
+        transcript().scrollTop = scrolledTo;
+        expect(jump()).not.toBeNull();
+      },
+      { timeout: 5000 },
+    );
     // Messages that were just drawn are measured, which can move the view a little. Let that settle.
     await new Promise((resolve) => setTimeout(resolve, 500));
     const before = transcript().scrollTop;

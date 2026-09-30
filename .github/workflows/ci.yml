@@ -89,7 +89,10 @@ jobs:
       - name: End-to-end test against the real app
         run: pnpm test:e2e
 
-      - name: What was running when the end-to-end test failed
+      - name: Performance against the plan's targets, on the release build
+        run: pnpm --filter @arden/desktop test:perf
+
+      - name: What was running when a test failed
         if: failure()
         shell: pwsh
         run: |

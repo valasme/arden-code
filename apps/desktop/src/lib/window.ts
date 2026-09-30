@@ -1,6 +1,9 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+/** The page's own timeline gets this mark when the window is shown. The start-up measurement reads it. */
+export const windowShownMark = "arden:window-shown";
+
 /** Resolves once the browser has drawn a frame with everything currently on the page. */
 function nextPaint(): Promise<void> {
   return new Promise((resolve) => {
@@ -21,4 +24,5 @@ export async function showWindowWhenPainted(): Promise<void> {
   if (!isTauri()) return;
   await nextPaint();
   await getCurrentWindow().show();
+  performance.mark(windowShownMark);
 }

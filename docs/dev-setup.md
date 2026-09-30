@@ -82,6 +82,9 @@ pnpm typos    # spelling
 
 `pnpm test:e2e` builds a debug app and drives it through WebView2 with Playwright.
 
+`pnpm test:perf` builds the release app and measures start-up time, idle memory and CPU, and how long a
+settings change takes, against the plan's targets: see [performance.md](performance.md).
+
 `pnpm test:visual` runs screenshot and interaction tests of the design system page
 (`/dev/design-system`, development builds only). After an intended visual change, update the baselines with
 `pnpm test:visual:update` and look at the new images before committing them.
