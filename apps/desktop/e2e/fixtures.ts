@@ -72,7 +72,9 @@ function describeWebView(profile: string): string {
         foreach ($p in $processes) {
           $line = [string]$p.CommandLine
           if ($p.Name -eq 'arden-code.exe' -or $line -like '*${profile.replaceAll("'", "''")}*') {
-            "$($p.ProcessId) $($p.Name) $($line.Substring(0, [Math]::Min(300, $line.Length)))"
+            # The browser process holds the arguments that matter; the helpers only need a glimpse.
+            $limit = if ($line -like '*--type=*') { 160 } else { 2000 }
+            "$($p.ProcessId) $($p.Name) $($line.Substring(0, [Math]::Min($limit, $line.Length)))"
           }
         }
         "--- listening ports of those processes ---"
