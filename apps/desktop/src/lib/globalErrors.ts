@@ -12,8 +12,22 @@ function report(what: string, thrown: unknown, notify: Notify) {
   notify(error);
 }
 
+/**
+ * Browsers raise this as an error event when a layout change had to wait for the next frame, which
+ * happens when panels are resized. Nothing is broken and nothing is lost.
+ */
+const isResizeObserverNotice = (event: ErrorEvent) =>
+  (event.error === null || event.error === undefined) &&
+  /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/u.test(
+    event.message,
+  );
+
 /** Runs for an error thrown anywhere in the UI that nothing caught. */
 export function handleUncaughtError(event: ErrorEvent, notify: Notify) {
+  if (isResizeObserverNotice(event)) {
+    logger.debug("ui", `Ignored: ${event.message}`);
+    return;
+  }
   report("Uncaught error", event.error ?? event.message, notify);
 }
 

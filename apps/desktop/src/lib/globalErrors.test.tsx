@@ -80,6 +80,38 @@ describe("uncaught errors", () => {
   });
 });
 
+describe("the browser's ResizeObserver notice", () => {
+  // Browsers raise this as an error event when a layout change had to wait for the next frame.
+  // Nothing is broken and nothing is lost, so it is not an error to show or to report.
+  it.each([
+    "ResizeObserver loop completed with undelivered notifications.",
+    "ResizeObserver loop limit exceeded",
+  ])("is not shown to the user, and is not logged as an error: %s", (message) => {
+    const messages = recordLog();
+    const notified: AppError[] = [];
+
+    handleUncaughtError(new ErrorEvent("error", { message }), (error) => notified.push(error));
+
+    expect(notified).toEqual([]);
+    expect(messages.filter((entry) => entry.level === "error")).toEqual([]);
+  });
+
+  it("does not hide other errors that mention it", () => {
+    recordLog();
+    const notified: AppError[] = [];
+
+    handleUncaughtError(
+      new ErrorEvent("error", {
+        error: new TypeError("ResizeObserver is not a constructor"),
+        message: "ResizeObserver is not a constructor",
+      }),
+      (error) => notified.push(error),
+    );
+
+    expect(notified).toHaveLength(1);
+  });
+});
+
 describe("rejected promises nobody handled", () => {
   it("logs the reason and tells the user", () => {
     const messages = recordLog();
