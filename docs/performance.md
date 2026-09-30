@@ -14,11 +14,11 @@ run's summary. The results are also written to `target/performance.json`.
 
 | Measurement | Target | How | Fails CI |
 |---|---|---|---|
-| Cold start to a usable window | ≤ 1.0 s | From starting the process to the window being shown, on a new settings folder and a new web engine folder. The best of 4 starts. | Past the target × 1.5 |
+| Cold start to a usable window | ≤ 1.0 s | From starting the process to its window becoming visible (the app shows it once the first frame is drawn), seen from outside through Windows, on a new settings folder and a new web engine folder. The best of 4 starts. | Past the target × 1.5 |
 | Warm start | ≤ 0.4 s | The same, on the folders the first start left behind. The best of 4 starts. | Reported only |
 | Idle memory, web engine included | ≤ 200 MB | Private working set of the app and every process it started, after the window has been up for 8 s | Past the target × 1.5 |
 | Idle CPU | ≈ 0% | Processor time of the same processes over 20 s | Reported only |
-| Applying a settings change | < 50 ms | In the page, from clicking a switch to the change being on screen. The median of 6 changes. | Past the target × 1.5 |
+| Applying a settings change | < 50 ms | `src/app/settingsChange.test.tsx`, part of `pnpm test`: the real app in Chromium, from clicking a switch to the change being on screen. The median of 6 changes. The UI applies a change before Rust has saved it, so this is the whole of what a person waits for. | Past the target × 1.5 |
 | 10,000 messages in a session | 60 fps | `src/app/longSessions.test.tsx`, part of `pnpm test`: opening the session, how much is drawn, and the frame times while scrolling | Always (it is a test) |
 
 Only the measurements that have a gate can fail. A shared CI machine is slower and noisier than the one the
@@ -31,11 +31,16 @@ scanner looks at every file a new web engine folder creates, and it does not do 
 the app got slower. The best start is what the app can do, and a change that makes the app slower makes the
 best start slower too. Every start is printed, so a run that is noisy shows it.
 
-### Why the idle measurement has nothing attached
+### Why nothing is attached to the app
 
-A test that drives the page through the debugging port makes the web engine do work of its own: the same app
-used about 10% of a core that way and under 1% without it. The idle test starts the app on its own and only
-looks at the processes from outside.
+A release build opens no debugging port: only a debug build does, so that no program on the machine can drive
+a person's app. The performance check therefore starts the release build exactly as it is shipped and only
+looks at it from outside: the moment its window becomes visible, and the memory and processor time of its
+processes. It also clears `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`, so a run on a developer's machine takes
+the same path as one on CI (the CI runner's web engine ignores that variable).
+
+Attaching would change what is measured, too: the same app used about 10% of a core with a test driving it
+through the debugging port, and under 1% without.
 
 ## What the start-up time is made of
 
