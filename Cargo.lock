@@ -130,6 +130,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "arden-cli"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "windows",
+]
+
+[[package]]
 name = "arden-core"
 version = "0.1.0"
 dependencies = [

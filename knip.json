@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreBinaries": ["typos"],
+  "ignoreBinaries": ["typos", "reg"],
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     "apps/desktop": {

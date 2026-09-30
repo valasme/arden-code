@@ -2,6 +2,7 @@
 
 mod agents;
 mod commands;
+mod launch;
 mod navigation;
 mod notifications;
 mod sessions;
@@ -79,6 +80,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         sessions::get_session,
         sessions::send_message,
         sessions::stop_reply,
+        sessions::take_pending_open,
         agents::detect_agents,
         sessions::debug_fill_session,
         agents::debug_spawn_sleeper,
@@ -123,13 +125,15 @@ fn specta_builder() -> Builder<tauri::Wry> {
         sessions::get_session,
         sessions::send_message,
         sessions::stop_reply,
+        sessions::take_pending_open,
         agents::detect_agents,
     ];
 
     builder.commands(commands).events(collect_events![
         commands::SettingsChanged,
         commands::SystemPreferencesChanged,
-        updates::UpdateStatusChanged
+        updates::UpdateStatusChanged,
+        sessions::SessionRequested
     ])
 }
 
@@ -330,7 +334,13 @@ pub fn run() {
     tauri::Builder::default()
         // This plugin must come first. A second launch ends here and brings the first window forward.
         .plugin(tauri_plugin_single_instance::init(
-            |app, _arguments, _working_directory| {
+            |app, arguments, working_directory| {
+                if let Some(folder) = launch::folder_to_open(
+                    &arguments,
+                    Some(std::path::Path::new(&working_directory)),
+                ) {
+                    sessions::open_folder(app, &folder);
+                }
                 window::focus_main_window(app);
             },
         ))
@@ -368,11 +378,19 @@ pub fn run() {
             window::prepare_main_window(app, &paths, &settings.get())?;
             app.manage(settings);
             manage_sessions(app, &paths);
+            app.manage(sessions::PendingOpen::default());
             manage_programs(app, &paths);
             app.manage(updates::Updates::default());
             app.manage(paths);
             app.manage(watch_system_preferences(app.handle().clone()));
             updates::start(app.handle().clone());
+            // The terminal command starts the app with a folder to open.
+            let arguments: Vec<String> = std::env::args().collect();
+            if let Some(folder) =
+                launch::folder_to_open(&arguments, std::env::current_dir().ok().as_deref())
+            {
+                sessions::open_folder(app.handle(), &folder);
+            }
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -17,6 +17,8 @@ pub enum AgentKind {
 pub enum ProjectKind {
     /// The folder the app makes for itself, for Demo agent sessions.
     Playground,
+    /// A folder the person opened, for example with the `arden-code` command.
+    Folder,
 }
 
 /// A folder on disk where agents work.

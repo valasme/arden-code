@@ -26,3 +26,7 @@ LangString webview2InstallError ${LANG_ENGLISH} "Error: Installing WebView2 fail
 LangString webview2InstallSuccess ${LANG_ENGLISH} "WebView2 installed successfully"
 LangString deleteAppData ${LANG_ENGLISH} "Also delete my settings and logs"
 LangString windows11Required ${LANG_ENGLISH} "Arden Code needs Windows 11 or newer, and this computer has an older version of Windows. Nothing was installed. You can find newer releases at https://github.com/valasme/arden-code/releases."
+LangString terminalCommandTitle ${LANG_ENGLISH} "Terminal command"
+LangString terminalCommandSubtitle ${LANG_ENGLISH} "Open Arden Code from any terminal"
+LangString terminalCommandText ${LANG_ENGLISH} "The arden-code command opens Arden Code, or a folder as a project, from a terminal: arden-code . opens the current folder. Terminals that are already open need to be restarted to see it."
+LangString addCommandToPath ${LANG_ENGLISH} "Add the arden-code command to my PATH"

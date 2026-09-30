@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "pnpm dev:web",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm build && cargo build --release -p arden-cli",
     "frontendDist": "../dist"
   },
   "app": {

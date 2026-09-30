@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "crates/arden-agents",
+  "crates/arden-cli",
   "crates/arden-core",
   "crates/arden-diagnostics",
   "crates/arden-process",

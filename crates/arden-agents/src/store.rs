@@ -46,6 +46,7 @@ fn title_of(prompt: &str) -> Option<String> {
 
 #[derive(Default)]
 struct Inner {
+    projects: Vec<Project>,
     sessions: Vec<Session>,
     last_id: u64,
     /// The turns whose reply the person has asked to stop, until their driver has noticed.
@@ -68,7 +69,6 @@ impl Inner {
 
 /// Every project and session the app knows.
 pub struct SessionStore {
-    projects: Vec<Project>,
     inner: Mutex<Inner>,
 }
 
@@ -77,8 +77,10 @@ impl SessionStore {
     #[must_use]
     pub fn new(projects: Vec<Project>) -> Self {
         Self {
-            projects,
-            inner: Mutex::new(Inner::default()),
+            inner: Mutex::new(Inner {
+                projects,
+                ..Inner::default()
+            }),
         }
     }
 
@@ -92,7 +94,8 @@ impl SessionStore {
     #[must_use]
     pub fn projects(&self) -> Vec<ProjectListing> {
         let inner = self.lock();
-        self.projects
+        inner
+            .projects
             .iter()
             .map(|project| ProjectListing {
                 project: project.clone(),
@@ -107,6 +110,31 @@ impl SessionStore {
             .collect()
     }
 
+    /// Adds a folder as a project, and returns it. A folder that is a project already (the same
+    /// path, whatever the case of its letters or a closing backslash) is returned as it is.
+    pub fn open_folder(&self, folder: &std::path::Path) -> Project {
+        let path = folder.display().to_string();
+        let same = |other: &str| {
+            let plain = |text: &str| text.trim_end_matches(['\\', '/']).to_lowercase();
+            plain(other) == plain(&path)
+        };
+        let mut inner = self.lock();
+        if let Some(known) = inner.projects.iter().find(|project| same(&project.path)) {
+            return known.clone();
+        }
+        let name = folder
+            .file_name()
+            .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
+        let project = Project {
+            id: inner.next_id("folder"),
+            kind: crate::model::ProjectKind::Folder,
+            name,
+            path,
+        };
+        inner.projects.push(project.clone());
+        project
+    }
+
     /// Starts an empty session in a project.
     ///
     /// # Errors
@@ -117,10 +145,14 @@ impl SessionStore {
         project_id: &str,
         agent: AgentKind,
     ) -> Result<SessionSummary, StoreError> {
-        if !self.projects.iter().any(|project| project.id == project_id) {
+        let mut inner = self.lock();
+        if !inner
+            .projects
+            .iter()
+            .any(|project| project.id == project_id)
+        {
             return Err(StoreError::UnknownProject);
         }
-        let mut inner = self.lock();
         let session = Session {
             id: inner.next_id("session"),
             project_id: project_id.to_owned(),
@@ -316,6 +348,42 @@ mod tests {
         assert_eq!(listing.len(), 1);
         assert_eq!(listing[0].project.id, playground::PLAYGROUND_ID);
         assert!(listing[0].sessions.is_empty());
+    }
+
+    #[test]
+    fn an_opened_folder_becomes_a_project_named_after_it_and_can_have_sessions() {
+        let store = store();
+
+        let project = store.open_folder(Path::new(r"C:\Work\my-app"));
+        let session = store
+            .create_session(&project.id, AgentKind::Demo)
+            .expect("a session");
+
+        assert_eq!(project.name, "my-app");
+        assert_eq!(project.path, r"C:\Work\my-app");
+        assert_eq!(project.kind, crate::model::ProjectKind::Folder);
+        let listing = store.projects();
+        assert_eq!(listing.len(), 2, "the Playground and the folder");
+        assert_eq!(listing[1].project, project);
+        assert_eq!(listing[1].sessions[0].id, session.id);
+    }
+
+    #[test]
+    fn opening_the_same_folder_again_gives_the_same_project_whatever_its_spelling() {
+        let store = store();
+
+        let first = store.open_folder(Path::new(r"C:\Work\my-app"));
+        let again = store.open_folder(Path::new(r"c:\work\MY-APP\"));
+
+        assert_eq!(again, first);
+        assert_eq!(store.projects().len(), 2);
+    }
+
+    #[test]
+    fn a_drive_root_is_named_by_its_path() {
+        let project = store().open_folder(Path::new(r"D:\"));
+
+        assert_eq!(project.name, r"D:\");
     }
 
     #[test]

@@ -33,7 +33,11 @@ export function SessionsNav() {
       </h2>
       {projects.map(({ project, sessions }) => (
         <section key={project.id} aria-labelledby={`project-${project.id}`}>
-          <h3 id={`project-${project.id}`} className="px-2 pb-1 text-xs font-medium">
+          <h3
+            id={`project-${project.id}`}
+            title={project.kind === "playground" ? undefined : project.path}
+            className="truncate px-2 pb-1 text-xs font-medium"
+          >
             {project.kind === "playground" ? t("sessions.playground") : project.name}
           </h3>
           {sessions.length === 0 ? (

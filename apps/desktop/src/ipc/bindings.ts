@@ -272,6 +272,11 @@ export const commands = {
 	 */
 	stopReply: (sessionId: string) => __TAURI_INVOKE<null>("stop_reply", { sessionId }),
 	/**
+	 *  The session the page should show because a folder was opened before the page was ready. Asking
+	 *  takes it: it is never returned twice.
+	 */
+	takePendingOpen: () => __TAURI_INVOKE<string | null>("take_pending_open"),
+	/**
 	 *  Looks for the Claude Code and Codex programs, and says where they are and which version. It
 	 *  changes nothing. Asking each program for its version can take a moment, so it runs off the
 	 *  thread of the window.
@@ -314,6 +319,7 @@ export const commands = {
 
 /** Events */
 export const events = {
+	sessionRequested: makeEvent<SessionRequested>("session-requested"),
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	systemPreferencesChanged: makeEvent<SystemPreferencesChanged>("system-preferences-changed"),
 	updateStatusChanged: makeEvent<UpdateStatusChanged>("update-status-changed"),
@@ -558,7 +564,9 @@ export type Project = {
 /**  What a project is. Only the Playground exists in the foundation. */
 export type ProjectKind = 
 /**  The folder the app makes for itself, for Demo agent sessions. */
-"playground";
+"playground" | 
+/**  A folder the person opened, for example with the `arden-code` command. */
+"folder";
 
 /**  A project and its sessions, the newest first. */
 export type ProjectListing = {
@@ -602,6 +610,11 @@ export type Session = {
 	/**  When the session was created, in UTC. */
 	createdAt: string,
 	turns: Turn[],
+};
+
+/**  Tells the page to show a session, such as the one made for a folder that was opened. */
+export type SessionRequested = {
+	sessionId: string,
 };
 
 /**  A session as the sidebar lists it. */

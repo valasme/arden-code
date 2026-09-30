@@ -144,3 +144,48 @@ pub fn send_message(
     });
     Ok(snapshot)
 }
+
+/// The session that was made for a folder the app was asked to open, until the page has asked
+/// for it. The page may not be there yet when the first launch is asked to open a folder.
+#[derive(Default)]
+pub struct PendingOpen(std::sync::Mutex<Option<String>>);
+
+/// Tells the page to show a session, such as the one made for a folder that was opened.
+#[derive(Debug, Clone, serde::Serialize, specta::Type, tauri_specta::Event)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRequested {
+    pub session_id: String,
+}
+
+/// Opens a folder as a project, starts a Demo agent session in it and asks the page to show it.
+pub fn open_folder(app: &tauri::AppHandle, folder: &std::path::Path) {
+    use tauri::Manager;
+    use tauri_specta::Event;
+
+    let store = app.state::<Sessions>();
+    let project = store.open_folder(folder);
+    let Ok(session) = store.create_session(&project.id, AgentKind::Demo) else {
+        return;
+    };
+    tracing::info!(project = %project.id, session = %session.id, "a folder was opened as a project");
+    *app.state::<PendingOpen>()
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(session.id.clone());
+    let _ = SessionRequested {
+        session_id: session.id,
+    }
+    .emit(app);
+}
+
+/// The session the page should show because a folder was opened before the page was ready. Asking
+/// takes it: it is never returned twice.
+#[tauri::command]
+#[specta::specta]
+pub fn take_pending_open(pending: State<'_, PendingOpen>) -> Option<String> {
+    pending
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take()
+}

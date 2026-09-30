@@ -86,6 +86,9 @@ jobs:
           "size=$($installer.Length)" >> $env:GITHUB_OUTPUT
           "The installer is $($installer.Name), $([math]::Round($installer.Length / 1MB, 1)) MB."
 
+      - name: Install it silently, check the terminal command and the PATH, and uninstall it
+        run: pnpm --filter @arden/desktop test:e2e:installer
+
       - name: Make latest.json
         shell: pwsh
         run: |

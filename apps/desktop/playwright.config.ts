@@ -3,6 +3,8 @@ import { defineConfig } from "@playwright/test";
 // These tests drive the real desktop app: see e2e/fixtures.ts.
 export default defineConfig({
   testDir: "./e2e",
+  // Needs the installer that tauri build makes: see e2e/installer.spec.ts.
+  testIgnore: ["installer.spec.ts"],
   workers: 1,
   fullyParallel: false,
   timeout: 60_000,
