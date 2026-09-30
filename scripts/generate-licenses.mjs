@@ -54,6 +54,9 @@ function crates() {
     "--format",
     "{p}|{l}",
     "--locked",
+    // CI sets CARGO_TERM_COLOR=always, and colors would end up in the list.
+    "--color",
+    "never",
   ]);
   const found = [];
   for (const line of tree.split(/\r?\n/u)) {
