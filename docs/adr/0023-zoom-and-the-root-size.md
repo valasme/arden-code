@@ -29,3 +29,10 @@ measured against the root element's size, so one rem was 13px. `text-xs` drew at
 
 - The screenshot baselines changed in this ticket: the interface is now the size the plan describes.
 - Anything sized in `em` or `rem` follows the zoom. Anything that must not (a hairline, a scrollbar) is sized in pixels.
+
+## Shortcut rebinding (ticket 15)
+
+- **What is stored:** only the commands a person changed, in `settings.json` under `keyboard.shortcuts` (command id to a list of up to three shortcuts). A command that is not there has its defaults; an empty list means no shortcut. Rust drops anything that is not a shortcut, also in a hand-edited file.
+- **One source:** the palette, the tooltips, the cheat sheet, the Keyboard tab and the key handler all read the same effective shortcuts, so they cannot disagree.
+- **Recording** takes every key press for itself (a capturing listener that stops it), so pressing an existing shortcut to record it does not also run it. Esc cancels. The recorded keys are written by `shortcutFromEvent`: a shifted symbol is named by its key (`Ctrl+Shift+1`, not `Ctrl+!`) and a non-Latin layout by the Latin key in the same place.
+- **Refused before saving:** Windows' own shortcuts (Alt+F4, Alt+Tab, Ctrl+Shift+Esc and the like), the keys that edit text (Ctrl+C, X, V, A, Z, Y), Ctrl and Alt together (AltGr), and a bare key that is typed (a shortcut needs Ctrl or Alt, unless it is a function key). A shortcut that another command has is flagged with a choice to move it or cancel.

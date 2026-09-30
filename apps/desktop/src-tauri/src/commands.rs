@@ -138,6 +138,40 @@ pub fn reset_setting(
     settings.reset(key)
 }
 
+/// Changes the shortcuts of one command: saves them, and tells every window. An empty list leaves the
+/// command without a shortcut.
+///
+/// # Errors
+///
+/// `ARD-SET-001` when the settings file cannot be written.
+// Tauri hands commands their arguments and state by value.
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command]
+#[specta::specta]
+pub fn set_shortcuts(
+    command: String,
+    shortcuts: Vec<String>,
+    settings: State<'_, SettingsService>,
+) -> Result<Settings, AppError> {
+    settings.set_shortcuts(&command, &shortcuts)
+}
+
+/// Gives one command, or every command when `command` is empty, its default shortcuts again.
+///
+/// # Errors
+///
+/// `ARD-SET-001` when the settings file cannot be written.
+// Tauri hands commands their arguments and state by value.
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command]
+#[specta::specta]
+pub fn reset_shortcuts(
+    command: Option<String>,
+    settings: State<'_, SettingsService>,
+) -> Result<Settings, AppError> {
+    settings.reset_shortcuts(command.as_deref())
+}
+
 /// What Windows says about the text size and the regional format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

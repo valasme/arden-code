@@ -1,4 +1,10 @@
-import { formatShortcut, matchesShortcut, parseShortcut } from "./shortcuts";
+import {
+  checkShortcut,
+  formatShortcut,
+  matchesShortcut,
+  parseShortcut,
+  shortcutFromEvent,
+} from "./shortcuts";
 
 /** The parts of a keyboard event that shortcuts look at. */
 function press(
@@ -149,5 +155,161 @@ describe("formatShortcut", () => {
     expect(formatShortcut("Alt+ArrowRight")).toBe("Alt+→");
     expect(formatShortcut("Ctrl+,")).toBe("Ctrl+,");
     expect(formatShortcut("F11")).toBe("F11");
+  });
+});
+
+describe("shortcutFromEvent", () => {
+  it("writes the keys that were pressed the way shortcuts are written", () => {
+    expect(shortcutFromEvent(press("k", "KeyK", { ctrlKey: true }))).toBe("Ctrl+K");
+    expect(shortcutFromEvent(press("P", "KeyP", { ctrlKey: true, shiftKey: true }))).toBe(
+      "Ctrl+Shift+P",
+    );
+    expect(shortcutFromEvent(press("ArrowLeft", "ArrowLeft", { altKey: true }))).toBe(
+      "Alt+ArrowLeft",
+    );
+    expect(shortcutFromEvent(press("F11", "F11"))).toBe("F11");
+    expect(shortcutFromEvent(press(",", "Comma", { ctrlKey: true }))).toBe("Ctrl+,");
+    expect(shortcutFromEvent(press(" ", "Space", { ctrlKey: true }))).toBe("Ctrl+Space");
+  });
+
+  it("names a shifted symbol by its key, not by the symbol it types", () => {
+    expect(shortcutFromEvent(press("!", "Digit1", { ctrlKey: true, shiftKey: true }))).toBe(
+      "Ctrl+Shift+1",
+    );
+    expect(shortcutFromEvent(press("+", "Equal", { ctrlKey: true, shiftKey: true }))).toBe(
+      "Ctrl+Shift+=",
+    );
+    expect(shortcutFromEvent(press("?", "Slash", { ctrlKey: true, shiftKey: true }))).toBe(
+      "Ctrl+Shift+/",
+    );
+  });
+
+  it("names a key on a non-Latin layout by the Latin key in the same place", () => {
+    expect(shortcutFromEvent(press("л", "KeyK", { ctrlKey: true }))).toBe("Ctrl+K");
+    expect(shortcutFromEvent(press("б", "Comma", { ctrlKey: true }))).toBe("Ctrl+,");
+  });
+
+  it("gives nothing for a modifier on its own, a dead key, or a composed character", () => {
+    expect(shortcutFromEvent(press("Control", "ControlLeft", { ctrlKey: true }))).toBeUndefined();
+    expect(shortcutFromEvent(press("Shift", "ShiftLeft", { shiftKey: true }))).toBeUndefined();
+    expect(shortcutFromEvent(press("Alt", "AltLeft", { altKey: true }))).toBeUndefined();
+    expect(shortcutFromEvent(press("Meta", "MetaLeft", { metaKey: true }))).toBeUndefined();
+    expect(shortcutFromEvent(press("Dead", "Quote", { ctrlKey: true }))).toBeUndefined();
+    expect(
+      shortcutFromEvent(press("k", "KeyK", { ctrlKey: true, isComposing: true })),
+    ).toBeUndefined();
+  });
+
+  it("gives nothing when the Windows key is held, which Windows keeps for itself", () => {
+    expect(shortcutFromEvent(press("k", "KeyK", { ctrlKey: true, metaKey: true }))).toBeUndefined();
+  });
+
+  it("gives nothing for the number pad plus, which cannot be written as a shortcut", () => {
+    expect(shortcutFromEvent(press("+", "NumpadAdd", { ctrlKey: true }))).toBeUndefined();
+  });
+
+  it("writes something that parses back to the same keys", () => {
+    for (const written of [
+      "Ctrl+K",
+      "Ctrl+Shift+P",
+      "Alt+ArrowLeft",
+      "F11",
+      "Ctrl+,",
+      "Ctrl+Space",
+    ]) {
+      expect(() => parseShortcut(written)).not.toThrow();
+    }
+  });
+});
+
+describe("shifted symbols in shortcuts", () => {
+  it("match by the key they are on, whichever symbol Shift types", () => {
+    const shiftedOne = parseShortcut("Ctrl+Shift+1");
+    expect(
+      matchesShortcut(press("!", "Digit1", { ctrlKey: true, shiftKey: true }), shiftedOne),
+    ).toBe(true);
+    expect(matchesShortcut(press("1", "Digit1", { ctrlKey: true }), shiftedOne)).toBe(false);
+    expect(
+      matchesShortcut(press("@", "Digit2", { ctrlKey: true, shiftKey: true }), shiftedOne),
+    ).toBe(false);
+    const shiftedEquals = parseShortcut("Ctrl+Shift+=");
+    expect(
+      matchesShortcut(press("+", "Equal", { ctrlKey: true, shiftKey: true }), shiftedEquals),
+    ).toBe(true);
+  });
+
+  it("match the space bar", () => {
+    expect(
+      matchesShortcut(press(" ", "Space", { ctrlKey: true }), parseShortcut("Ctrl+Space")),
+    ).toBe(true);
+  });
+});
+
+describe("checkShortcut", () => {
+  it("accepts an ordinary shortcut", () => {
+    for (const shortcut of [
+      "Ctrl+K",
+      "Ctrl+Shift+P",
+      "Alt+ArrowLeft",
+      "F11",
+      "Ctrl+,",
+      "Ctrl+1",
+      "Alt+K",
+      "F6",
+    ]) {
+      expect(checkShortcut(shortcut), shortcut).toBeUndefined();
+    }
+  });
+
+  it("refuses the keys Windows keeps for itself", () => {
+    for (const shortcut of [
+      "Alt+F4",
+      "Alt+Space",
+      "Alt+Tab",
+      "Alt+Escape",
+      "Ctrl+Escape",
+      "Ctrl+Shift+Escape",
+      "Alt+Shift+Tab",
+    ]) {
+      expect(checkShortcut(shortcut), shortcut).toBe("reserved");
+    }
+  });
+
+  it("refuses the keys that edit text, which every text field needs", () => {
+    for (const shortcut of [
+      "Ctrl+C",
+      "Ctrl+X",
+      "Ctrl+V",
+      "Ctrl+A",
+      "Ctrl+Z",
+      "Ctrl+Y",
+      "Ctrl+Shift+Z",
+    ]) {
+      expect(checkShortcut(shortcut), shortcut).toBe("editing");
+    }
+  });
+
+  it("refuses Ctrl and Alt together, which is how Windows types characters on many layouts", () => {
+    expect(checkShortcut("Ctrl+Alt+K")).toBe("altgr");
+    expect(checkShortcut("Ctrl+Alt+Shift+Q")).toBe("altgr");
+  });
+
+  it("wants Ctrl or Alt, so typing is not taken over, unless the key is a function key", () => {
+    for (const shortcut of [
+      "K",
+      "Shift+K",
+      "1",
+      ",",
+      "Space",
+      "Enter",
+      "Escape",
+      "Tab",
+      "ArrowLeft",
+      "Shift+ArrowLeft",
+    ]) {
+      expect(checkShortcut(shortcut), shortcut).toBe("needsModifier");
+    }
+    expect(checkShortcut("F12")).toBeUndefined();
+    expect(checkShortcut("Shift+F10")).toBe("reserved");
   });
 });

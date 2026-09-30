@@ -20,5 +20,8 @@ export const defaultSettings: Settings = {
   "layout": {
     "sidebarWidth": 260,
     "inspectorWidth": 320
+  },
+  "keyboard": {
+    "shortcuts": {}
   }
 };

@@ -1,5 +1,7 @@
 //! The settings and their defaults.
 
+use std::collections::BTreeMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -138,6 +140,48 @@ impl Default for Layout {
     }
 }
 
+/// The most shortcuts one command can have.
+pub const MAX_SHORTCUTS_PER_COMMAND: usize = 3;
+
+/// The shortcuts a person changed. A command that is not here has its default shortcuts.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Keyboard {
+    /// For each command that was changed, its shortcuts, written like `Ctrl+Shift+P`. An empty
+    /// list means the command has no shortcut.
+    pub shortcuts: BTreeMap<String, Vec<String>>,
+}
+
+/// Whether text is a command id such as `palette.open`.
+fn is_command_id(text: &str) -> bool {
+    text.len() <= 40
+        && text
+            .chars()
+            .next()
+            .is_some_and(|first| first.is_ascii_alphabetic())
+        && text
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '.')
+}
+
+/// Whether text is a shortcut such as `Ctrl+K`, `Alt+ArrowLeft` or `F11`: any of Ctrl, Alt and
+/// Shift, once each, and then a key.
+#[must_use]
+pub fn is_shortcut(text: &str) -> bool {
+    let mut parts: Vec<&str> = text.split('+').collect();
+    let Some(key) = parts.pop() else { return false };
+    let key_ok = !key.is_empty()
+        && !matches!(key, "Ctrl" | "Alt" | "Shift")
+        && key.chars().count() <= 20
+        && key
+            .chars()
+            .all(|character| !character.is_whitespace() && !character.is_control());
+    let modifiers_ok = parts.iter().enumerate().all(|(index, part)| {
+        matches!(*part, "Ctrl" | "Alt" | "Shift") && !parts[..index].contains(part)
+    });
+    key_ok && modifiers_ok
+}
+
 /// Every setting, as stored in `settings.json`. Keys this version does not know are ignored. The
 /// store fills in anything missing from a file with its default before reading it into this type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
@@ -147,6 +191,7 @@ pub struct Settings {
     pub general: General,
     pub appearance: Appearance,
     pub layout: Layout,
+    pub keyboard: Keyboard,
 }
 
 impl Default for Settings {
@@ -156,6 +201,7 @@ impl Default for Settings {
             general: General::default(),
             appearance: Appearance::default(),
             layout: Layout::default(),
+            keyboard: Keyboard::default(),
         }
     }
 }
@@ -239,6 +285,32 @@ impl Settings {
         self.clamp();
     }
 
+    /// Sets the shortcuts of one command. An empty list gives it no shortcut. Anything that is not a
+    /// shortcut is left out, and so is everything past the most a command can have.
+    pub fn set_shortcuts(&mut self, command: &str, shortcuts: &[String]) {
+        if !is_command_id(command) {
+            return;
+        }
+        let mut kept: Vec<String> = Vec::new();
+        for shortcut in shortcuts {
+            if is_shortcut(shortcut) && !kept.contains(shortcut) {
+                kept.push(shortcut.clone());
+            }
+        }
+        kept.truncate(MAX_SHORTCUTS_PER_COMMAND);
+        self.keyboard.shortcuts.insert(command.to_owned(), kept);
+    }
+
+    /// Gives one command its default shortcuts again, or every command when `command` is `None`.
+    pub fn reset_shortcuts(&mut self, command: Option<&str>) {
+        match command {
+            Some(command) => {
+                self.keyboard.shortcuts.remove(command);
+            }
+            None => self.keyboard.shortcuts.clear(),
+        }
+    }
+
     /// Puts one setting back to its default.
     pub fn reset(&mut self, key: SettingKey) {
         let defaults = Self::default();
@@ -292,6 +364,11 @@ impl Settings {
             .layout
             .inspector_width
             .clamp(INSPECTOR_WIDTH_RANGE.0, INSPECTOR_WIDTH_RANGE.1);
+        // A hand-edited shortcut that is not one is dropped, the rest of the file is kept.
+        let changed = std::mem::take(&mut self.keyboard.shortcuts);
+        for (command, shortcuts) in changed {
+            self.set_shortcuts(&command, &shortcuts);
+        }
     }
 }
 
@@ -338,7 +415,8 @@ mod tests {
                     "reduceMotion": "system",
                     "showStatusBar": true
                 },
-                "layout": { "sidebarWidth": 260, "inspectorWidth": 320 }
+                "layout": { "sidebarWidth": 260, "inspectorWidth": 320 },
+                "keyboard": { "shortcuts": {} }
             })
         );
     }
@@ -473,9 +551,121 @@ mod tests {
     }
 
     #[test]
+    fn shortcuts_are_written_like_people_write_them() {
+        for good in [
+            "Ctrl+K",
+            "Ctrl+Shift+P",
+            "Alt+ArrowLeft",
+            "F11",
+            "Ctrl+,",
+            "Ctrl+/",
+            "Shift+F10",
+        ] {
+            assert!(is_shortcut(good), "{good}");
+        }
+        for bad in [
+            "",
+            "+",
+            "Ctrl+",
+            "Ctrl+Ctrl+K",
+            "Meta+K",
+            "ctrl+k ",
+            "Ctrl+K L",
+            "Ctrl+\u{7}",
+            "Ctrl++",
+            "Ctrl+Shift",
+            "Ctrl+waytoolongakeynamethatisnotakey",
+        ] {
+            assert!(!is_shortcut(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn a_shortcut_can_be_set_for_one_command() {
+        let mut settings = Settings::default();
+
+        settings.set_shortcuts("palette.open", &["Ctrl+Shift+O".to_owned()]);
+
+        assert_eq!(
+            settings.keyboard.shortcuts["palette.open"],
+            ["Ctrl+Shift+O"]
+        );
+        assert_eq!(settings.keyboard.shortcuts.len(), 1);
+    }
+
+    #[test]
+    fn a_command_can_be_left_without_a_shortcut() {
+        let mut settings = Settings::default();
+
+        settings.set_shortcuts("sidebar.toggle", &[]);
+
+        assert_eq!(
+            settings.keyboard.shortcuts["sidebar.toggle"],
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn what_is_not_a_shortcut_is_left_out_and_a_command_keeps_at_most_three() {
+        let mut settings = Settings::default();
+
+        settings.set_shortcuts(
+            "palette.open",
+            &[
+                "Ctrl+K".to_owned(),
+                "not a shortcut".to_owned(),
+                "Ctrl+K".to_owned(),
+                "Ctrl+1".to_owned(),
+                "Ctrl+2".to_owned(),
+                "Ctrl+3".to_owned(),
+            ],
+        );
+        settings.set_shortcuts("no spaces allowed", &["Ctrl+9".to_owned()]);
+        settings.set_shortcuts("", &["Ctrl+9".to_owned()]);
+
+        assert_eq!(
+            settings.keyboard.shortcuts["palette.open"],
+            ["Ctrl+K", "Ctrl+1", "Ctrl+2"]
+        );
+        assert_eq!(settings.keyboard.shortcuts.len(), 1);
+    }
+
+    #[test]
+    fn one_command_or_all_of_them_can_go_back_to_their_defaults() {
+        let mut settings = Settings::default();
+        settings.set_shortcuts("palette.open", &["Ctrl+Shift+O".to_owned()]);
+        settings.set_shortcuts("sidebar.toggle", &[]);
+
+        settings.reset_shortcuts(Some("palette.open"));
+        assert!(!settings.keyboard.shortcuts.contains_key("palette.open"));
+        assert!(settings.keyboard.shortcuts.contains_key("sidebar.toggle"));
+
+        settings.reset_shortcuts(None);
+        assert!(settings.keyboard.shortcuts.is_empty());
+    }
+
+    #[test]
+    fn a_hand_edited_shortcut_that_is_not_one_is_dropped_and_the_rest_kept() {
+        let mut settings = Settings::default();
+        settings.keyboard.shortcuts.insert(
+            "palette.open".to_owned(),
+            vec!["Ctrl+K".to_owned(), "nonsense++".to_owned()],
+        );
+        settings
+            .keyboard
+            .shortcuts
+            .insert("bad id!".to_owned(), vec!["Ctrl+B".to_owned()]);
+
+        settings.clamp();
+
+        assert_eq!(settings.keyboard.shortcuts.len(), 1);
+        assert_eq!(settings.keyboard.shortcuts["palette.open"], ["Ctrl+K"]);
+    }
+
+    #[test]
     fn unknown_keys_are_ignored_so_a_schema_reference_or_a_future_setting_does_no_harm() {
         let settings: Settings = serde_json::from_str(
-            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"extra":1}"#,
+            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"keyboard":{"shortcuts":{}},"extra":1}"#,
         )
         .unwrap();
 

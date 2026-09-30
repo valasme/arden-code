@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-import { type CommandId, definitionOf } from "./registry";
+import { useShortcutsOf } from "./CommandsProvider";
+import { definitionOf, type CommandId } from "./registry";
 import { formatShortcut } from "./shortcuts";
 
 /**
@@ -12,7 +13,8 @@ import { formatShortcut } from "./shortcuts";
  */
 export function CommandTooltip({ command, children }: { command: CommandId; children: ReactNode }) {
   const { t } = useTranslation();
-  const { labelKey, shortcuts } = definitionOf(command);
+  const { labelKey } = definitionOf(command);
+  const shortcuts = useShortcutsOf(command);
 
   return (
     <TooltipProvider delayDuration={500}>

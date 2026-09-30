@@ -75,6 +75,14 @@ fn write(dir: &Path, mut base: Value, settings: &Settings) -> Result<(), AppErro
     }
     let typed = serde_json::to_value(settings).map_err(|error| save_failed(&error))?;
     merge(&mut base, &typed);
+    // The shortcuts a person changed are a set of entries that can shrink. Merging would keep an
+    // entry that was removed, so this one is replaced.
+    if let Some(shortcuts) = typed.pointer("/keyboard/shortcuts")
+        && let Some(target) = base.pointer_mut("/keyboard")
+        && let Value::Object(target) = target
+    {
+        target.insert("shortcuts".to_owned(), shortcuts.clone());
+    }
     if let Value::Object(object) = &mut base {
         object.insert(
             "$schema".to_owned(),
@@ -471,6 +479,29 @@ mod tests {
         assert_eq!(loaded.settings.appearance.zoom, 200);
         assert_eq!(loaded.settings.appearance.code_font_size, 11);
         assert!(loaded.notice.is_none(), "this is not a broken file");
+    }
+
+    #[test]
+    fn a_shortcut_that_was_reset_is_gone_from_the_file_but_what_a_person_added_stays() {
+        let folder = tempfile::tempdir().unwrap();
+        fs::write(
+            folder.path().join("settings.json"),
+            r#"{"version":1,"note":"mine","keyboard":{"shortcuts":{"palette.open":["Ctrl+Shift+O"],"sidebar.toggle":["Ctrl+M"]},"comment":"keep"}}"#,
+        )
+        .unwrap();
+        let mut settings = load_at(folder.path(), NOW).settings;
+        assert_eq!(settings.keyboard.shortcuts.len(), 2);
+
+        settings.reset_shortcuts(Some("palette.open"));
+        save(folder.path(), &settings).unwrap();
+
+        let file = read_json(&folder.path().join("settings.json"));
+        assert_eq!(
+            file["keyboard"]["shortcuts"],
+            serde_json::json!({ "sidebar.toggle": ["Ctrl+M"] })
+        );
+        assert_eq!(file["keyboard"]["comment"], "keep");
+        assert_eq!(file["note"], "mine");
     }
 
     #[test]

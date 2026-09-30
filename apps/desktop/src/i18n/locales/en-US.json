@@ -5,6 +5,7 @@
   "cheatSheet": {
     "command": "Command",
     "description": "Every shortcut, and the command it runs.",
+    "none": "None",
     "shortcut": "Shortcut",
     "title": "Keyboard shortcuts"
   },
@@ -148,6 +149,32 @@
         "preview": "Example: {{date}}, {{number}}, {{relative}}",
         "windows": "Same as Windows"
       }
+    },
+    "keyboard": {
+      "add": "Add a shortcut for {{command}}",
+      "cancel": "Cancel",
+      "change": "Change shortcut {{shortcut}} for {{command}}",
+      "command": "Command",
+      "conflict": "{{shortcut}} is already used by {{command}}.",
+      "empty": "No command matches.",
+      "none": "No shortcut",
+      "pressKeys": "Press keys…",
+      "problems": {
+        "altgr": "Many keyboards type characters with Ctrl and Alt together, so a shortcut cannot use both. Press another shortcut.",
+        "editing": "{{shortcut}} edits text in every text field. Press another shortcut.",
+        "needsModifier": "{{shortcut}} would take over typing. Hold Ctrl or Alt as well, or use a function key.",
+        "reserved": "Windows keeps {{shortcut}} for itself. Press another shortcut."
+      },
+      "recording": "Press the new shortcut, or Esc to cancel.",
+      "remove": "Remove shortcut {{shortcut}} from {{command}}",
+      "replace": "Use it here instead",
+      "resetAll": "Reset all shortcuts",
+      "resetRow": "Reset the shortcuts of {{command}}",
+      "search": {
+        "label": "Search shortcuts",
+        "placeholder": "Search commands and shortcuts"
+      },
+      "shortcuts": "Shortcuts"
     },
     "placeholder": "These settings arrive in a later update.",
     "reset": "Reset {{name}} to its default",

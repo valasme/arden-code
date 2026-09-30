@@ -164,7 +164,7 @@ describe("the Settings page", () => {
 
   it("says so on a tab whose settings are not there yet", async () => {
     startApp();
-    renderApp("/settings/keyboard");
+    renderApp("/settings/notifications");
 
     expect(await screen.findByText("These settings arrive in a later update.")).toBeVisible();
   });

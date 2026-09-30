@@ -117,6 +117,20 @@ export const commandDefinitions = [
   { id: "zoom.reset", labelKey: "commands.zoomReset", icon: RotateCcwIcon, shortcuts: ["Ctrl+0"] },
 ] as const satisfies readonly CommandDefinition[];
 
+/** The most shortcuts one command can have. Rust keeps to the same number. */
+export const MAX_SHORTCUTS_PER_COMMAND = 3;
+
+/**
+ * The shortcuts a command has: the ones a person set (which may be none), or else the defaults.
+ * `changed` is what the settings hold for the commands that were changed.
+ */
+export function effectiveShortcuts(
+  definition: CommandDefinition,
+  changed: Partial<Record<string, readonly string[]>>,
+): readonly string[] {
+  return changed[definition.id] ?? definition.shortcuts;
+}
+
 export function definitionOf(id: CommandId): CommandDefinition {
   const definition = commandDefinitions.find((command) => command.id === id);
   if (!definition) throw new Error(`there is no command "${id}"`);

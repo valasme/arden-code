@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { useOverlayStore } from "@/state/overlays";
 
-import { commandDefinitions } from "./registry";
+import { useCommands } from "./CommandsProvider";
 import { formatShortcut } from "./shortcuts";
 
 /** Every shortcut and the command it runs (Ctrl+/). */
@@ -17,6 +17,7 @@ export function CheatSheet() {
   const { t } = useTranslation();
   const open = useOverlayStore((state) => state.cheatSheetOpen);
   const setOpen = useOverlayStore((state) => state.setCheatSheetOpen);
+  const { commands } = useCommands();
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -37,13 +38,16 @@ export function CheatSheet() {
             </tr>
           </thead>
           <tbody>
-            {commandDefinitions.map((command) => (
+            {commands.map((command) => (
               <tr key={command.id} className="border-t border-border">
                 <th scope="row" className="py-1.5 pr-4 text-left font-normal">
                   {t(command.labelKey)}
                 </th>
                 <td className="py-1.5">
                   <span className="flex flex-wrap gap-2">
+                    {command.shortcuts.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">{t("cheatSheet.none")}</span>
+                    ) : null}
                     {command.shortcuts.map((shortcut) => (
                       <kbd
                         key={shortcut}

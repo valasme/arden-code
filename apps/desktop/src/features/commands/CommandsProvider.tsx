@@ -10,7 +10,13 @@ import { useNavigationHistory } from "@/lib/useNavigationHistory";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 
-import { commandDefinitions, type CommandDefinition, type CommandId } from "./registry";
+import {
+  commandDefinitions,
+  definitionOf,
+  effectiveShortcuts,
+  type CommandDefinition,
+  type CommandId,
+} from "./registry";
 import { matchesShortcut, parseShortcut } from "./shortcuts";
 
 /** A command as the app can use it: its definition, and whether it can run right now. */
@@ -30,6 +36,25 @@ export function useCommands(): Commands {
   const commands = useContext(CommandsContext);
   if (!commands) throw new Error("useCommands needs a CommandsProvider above it");
   return commands;
+}
+
+function available(
+  definition: CommandDefinition,
+  shortcuts: readonly string[],
+  enabled: boolean,
+): AvailableCommand {
+  return { ...definition, shortcuts, enabled };
+}
+
+/**
+ * The shortcuts a command has now: the person's own when they changed them, else the defaults. It
+ * also works outside the provider, such as in a test that draws one control, with the defaults.
+ */
+export function useShortcutsOf(id: CommandId): readonly string[] {
+  const commands = useContext(CommandsContext);
+  return (
+    commands?.commands.find((command) => command.id === id)?.shortcuts ?? definitionOf(id).shortcuts
+  );
 }
 
 function findMessageBox(): HTMLElement | null {
@@ -53,7 +78,9 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
   const toggleInspector = useLayoutStore((state) => state.toggleInspector);
   const setPaletteOpen = useOverlayStore((state) => state.setPaletteOpen);
   const setCheatSheetOpen = useOverlayStore((state) => state.setCheatSheetOpen);
-  const { zoom } = useSettings().appearance;
+  const { appearance, keyboard } = useSettings();
+  const { zoom } = appearance;
+  const changed = keyboard.shortcuts;
   const { mutate: changeSetting } = useChangeSetting();
 
   const value = useMemo<Commands>(() => {
@@ -80,10 +107,14 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
       },
     };
     return {
-      commands: commandDefinitions.map((definition) => ({
-        ...definition,
-        enabled: actions[definition.id].enabled?.() ?? true,
-      })),
+      // A person's own shortcuts replace the defaults everywhere the shortcut is shown or used.
+      commands: commandDefinitions.map((definition) =>
+        available(
+          definition,
+          effectiveShortcuts(definition, changed),
+          actions[definition.id].enabled?.() ?? true,
+        ),
+      ),
       run: (id) => {
         const action = actions[id];
         if (action.enabled?.() ?? true) action.run();
@@ -98,12 +129,13 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
     setCheatSheetOpen,
     zoom,
     changeSetting,
+    changed,
   ]);
 
   useEffect(() => {
-    const parsed = commandDefinitions.flatMap((definition) =>
-      definition.shortcuts.map((shortcut) => ({
-        id: definition.id,
+    const parsed = value.commands.flatMap((command) =>
+      command.shortcuts.map((shortcut) => ({
+        id: command.id,
         shortcut: parseShortcut(shortcut),
       })),
     );

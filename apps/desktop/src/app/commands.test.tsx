@@ -399,3 +399,67 @@ describe("the zoom shortcuts", () => {
     expect(within(palette).getByRole("option", { name: /Reset zoom/ })).toHaveTextContent("Ctrl+0");
   });
 });
+
+const custom = () =>
+  settingsWith({
+    keyboard: { shortcuts: { "palette.open": ["Ctrl+Shift+O"], "sidebar.toggle": [] } },
+  });
+
+describe("shortcuts a person changed", () => {
+  it("work in place of the defaults", async () => {
+    startingSettings = custom();
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}k{/Control}");
+    expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+    await user.keyboard("{Control>}{Shift>}o{/Shift}{/Control}");
+
+    expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeVisible();
+  });
+
+  it("leave a command without a shortcut when it was emptied", async () => {
+    startingSettings = custom();
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}b{/Control}");
+
+    expect(sidebar()).toBeVisible();
+  });
+
+  it("show in the command palette, the cheat sheet and the tooltips", async () => {
+    startingSettings = custom();
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}{Shift>}o{/Shift}{/Control}");
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+    expect(within(palette).getByRole("option", { name: /Command palette/ })).toHaveTextContent(
+      "Ctrl+Shift+O",
+    );
+    expect(within(palette).getByRole("option", { name: /Toggle sidebar/ }).textContent).not.toMatch(
+      /Ctrl/,
+    );
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    await user.hover(await screen.findByRole("button", { name: "Hide sidebar" }));
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).not.toHaveTextContent("Ctrl+B");
+
+    await user.keyboard("{Control>}/{/Control}");
+    const sheet = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
+    expect(within(sheet).getByRole("row", { name: /Command palette/ })).toHaveTextContent(
+      "Ctrl+Shift+O",
+    );
+    expect(within(sheet).getByRole("row", { name: /Command palette/ })).not.toHaveTextContent(
+      "Ctrl+K",
+    );
+  });
+});

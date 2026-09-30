@@ -62,6 +62,23 @@ export const commands = {
 	 *  `ARD-SET-001` when the settings file cannot be written.
 	 */
 	resetSetting: (key: SettingKey) => __TAURI_INVOKE<Settings>("reset_setting", { key }),
+	/**
+	 *  Changes the shortcuts of one command: saves them, and tells every window. An empty list leaves the
+	 *  command without a shortcut.
+	 * 
+	 *  # Errors
+	 * 
+	 *  `ARD-SET-001` when the settings file cannot be written.
+	 */
+	setShortcuts: (command: string, shortcuts: string[]) => __TAURI_INVOKE<Settings>("set_shortcuts", { command, shortcuts }),
+	/**
+	 *  Gives one command, or every command when `command` is empty, its default shortcuts again.
+	 * 
+	 *  # Errors
+	 * 
+	 *  `ARD-SET-001` when the settings file cannot be written.
+	 */
+	resetShortcuts: (command: string | null) => __TAURI_INVOKE<Settings>("reset_shortcuts", { command }),
 	/**  The problem found with the settings file when the app started, if any. It is handed over once. */
 	takeSettingsNotice: () => __TAURI_INVOKE<{
 	code: ErrorCode,
@@ -163,6 +180,15 @@ export type General = {
 	regionalFormat: RegionalFormat,
 };
 
+/**  The shortcuts a person changed. A command that is not here has its default shortcuts. */
+export type Keyboard = {
+	/**
+	 *  For each command that was changed, its shortcuts, written like `Ctrl+Shift+P`. An empty
+	 *  list means the command has no shortcut.
+	 */
+	shortcuts: { [key in string]: string[] },
+};
+
 /**  How wide the side panels were left. */
 export type Layout = {
 	/**  The sidebar's width in pixels. */
@@ -210,6 +236,7 @@ export type Settings = {
 	general: General,
 	appearance: Appearance,
 	layout: Layout,
+	keyboard: Keyboard,
 };
 
 /**  Sent to the UI whenever the settings change: through the UI, or by editing the file by hand. */

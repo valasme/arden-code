@@ -209,6 +209,32 @@ impl SettingsService {
         self.modify(|settings| settings.reset(key))
     }
 
+    /// Sets the shortcuts of one command, saves them and announces them.
+    ///
+    /// # Errors
+    ///
+    /// `ARD-SET-001` when the file cannot be written. The shortcuts then stay as they were.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if another thread panicked while holding the settings, which nothing does.
+    pub fn set_shortcuts(&self, command: &str, shortcuts: &[String]) -> Result<Settings, AppError> {
+        self.modify(|settings| settings.set_shortcuts(command, shortcuts))
+    }
+
+    /// Gives one command (or, with `None`, every command) its default shortcuts again.
+    ///
+    /// # Errors
+    ///
+    /// `ARD-SET-001` when the file cannot be written. The shortcuts then stay as they were.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if another thread panicked while holding the settings, which nothing does.
+    pub fn reset_shortcuts(&self, command: Option<&str>) -> Result<Settings, AppError> {
+        self.modify(|settings| settings.reset_shortcuts(command))
+    }
+
     fn modify(&self, change: impl FnOnce(&mut Settings)) -> Result<Settings, AppError> {
         let next = {
             // Held until the file is written, so that a reload cannot read a state in between.
@@ -340,6 +366,52 @@ mod tests {
         service.reset(SettingKey::AppearanceZoom).unwrap();
 
         assert!(seen.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn shortcuts_are_saved_announced_and_survive_a_restart() {
+        let folder = tempfile::tempdir().unwrap();
+        let service = SettingsService::start(folder.path());
+        let seen = listen(&service);
+
+        let changed = service
+            .set_shortcuts("palette.open", &["Ctrl+Shift+O".to_owned()])
+            .unwrap();
+
+        assert_eq!(changed.keyboard.shortcuts["palette.open"], ["Ctrl+Shift+O"]);
+        assert_eq!(seen.lock().unwrap().len(), 1);
+        drop(service);
+        let restarted = SettingsService::start(folder.path());
+        assert_eq!(
+            restarted.get().keyboard.shortcuts["palette.open"],
+            ["Ctrl+Shift+O"]
+        );
+    }
+
+    #[test]
+    fn shortcuts_can_be_reset_one_at_a_time_or_all_at_once() {
+        let folder = tempfile::tempdir().unwrap();
+        let service = SettingsService::start(folder.path());
+        service
+            .set_shortcuts("palette.open", &["Ctrl+Shift+O".to_owned()])
+            .unwrap();
+        service.set_shortcuts("sidebar.toggle", &[]).unwrap();
+
+        let one = service.reset_shortcuts(Some("palette.open")).unwrap();
+        assert_eq!(
+            one.keyboard.shortcuts.keys().collect::<Vec<_>>(),
+            ["sidebar.toggle"]
+        );
+
+        let all = service.reset_shortcuts(None).unwrap();
+        assert!(all.keyboard.shortcuts.is_empty());
+        assert!(
+            store::load(folder.path())
+                .settings
+                .keyboard
+                .shortcuts
+                .is_empty()
+        );
     }
 
     #[test]

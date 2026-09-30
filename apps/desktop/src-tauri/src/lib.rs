@@ -39,6 +39,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::get_settings,
         commands::change_setting,
         commands::reset_setting,
+        commands::set_shortcuts,
+        commands::reset_shortcuts,
         commands::take_settings_notice,
         commands::get_system_preferences,
         commands::debug_fail,
@@ -54,6 +56,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::get_settings,
         commands::change_setting,
         commands::reset_setting,
+        commands::set_shortcuts,
+        commands::reset_shortcuts,
         commands::take_settings_notice,
         commands::get_system_preferences,
     ];
