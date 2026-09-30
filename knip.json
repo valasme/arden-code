@@ -4,7 +4,8 @@
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     "apps/desktop": {
-      "entry": ["isolation/index.js", "i18next.config.ts", "visual/*.spec.ts"]
+      "entry": ["isolation/index.js", "i18next.config.ts", "visual/*.spec.ts"],
+      "ignore": ["src/components/ui/**"]
     },
     "brand": {
       "ignoreDependencies": ["opentype.js"]

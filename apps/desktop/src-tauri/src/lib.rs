@@ -118,6 +118,9 @@ pub fn run() {
             },
         ))
         .plugin(tauri_plugin_opener::init())
+        .on_page_load(|_webview, payload| {
+            tracing::info!(url = %payload.url(), event = ?payload.event(), "page load");
+        })
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);

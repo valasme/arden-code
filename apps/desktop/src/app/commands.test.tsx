@@ -1,0 +1,320 @@
+import { createMemoryHistory } from "@tanstack/react-router";
+import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { page } from "vitest/browser";
+
+import { commandDefinitions } from "@/features/commands/registry";
+import { formatShortcut } from "@/features/commands/shortcuts";
+import { useLayoutStore } from "@/state/layout";
+import { useOverlayStore } from "@/state/overlays";
+import { animationsDone } from "@/test/animations";
+import { expectNoAccessibilityViolations } from "@/test/axe";
+
+import { App } from "./App";
+
+import "@/styles/global.css";
+
+function renderApp(entries = ["/"], initialIndex = entries.length - 1) {
+  Object.assign(globalThis, { isTauri: true });
+  mockWindows("main");
+  const calls: { command: string; payload: unknown }[] = [];
+  mockIPC(
+    (command, payload) => {
+      calls.push({ command, payload });
+      if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
+      if (command === "get_settings") return { version: 1, appearance: { theme: "system" } };
+      if (command === "plugin:window|is_fullscreen") return false;
+      return null;
+    },
+    { shouldMockEvents: true },
+  );
+  render(<App history={createMemoryHistory({ initialEntries: entries, initialIndex })} />);
+  return calls;
+}
+
+beforeEach(async () => {
+  await page.viewport(1280, 800);
+  useLayoutStore.setState(useLayoutStore.getInitialState());
+  useOverlayStore.setState(useOverlayStore.getInitialState());
+});
+
+afterEach(() => {
+  Reflect.deleteProperty(globalThis, "isTauri");
+});
+
+/** Types a key on a keyboard whose layout produced `key` from the physical key `code`. */
+function pressOnLayout(
+  key: string,
+  code: string,
+  modifiers: { ctrlKey?: boolean; altKey?: boolean },
+) {
+  const event = new KeyboardEvent("keydown", {
+    key,
+    code,
+    bubbles: true,
+    cancelable: true,
+    ...modifiers,
+  });
+  window.dispatchEvent(event);
+  return event;
+}
+
+const sidebar = () => screen.queryByRole("complementary", { name: "Sidebar" });
+
+describe("the command palette", () => {
+  it.each(["{Control>}k{/Control}", "{Control>}{Shift>}p{/Shift}{/Control}"])(
+    "opens with %s",
+    async (keys) => {
+      const user = userEvent.setup();
+      renderApp();
+      await screen.findByRole("main");
+
+      await user.keyboard(keys);
+
+      const dialog = await screen.findByRole("dialog", { name: "Command palette" });
+      await animationsDone(dialog);
+      expect(dialog).toBeVisible();
+      expect(screen.getByRole("combobox")).toHaveFocus();
+    },
+  );
+
+  it("opens from the search field in the title bar", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(await screen.findByRole("button", { name: /^Search or run a command/ }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Command palette" });
+    await animationsDone(dialog);
+    expect(dialog).toBeVisible();
+  });
+
+  it("lists every command with its shortcut", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+
+    // "Focus the message box" needs a message box, which does not exist yet, so it is not offered.
+    for (const [label, shortcut] of [
+      ["Command palette", "Ctrl+K"],
+      ["Settings", "Ctrl+,"],
+      ["Toggle sidebar", "Ctrl+B"],
+      ["Toggle inspector", "Ctrl+J"],
+      ["Full screen", "F11"],
+      ["Keyboard shortcuts", "Ctrl+/"],
+    ] as const) {
+      const option = within(palette).getByRole("option", { name: new RegExp(label) });
+      expect(option, label).toHaveTextContent(shortcut);
+    }
+    expect(within(palette).queryByRole("option", { name: /Focus the message box/ })).toBeNull();
+  });
+
+  it("filters as the person types, and runs the chosen command with Enter", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+    expect(sidebar()).toBeVisible();
+
+    await user.keyboard("{Control>}k{/Control}");
+    await user.keyboard("side");
+    const options = await screen.findAllByRole("option");
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent("Toggle sidebar");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(sidebar()).toBeNull();
+      expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+    });
+  });
+
+  it("says so when nothing matches", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}k{/Control}");
+    await user.keyboard("zzzzzz");
+
+    expect(await screen.findByText("No command matches.")).toBeVisible();
+  });
+
+  it("closes with Escape", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+    await user.keyboard("{Control>}k{/Control}");
+    await screen.findByRole("dialog", { name: "Command palette" });
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+    });
+  });
+
+  it("has no accessibility violations", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+    await animationsDone(palette);
+
+    await expectNoAccessibilityViolations(palette);
+  });
+});
+
+describe("the default shortcuts", () => {
+  it("open the settings with Ctrl+,", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>},{/Control}");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "General" })).toBeVisible();
+  });
+
+  it("toggle the sidebar with Ctrl+B and the inspector with Ctrl+J", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}b{/Control}");
+    await waitFor(() => {
+      expect(sidebar()).toBeNull();
+    });
+    await user.keyboard("{Control>}b{/Control}");
+    await waitFor(() => {
+      expect(sidebar()).toBeVisible();
+    });
+
+    await user.keyboard("{Control>}j{/Control}");
+    expect(await screen.findByRole("complementary", { name: "Inspector" })).toBeVisible();
+  });
+
+  it("toggle full screen with F11", async () => {
+    const user = userEvent.setup();
+    const calls = renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{F11}");
+
+    await waitFor(() => {
+      expect(
+        calls.find((call) => call.command === "plugin:window|set_fullscreen")?.payload,
+      ).toMatchObject({
+        value: true,
+      });
+    });
+  });
+
+  it("focus the message box with Ctrl+L, when there is one", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+    const box = document.createElement("textarea");
+    box.setAttribute("data-message-box", "");
+    document.body.append(box);
+
+    await user.keyboard("{Control>}l{/Control}");
+
+    expect(box).toHaveFocus();
+    box.remove();
+  });
+
+  it("go back and forward with Alt+Left and Alt+Right", async () => {
+    const user = userEvent.setup();
+    renderApp(["/", "/settings/general"]);
+    await screen.findByRole("heading", { level: 1, name: "General" });
+
+    await user.keyboard("{Alt>}{ArrowLeft}{/Alt}");
+    expect(await screen.findByRole("heading", { name: "Arden Code 0.1.0" })).toBeVisible();
+
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    expect(await screen.findByRole("heading", { level: 1, name: "General" })).toBeVisible();
+  });
+
+  it("open a cheat sheet with Ctrl+/ that lists every shortcut", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}/{/Control}");
+    const sheet = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
+    await animationsDone(sheet);
+
+    for (const command of commandDefinitions) {
+      for (const shortcut of command.shortcuts) {
+        expect(sheet, `${command.id}: ${shortcut}`).toHaveTextContent(formatShortcut(shortcut));
+      }
+    }
+    await expectNoAccessibilityViolations(sheet);
+  });
+});
+
+describe("keyboard layouts", () => {
+  it("run a shortcut by the key's position when the layout types a non-Latin letter", async () => {
+    renderApp();
+    await screen.findByRole("main");
+
+    // On a Russian layout the key at the Latin B position types "и".
+    const event = pressOnLayout("и", "KeyB", { ctrlKey: true });
+
+    expect(event.defaultPrevented).toBe(true);
+    await waitFor(() => {
+      expect(sidebar()).toBeNull();
+    });
+  });
+
+  it("go by the typed letter on other Latin layouts", async () => {
+    renderApp();
+    await screen.findByRole("main");
+
+    // On a Dvorak layout the key at the Latin V position types "b", which is Ctrl+B.
+    pressOnLayout("b", "KeyV", { ctrlKey: true });
+    await waitFor(() => {
+      expect(sidebar()).toBeNull();
+    });
+  });
+
+  it("leave AltGr alone, since it types characters", async () => {
+    renderApp();
+    await screen.findByRole("main");
+
+    // Windows reports AltGr as Ctrl and Alt together.
+    const event = pressOnLayout("b", "KeyB", { ctrlKey: true, altKey: true });
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(sidebar()).toBeVisible();
+  });
+});
+
+describe("tooltips", () => {
+  it("show a command's shortcut", async () => {
+    const user = userEvent.setup();
+    renderApp(["/", "/settings/general"]);
+    await screen.findByRole("heading", { level: 1, name: "General" });
+
+    await user.hover(screen.getByRole("button", { name: "Back" }));
+
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent("Back");
+    expect(tooltip).toHaveTextContent("Alt+←");
+  });
+
+  it("show the shortcut of the sidebar button", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.hover(screen.getByRole("button", { name: "Hide sidebar" }));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Ctrl+B");
+  });
+});

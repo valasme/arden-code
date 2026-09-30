@@ -2,6 +2,23 @@
   "brand": {
     "name": "Arden Code"
   },
+  "cheatSheet": {
+    "command": "Command",
+    "description": "Every shortcut, and the command it runs.",
+    "shortcut": "Shortcut",
+    "title": "Keyboard shortcuts"
+  },
+  "commands": {
+    "inspectorToggle": "Toggle inspector",
+    "messageBoxFocus": "Focus the message box",
+    "navigateBack": "Back",
+    "navigateForward": "Forward",
+    "paletteOpen": "Command palette",
+    "settingsOpen": "Settings",
+    "shortcutsShow": "Keyboard shortcuts",
+    "sidebarToggle": "Toggle sidebar",
+    "windowFullScreen": "Full screen"
+  },
   "errors": {
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
@@ -59,6 +76,12 @@
   "notices": {
     "title": "Notice ({{code}})",
     "uiError": "Something went wrong ({{code}})"
+  },
+  "palette": {
+    "description": "Search for a command and press Enter to run it.",
+    "empty": "No command matches.",
+    "placeholder": "Type a command",
+    "title": "Command palette"
   },
   "regions": {
     "inspector": "Inspector",

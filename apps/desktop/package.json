@@ -23,6 +23,7 @@
     "@tanstack/react-router": "catalog:",
     "@tauri-apps/api": "catalog:",
     "class-variance-authority": "catalog:",
+    "cmdk": "catalog:",
     "cn": "catalog:",
     "i18next": "catalog:",
     "lucide-react": "catalog:",

@@ -29,6 +29,7 @@
     "**/src-tauri/gen/**",
     "**/src/ipc/bindings.ts",
     "**/src/routeTree.gen.ts",
+    "**/src/components/ui/**",
     "**/*.gen.ts"
   ]
 }

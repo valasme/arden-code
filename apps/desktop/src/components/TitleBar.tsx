@@ -7,6 +7,8 @@ import { commands } from "@/ipc/bindings";
 import { cn } from "@/lib/utils";
 import { useWindowMaximized, windowControls } from "@/lib/useWindowControls";
 
+import { CommandTooltip } from "@/features/commands/CommandTooltip";
+
 import { Mark } from "./brand/Logo";
 import { CloseGlyph, MaximizeGlyph, MinimizeGlyph, RestoreGlyph } from "./WindowIcons";
 
@@ -90,22 +92,26 @@ export function TitleBar({ canGoBack, canGoForward, onBack, onForward, onSearch 
         <Mark decorative className="size-4" />
       </BarButton>
 
-      <BarButton
-        aria-label={t("titleBar.back")}
-        className="w-8"
-        disabled={!canGoBack}
-        onClick={onBack}
-      >
-        <ArrowLeftIcon aria-hidden className="size-5" strokeWidth={1.5} />
-      </BarButton>
-      <BarButton
-        aria-label={t("titleBar.forward")}
-        className="w-8"
-        disabled={!canGoForward}
-        onClick={onForward}
-      >
-        <ArrowRightIcon aria-hidden className="size-5" strokeWidth={1.5} />
-      </BarButton>
+      <CommandTooltip command="navigate.back">
+        <BarButton
+          aria-label={t("titleBar.back")}
+          className="w-8"
+          disabled={!canGoBack}
+          onClick={onBack}
+        >
+          <ArrowLeftIcon aria-hidden className="size-5" strokeWidth={1.5} />
+        </BarButton>
+      </CommandTooltip>
+      <CommandTooltip command="navigate.forward">
+        <BarButton
+          aria-label={t("titleBar.forward")}
+          className="w-8"
+          disabled={!canGoForward}
+          onClick={onForward}
+        >
+          <ArrowRightIcon aria-hidden className="size-5" strokeWidth={1.5} />
+        </BarButton>
+      </CommandTooltip>
 
       <button
         type="button"

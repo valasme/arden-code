@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PanelLeftIcon, PanelRightIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { CommandTooltip } from "@/features/commands/CommandTooltip";
 import { appInfoQuery } from "@/ipc/queries";
 import { useLayoutStore } from "@/state/layout";
 
@@ -19,23 +20,27 @@ export function StatusBar() {
 
   return (
     <footer className="flex h-6 shrink-0 items-center justify-between border-t border-border bg-background px-1 text-xs text-muted-foreground tabular-nums">
-      <button
-        type="button"
-        aria-label={sidebarOpen ? t("statusBar.hideSidebar") : t("statusBar.showSidebar")}
-        className={toggleClass}
-        onClick={toggleSidebar}
-      >
-        <PanelLeftIcon aria-hidden className="size-4" strokeWidth={1.5} />
-      </button>
+      <CommandTooltip command="sidebar.toggle">
+        <button
+          type="button"
+          aria-label={sidebarOpen ? t("statusBar.hideSidebar") : t("statusBar.showSidebar")}
+          className={toggleClass}
+          onClick={toggleSidebar}
+        >
+          <PanelLeftIcon aria-hidden className="size-4" strokeWidth={1.5} />
+        </button>
+      </CommandTooltip>
       <span>{data ? t("statusBar.version", { version: data.version }) : null}</span>
-      <button
-        type="button"
-        aria-label={inspectorOpen ? t("statusBar.hideInspector") : t("statusBar.showInspector")}
-        className={toggleClass}
-        onClick={toggleInspector}
-      >
-        <PanelRightIcon aria-hidden className="size-4" strokeWidth={1.5} />
-      </button>
+      <CommandTooltip command="inspector.toggle">
+        <button
+          type="button"
+          aria-label={inspectorOpen ? t("statusBar.hideInspector") : t("statusBar.showInspector")}
+          className={toggleClass}
+          onClick={toggleInspector}
+        >
+          <PanelRightIcon aria-hidden className="size-4" strokeWidth={1.5} />
+        </button>
+      </CommandTooltip>
     </footer>
   );
 }

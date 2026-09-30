@@ -4,7 +4,11 @@ import { usePanelRef } from "react-resizable-panels";
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
-import { useNavigationShortcuts } from "@/lib/useNavigationShortcuts";
+import { CheatSheet } from "@/features/commands/CheatSheet";
+import { CommandPalette } from "@/features/commands/CommandPalette";
+import { CommandsProvider } from "@/features/commands/CommandsProvider";
+import { useMouseNavigation } from "@/lib/useMouseNavigation";
+import { useOverlayStore } from "@/state/overlays";
 import { useLayoutStore } from "@/state/layout";
 
 import { TitleBar } from "../TitleBar";
@@ -37,7 +41,8 @@ function usePanelOpen(open: boolean) {
 /** The frame around every page: title bar, sidebar, page, inspector and status bar. */
 export function AppShell() {
   const navigation = useNavigationHistory();
-  useNavigationShortcuts(navigation);
+  useMouseNavigation(navigation);
+  const openPalette = useOverlayStore((state) => state.setPaletteOpen);
 
   const sidebarOpen = useLayoutStore((state) => state.sidebarOpen);
   const inspectorOpen = useLayoutStore((state) => state.inspectorOpen);
@@ -47,51 +52,59 @@ export function AppShell() {
   const inspectorPanel = usePanelOpen(inspectorOpen);
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
-      {/* The command palette arrives with the commands ticket; until then the field does nothing. */}
-      <TitleBar {...navigation} onSearch={() => {}} />
-      <div className="min-h-0 flex-1">
-        <ResizablePanelGroup orientation="horizontal">
-          <ResizablePanel
-            id="sidebar"
-            panelRef={sidebarPanel}
-            defaultSize={sidebarOpen ? "260px" : "0px"}
-            minSize="180px"
-            maxSize="480px"
-            collapsible
-            collapsedSize="0px"
-            groupResizeBehavior="preserve-pixel-size"
-            onResize={(size) => {
-              setSidebarOpen(size.inPixels > 0);
-            }}
-          >
-            <Sidebar hidden={!sidebarOpen} />
-          </ResizablePanel>
-          <ResizableHandle />
-          <ResizablePanel id="session-view" minSize="320px">
-            <div className="h-full overflow-auto">
-              <Outlet />
-            </div>
-          </ResizablePanel>
-          <ResizableHandle />
-          <ResizablePanel
-            id="inspector"
-            panelRef={inspectorPanel}
-            defaultSize={inspectorOpen ? "320px" : "0px"}
-            minSize="240px"
-            maxSize="640px"
-            collapsible
-            collapsedSize="0px"
-            groupResizeBehavior="preserve-pixel-size"
-            onResize={(size) => {
-              setInspectorOpen(size.inPixels > 0);
-            }}
-          >
-            <Inspector hidden={!inspectorOpen} />
-          </ResizablePanel>
-        </ResizablePanelGroup>
+    <CommandsProvider>
+      <div className="flex h-full flex-col bg-background text-foreground">
+        <TitleBar
+          {...navigation}
+          onSearch={() => {
+            openPalette(true);
+          }}
+        />
+        <div className="min-h-0 flex-1">
+          <ResizablePanelGroup orientation="horizontal">
+            <ResizablePanel
+              id="sidebar"
+              panelRef={sidebarPanel}
+              defaultSize={sidebarOpen ? "260px" : "0px"}
+              minSize="180px"
+              maxSize="480px"
+              collapsible
+              collapsedSize="0px"
+              groupResizeBehavior="preserve-pixel-size"
+              onResize={(size) => {
+                setSidebarOpen(size.inPixels > 0);
+              }}
+            >
+              <Sidebar hidden={!sidebarOpen} />
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel id="session-view" minSize="320px">
+              <div className="h-full overflow-auto">
+                <Outlet />
+              </div>
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel
+              id="inspector"
+              panelRef={inspectorPanel}
+              defaultSize={inspectorOpen ? "320px" : "0px"}
+              minSize="240px"
+              maxSize="640px"
+              collapsible
+              collapsedSize="0px"
+              groupResizeBehavior="preserve-pixel-size"
+              onResize={(size) => {
+                setInspectorOpen(size.inPixels > 0);
+              }}
+            >
+              <Inspector hidden={!inspectorOpen} />
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </div>
+        <StatusBar />
+        <CommandPalette />
+        <CheatSheet />
       </div>
-      <StatusBar />
-    </div>
+    </CommandsProvider>
   );
 }
