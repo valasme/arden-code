@@ -10,6 +10,8 @@
     "title": "Keyboard shortcuts"
   },
   "commands": {
+    "focusNext": "Move to the next area",
+    "focusPrevious": "Move to the previous area",
     "inspectorToggle": "Toggle inspector",
     "messageBoxFocus": "Focus the message box",
     "navigateBack": "Back",
@@ -22,6 +24,12 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "zoomReset": "Reset zoom"
+  },
+  "contextMenu": {
+    "copy": "Copy",
+    "cut": "Cut",
+    "paste": "Paste",
+    "selectAll": "Select all"
   },
   "errors": {
     "ARD-APP-001": {

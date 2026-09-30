@@ -463,3 +463,67 @@ describe("shortcuts a person changed", () => {
     );
   });
 });
+
+const areaWithFocus = () =>
+  document.activeElement?.closest("[data-area]")?.getAttribute("data-area") ?? "none";
+
+describe("F6 and Shift+F6", () => {
+  it("move the focus through the title bar, sidebar, session view and status bar, and around again", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+    expect(areaWithFocus()).toBe("none");
+
+    const seen: string[] = [];
+    for (let press = 0; press < 5; press += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- each press depends on the one before
+      await user.keyboard("{F6}");
+      seen.push(areaWithFocus());
+    }
+
+    expect(seen).toEqual(["titlebar", "sidebar", "session", "statusbar", "titlebar"]);
+  });
+
+  it("go the other way with Shift", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Shift>}{F6}{/Shift}");
+    expect(areaWithFocus()).toBe("statusbar");
+    await user.keyboard("{Shift>}{F6}{/Shift}");
+    expect(areaWithFocus()).toBe("session");
+    await user.keyboard("{Shift>}{F6}{/Shift}");
+    expect(areaWithFocus()).toBe("sidebar");
+  });
+
+  it("include the inspector once it is open, and leave out a sidebar that is hidden", async () => {
+    useLayoutStore.setState({ inspectorOpen: true, sidebarOpen: false });
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+    await waitFor(() => {
+      expect(screen.getByRole("complementary", { name: "Inspector" })).toBeVisible();
+    });
+
+    const seen: string[] = [];
+    for (let press = 0; press < 4; press += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- each press depends on the one before
+      await user.keyboard("{F6}");
+      seen.push(areaWithFocus());
+    }
+
+    expect(seen).toEqual(["titlebar", "session", "inspector", "statusbar"]);
+  });
+
+  it("put the focus on an area that has nothing to press, so the keyboard can still start there", async () => {
+    const user = userEvent.setup();
+    renderApp(["/"]);
+    await screen.findByRole("main");
+
+    await user.keyboard("{F6}{F6}{F6}");
+
+    expect(areaWithFocus()).toBe("session");
+    expect(document.activeElement).toBeVisible();
+  });
+});

@@ -2,6 +2,8 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   CommandIcon,
+  ChevronsLeftIcon,
+  ChevronsRightIcon,
   KeyboardIcon,
   MaximizeIcon,
   PanelLeftIcon,
@@ -27,7 +29,9 @@ export type CommandId =
   | "navigate.forward"
   | "zoom.in"
   | "zoom.out"
-  | "zoom.reset";
+  | "zoom.reset"
+  | "focus.next"
+  | "focus.previous";
 
 export interface CommandDefinition {
   id: CommandId;
@@ -44,7 +48,9 @@ export interface CommandDefinition {
     | "commands.navigateForward"
     | "commands.zoomIn"
     | "commands.zoomOut"
-    | "commands.zoomReset";
+    | "commands.zoomReset"
+    | "commands.focusNext"
+    | "commands.focusPrevious";
   icon: LucideIcon;
   /**
    * Default shortcuts, the first being the one shown. They never use Ctrl+Alt with a letter (AltGr
@@ -115,6 +121,13 @@ export const commandDefinitions = [
   { id: "zoom.in", labelKey: "commands.zoomIn", icon: ZoomInIcon, shortcuts: ["Ctrl+="] },
   { id: "zoom.out", labelKey: "commands.zoomOut", icon: ZoomOutIcon, shortcuts: ["Ctrl+-"] },
   { id: "zoom.reset", labelKey: "commands.zoomReset", icon: RotateCcwIcon, shortcuts: ["Ctrl+0"] },
+  { id: "focus.next", labelKey: "commands.focusNext", icon: ChevronsRightIcon, shortcuts: ["F6"] },
+  {
+    id: "focus.previous",
+    labelKey: "commands.focusPrevious",
+    icon: ChevronsLeftIcon,
+    shortcuts: ["Shift+F6"],
+  },
 ] as const satisfies readonly CommandDefinition[];
 
 /** The most shortcuts one command can have. Rust keeps to the same number. */

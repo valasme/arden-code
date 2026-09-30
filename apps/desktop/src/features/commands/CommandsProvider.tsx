@@ -6,6 +6,7 @@ import { createContext, type ReactNode, useContext, useEffect, useMemo } from "r
 import { useChangeSetting, useSettings } from "@/features/settings/useSettings";
 import { nextZoom } from "@/features/settings/zoom";
 import { defaultSettings } from "@/ipc/defaults.gen";
+import { moveToArea } from "./areas";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
@@ -100,6 +101,8 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
       "shortcuts.show": { run: () => setCheatSheetOpen(true) },
       "navigate.back": { run: history.onBack, enabled: () => history.canGoBack },
       "navigate.forward": { run: history.onForward, enabled: () => history.canGoForward },
+      "focus.next": { run: () => moveToArea(1) },
+      "focus.previous": { run: () => moveToArea(-1) },
       "zoom.in": { run: () => changeSetting({ appearanceZoom: nextZoom(zoom, "in") }) },
       "zoom.out": { run: () => changeSetting({ appearanceZoom: nextZoom(zoom, "out") }) },
       "zoom.reset": {

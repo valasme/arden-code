@@ -17,6 +17,8 @@ const planned: Record<string, readonly string[]> = {
   "zoom.in": ["Ctrl+="],
   "zoom.out": ["Ctrl+-"],
   "zoom.reset": ["Ctrl+0"],
+  "focus.next": ["F6"],
+  "focus.previous": ["Shift+F6"],
 };
 
 /** Shortcuts that Windows keeps for itself. An app that takes them breaks the system. */

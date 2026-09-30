@@ -6,6 +6,7 @@ export function Inspector({ hidden }: { hidden: boolean }) {
 
   return (
     <aside
+      data-area="inspector"
       aria-label={t("regions.inspector")}
       hidden={hidden}
       className="flex h-full min-w-0 flex-col gap-2 bg-card p-3 text-card-foreground"

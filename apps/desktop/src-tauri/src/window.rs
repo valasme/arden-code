@@ -72,6 +72,10 @@ pub fn prepare_main_window(
         .get_webview_window("main")
         .ok_or(tauri::Error::WindowNotFound)?;
 
+    // A debug build keeps the browser's menu and shortcuts, which developers use.
+    #[cfg(not(debug_assertions))]
+    crate::webview::harden(&window)?;
+
     window.set_theme(native_theme(theme))?;
     let (r, g, b, a) = startup_background(starts_dark(theme, window.theme()? == Theme::Dark));
     window.set_background_color(Some(Color(r, g, b, a)))?;

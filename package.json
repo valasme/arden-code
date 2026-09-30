@@ -25,6 +25,7 @@
     "prepare": "lefthook install",
     "build:debug": "pnpm --filter @arden/desktop build:debug",
     "test:e2e": "pnpm build:debug && pnpm --filter @arden/desktop test:e2e",
+    "test:e2e:release": "pnpm build && pnpm --filter @arden/desktop test:e2e:release",
     "knip": "knip",
     "i18n:lint": "pnpm --filter @arden/desktop i18n:lint",
     "typos": "typos",

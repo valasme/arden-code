@@ -5,6 +5,7 @@ import { usePanelRef } from "react-resizable-panels";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
 import { CheatSheet } from "@/features/commands/CheatSheet";
+import { ContextMenuHost } from "@/features/contextMenu/ContextMenuHost";
 import { CommandPalette } from "@/features/commands/CommandPalette";
 import { CommandsProvider } from "@/features/commands/CommandsProvider";
 import { useMouseNavigation } from "@/lib/useMouseNavigation";
@@ -94,7 +95,7 @@ export function AppShell() {
             </ResizablePanel>
             <ResizableHandle />
             <ResizablePanel id="session-view" minSize="320px">
-              <div className="h-full overflow-auto">
+              <div data-area="session" tabIndex={-1} className="h-full overflow-auto">
                 <Outlet />
               </div>
             </ResizablePanel>
@@ -120,6 +121,7 @@ export function AppShell() {
         {showStatusBar ? <StatusBar /> : null}
         <CommandPalette />
         <CheatSheet />
+        <ContextMenuHost />
       </div>
     </CommandsProvider>
   );

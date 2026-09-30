@@ -19,7 +19,10 @@ export function StatusBar() {
     "grid size-6 place-items-center hover:bg-muted active:bg-border forced-colors:hover:outline forced-colors:hover:outline-1";
 
   return (
-    <footer className="flex h-6 shrink-0 items-center justify-between border-t border-border bg-background px-1 text-xs text-muted-foreground tabular-nums">
+    <footer
+      data-area="statusbar"
+      className="flex h-6 shrink-0 items-center justify-between border-t border-border bg-background px-1 text-xs text-muted-foreground tabular-nums"
+    >
       <CommandTooltip command="sidebar.toggle">
         <button
           type="button"

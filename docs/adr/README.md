@@ -31,3 +31,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0021](0021-terminal-command.md) | The `arden-code` terminal command | Accepted |
 | [0022](0022-high-contrast-and-component-adjustments.md) | High contrast and component adjustments | Accepted |
 | [0023](0023-zoom-and-the-root-size.md) | Zoom, and the size of one rem | Accepted |
+| [0024](0024-areas-context-menus-and-browser-features.md) | Areas, context menus and the browser's own features | Accepted |

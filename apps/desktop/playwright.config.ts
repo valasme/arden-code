@@ -6,5 +6,7 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   timeout: 60_000,
+  // When the app cannot be started at all, every test would wait for its own timeout: stop early.
+  maxFailures: process.env["CI"] ? 5 : 0,
   reporter: [["list"]],
 });

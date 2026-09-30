@@ -79,6 +79,7 @@ export function TitleBar({ canGoBack, canGoForward, onBack, onForward, onSearch 
 
   return (
     <header
+      data-area="titlebar"
       data-tauri-drag-region
       onContextMenu={onContextMenu}
       className="flex h-8 shrink-0 items-stretch gap-1 border-b border-border bg-background pl-1 text-foreground select-none"

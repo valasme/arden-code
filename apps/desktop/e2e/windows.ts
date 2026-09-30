@@ -48,6 +48,21 @@ public static class W {
   [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+  [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc p, IntPtr l);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder text, int max);
+  /** The window inside the app that receives keys for the web page. */
+  public static IntPtr FindPage(IntPtr top) {
+    IntPtr found = IntPtr.Zero;
+    EnumChildWindows(top, (h, l) => {
+      var text = new StringBuilder(256); GetClassName(h, text, 256);
+      if (text.ToString() == "Chrome_RenderWidgetHostHWND") { found = h; return false; }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
 }
 "@
 function Main-Window($id) { [W]::Find($id, "Arden Code") }
@@ -110,3 +125,27 @@ export function countAppProcesses(): number {
     powershell(`(Get-Process arden-code -ErrorAction SilentlyContinue | Measure-Object).Count`),
   );
 }
+
+/**
+ * Presses a key the way a keyboard does, so that it goes through the same path as a real key press
+ * and reaches the web engine's own shortcuts (reload, print, find ...). Key presses sent through
+ * the debugging port never do.
+ *
+ * Real input goes to whichever window is in front, so the app's window is brought forward first and
+ * nothing is pressed unless it really is in front. Returns whether the key was pressed.
+ */
+export function pressKey(pid: number, virtualKey: number): boolean {
+  const pressed = powershell(`
+    $top = Main-Window ${pid}
+    [W]::SetForegroundWindow($top) | Out-Null
+    Start-Sleep -Milliseconds 300
+    if ([W]::GetForegroundWindow() -ne $top) { "no"; exit }
+    [W]::keybd_event(${virtualKey}, 0, 0, [UIntPtr]::Zero)
+    [W]::keybd_event(${virtualKey}, 0, 2, [UIntPtr]::Zero)
+    "yes"
+  `);
+  return pressed === "yes";
+}
+
+/** Virtual key codes of the keys the tests press. */
+export const virtualKeys = { f5: 0x74 } as const;

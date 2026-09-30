@@ -8,6 +8,7 @@ export function Sidebar({ hidden }: { hidden: boolean }) {
 
   return (
     <aside
+      data-area="sidebar"
       aria-label={t("regions.sidebar")}
       hidden={hidden}
       className="flex h-full min-w-0 flex-col bg-sidebar text-sidebar-foreground"

@@ -1,6 +1,7 @@
 //! The Arden Code desktop app.
 
 mod commands;
+mod webview;
 mod window;
 mod window_state;
 
@@ -170,6 +171,7 @@ pub fn run() {
                 window::focus_main_window(app);
             },
         ))
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .on_page_load(|_webview, payload| {
             tracing::info!(url = %payload.url(), event = ?payload.event(), "page load");
