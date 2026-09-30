@@ -71,3 +71,11 @@ export const sessionQuery = (id: string) =>
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
+
+/** Which agent programs are installed. Looked for again when asked, since the person may install one. */
+export const agentsQuery = queryOptions({
+  queryKey: ["agents"],
+  queryFn: () => (isTauri() ? commands.detectAgents() : []),
+  staleTime: 0,
+  gcTime: 0,
+});

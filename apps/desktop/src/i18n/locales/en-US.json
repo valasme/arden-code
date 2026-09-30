@@ -83,6 +83,11 @@
       "what": "The diagnostics could not be saved.",
       "why": "The file could not be written. The folder may be read-only, or the disk full."
     },
+    "ARD-PROC-001": {
+      "action": "Restart Arden Code. If it keeps happening, report it.",
+      "what": "Arden Code cannot start other programs on this computer.",
+      "why": "Windows did not let it make the group that keeps agent programs together with the app."
+    },
     "ARD-SET-001": {
       "action": "Check that the folder is writable, then change the setting again.",
       "what": "Your settings could not be saved.",
@@ -353,6 +358,23 @@
         "description": "Delete your settings, logs, crash reports and caches, and start again as if it were new.",
         "label": "Reset Arden Code"
       }
+    },
+    "agents": {
+      "checkAgain": "Check again",
+      "description": "Claude Code and Codex are separate programs. Arden Code looks for them on this computer. It never installs them, updates them or signs in to them.",
+      "install": "How to install",
+      "installed": "Installed",
+      "installLabel": "How to install {{name}}",
+      "looking": "Looking for agents…",
+      "names": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "notFound": "{{name}} was not found. Install it, then check again.",
+      "notInstalled": "Not installed",
+      "path": "Location",
+      "version": "Version",
+      "versionUnknown": "Unknown"
     },
     "appearance": {
       "codeFontSize": {

@@ -4,6 +4,7 @@ members = [
   "crates/arden-agents",
   "crates/arden-core",
   "crates/arden-diagnostics",
+  "crates/arden-process",
   "crates/arden-settings",
   "crates/arden-windows",
   "apps/desktop/src-tauri",
@@ -21,6 +22,7 @@ authors = ["valasme"]
 arden-agents = { path = "crates/arden-agents" }
 arden-core = { path = "crates/arden-core" }
 arden-diagnostics = { path = "crates/arden-diagnostics" }
+arden-process = { path = "crates/arden-process" }
 arden-settings = { path = "crates/arden-settings" }
 arden-windows = { path = "crates/arden-windows" }
 serde = { version = "1", features = ["derive"] }

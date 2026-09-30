@@ -26,6 +26,7 @@ do), and add a row here. Never reuse or renumber a code.
 | `ARD-LOG-002` | The diagnostics bundle could not be written | Settings → Advanced → Export diagnostics; after a crash |
 | `ARD-AGT-001` | A session or project does not exist any more | Sending a message, or opening a session |
 | `ARD-AGT-002` | A message was sent while the agent was still answering the last one | Sending a message |
+| `ARD-PROC-001` | Programs cannot be started and supervised on this computer | Settings → Agents; starting an agent |
 | `ARD-WIN-001` | Windows' window menu could not be opened | The title bar's logo button and Alt+Space |
 | `ARD-WIN-002` | The web engine that draws the window stopped and was started again | The web engine's process crashed or stopped answering |
 

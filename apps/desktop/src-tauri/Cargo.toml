@@ -25,6 +25,7 @@ tauri-build = { version = "2.6", features = ["isolation"] }
 arden-agents.workspace = true
 arden-core.workspace = true
 arden-diagnostics.workspace = true
+arden-process.workspace = true
 arden-settings.workspace = true
 arden-windows.workspace = true
 serde.workspace = true

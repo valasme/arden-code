@@ -247,6 +247,17 @@ export const commands = {
 	 */
 	stopReply: (sessionId: string) => __TAURI_INVOKE<null>("stop_reply", { sessionId }),
 	/**
+	 *  Looks for the Claude Code and Codex programs, and says where they are and which version. It
+	 *  changes nothing. Asking each program for its version can take a moment, so it runs off the
+	 *  thread of the window.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns `ARD-PROC-001` when programs cannot be supervised on this computer, and an unexpected
+	 *  error when the search itself could not run.
+	 */
+	detectAgents: () => __TAURI_INVOKE<Detection[]>("detect_agents"),
+	/**
 	 *  Makes a session with `count` finished turns, to test long conversations. Debug builds only.
 	 * 
 	 *  # Errors
@@ -254,6 +265,15 @@ export const commands = {
 	 *  Returns an error when the Playground does not exist.
 	 */
 	debugFillSession: (count: number) => __TAURI_INVOKE<SessionSummary>("debug_fill_session", { count }),
+	/**
+	 *  Starts a program that runs for a minute, in the job, and returns its process number. Tests use it
+	 *  to see that a program ends when the app does. Debug builds only.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when the program cannot be started.
+	 */
+	debugSpawnSleeper: () => __TAURI_INVOKE<number>("debug_spawn_sleeper"),
 	/**
 	 *  Fails on purpose, so tests and the development page can see what an error looks like. Debug
 	 *  builds only.
@@ -288,6 +308,13 @@ export type Advanced = {
 	 */
 	hardwareAcceleration: boolean,
 };
+
+/**  The agent programs Arden Code will work with. */
+export type AgentCli = 
+/**  The Claude Code program from Anthropic, `claude`. */
+"claude" | 
+/**  The Codex program, `codex`. */
+"codex";
 
 /**  Which agent answers in a session. Claude and Codex arrive with their drivers. */
 export type AgentKind = 
@@ -332,6 +359,18 @@ export type Appearance = {
 	reduceMotion: ReduceMotion,
 	/**  Show the bar along the bottom of the window. */
 	showStatusBar: boolean,
+};
+
+/**  What was found about one agent program. */
+export type Detection = {
+	cli: AgentCli,
+	installed: boolean,
+	/**  The file that would be started. */
+	path: string | null,
+	/**  Its version, when it could be read. */
+	version: string | null,
+	/**  Where to install it. */
+	installUrl: string,
 };
 
 /**  One line of a log file, in the shape the log viewer shows. */
@@ -379,6 +418,8 @@ export type ErrorCode =
 "ARD-AGT-001" | 
 /**  A message was sent while the agent was still answering the last one. */
 "ARD-AGT-002" | 
+/**  Programs cannot be started and supervised on this computer. */
+"ARD-PROC-001" | 
 /**  Windows' window menu could not be opened. */
 "ARD-WIN-001" | 
 /**  The web engine that draws the window stopped and was started again. */

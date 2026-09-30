@@ -5,6 +5,7 @@
 //! applies and the UI receives. The only driver so far is the [`demo::DemoDriver`].
 
 pub mod demo;
+pub mod detect;
 pub mod driver;
 pub mod model;
 pub mod playground;

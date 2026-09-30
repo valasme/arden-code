@@ -1,5 +1,6 @@
 //! The Arden Code desktop app.
 
+mod agents;
 mod commands;
 mod navigation;
 mod sessions;
@@ -19,6 +20,7 @@ use arden_core::paths::{AppPaths, DATA_DIR_VARIABLE};
 use arden_diagnostics::logging::UiLevel;
 use arden_diagnostics::redact::Redactor;
 use arden_diagnostics::{crash, logging};
+use arden_process::supervisor::Supervisor;
 use arden_settings::service::SettingsService;
 use arden_settings::settings::LogLevel;
 use arden_windows::preferences;
@@ -71,7 +73,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         sessions::get_session,
         sessions::send_message,
         sessions::stop_reply,
+        agents::detect_agents,
         sessions::debug_fill_session,
+        agents::debug_spawn_sleeper,
         commands::debug_fail,
         commands::debug_panic,
     ];
@@ -109,6 +113,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         sessions::get_session,
         sessions::send_message,
         sessions::stop_reply,
+        agents::detect_agents,
     ];
 
     builder.commands(commands).events(collect_events![
@@ -195,6 +200,18 @@ fn manage_sessions(app: &tauri::App, paths: &AppPaths) {
     });
     let store: sessions::Sessions = Arc::new(SessionStore::new(vec![playground]));
     app.manage(store);
+}
+
+/// Starts the supervisor that keeps the agent programs in a job with the app.
+fn manage_programs(app: &tauri::App, paths: &AppPaths) {
+    let supervisor = match Supervisor::new(paths.logs_dir().join("agents")) {
+        Ok(supervisor) => Some(Arc::new(supervisor)),
+        Err(error) => {
+            tracing::error!(%error, "could not make the job for agent programs");
+            None
+        }
+    };
+    app.manage(agents::Programs(supervisor));
 }
 
 /// How often Windows' text size and regional format are looked at for a change.
@@ -308,6 +325,7 @@ pub fn run() {
             window::prepare_main_window(app, &paths, &settings.get())?;
             app.manage(settings);
             manage_sessions(app, &paths);
+            manage_programs(app, &paths);
             app.manage(paths);
             app.manage(watch_system_preferences(app.handle().clone()));
             Ok(())

@@ -1,6 +1,7 @@
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
+import { AgentsTab } from "@/features/agents/AgentsTab";
 import { AboutTab } from "@/features/settings/AboutTab";
 import { AdvancedTab } from "@/features/settings/AdvancedTab";
 import { KeyboardTab } from "@/features/settings/KeyboardTab";
@@ -38,6 +39,9 @@ function TabContent({ tab }: { tab: SettingsTab }) {
     }
     case "about": {
       return <AboutTab />;
+    }
+    case "agents": {
+      return <AgentsTab />;
     }
     default: {
       return <p className="text-sm text-muted-foreground">{t("settings.placeholder")}</p>;

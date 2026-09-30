@@ -18,6 +18,7 @@ interface ErrorsPlaygroundProps {
 export function ErrorsPlayground({ failToDraw, onFailToDraw }: ErrorsPlaygroundProps) {
   const [commandError, setCommandError] = useState<string>();
   const navigate = useNavigate();
+  const [sleeper, setSleeper] = useState<string>();
 
   if (failToDraw) {
     throw new Error("Deliberate error while drawing the page");
@@ -85,7 +86,23 @@ export function ErrorsPlayground({ failToDraw, onFailToDraw }: ErrorsPlaygroundP
         >
           Make a session of 10,000 messages
         </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            commands
+              .debugSpawnSleeper()
+              .then((pid) => {
+                setSleeper(`Started program ${pid}`);
+              })
+              .catch((failure: unknown) => {
+                setCommandError(toAppError(failure).code);
+              });
+          }}
+        >
+          Start a program that runs for two minutes
+        </Button>
       </div>
+      {sleeper ? <output className="text-sm">{sleeper}</output> : null}
       {commandError ? (
         <output className="text-sm">The command failed with {commandError}</output>
       ) : null}

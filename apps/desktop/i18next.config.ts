@@ -22,7 +22,14 @@ export default defineConfig({
     keySeparator: ".",
     // Keys built at runtime, such as the title of each settings tab, cannot be found by reading the
     // code, so they are listed here to keep the extractor from deleting them.
-    preservePatterns: ["settings.*", "errors.*", "commands.*", "items.*", "sessions.announce.*"],
+    preservePatterns: [
+      "settings.*",
+      "errors.*",
+      "commands.*",
+      "items.*",
+      "sessions.announce.*",
+      "settings.agents.names.*",
+    ],
   },
   lint: { ignore },
 });

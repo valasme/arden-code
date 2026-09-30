@@ -122,6 +122,7 @@ dependencies = [
 name = "arden-agents"
 version = "0.1.0"
 dependencies = [
+ "arden-process",
  "serde",
  "specta",
  "tempfile",
@@ -146,6 +147,7 @@ dependencies = [
  "arden-agents",
  "arden-core",
  "arden-diagnostics",
+ "arden-process",
  "arden-settings",
  "arden-windows",
  "serde",
@@ -178,6 +180,14 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zip",
+]
+
+[[package]]
+name = "arden-process"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "windows",
 ]
 
 [[package]]
