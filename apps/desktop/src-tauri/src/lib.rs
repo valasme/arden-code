@@ -5,6 +5,7 @@ mod commands;
 mod navigation;
 mod notifications;
 mod sessions;
+mod updates;
 mod webview;
 mod window;
 mod window_state;
@@ -58,6 +59,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::open_settings_file,
         commands::open_project_page,
         commands::open_link,
+        updates::get_update_status,
+        updates::check_for_updates,
+        updates::restart_to_update,
         commands::send_test_notification,
         commands::open_bug_report,
         commands::read_logs,
@@ -99,6 +103,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::open_settings_file,
         commands::open_project_page,
         commands::open_link,
+        updates::get_update_status,
+        updates::check_for_updates,
+        updates::restart_to_update,
         commands::send_test_notification,
         commands::open_bug_report,
         commands::read_logs,
@@ -121,7 +128,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
 
     builder.commands(commands).events(collect_events![
         commands::SettingsChanged,
-        commands::SystemPreferencesChanged
+        commands::SystemPreferencesChanged,
+        updates::UpdateStatusChanged
     ])
 }
 
@@ -329,6 +337,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .on_page_load(|_webview, payload| {
             tracing::info!(url = %payload.url(), event = ?payload.event(), "page load");
@@ -359,8 +368,10 @@ pub fn run() {
             app.manage(settings);
             manage_sessions(app, &paths);
             manage_programs(app, &paths);
+            app.manage(updates::Updates::default());
             app.manage(paths);
             app.manage(watch_system_preferences(app.handle().clone()));
+            updates::start(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -129,6 +129,21 @@ export const commands = {
 	 *  Returns `ARD-APP-004` when the link is not allowed or cannot be opened.
 	 */
 	openLink: (url: string, confirmed: boolean) => __TAURI_INVOKE<null>("open_link", { url, confirmed }),
+	/**  Where an update is now. */
+	getUpdateStatus: () => __TAURI_INVOKE<UpdateStatus>("get_update_status"),
+	/**
+	 *  Looks for a new version now, for the person who asked, and downloads it when there is one. What
+	 *  it found is the answer; a check that could not be done is not an error.
+	 */
+	checkForUpdates: () => __TAURI_INVOKE<CheckResult>("check_for_updates"),
+	/**
+	 *  Installs the update that is ready and restarts into the new version.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns `ARD-UPD-001` when there is no update or it cannot be installed.
+	 */
+	restartToUpdate: () => __TAURI_INVOKE<null>("restart_to_update"),
 	/**
 	 *  Shows a notification so the person can see how it looks, unless notifications are off. Says
 	 *  whether one was shown.
@@ -301,6 +316,7 @@ export const commands = {
 export const events = {
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	systemPreferencesChanged: makeEvent<SystemPreferencesChanged>("system-preferences-changed"),
+	updateStatusChanged: makeEvent<UpdateStatusChanged>("update-status-changed"),
 };
 
 /* Types */
@@ -371,6 +387,19 @@ export type Appearance = {
 	showStatusBar: boolean,
 };
 
+/**  What a check found, for the person who asked for it. */
+export type CheckResult = 
+/**  This is the newest version. */
+"upToDate" | 
+/**  A new version is downloaded and waits for a restart. */
+"ready" | 
+/**  A check or a download is already going on. */
+"busy" | 
+/**  The check could not be done: no release exists yet, or the internet is not reachable. */
+"unavailable" | 
+/**  A release exists, but its signature is not valid, so it was not used. */
+"rejected";
+
 /**  What was found about one agent program. */
 export type Detection = {
 	cli: AgentCli,
@@ -432,6 +461,8 @@ export type ErrorCode =
 "ARD-AGT-002" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
+/**  The update could not be installed. */
+"ARD-UPD-001" | 
 /**  Windows' window menu could not be opened. */
 "ARD-WIN-001" | 
 /**  The web engine that draws the window stopped and was started again. */
@@ -690,6 +721,22 @@ export type TurnStatus =
 
 /**  How serious a message from the UI is. */
 export type UiLogLevel = "error" | "warn" | "info" | "debug";
+
+/**  Where an update is in its way to being installed. */
+export type UpdateStatus = 
+/**  Nothing is happening, and there is nothing to install. */
+{ state: "idle" } | 
+/**  Looking for a new version. */
+{ state: "checking" } | 
+/**  A new version is being downloaded. */
+{ state: "downloading"; version: string } | 
+/**  A new version is downloaded and checked. Restarting installs it. */
+{ state: "ready"; version: string };
+
+/**  Tells the UI when the status changes. */
+export type UpdateStatusChanged = {
+	status: UpdateStatus,
+};
 
 /* Tauri Specta runtime */
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;

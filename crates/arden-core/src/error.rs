@@ -56,6 +56,9 @@ pub enum ErrorCode {
     /// Programs cannot be started and supervised on this computer.
     #[serde(rename = "ARD-PROC-001")]
     ProcessSupervisor,
+    /// The update could not be installed.
+    #[serde(rename = "ARD-UPD-001")]
+    UpdateInstall,
     /// Windows' window menu could not be opened.
     #[serde(rename = "ARD-WIN-001")]
     WindowsSystemMenu,
@@ -84,6 +87,7 @@ impl ErrorCode {
             Self::SessionNotFound => "ARD-AGT-001",
             Self::TurnRunning => "ARD-AGT-002",
             Self::ProcessSupervisor => "ARD-PROC-001",
+            Self::UpdateInstall => "ARD-UPD-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",
             Self::WebEngineFailed => "ARD-WIN-002",
         }

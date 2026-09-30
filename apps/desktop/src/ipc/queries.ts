@@ -5,7 +5,7 @@ import { defaultSettings } from "@/ipc/defaults.gen";
 
 import { fallbackSystemPreferences } from "@/features/settings/systemPreferences";
 
-import { commands } from "./bindings";
+import { commands, type UpdateStatus } from "./bindings";
 
 /** The product name and version. They never change while the app runs. */
 export const appInfoQuery = queryOptions({
@@ -78,4 +78,12 @@ export const agentsQuery = queryOptions({
   queryFn: () => (isTauri() ? commands.detectAgents() : []),
   staleTime: 0,
   gcTime: 0,
+});
+
+/** Where the update is. Rust announces every change, so it is never fetched again on its own. */
+export const updateStatusQuery = queryOptions({
+  queryKey: ["update-status"],
+  queryFn: (): Promise<UpdateStatus> =>
+    isTauri() ? commands.getUpdateStatus() : Promise.resolve({ state: "idle" }),
+  staleTime: Number.POSITIVE_INFINITY,
 });

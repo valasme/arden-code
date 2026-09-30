@@ -118,6 +118,11 @@
       "what": "settings.json could not be opened.",
       "why": "Windows refused, or no program is set to open JSON files."
     },
+    "ARD-UPD-001": {
+      "action": "Try again. If it keeps happening, download the newest version from the releases page.",
+      "what": "The update could not be installed.",
+      "why": "The installer did not start, or it was stopped."
+    },
     "ARD-WIN-001": {
       "action": "Use the buttons at the right of the title bar instead.",
       "what": "Windows' window menu could not be opened.",
@@ -259,6 +264,15 @@
     "about": {
       "build": "Build",
       "buildValue": "{{commit}} ({{date}})",
+      "checkForUpdates": {
+        "busy": "Already looking for updates.",
+        "button": "Check for updates",
+        "checking": "Looking for updates…",
+        "ready": "An update is ready. Restart Arden Code from the status bar to install it.",
+        "rejected": "An update was found, but its signature is not valid, so it was not used.",
+        "unavailable": "Could not check for updates right now. Try again later.",
+        "upToDate": "Arden Code is up to date."
+      },
       "copied": "System information copied",
       "copy": "Copy system info",
       "license": "MIT license",
@@ -513,6 +527,8 @@
     "hideSidebar": "Hide sidebar",
     "showInspector": "Show inspector",
     "showSidebar": "Show sidebar",
+    "updateDownloading": "Downloading an update…",
+    "updateReady": "Update ready: restart",
     "version": "Version {{version}}"
   },
   "titleBar": {

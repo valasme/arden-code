@@ -3,13 +3,17 @@ import { PanelLeftIcon, PanelRightIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { CommandTooltip } from "@/features/commands/CommandTooltip";
-import { appInfoQuery } from "@/ipc/queries";
+import { commands } from "@/ipc/bindings";
+import { appInfoQuery, updateStatusQuery } from "@/ipc/queries";
+import { showErrorToast } from "@/lib/errorToasts";
+import { toAppError } from "@/lib/errors";
 import { useLayoutStore } from "@/state/layout";
 
 /** Agent status, update status and notices, later. For now: the region toggles and the version. */
 export function StatusBar() {
   const { t } = useTranslation();
   const { data } = useQuery(appInfoQuery);
+  const { data: update } = useQuery(updateStatusQuery);
   const sidebarOpen = useLayoutStore((state) => state.sidebarOpen);
   const inspectorOpen = useLayoutStore((state) => state.inspectorOpen);
   const toggleSidebar = useLayoutStore((state) => state.toggleSidebar);
@@ -33,7 +37,25 @@ export function StatusBar() {
           <PanelLeftIcon aria-hidden className="size-4" strokeWidth={1.5} />
         </button>
       </CommandTooltip>
-      <span>{data ? t("statusBar.version", { version: data.version }) : null}</span>
+      <span className="flex items-center gap-3">
+        {update?.state === "ready" ? (
+          <button
+            type="button"
+            className="px-1.5 font-medium text-foreground underline underline-offset-2 hover:bg-muted"
+            onClick={() => {
+              commands.restartToUpdate().catch((error: unknown) => {
+                showErrorToast(toAppError(error));
+              });
+            }}
+          >
+            {t("statusBar.updateReady")}
+          </button>
+        ) : null}
+        {update?.state === "downloading" ? (
+          <output>{t("statusBar.updateDownloading")}</output>
+        ) : null}
+        <span>{data ? t("statusBar.version", { version: data.version }) : null}</span>
+      </span>
       <CommandTooltip command="inspector.toggle">
         <button
           type="button"

@@ -124,6 +124,24 @@ export function AboutTab() {
       });
   };
 
+  const [checking, setChecking] = useState(false);
+  const checkForUpdates = () => {
+    setChecking(true);
+    commands
+      .checkForUpdates()
+      .then((result) => {
+        const message = t(`settings.about.checkForUpdates.${result}`);
+        if (result === "ready" || result === "upToDate") toast.success(message);
+        else toast.info(message);
+      })
+      .catch((error: unknown) => {
+        showErrorToast(toAppError(error));
+      })
+      .finally(() => {
+        setChecking(false);
+      });
+  };
+
   return (
     <div>
       <div className="flex items-center gap-4 py-4">
@@ -157,6 +175,11 @@ export function AboutTab() {
           }}
         >
           {t("settings.about.reportBug")}
+        </Button>
+        <Button variant="outline" disabled={checking} onClick={checkForUpdates}>
+          {checking
+            ? t("settings.about.checkForUpdates.checking")
+            : t("settings.about.checkForUpdates.button")}
         </Button>
         <Button
           variant="outline"

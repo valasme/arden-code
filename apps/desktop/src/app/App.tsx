@@ -11,6 +11,7 @@ import { SettingsSync } from "@/features/settings/SettingsSync";
 import { StartupSettingsProvider } from "@/features/settings/startup";
 import { AppearanceFromSettings } from "@/features/settings/AppearanceFromSettings";
 import { SystemPreferencesSync } from "@/features/settings/SystemPreferencesSync";
+import { UpdateSync } from "@/features/updates/UpdateSync";
 import type { Settings, SystemPreferences } from "@/ipc/bindings";
 import { settingsQuery, systemPreferencesQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
@@ -47,6 +48,7 @@ export function App({ history, initialSettings, initialSystemPreferences }: AppP
       <StartupSettingsProvider settings={initialSettings}>
         <SettingsSync />
         <SystemPreferencesSync />
+        <UpdateSync />
         <WebEngineNotice />
         <AppearanceFromSettings />
         <AppErrorBoundary>
