@@ -67,6 +67,8 @@ function crates() {
   return found;
 }
 
+const key = (item) => `${item.kind}:${item.name}@${item.version} (${item.license})`;
+
 function unique(list) {
   const seen = new Map();
   for (const item of list) seen.set(`${item.kind}:${item.name}@${item.version}`, item);
@@ -85,6 +87,11 @@ if (process.argv.includes("--check")) {
     console.error(
       "licenses.gen.json is out of date. Run `pnpm licenses:build` and commit the result.",
     );
+    // Say what differs, so a mismatch on another machine can be understood from its log.
+    const now = new Set(JSON.parse(text).map(key));
+    const before = new Set(JSON.parse(current).map(key));
+    for (const item of now) if (!before.has(item)) console.error(`  new: ${item}`);
+    for (const item of before) if (!now.has(item)) console.error(`  gone: ${item}`);
     process.exit(1);
   }
   console.log("licenses.gen.json is up to date.");
