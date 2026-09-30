@@ -69,6 +69,7 @@ test.describe("settings in the real app", () => {
           showStatusBar: true,
         },
         layout: { sidebarWidth: 260, inspectorWidth: 320 },
+        notifications: { desktop: true },
         keyboard: { shortcuts: {} },
         advanced: {
           developerMode: false,

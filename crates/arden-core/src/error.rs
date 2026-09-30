@@ -23,6 +23,9 @@ pub enum ErrorCode {
     /// A link was not opened: it is not allowed, or Windows could not open it.
     #[serde(rename = "ARD-APP-004")]
     LinkNotOpened,
+    /// A notification could not be shown.
+    #[serde(rename = "ARD-APP-005")]
+    NotificationNotShown,
     /// The settings could not be saved.
     #[serde(rename = "ARD-SET-001")]
     SettingsSave,
@@ -70,6 +73,7 @@ impl ErrorCode {
             Self::UiFailure => "ARD-APP-002",
             Self::ResetApp => "ARD-APP-003",
             Self::LinkNotOpened => "ARD-APP-004",
+            Self::NotificationNotShown => "ARD-APP-005",
             Self::SettingsSave => "ARD-SET-001",
             Self::SettingsInvalid => "ARD-SET-002",
             Self::SettingsImport => "ARD-SET-003",

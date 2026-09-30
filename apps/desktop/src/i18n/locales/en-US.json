@@ -73,6 +73,11 @@
       "what": "That link was not opened.",
       "why": "Arden Code does not open some kinds of link, such as programs and scripts, or Windows could not open it."
     },
+    "ARD-APP-005": {
+      "action": "Check that notifications are allowed for Arden Code in Windows settings, and that Focus assist is off.",
+      "what": "The notification was not shown.",
+      "why": "Windows would not show it."
+    },
     "ARD-LOG-001": {
       "action": "Open it yourself in Explorer, at %LOCALAPPDATA%\\io.github.valasme.arden\\logs.",
       "what": "The logs folder could not be opened.",
@@ -361,7 +366,7 @@
     },
     "agents": {
       "checkAgain": "Check again",
-      "description": "Claude Code and Codex are separate programs. Arden Code looks for them on this computer. It never installs them, updates them or signs in to them.",
+      "description": "Claude Code and Codex are separate programs. Arden Code looks for them on this computer. It never installs them, updates them or signs in to them. Real integration is coming later.",
       "install": "How to install",
       "installed": "Installed",
       "installLabel": "How to install {{name}}",
@@ -460,7 +465,19 @@
       },
       "shortcuts": "Shortcuts"
     },
-    "placeholder": "These settings arrive in a later update.",
+    "notifications": {
+      "desktop": {
+        "description": "Show a Windows notification when something needs you, such as an agent asking a question. With this off, Arden Code shows none.",
+        "label": "Desktop notifications"
+      },
+      "off": "Notifications are off, so none was shown.",
+      "sent": "Test notification sent",
+      "test": {
+        "button": "Send",
+        "description": "Show a notification now, to see how it looks.",
+        "label": "Send a test notification"
+      }
+    },
     "reset": "Reset {{name}} to its default",
     "resetButton": "Reset",
     "restart": {

@@ -2,6 +2,7 @@ import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { AgentsTab } from "@/features/agents/AgentsTab";
+import { NotificationsTab } from "@/features/notifications/NotificationsTab";
 import { AboutTab } from "@/features/settings/AboutTab";
 import { AdvancedTab } from "@/features/settings/AdvancedTab";
 import { KeyboardTab } from "@/features/settings/KeyboardTab";
@@ -15,9 +16,8 @@ export const Route = createFileRoute("/settings/$tab")({
   component: SettingsTabPage,
 });
 
-/** What a tab holds. Tabs that have nothing yet say so. */
+/** What a tab holds. */
 function TabContent({ tab }: { tab: SettingsTab }) {
-  const { t } = useTranslation();
   const navigate = useNavigate();
 
   switch (tab) {
@@ -37,16 +37,17 @@ function TabContent({ tab }: { tab: SettingsTab }) {
         />
       );
     }
-    case "about": {
-      return <AboutTab />;
+    case "notifications": {
+      return <NotificationsTab />;
     }
     case "agents": {
       return <AgentsTab />;
     }
-    default: {
-      return <p className="text-sm text-muted-foreground">{t("settings.placeholder")}</p>;
+    case "about": {
+      break;
     }
   }
+  return <AboutTab />;
 }
 
 /** A settings tab. */

@@ -36,3 +36,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0026](0026-markdown-links-and-images.md) | Markdown, links and images in an agent's reply | Accepted |
 | [0027](0027-long-sessions-and-announcements.md) | Long sessions, stopping a reply, and what screen readers hear | Accepted |
 | [0028](0028-process-supervisor.md) | The process supervisor and agent detection | Accepted |
+| [0029](0029-notifications.md) | Notifications | Accepted |

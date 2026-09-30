@@ -3048,6 +3048,12 @@
     "kind": "crate"
   },
   {
+    "name": "notify-rust",
+    "version": "4.18.1",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "notify-types",
     "version": "2.1.0",
     "license": "MIT OR Apache-2.0",
@@ -3408,6 +3414,12 @@
     "kind": "npm"
   },
   {
+    "name": "ppv-lite86",
+    "version": "0.2.21",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "precomputed-hash",
     "version": "0.1.1",
     "license": "MIT",
@@ -3480,9 +3492,27 @@
     "kind": "npm"
   },
   {
+    "name": "rand",
+    "version": "0.9.5",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "rand_chacha",
+    "version": "0.9.0",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "rand_core",
     "version": "0.6.4",
     "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "rand_core",
+    "version": "0.9.5",
+    "license": "MIT OR Apache-2.0 (*)",
     "kind": "crate"
   },
   {
@@ -4248,6 +4278,12 @@
     "kind": "crate"
   },
   {
+    "name": "tauri-plugin-notification",
+    "version": "2.5.0",
+    "license": "Apache-2.0 OR MIT",
+    "kind": "crate"
+  },
+  {
     "name": "tauri-plugin-opener",
     "version": "2.7.0",
     "license": "Apache-2.0 OR MIT",
@@ -4287,6 +4323,12 @@
     "name": "tauri-utils",
     "version": "2.10.0",
     "license": "Apache-2.0 OR MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "tauri-winrt-notification",
+    "version": "0.8.1",
+    "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
   {
@@ -4857,6 +4899,12 @@
     "name": "yoke-derive",
     "version": "0.8.3",
     "license": "Unicode-3.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "zerocopy",
+    "version": "0.8.59",
+    "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
     "kind": "crate"
   },
   {

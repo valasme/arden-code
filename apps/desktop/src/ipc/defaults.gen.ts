@@ -21,6 +21,9 @@ export const defaultSettings: Settings = {
     "sidebarWidth": 260,
     "inspectorWidth": 320
   },
+  "notifications": {
+    "desktop": true
+  },
   "keyboard": {
     "shortcuts": {}
   },

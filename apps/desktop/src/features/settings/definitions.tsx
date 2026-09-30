@@ -299,6 +299,23 @@ export const settingDefinitions: readonly SettingDefinition[] = [
     },
   },
   {
+    id: "desktop-notifications",
+    tab: "notifications",
+    key: "notificationsDesktop",
+    labelKey: "settings.notifications.desktop.label",
+    descriptionKey: "settings.notifications.desktop.description",
+    isDefault: (settings) => settings.notifications.desktop === same.notifications.desktop,
+    Control: ({ id, settings, change }) => (
+      <ToggleControl
+        id={id}
+        checked={settings.notifications.desktop}
+        onChange={(checked) => {
+          change.mutate({ notificationsDesktop: checked });
+        }}
+      />
+    ),
+  },
+  {
     id: "developer-mode",
     tab: "advanced",
     key: "advancedDeveloperMode",

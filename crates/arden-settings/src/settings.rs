@@ -121,6 +121,20 @@ impl Default for Appearance {
     }
 }
 
+/// Whether Arden Code may show Windows notifications.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Notifications {
+    /// Show notifications, such as when an agent needs the person. With this off, nothing is shown.
+    pub desktop: bool,
+}
+
+impl Default for Notifications {
+    fn default() -> Self {
+        Self { desktop: true }
+    }
+}
+
 /// How wide the side panels were left.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(rename_all = "camelCase")]
@@ -232,6 +246,7 @@ pub struct Settings {
     pub general: General,
     pub appearance: Appearance,
     pub layout: Layout,
+    pub notifications: Notifications,
     pub keyboard: Keyboard,
     pub advanced: Advanced,
 }
@@ -243,6 +258,7 @@ impl Default for Settings {
             general: General::default(),
             appearance: Appearance::default(),
             layout: Layout::default(),
+            notifications: Notifications::default(),
             keyboard: Keyboard::default(),
             advanced: Advanced::default(),
         }
@@ -265,6 +281,7 @@ pub enum SettingChange {
     AppearanceShowStatusBar(bool),
     LayoutSidebarWidth(u16),
     LayoutInspectorWidth(u16),
+    NotificationsDesktop(bool),
     AdvancedLogLevel(LogLevel),
     AdvancedDeveloperMode(bool),
     AdvancedNativeTitleBar(bool),
@@ -287,6 +304,7 @@ pub enum SettingKey {
     AppearanceShowStatusBar,
     LayoutSidebarWidth,
     LayoutInspectorWidth,
+    NotificationsDesktop,
     AdvancedLogLevel,
     AdvancedDeveloperMode,
     AdvancedNativeTitleBar,
@@ -295,7 +313,7 @@ pub enum SettingKey {
 
 impl SettingKey {
     /// Every setting.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::GeneralOnStartup,
         Self::GeneralCheckForUpdates,
         Self::GeneralRegionalFormat,
@@ -308,6 +326,7 @@ impl SettingKey {
         Self::AppearanceShowStatusBar,
         Self::LayoutSidebarWidth,
         Self::LayoutInspectorWidth,
+        Self::NotificationsDesktop,
         Self::AdvancedLogLevel,
         Self::AdvancedDeveloperMode,
         Self::AdvancedNativeTitleBar,
@@ -336,6 +355,7 @@ impl Settings {
             }
             SettingChange::LayoutSidebarWidth(value) => self.layout.sidebar_width = value,
             SettingChange::LayoutInspectorWidth(value) => self.layout.inspector_width = value,
+            SettingChange::NotificationsDesktop(value) => self.notifications.desktop = value,
             SettingChange::AdvancedLogLevel(value) => self.advanced.log_level = value,
             SettingChange::AdvancedDeveloperMode(value) => self.advanced.developer_mode = value,
             SettingChange::AdvancedNativeTitleBar(value) => self.advanced.native_title_bar = value,
@@ -406,6 +426,9 @@ impl Settings {
             SettingKey::LayoutInspectorWidth => {
                 self.layout.inspector_width = defaults.layout.inspector_width;
             }
+            SettingKey::NotificationsDesktop => {
+                self.notifications.desktop = defaults.notifications.desktop;
+            }
             SettingKey::AdvancedLogLevel => self.advanced.log_level = defaults.advanced.log_level,
             SettingKey::AdvancedDeveloperMode => {
                 self.advanced.developer_mode = defaults.advanced.developer_mode;
@@ -462,6 +485,7 @@ mod tests {
         assert!(!settings.appearance.code_ligatures);
         assert_eq!(settings.appearance.reduce_motion, ReduceMotion::System);
         assert!(settings.appearance.show_status_bar);
+        assert!(settings.notifications.desktop);
         assert_eq!(settings.advanced.log_level, LogLevel::Info);
         assert!(!settings.advanced.developer_mode);
         assert!(!settings.advanced.native_title_bar);
@@ -491,6 +515,7 @@ mod tests {
                     "showStatusBar": true
                 },
                 "layout": { "sidebarWidth": 260, "inspectorWidth": 320 },
+                "notifications": { "desktop": true },
                 "keyboard": { "shortcuts": {} },
                 "advanced": {
                     "logLevel": "info",
@@ -530,6 +555,7 @@ mod tests {
         settings.apply(SettingChange::AppearanceShowStatusBar(false));
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
+        settings.apply(SettingChange::NotificationsDesktop(false));
         settings.apply(SettingChange::AdvancedLogLevel(LogLevel::Debug));
         settings.apply(SettingChange::AdvancedDeveloperMode(true));
         settings.apply(SettingChange::AdvancedNativeTitleBar(true));
@@ -550,6 +576,7 @@ mod tests {
         assert!(!settings.appearance.show_status_bar);
         assert_eq!(settings.layout.sidebar_width, 300);
         assert_eq!(settings.layout.inspector_width, 400);
+        assert!(!settings.notifications.desktop);
     }
 
     #[test]
@@ -601,6 +628,7 @@ mod tests {
         settings.apply(SettingChange::AppearanceShowStatusBar(false));
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
+        settings.apply(SettingChange::NotificationsDesktop(false));
         settings.apply(SettingChange::AdvancedLogLevel(LogLevel::Debug));
         settings.apply(SettingChange::AdvancedDeveloperMode(true));
         settings.apply(SettingChange::AdvancedNativeTitleBar(true));
@@ -758,7 +786,7 @@ mod tests {
     #[test]
     fn unknown_keys_are_ignored_so_a_schema_reference_or_a_future_setting_does_no_harm() {
         let settings: Settings = serde_json::from_str(
-            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"keyboard":{"shortcuts":{}},"advanced":{"logLevel":"info","developerMode":false,"nativeTitleBar":false,"hardwareAcceleration":true},"extra":1}"#,
+            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"notifications":{"desktop":true},"keyboard":{"shortcuts":{}},"advanced":{"logLevel":"info","developerMode":false,"nativeTitleBar":false,"hardwareAcceleration":true},"extra":1}"#,
         )
         .unwrap();
 

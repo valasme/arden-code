@@ -3,6 +3,7 @@
 mod agents;
 mod commands;
 mod navigation;
+mod notifications;
 mod sessions;
 mod webview;
 mod window;
@@ -57,6 +58,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::open_settings_file,
         commands::open_project_page,
         commands::open_link,
+        commands::send_test_notification,
         commands::open_bug_report,
         commands::read_logs,
         commands::export_diagnostics,
@@ -97,6 +99,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::open_settings_file,
         commands::open_project_page,
         commands::open_link,
+        commands::send_test_notification,
         commands::open_bug_report,
         commands::read_logs,
         commands::export_diagnostics,
@@ -297,6 +300,7 @@ pub fn run() {
         .plugin(navigation::guard())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .on_page_load(|_webview, payload| {
             tracing::info!(url = %payload.url(), event = ?payload.event(), "page load");

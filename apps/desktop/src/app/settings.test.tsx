@@ -163,13 +163,6 @@ describe("the Settings page", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Advanced" })).toBeVisible();
   });
 
-  it("says so on a tab whose settings are not there yet", async () => {
-    startApp();
-    renderApp("/settings/notifications");
-
-    expect(await screen.findByText("These settings arrive in a later update.")).toBeVisible();
-  });
-
   it("has the theme control on the Appearance tab", async () => {
     startApp();
     renderApp("/settings/appearance");
@@ -310,7 +303,13 @@ describe("searching the settings", () => {
       within(results)
         .getAllByRole("heading", { level: 2 })
         .map((h) => h.textContent),
-    ).toEqual(["Theme", "Follow Windows text size", "Reduce motion", "Use the Windows title bar"]);
+    ).toEqual([
+      "Theme",
+      "Follow Windows text size",
+      "Reduce motion",
+      "Desktop notifications",
+      "Use the Windows title bar",
+    ]);
   });
 
   it("says when nothing matches, and goes back to the tab when the search is cleared", async () => {

@@ -1,5 +1,6 @@
 //! Commands the UI can call. Each one returns a typed `AppError` on failure (ADR 0008).
 
+use crate::notifications;
 use arden_core::AppInfo;
 use arden_core::error::{AppError, ErrorCode};
 use arden_core::links;
@@ -239,6 +240,34 @@ pub fn open_project_page(app: AppHandle, page: ProjectPage) -> Result<(), AppErr
     app.opener()
         .open_url(page.url(), None::<&str>)
         .map_err(|error| AppError::new(ErrorCode::Unexpected).with_details(error.to_string()))
+}
+
+/// Shows a notification so the person can see how it looks, unless notifications are off. Says
+/// whether one was shown.
+///
+/// # Errors
+///
+/// Returns `ARD-APP-005` when Windows would not show it.
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command]
+#[specta::specta]
+pub fn send_test_notification(
+    app: AppHandle,
+    settings: State<'_, SettingsService>,
+) -> Result<bool, AppError> {
+    let enabled = settings.get().notifications.desktop;
+    let (title, body) = (
+        arden_core::APP_NAME,
+        "This is a test notification. Arden Code will use notifications like this to tell you when an agent needs you.",
+    );
+    #[cfg(debug_assertions)]
+    let shown = match std::env::var_os(notifications::FILE_VARIABLE) {
+        Some(file) => notifications::send(enabled, &notifications::File(file.into()), title, body),
+        None => notifications::send(enabled, &notifications::Windows(&app), title, body),
+    };
+    #[cfg(not(debug_assertions))]
+    let shown = notifications::send(enabled, &notifications::Windows(&app), title, body);
+    shown.map_err(|error| AppError::new(ErrorCode::NotificationNotShown).with_details(error))
 }
 
 /// Opens a link from an agent's reply in the program Windows uses for it. A web address opens
