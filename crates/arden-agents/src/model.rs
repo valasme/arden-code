@@ -39,6 +39,8 @@ pub enum ToolStatus {
     Running,
     Done,
     Failed,
+    /// The person stopped the reply while the tool was running.
+    Stopped,
 }
 
 /// What happened to a file.
@@ -123,6 +125,8 @@ pub enum TurnStatus {
     Done,
     /// The reply stopped because something went wrong.
     Failed,
+    /// The person stopped the reply.
+    Stopped,
 }
 
 /// The person's message and the agent's reply to it.
@@ -139,6 +143,26 @@ pub struct Turn {
 }
 
 impl Turn {
+    /// Ends the turn as stopped by the person: a tool that was still running stopped with it, and
+    /// a marker records it.
+    fn stop(&mut self) {
+        self.status = TurnStatus::Stopped;
+        for item in &mut self.items {
+            if let Item::ToolCall { status, .. } = item
+                && *status == ToolStatus::Running
+            {
+                *status = ToolStatus::Stopped;
+            }
+        }
+        let marker = format!("{}-stopped", self.id);
+        if !self.items.iter().any(|item| item.id() == marker) {
+            self.items.push(Item::Status {
+                id: marker,
+                kind: StatusKind::Stopped,
+            });
+        }
+    }
+
     /// Records one event of the reply. An event for another turn changes nothing.
     pub fn apply(&mut self, event: &TurnEvent) {
         if event.turn_id() != self.id {
@@ -181,6 +205,7 @@ impl Turn {
             }
             TurnEvent::Finished { .. } => self.status = TurnStatus::Done,
             TurnEvent::Failed { .. } => self.status = TurnStatus::Failed,
+            TurnEvent::Stopped { .. } => self.stop(),
         }
     }
 }
@@ -247,6 +272,9 @@ pub enum TurnEvent {
     /// The reply stopped because something went wrong.
     #[serde(rename_all = "camelCase")]
     Failed { turn_id: String },
+    /// The person stopped the reply.
+    #[serde(rename_all = "camelCase")]
+    Stopped { turn_id: String },
 }
 
 impl TurnEvent {
@@ -258,7 +286,8 @@ impl TurnEvent {
             | Self::TextDelta { turn_id, .. }
             | Self::ToolCallEnded { turn_id, .. }
             | Self::Finished { turn_id }
-            | Self::Failed { turn_id } => turn_id,
+            | Self::Failed { turn_id }
+            | Self::Stopped { turn_id } => turn_id,
         }
     }
 }

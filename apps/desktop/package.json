@@ -23,6 +23,7 @@
     "@streamdown/code": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
+    "@tanstack/react-virtual": "catalog:",
     "@tauri-apps/api": "catalog:",
     "@tauri-apps/plugin-clipboard-manager": "catalog:",
     "class-variance-authority": "catalog:",

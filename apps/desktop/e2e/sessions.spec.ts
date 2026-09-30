@@ -208,3 +208,78 @@ test.describe("rich replies in the real app", () => {
     }
   });
 });
+
+test.describe("stopping a reply and long sessions in the real app", () => {
+  test("Esc stops the reply, and the turn says it was stopped", async () => {
+    const app = await launchApp();
+    try {
+      const conversation = await ask(app.page, "Show me everything");
+      await expect(conversation.getByText("The agent started working")).toBeVisible();
+      await expect(conversation.getByText("The Demo agent is replying…")).toBeVisible();
+
+      await app.page.keyboard.press("Escape");
+
+      await expect(conversation.getByText("You stopped the reply")).toBeVisible();
+      await expect(conversation.getByText("The Demo agent is replying…")).toBeHidden();
+      // Nothing more arrives after the stop.
+      const length = (await conversation.textContent())?.length ?? 0;
+      await app.page.waitForTimeout(1500);
+      expect((await conversation.textContent())?.length).toBe(length);
+      // And the next message can be sent.
+      const box = app.page.getByRole("textbox", { name: "Message" });
+      await box.fill("Again");
+      await box.press("Enter");
+      await expect(conversation.getByText("Again", { exact: true })).toBeVisible();
+    } finally {
+      app.kill();
+    }
+  });
+
+  test("a session of 10,000 messages draws only a screenful and scrolls smoothly", async () => {
+    const app = await launchApp();
+    try {
+      await app.page.goto("http://tauri.localhost/dev/errors");
+      await app.page.getByRole("button", { name: "Make a session of 10,000 messages" }).click();
+      const conversation = app.page.getByRole("main", { name: "Conversation" });
+
+      await expect(conversation.getByText("Message number 10000")).toBeVisible({ timeout: 30_000 });
+      expect(await conversation.locator("article").count()).toBeLessThan(60);
+
+      await conversation.evaluate((element) => {
+        element.scrollTop = 0;
+      });
+      await expect(conversation.getByText("Message number 1", { exact: true })).toBeVisible();
+      await expect(app.page.getByRole("button", { name: "Jump to latest" })).toBeVisible();
+      // Scroll through the session a frame at a time, and look at how long the frames took.
+      const frames = await conversation.evaluate(async (element) => {
+        const durations: number[] = [];
+        const step = (element.scrollHeight - element.clientHeight) / 300;
+        let last = performance.now();
+        for (let index = 0; index < 300; index += 1) {
+          // oxlint-disable-next-line no-await-in-loop -- each frame follows the one before
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
+              element.scrollTop += step;
+              resolve();
+            });
+          });
+          const now = performance.now();
+          durations.push(now - last);
+          last = now;
+        }
+        return durations;
+      });
+      const sorted = frames.toSorted((a, b) => a - b);
+      const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
+      // Sixty frames a second is 16.7 ms a frame. A shared machine gets more room; a version that
+      // drew all 10,000 messages would take far longer than this for every frame.
+      expect(p95, `95% of frames took at most ${p95.toFixed(1)} ms`).toBeLessThan(50);
+
+      await app.page.getByRole("button", { name: "Jump to latest" }).click();
+      await expect(conversation.getByText("Message number 10000")).toBeVisible();
+      await expect(app.page.getByRole("button", { name: "Jump to latest" })).toBeHidden();
+    } finally {
+      app.kill();
+    }
+  });
+});

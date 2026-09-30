@@ -114,6 +114,7 @@ function startRust({
   return {
     calls,
     sent: () => calls.filter((call) => call.command === "send_message"),
+    stops: () => calls.filter((call) => call.command === "stop_reply"),
     /** Streams an event of the reply, as Rust would through the channel. */
     emit(event: TurnEvent) {
       if (!channel) throw new Error("no message was sent yet");
@@ -399,6 +400,84 @@ describe("Sending a message", () => {
     rust.emit({ type: "failed", turnId: "turn-1" });
 
     expect(await screen.findByText("The reply stopped.")).toBeVisible();
+  });
+
+  it("stops the reply with Esc, and the turn says it was stopped", async () => {
+    const rust = startRust();
+    const { user } = await openSession(rust);
+    await user.keyboard("hello{Enter}");
+    await screen.findByText("The Demo agent is replying…");
+    rust.emit(delta("Half of a sen"));
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(rust.stops()).toHaveLength(1);
+    });
+    expect(rust.stops()[0]?.payload).toMatchObject({ sessionId: "session-1" });
+    // Rust ends the reply, and tells the channel.
+    rust.emit({ type: "stopped", turnId: "turn-1" });
+    expect(await screen.findByText("You stopped the reply")).toBeVisible();
+    expect(screen.queryByText("The Demo agent is replying…")).toBeNull();
+    expect(screen.getByText("Half of a sen")).toBeVisible();
+    // The session is free for the next message.
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
+    });
+  });
+
+  it("leaves Esc alone when no reply is running", async () => {
+    const rust = startRust();
+    const { user } = await openSession(rust);
+    const box = await messageBox();
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+
+    box.dispatchEvent(escape);
+
+    expect(escape.defaultPrevented).toBe(false);
+    expect(rust.stops()).toHaveLength(0);
+    await user.keyboard("{Escape}");
+    expect(rust.stops()).toHaveLength(0);
+  });
+
+  it("uses Esc to close a dialog first, and does not stop the reply behind it", async () => {
+    const rust = startRust();
+    const { user } = await openSession(rust);
+    await user.keyboard("hello{Enter}");
+    await screen.findByText("The Demo agent is replying…");
+    await user.keyboard("{Control>}/{/Control}");
+    await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(rust.stops()).toHaveLength(0);
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(rust.stops()).toHaveLength(1);
+    });
+  });
+
+  it("offers Stop the reply in the command palette only while a reply is running", async () => {
+    const rust = startRust();
+    const { user } = await openSession(rust);
+    await user.keyboard("{Control>}k{/Control}");
+    await screen.findByRole("dialog", { name: "Command palette" });
+    expect(screen.queryByRole("option", { name: /Stop the reply/ })).toBeNull();
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await user.click(await messageBox());
+    await user.keyboard("hello{Enter}");
+    await screen.findByText("The Demo agent is replying…");
+
+    await user.keyboard("{Control>}k{/Control}");
+
+    expect(await screen.findByRole("option", { name: /Stop the reply/ })).toBeVisible();
+    rust.emit({ type: "finished", turnId: "turn-1" });
   });
 
   it("stores the time in UTC and shows it in local time", async () => {

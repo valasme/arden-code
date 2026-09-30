@@ -7,6 +7,8 @@ use std::sync::Arc;
 use std::thread;
 
 use arden_agents::demo::DemoDriver;
+#[cfg(debug_assertions)]
+use arden_agents::model::Item;
 use arden_agents::model::{AgentKind, ProjectListing, Session, SessionSummary, TurnEvent};
 use arden_agents::playground::PLAYGROUND_ID;
 use arden_agents::store::{SessionStore, StoreError};
@@ -60,6 +62,49 @@ pub fn get_session(id: String, sessions: State<'_, Sessions>) -> Result<Session,
     sessions
         .session(&id)
         .ok_or_else(|| AppError::new(ErrorCode::SessionNotFound))
+}
+
+/// Stops the reply that is running in a session. The turn ends as stopped, and the reply's channel
+/// is told.
+///
+/// # Errors
+///
+/// Returns an error when there is no such session.
+#[tauri::command]
+#[specta::specta]
+pub fn stop_reply(session_id: String, sessions: State<'_, Sessions>) -> Result<(), AppError> {
+    sessions.stop_turn(&session_id).map_err(app_error)
+}
+
+/// Makes a session with `count` finished turns, to test long conversations. Debug builds only.
+///
+/// # Errors
+///
+/// Returns an error when the Playground does not exist.
+#[cfg(debug_assertions)]
+#[tauri::command]
+#[specta::specta]
+pub fn debug_fill_session(
+    count: u32,
+    sessions: State<'_, Sessions>,
+) -> Result<SessionSummary, AppError> {
+    let session = sessions
+        .create_session(PLAYGROUND_ID, AgentKind::Demo)
+        .map_err(app_error)?;
+    for number in 1..=count {
+        let reply = Item::Text {
+            id: format!("filled-{number}"),
+            text: format!("Reply number {number}. It is a short answer with **bold** text."),
+        };
+        sessions
+            .add_finished_turn(
+                &session.id,
+                &format!("Message number {number}"),
+                vec![reply],
+            )
+            .map_err(app_error)?;
+    }
+    Ok(session)
 }
 
 /// Sends a message. The session, with the new turn still running, is returned at once; the reply

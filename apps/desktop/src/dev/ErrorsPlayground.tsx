@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ interface ErrorsPlaygroundProps {
  */
 export function ErrorsPlayground({ failToDraw, onFailToDraw }: ErrorsPlaygroundProps) {
   const [commandError, setCommandError] = useState<string>();
+  const navigate = useNavigate();
 
   if (failToDraw) {
     throw new Error("Deliberate error while drawing the page");
@@ -67,6 +69,21 @@ export function ErrorsPlayground({ failToDraw, onFailToDraw }: ErrorsPlaygroundP
           }}
         >
           Panic on a Rust thread
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          onClick={() => {
+            commands
+              .debugFillSession(10_000)
+              .then((session) => navigate({ to: "/session/$id", params: { id: session.id } }))
+              .catch((failure: unknown) => {
+                setCommandError(toAppError(failure).code);
+              });
+          }}
+        >
+          Make a session of 10,000 messages
         </Button>
       </div>
       {commandError ? (

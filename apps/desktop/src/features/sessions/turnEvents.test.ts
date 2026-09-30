@@ -104,3 +104,19 @@ describe("Applying the events of a reply", () => {
     expect(applyTurnEvent(session, stray)).toEqual(session);
   });
 });
+
+describe("Applying the stop of a reply", () => {
+  it("ends the turn as stopped, stops a tool that was running, and adds a marker once", () => {
+    const running = applyTurnEvent(session, added(toolCall));
+
+    const first = applyTurnEvent(running, { type: "stopped", turnId: "turn-2" });
+    const again = applyTurnEvent(first, { type: "stopped", turnId: "turn-2" });
+
+    expect(first.turns[0]?.status).toBe("stopped");
+    expect(first.turns[0]?.items).toEqual([
+      { ...toolCall, status: "stopped" },
+      { type: "status", id: "turn-2-stopped", kind: "stopped" },
+    ]);
+    expect(again.turns[0]?.items).toHaveLength(2);
+  });
+});

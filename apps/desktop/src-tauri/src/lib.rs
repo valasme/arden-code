@@ -70,6 +70,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         sessions::create_session,
         sessions::get_session,
         sessions::send_message,
+        sessions::stop_reply,
+        sessions::debug_fill_session,
         commands::debug_fail,
         commands::debug_panic,
     ];
@@ -106,6 +108,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         sessions::create_session,
         sessions::get_session,
         sessions::send_message,
+        sessions::stop_reply,
     ];
 
     builder.commands(commands).events(collect_events![

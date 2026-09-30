@@ -12,6 +12,18 @@ function withDelta(item: Item, itemId: string, text: string): Item {
     : item;
 }
 
+/** The turn after the person stopped its reply: a tool that was running stopped with it, and a marker says so. */
+function stopped(turn: Turn): Turn {
+  const marker = `${turn.id}-stopped`;
+  const items: Item[] = turn.items.map((item) =>
+    item.type === "toolCall" && item.status === "running" ? { ...item, status: "stopped" } : item,
+  );
+  if (!items.some((item) => item.id === marker)) {
+    items.push({ type: "status", id: marker, kind: "stopped" });
+  }
+  return { ...turn, status: "stopped", items };
+}
+
 function applyToTurn(turn: Turn, event: TurnEvent): Turn {
   switch (event.type) {
     case "itemAdded": {
@@ -41,6 +53,8 @@ function applyToTurn(turn: Turn, event: TurnEvent): Turn {
             : item,
         ),
       };
+    case "stopped":
+      return stopped(turn);
     case "finished":
     case "failed":
       break;

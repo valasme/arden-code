@@ -732,6 +732,12 @@
     "kind": "npm"
   },
   {
+    "name": "@tanstack/react-virtual",
+    "version": "3.14.13",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "@tanstack/router-core",
     "version": "1.171.33",
     "license": "MIT",
@@ -740,6 +746,12 @@
   {
     "name": "@tanstack/store",
     "version": "0.11.1",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "@tanstack/virtual-core",
+    "version": "3.17.11",
     "license": "MIT",
     "kind": "npm"
   },

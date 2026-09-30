@@ -10,6 +10,7 @@ import {
   PanelRightIcon,
   RotateCcwIcon,
   SettingsIcon,
+  SquareIcon,
   SquarePenIcon,
   TextCursorInputIcon,
   ZoomInIcon,
@@ -21,6 +22,7 @@ import {
 export type CommandId =
   | "palette.open"
   | "session.new"
+  | "reply.stop"
   | "settings.open"
   | "sidebar.toggle"
   | "inspector.toggle"
@@ -41,6 +43,7 @@ export interface CommandDefinition {
   labelKey:
     | "commands.paletteOpen"
     | "commands.sessionNew"
+    | "commands.replyStop"
     | "commands.settingsOpen"
     | "commands.sidebarToggle"
     | "commands.inspectorToggle"
@@ -78,6 +81,12 @@ export const commandDefinitions = [
     labelKey: "commands.sessionNew",
     icon: SquarePenIcon,
     shortcuts: ["Ctrl+N"],
+  },
+  {
+    id: "reply.stop",
+    labelKey: "commands.replyStop",
+    icon: SquareIcon,
+    shortcuts: ["Escape"],
   },
   {
     id: "settings.open",

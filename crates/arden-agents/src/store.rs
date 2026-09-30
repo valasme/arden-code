@@ -1,5 +1,6 @@
 //! Projects and sessions, kept in memory (ADR 0016). They disappear when the app closes.
 
+use std::collections::HashSet;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use time::OffsetDateTime;
@@ -7,7 +8,7 @@ use time::format_description::well_known::Rfc3339;
 
 use crate::driver::{AgentDriver, Flow};
 use crate::model::{
-    AgentKind, Project, ProjectListing, Session, SessionSummary, Turn, TurnEvent, TurnStatus,
+    AgentKind, Item, Project, ProjectListing, Session, SessionSummary, Turn, TurnEvent, TurnStatus,
 };
 
 /// How many characters of the first message become the session's title.
@@ -47,6 +48,8 @@ fn title_of(prompt: &str) -> Option<String> {
 struct Inner {
     sessions: Vec<Session>,
     last_id: u64,
+    /// The turns whose reply the person has asked to stop, until their driver has noticed.
+    stopping: HashSet<String>,
 }
 
 impl Inner {
@@ -188,9 +191,61 @@ impl SessionStore {
         }
     }
 
+    /// Adds a turn that is already over, with the given reply. Tests use it to make long sessions.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session.
+    pub fn add_finished_turn(
+        &self,
+        session_id: &str,
+        prompt: &str,
+        items: Vec<Item>,
+    ) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let id = inner.next_id("turn");
+        let session = inner.session_mut(session_id)?;
+        if session.title.is_none() {
+            session.title = title_of(prompt);
+        }
+        session.turns.push(Turn {
+            id,
+            prompt: prompt.to_owned(),
+            started_at: now_utc(),
+            status: TurnStatus::Done,
+            items,
+        });
+        Ok(())
+    }
+
+    /// Asks for the reply that is running in a session to stop. The driver notices at its next
+    /// event, and the turn then ends as stopped. Nothing happens when no reply is running.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session.
+    pub fn stop_turn(&self, session_id: &str) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let running = inner
+            .session_mut(session_id)?
+            .turns
+            .iter()
+            .find(|turn| turn.status == TurnStatus::Running)
+            .map(|turn| turn.id.clone());
+        if let Some(turn_id) = running {
+            inner.stopping.insert(turn_id);
+        }
+        Ok(())
+    }
+
+    fn is_stopping(&self, turn_id: &str) -> bool {
+        self.lock().stopping.contains(turn_id)
+    }
+
     /// Has the driver answer a turn, recording each event and passing it to `on_event`. A false
-    /// answer from `on_event` means nobody is listening any more, and stops the reply. A reply that
-    /// is stopped this way is marked as failed, so the session is not left waiting for it.
+    /// answer from `on_event` means nobody is listening any more, and stops the reply; the turn is
+    /// then marked as failed, so the session is not left waiting for it. A reply that the person
+    /// stopped ends as stopped, and `on_event` is told.
     pub fn stream_reply(
         &self,
         driver: &dyn AgentDriver,
@@ -200,6 +255,9 @@ impl SessionStore {
     ) {
         let mut ended = false;
         driver.reply(&turn.id, &turn.prompt, &mut |event| {
+            if self.is_stopping(&turn.id) {
+                return Flow::Stop;
+            }
             self.apply(session_id, &event);
             ended = matches!(event, TurnEvent::Finished { .. } | TurnEvent::Failed { .. });
             if on_event(&event) {
@@ -209,13 +267,22 @@ impl SessionStore {
             }
         });
         if !ended {
-            self.apply(
-                session_id,
-                &TurnEvent::Failed {
+            let stopped = self.is_stopping(&turn.id);
+            let event = if stopped {
+                TurnEvent::Stopped {
                     turn_id: turn.id.clone(),
-                },
-            );
+                }
+            } else {
+                TurnEvent::Failed {
+                    turn_id: turn.id.clone(),
+                }
+            };
+            self.apply(session_id, &event);
+            if stopped {
+                on_event(&event);
+            }
         }
+        self.lock().stopping.remove(&turn.id);
     }
 }
 
@@ -413,6 +480,85 @@ mod tests {
         let saved = store.session(&session.id).expect("the session");
         assert_eq!(saved.turns[0].status, TurnStatus::Failed);
         assert!(store.start_turn(&session.id, "again").is_ok());
+    }
+
+    #[test]
+    fn a_reply_the_person_stops_ends_as_stopped_and_says_so_to_the_listener() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        let turn = store.start_turn(&session.id, "hello").expect("a turn");
+
+        let mut heard = Vec::new();
+        store.stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
+            heard.push(event.clone());
+            // The person presses Esc while the first tool is running.
+            if matches!(
+                event,
+                TurnEvent::ItemAdded {
+                    item: Item::ToolCall { .. },
+                    ..
+                }
+            ) {
+                store.stop_turn(&session.id).expect("the session exists");
+            }
+            true
+        });
+
+        let saved = store.session(&session.id).expect("the session");
+        let reply = &saved.turns[0];
+        assert_eq!(reply.status, TurnStatus::Stopped);
+        assert!(matches!(heard.last(), Some(TurnEvent::Stopped { .. })));
+        assert!(
+            reply.items.iter().any(|item| matches!(
+                item,
+                Item::ToolCall {
+                    status: crate::model::ToolStatus::Stopped,
+                    ..
+                }
+            )),
+            "the tool that was running stopped with the reply"
+        );
+        assert!(matches!(
+            reply.items.last(),
+            Some(Item::Status {
+                kind: crate::model::StatusKind::Stopped,
+                ..
+            })
+        ));
+        assert!(
+            !reply
+                .items
+                .iter()
+                .any(|item| matches!(item, Item::Text { .. })),
+            "nothing is said after the stop"
+        );
+        assert!(
+            store.start_turn(&session.id, "again").is_ok(),
+            "the session is free again"
+        );
+    }
+
+    #[test]
+    fn stopping_when_no_reply_is_running_does_nothing_and_stopping_a_missing_session_is_an_error() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+
+        assert_eq!(store.stop_turn(&session.id), Ok(()));
+        assert_eq!(
+            store.stop_turn("session-99"),
+            Err(StoreError::UnknownSession)
+        );
+        // A reply that starts afterwards is not affected by the earlier request.
+        let turn = store.start_turn(&session.id, "hi").expect("a turn");
+        store.stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| true);
+        assert_eq!(
+            store.session(&session.id).expect("the session").turns[0].status,
+            TurnStatus::Done
+        );
     }
 
     #[test]

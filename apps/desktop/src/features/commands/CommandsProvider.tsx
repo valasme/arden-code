@@ -14,6 +14,7 @@ import { toAppError } from "@/lib/errors";
 import { moveToArea } from "./areas";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
 import { useLayoutStore } from "@/state/layout";
+import { useRepliesStore } from "@/state/replies";
 import { useOverlayStore } from "@/state/overlays";
 
 import {
@@ -32,7 +33,8 @@ export interface AvailableCommand extends CommandDefinition {
 
 interface Commands {
   commands: readonly AvailableCommand[];
-  run: (id: CommandId) => void;
+  /** Runs a command. Says whether it ran: a command that cannot run right now does nothing. */
+  run: (id: CommandId) => boolean;
 }
 
 const CommandsContext = createContext<Commands | undefined>(undefined);
@@ -63,6 +65,11 @@ export function useShortcutsOf(id: CommandId): readonly string[] {
   );
 }
 
+/** Whether a dialog or a menu is on screen. */
+function overlayIsOpen(): boolean {
+  return document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]') !== null;
+}
+
 function findMessageBox(): HTMLElement | null {
   return document.querySelector<HTMLElement>("[data-message-box]");
 }
@@ -89,6 +96,8 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
   const changed = keyboard.shortcuts;
   const { mutate: changeSetting } = useChangeSetting();
   const queryClient = useQueryClient();
+  // Stopping a reply is offered while one is running; the list of commands follows it.
+  const replying = useRepliesStore((state) => state.busy);
 
   const startSession = useCallback(async () => {
     try {
@@ -104,6 +113,17 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
     const actions: Record<CommandId, { run: () => void; enabled?: () => boolean }> = {
       "palette.open": { run: () => setPaletteOpen(true) },
       "session.new": { run: () => void startSession() },
+      "reply.stop": {
+        run: () => {
+          const { sessionId } = useRepliesStore.getState();
+          if (sessionId) {
+            ipc.stopReply(sessionId).catch((error: unknown) => {
+              showErrorToast(toAppError(error));
+            });
+          }
+        },
+        enabled: () => replying,
+      },
       "settings.open": {
         run: () => void navigate({ to: "/settings/$tab", params: { tab: "general" } }),
       },
@@ -137,7 +157,9 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
       ),
       run: (id) => {
         const action = actions[id];
-        if (action.enabled?.() ?? true) action.run();
+        if (!(action.enabled?.() ?? true)) return false;
+        action.run();
+        return true;
       },
     };
   }, [
@@ -151,6 +173,7 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
     zoom,
     changeSetting,
     changed,
+    replying,
   ]);
 
   useEffect(() => {
@@ -163,9 +186,15 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
     const onKeyDown = (event: KeyboardEvent) => {
       const match = parsed.find(({ shortcut }) => matchesShortcut(event, shortcut));
       if (!match) return;
-      // Handled here, so the browser engine must not also act on it (Ctrl+L, Alt+Left, F11 ...).
-      event.preventDefault();
-      value.run(match.id);
+      const { ctrl, alt, shift } = match.shortcut;
+      // A key that is part of writing a character (an input method's Esc) is not a command.
+      if (event.isComposing) return;
+      // Esc closes a dialog or a menu first; it stops a reply only when none is open.
+      if (event.key === "Escape" && overlayIsOpen()) return;
+      const ran = value.run(match.id);
+      // Handled here, so the browser engine must not also act on it (Ctrl+L, Alt+Left, F11 ...). A
+      // plain key that did nothing, such as Esc with no reply running, is left for whoever wants it.
+      if (ran || ctrl || alt || shift) event.preventDefault();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {

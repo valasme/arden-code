@@ -17,6 +17,7 @@
     "navigateBack": "Back",
     "navigateForward": "Forward",
     "paletteOpen": "Command palette",
+    "replyStop": "Stop the reply",
     "sessionNew": "New session",
     "settingsOpen": "Settings",
     "shortcutsShow": "Keyboard shortcuts",
@@ -154,7 +155,8 @@
     "tool": {
       "done": "Done",
       "failed": "Failed",
-      "running": "Running…"
+      "running": "Running…",
+      "stopped": "Stopped"
     }
   },
   "logs": {
@@ -221,13 +223,20 @@
     "sidebar": "Sidebar"
   },
   "sessions": {
+    "announce": {
+      "done": "Reply finished.",
+      "failed": "Reply failed.",
+      "stopped": "Reply stopped."
+    },
     "demoAgent": "Demo agent",
     "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
+    "jumpToLatest": "Jump to latest",
     "messageBox": {
       "label": "Message",
       "placeholder": "Message the Demo agent",
       "send": "Send"
     },
+    "messages": "Messages",
     "new": "New session",
     "playground": "Playground",
     "replying": "The Demo agent is replying…",

@@ -34,3 +34,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0024](0024-areas-context-menus-and-browser-features.md) | Areas, context menus and the browser's own features | Accepted |
 | [0025](0025-diagnostics.md) | Diagnostics: logs, bundles and crash recovery | Accepted |
 | [0026](0026-markdown-links-and-images.md) | Markdown, links and images in an agent's reply | Accepted |
+| [0027](0027-long-sessions-and-announcements.md) | Long sessions, stopping a reply, and what screen readers hear | Accepted |

@@ -238,6 +238,23 @@ export const commands = {
 	 */
 	sendMessage: (sessionId: string, text: string, onEvent: Channel<TurnEvent>) => __TAURI_INVOKE<Session>("send_message", { sessionId, text, onEvent }),
 	/**
+	 *  Stops the reply that is running in a session. The turn ends as stopped, and the reply's channel
+	 *  is told.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session.
+	 */
+	stopReply: (sessionId: string) => __TAURI_INVOKE<null>("stop_reply", { sessionId }),
+	/**
+	 *  Makes a session with `count` finished turns, to test long conversations. Debug builds only.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when the Playground does not exist.
+	 */
+	debugFillSession: (count: number) => __TAURI_INVOKE<SessionSummary>("debug_fill_session", { count }),
+	/**
 	 *  Fails on purpose, so tests and the development page can see what an error looks like. Debug
 	 *  builds only.
 	 * 
@@ -569,7 +586,9 @@ export type Theme =
 /**  How a tool call ended. */
 export type ToolStatus = 
 /**  The agent is still using the tool. */
-"running" | "done" | "failed";
+"running" | "done" | "failed" | 
+/**  The person stopped the reply while the tool was running. */
+"stopped";
 
 /**  The person's message and the agent's reply to it. */
 export type Turn = {
@@ -596,14 +615,18 @@ export type TurnEvent =
 /**  The reply is complete. */
 { type: "finished"; turnId: string } | 
 /**  The reply stopped because something went wrong. */
-{ type: "failed"; turnId: string };
+{ type: "failed"; turnId: string } | 
+/**  The person stopped the reply. */
+{ type: "stopped"; turnId: string };
 
 /**  How far a turn has come. */
 export type TurnStatus = 
 /**  The agent is still replying. */
 "running" | "done" | 
 /**  The reply stopped because something went wrong. */
-"failed";
+"failed" | 
+/**  The person stopped the reply. */
+"stopped";
 
 /**  How serious a message from the UI is. */
 export type UiLogLevel = "error" | "warn" | "info" | "debug";
