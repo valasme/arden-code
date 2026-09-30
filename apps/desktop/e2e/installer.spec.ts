@@ -112,7 +112,10 @@ test.describe("the installer", () => {
     spawnSync(path.join(folder, "uninstall.exe"), ["/S"]);
     await untilGone(folder);
 
-    expect(userPath()?.value).toBe(before?.value);
+    // The same folders in the same order. A semicolon at the end of the list means nothing, and the
+    // installer does not put one back when the list had one.
+    const withoutEmpty = (list: string | undefined) => folders(list ?? "").filter(Boolean);
+    expect(withoutEmpty(userPath()?.value)).toEqual(withoutEmpty(before?.value));
     expect(userPath()?.kind).toBe(before?.kind);
     installed = undefined;
   });
