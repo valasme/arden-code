@@ -172,10 +172,11 @@ mod tests {
             "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk",
         ];
 
-        for secret in cases {
+        for (number, secret) in cases.into_iter().enumerate() {
             let text = redactor().redact(&format!("using {secret} for the request"));
 
-            assert!(!text.contains(secret), "{secret} was not redacted: {text}");
+            // The message names the case by its number: these are samples, but a test log is still a log.
+            assert!(!text.contains(secret), "case {number} was not redacted");
             assert!(
                 text.starts_with("using ") && text.ends_with(" for the request"),
                 "{text}"
