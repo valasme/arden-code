@@ -125,6 +125,8 @@ export interface RunningApp {
   dataDir: string;
   /** The folder the web engine keeps its files in for this launch. */
   webViewProfile: string;
+  /** The port the web engine listens on for the Chrome DevTools Protocol. */
+  debugPort: number;
   /** The app's web page, attached over the Chrome DevTools Protocol. */
   page: Page;
   /** Closes the window the way the user would, and waits for the app to save and exit. */
@@ -192,6 +194,7 @@ export async function launchApp({ dataDir, env = {} }: LaunchOptions = {}): Prom
       pid,
       dataDir: data,
       webViewProfile: profile,
+      debugPort,
       page,
       async close() {
         // Imported lazily to keep this file free of PowerShell until a test needs it.

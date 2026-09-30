@@ -90,6 +90,9 @@ pub fn prepare_main_window(
         .get_webview_window("main")
         .ok_or(tauri::Error::WindowNotFound)?;
 
+    // If the web engine's page process stops, the page is reloaded and the person is told.
+    crate::webview::recover_from_failures(&window)?;
+
     window.set_theme(native_theme(theme))?;
     let (r, g, b, a) = startup_background(starts_dark(theme, window.theme()? == Theme::Dark));
     window.set_background_color(Some(Color(r, g, b, a)))?;

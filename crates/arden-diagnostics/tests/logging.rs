@@ -2,13 +2,13 @@
 
 use std::fs;
 
-use arden_diagnostics::logging;
+use arden_diagnostics::logging::{self, UiLevel};
 use serde_json::Value;
 
 #[test]
 fn writes_redacted_json_lines_for_rust_and_ui_messages() {
     let folder = tempfile::tempdir().unwrap();
-    logging::init(folder.path(), &[r"D:\Profiles\ada"]).expect("logging starts");
+    logging::init(folder.path(), &[r"D:\Profiles\ada"], UiLevel::Info).expect("logging starts");
 
     tracing::info!(
         code = "ARD-SET-002",

@@ -38,9 +38,15 @@ pub enum ErrorCode {
     /// The logs folder could not be opened.
     #[serde(rename = "ARD-LOG-001")]
     LogsFolder,
+    /// The diagnostics bundle could not be written.
+    #[serde(rename = "ARD-LOG-002")]
+    DiagnosticsExport,
     /// Windows' window menu could not be opened.
     #[serde(rename = "ARD-WIN-001")]
     WindowsSystemMenu,
+    /// The web engine that draws the window stopped and was started again.
+    #[serde(rename = "ARD-WIN-002")]
+    WebEngineFailed,
 }
 
 impl ErrorCode {
@@ -57,7 +63,9 @@ impl ErrorCode {
             Self::SettingsExport => "ARD-SET-004",
             Self::SettingsOpen => "ARD-SET-005",
             Self::LogsFolder => "ARD-LOG-001",
+            Self::DiagnosticsExport => "ARD-LOG-002",
             Self::WindowsSystemMenu => "ARD-WIN-001",
+            Self::WebEngineFailed => "ARD-WIN-002",
         }
     }
 }

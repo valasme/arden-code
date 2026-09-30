@@ -98,13 +98,24 @@ describe("About", () => {
     expect(screen.getByRole("button", { name: "Copy system info" })).toBeDisabled();
   });
 
-  it("opens the bug reports, the release notes and the privacy statement in the browser", async () => {
+  it("opens a bug report that already holds the system information", async () => {
     const app = startApp();
     const user = userEvent.setup();
     renderTab();
 
     await user.click(await screen.findByRole("button", { name: "Report a bug" }));
-    await user.click(screen.getByRole("button", { name: "Release notes" }));
+
+    await waitFor(() => {
+      expect(app.calls.filter((call) => call.command === "open_bug_report")).toHaveLength(1);
+    });
+  });
+
+  it("opens the release notes and the privacy statement in the browser", async () => {
+    const app = startApp();
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.click(await screen.findByRole("button", { name: "Release notes" }));
     await user.click(screen.getByRole("button", { name: "Read the privacy statement" }));
 
     await waitFor(() => {
@@ -112,7 +123,7 @@ describe("About", () => {
         app.calls
           .filter((call) => call.command === "open_project_page")
           .map((call) => call.payload),
-      ).toEqual([{ page: "issues" }, { page: "releases" }, { page: "privacy" }]);
+      ).toEqual([{ page: "releases" }, { page: "privacy" }]);
     });
   });
 

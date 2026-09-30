@@ -37,3 +37,18 @@ export const systemInfoQuery = queryOptions({
   queryFn: () => commands.getSystemInfo(),
   staleTime: Number.POSITIVE_INFINITY,
 });
+
+/** The newest log entries. They are read again when asked for. */
+export const logsQuery = queryOptions({
+  queryKey: ["logs"],
+  queryFn: () => (isTauri() ? commands.readLogs() : []),
+  staleTime: 0,
+  gcTime: 0,
+});
+
+/** The crash reports the person has not been told about. */
+export const pendingCrashesQuery = queryOptions({
+  queryKey: ["pending-crashes"],
+  queryFn: () => (isTauri() ? commands.pendingCrashes() : []),
+  staleTime: Number.POSITIVE_INFINITY,
+});

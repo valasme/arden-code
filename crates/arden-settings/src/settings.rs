@@ -140,10 +140,27 @@ impl Default for Layout {
     }
 }
 
+/// How much the log files record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    /// Only what went wrong.
+    Error,
+    /// What went wrong, and what looks wrong.
+    Warn,
+    /// The above, and what the app does (the default).
+    #[default]
+    Info,
+    /// Everything, for finding a bug. Files grow faster.
+    Debug,
+}
+
 /// Settings for people who want to look under the hood.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Advanced {
+    /// How much the log files record.
+    pub log_level: LogLevel,
     /// Turns on the web engine's developer tools (F12).
     pub developer_mode: bool,
     /// Use the title bar of Windows instead of the one Arden Code draws.
@@ -156,6 +173,7 @@ pub struct Advanced {
 impl Default for Advanced {
     fn default() -> Self {
         Self {
+            log_level: LogLevel::default(),
             developer_mode: false,
             native_title_bar: false,
             hardware_acceleration: true,
@@ -247,6 +265,7 @@ pub enum SettingChange {
     AppearanceShowStatusBar(bool),
     LayoutSidebarWidth(u16),
     LayoutInspectorWidth(u16),
+    AdvancedLogLevel(LogLevel),
     AdvancedDeveloperMode(bool),
     AdvancedNativeTitleBar(bool),
     AdvancedHardwareAcceleration(bool),
@@ -268,6 +287,7 @@ pub enum SettingKey {
     AppearanceShowStatusBar,
     LayoutSidebarWidth,
     LayoutInspectorWidth,
+    AdvancedLogLevel,
     AdvancedDeveloperMode,
     AdvancedNativeTitleBar,
     AdvancedHardwareAcceleration,
@@ -275,7 +295,7 @@ pub enum SettingKey {
 
 impl SettingKey {
     /// Every setting.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::GeneralOnStartup,
         Self::GeneralCheckForUpdates,
         Self::GeneralRegionalFormat,
@@ -288,6 +308,7 @@ impl SettingKey {
         Self::AppearanceShowStatusBar,
         Self::LayoutSidebarWidth,
         Self::LayoutInspectorWidth,
+        Self::AdvancedLogLevel,
         Self::AdvancedDeveloperMode,
         Self::AdvancedNativeTitleBar,
         Self::AdvancedHardwareAcceleration,
@@ -315,6 +336,7 @@ impl Settings {
             }
             SettingChange::LayoutSidebarWidth(value) => self.layout.sidebar_width = value,
             SettingChange::LayoutInspectorWidth(value) => self.layout.inspector_width = value,
+            SettingChange::AdvancedLogLevel(value) => self.advanced.log_level = value,
             SettingChange::AdvancedDeveloperMode(value) => self.advanced.developer_mode = value,
             SettingChange::AdvancedNativeTitleBar(value) => self.advanced.native_title_bar = value,
             SettingChange::AdvancedHardwareAcceleration(value) => {
@@ -384,6 +406,7 @@ impl Settings {
             SettingKey::LayoutInspectorWidth => {
                 self.layout.inspector_width = defaults.layout.inspector_width;
             }
+            SettingKey::AdvancedLogLevel => self.advanced.log_level = defaults.advanced.log_level,
             SettingKey::AdvancedDeveloperMode => {
                 self.advanced.developer_mode = defaults.advanced.developer_mode;
             }
@@ -439,6 +462,7 @@ mod tests {
         assert!(!settings.appearance.code_ligatures);
         assert_eq!(settings.appearance.reduce_motion, ReduceMotion::System);
         assert!(settings.appearance.show_status_bar);
+        assert_eq!(settings.advanced.log_level, LogLevel::Info);
         assert!(!settings.advanced.developer_mode);
         assert!(!settings.advanced.native_title_bar);
         assert!(settings.advanced.hardware_acceleration);
@@ -469,6 +493,7 @@ mod tests {
                 "layout": { "sidebarWidth": 260, "inspectorWidth": 320 },
                 "keyboard": { "shortcuts": {} },
                 "advanced": {
+                    "logLevel": "info",
                     "developerMode": false,
                     "nativeTitleBar": false,
                     "hardwareAcceleration": true
@@ -505,10 +530,12 @@ mod tests {
         settings.apply(SettingChange::AppearanceShowStatusBar(false));
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
+        settings.apply(SettingChange::AdvancedLogLevel(LogLevel::Debug));
         settings.apply(SettingChange::AdvancedDeveloperMode(true));
         settings.apply(SettingChange::AdvancedNativeTitleBar(true));
         settings.apply(SettingChange::AdvancedHardwareAcceleration(false));
 
+        assert_eq!(settings.advanced.log_level, LogLevel::Debug);
         assert!(settings.advanced.developer_mode);
         assert!(settings.advanced.native_title_bar);
         assert!(!settings.advanced.hardware_acceleration);
@@ -574,6 +601,7 @@ mod tests {
         settings.apply(SettingChange::AppearanceShowStatusBar(false));
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
+        settings.apply(SettingChange::AdvancedLogLevel(LogLevel::Debug));
         settings.apply(SettingChange::AdvancedDeveloperMode(true));
         settings.apply(SettingChange::AdvancedNativeTitleBar(true));
         settings.apply(SettingChange::AdvancedHardwareAcceleration(false));
@@ -730,7 +758,7 @@ mod tests {
     #[test]
     fn unknown_keys_are_ignored_so_a_schema_reference_or_a_future_setting_does_no_harm() {
         let settings: Settings = serde_json::from_str(
-            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"keyboard":{"shortcuts":{}},"advanced":{"developerMode":false,"nativeTitleBar":false,"hardwareAcceleration":true},"extra":1}"#,
+            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"keyboard":{"shortcuts":{}},"advanced":{"logLevel":"info","developerMode":false,"nativeTitleBar":false,"hardwareAcceleration":true},"extra":1}"#,
         )
         .unwrap();
 
@@ -746,6 +774,7 @@ mod tests {
             text("general", "onStartup", r#""sometimes""#),
             text("appearance", "reduceMotion", r#""maybe""#),
             text("general", "regionalFormat", r#""klingon""#),
+            text("advanced", "logLevel", r#""shouting""#),
         ] {
             assert!(serde_json::from_str::<Settings>(&bad).is_err(), "{bad}");
         }

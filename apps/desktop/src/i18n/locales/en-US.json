@@ -34,6 +34,12 @@
     "paste": "Paste",
     "selectAll": "Select all"
   },
+  "crash": {
+    "description": "It left a crash report on this computer. You can export diagnostics, without private details, to attach to a bug report.",
+    "export": "Export diagnostics",
+    "later": "Not now",
+    "title": "Arden Code closed unexpectedly"
+  },
   "errors": {
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
@@ -54,6 +60,11 @@
       "action": "Open it yourself in Explorer, at %LOCALAPPDATA%\\io.github.valasme.arden\\logs.",
       "what": "The logs folder could not be opened.",
       "why": "Windows refused, or the folder could not be created."
+    },
+    "ARD-LOG-002": {
+      "action": "Choose another folder, and check that it is writable.",
+      "what": "The diagnostics could not be saved.",
+      "why": "The file could not be written. The folder may be read-only, or the disk full."
     },
     "ARD-SET-001": {
       "action": "Check that the folder is writable, then change the setting again.",
@@ -84,6 +95,11 @@
       "action": "Use the buttons at the right of the title bar instead.",
       "what": "Windows' window menu could not be opened.",
       "why": "Windows did not accept the request."
+    },
+    "ARD-WIN-002": {
+      "action": "Your work is not lost. If it keeps happening, turn off hardware acceleration in Settings → Advanced, and report it.",
+      "what": "The part of Arden Code that draws the window stopped, and was started again.",
+      "why": "Its process crashed or stopped answering. A graphics driver problem is the usual cause."
     }
   },
   "errorScreen": {
@@ -103,6 +119,31 @@
   "inspector": {
     "empty": "Details of the open session will appear here.",
     "title": "Inspector"
+  },
+  "logs": {
+    "description": "The newest entries of the log files. Private details were removed when they were written.",
+    "empty": "No entry matches.",
+    "filters": "Filters",
+    "folder": "Open logs folder",
+    "level": "Level",
+    "levelAll": "All levels",
+    "levels": {
+      "debug": "Debug",
+      "error": "Error",
+      "info": "Info",
+      "trace": "Trace",
+      "warn": "Warning"
+    },
+    "message": "Message",
+    "more": "Show more",
+    "none": "There are no log entries yet.",
+    "refresh": "Refresh",
+    "search": "Search the messages",
+    "showing": "Showing {{shown}} of {{total}} entries.",
+    "source": "Source",
+    "sourceAll": "All sources",
+    "time": "Time",
+    "title": "Logs"
   },
   "notFound": {
     "home": "Go to the session view",
@@ -157,6 +198,13 @@
         "description": "Turns on the developer tools (F12) and the browser's own menu. For people who work on Arden Code.",
         "label": "Developer mode"
       },
+      "diagnostics": {
+        "button": "Export…",
+        "description": "Save a zip file with the recent logs, your settings, system information and crash reports, without private details. You decide whether to share it.",
+        "done": "Diagnostics exported to {{path}}",
+        "label": "Export diagnostics",
+        "title": "Diagnostics"
+      },
       "export": {
         "button": "Export…",
         "description": "Save a copy of your settings to a file.",
@@ -175,6 +223,26 @@
         "description": "Replace your settings with the ones in a file you exported.",
         "done": "Settings imported",
         "label": "Import settings"
+      },
+      "logLevel": {
+        "debug": "Everything (debug)",
+        "description": "How much the log files record. Debug records everything and is for finding a bug.",
+        "error": "Errors only",
+        "info": "Normal",
+        "label": "Log level",
+        "warn": "Warnings and errors"
+      },
+      "logs": {
+        "folder": {
+          "button": "Open",
+          "description": "Show the log files in Explorer.",
+          "label": "Open logs folder"
+        },
+        "view": {
+          "button": "View logs",
+          "description": "Read the log files here, with filters.",
+          "label": "View logs"
+        }
       },
       "nativeTitleBar": {
         "description": "Lets Windows draw the title bar and the window buttons. Use it if the window does not behave well on your setup.",

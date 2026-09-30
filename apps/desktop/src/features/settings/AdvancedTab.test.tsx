@@ -21,6 +21,8 @@ interface Options {
   exportedTo?: string | null;
   imported?: Settings | null;
   failImport?: boolean;
+  /** Where the diagnostics bundle was saved, or nothing when the person cancels. */
+  diagnosticsTo?: string | null;
 }
 
 /** Rust as a test double, recording what the tab asks of it. */
@@ -29,6 +31,7 @@ function startApp({
   exportedTo = null,
   imported = null,
   failImport = false,
+  diagnosticsTo = null,
 }: Options = {}) {
   Object.assign(globalThis, { isTauri: true });
   let current = settings;
@@ -39,16 +42,19 @@ function startApp({
       if (command === "get_settings") return current;
       if (command === "change_setting") {
         // The tab only changes the advanced toggles here.
-        const { change } = z.object({ change: z.record(z.string(), z.boolean()) }).parse(payload);
+        const { change } = z.object({ change: z.record(z.string(), z.unknown()) }).parse(payload);
         const [key, value] = Object.entries(change)[0] ?? [];
         const advanced = { ...current.advanced };
         if (key === "advancedDeveloperMode") advanced.developerMode = Boolean(value);
         if (key === "advancedNativeTitleBar") advanced.nativeTitleBar = Boolean(value);
         if (key === "advancedHardwareAcceleration") advanced.hardwareAcceleration = Boolean(value);
+        if (key === "advancedLogLevel")
+          advanced.logLevel = z.enum(["error", "warn", "info", "debug"]).parse(value);
         current = { ...current, advanced };
         return current;
       }
       if (command === "export_settings") return exportedTo;
+      if (command === "export_diagnostics") return diagnosticsTo;
       if (command === "import_settings") {
         if (failImport) {
           throw JSON.stringify({
@@ -71,12 +77,14 @@ function startApp({
   return calls;
 }
 
+const onViewLogs = vi.fn<() => void>();
+
 function renderTab() {
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <AdvancedTab />
+      <AdvancedTab onViewLogs={onViewLogs} />
       <Toaster />
     </QueryClientProvider>,
   );
@@ -242,6 +250,66 @@ describe("Advanced → files", () => {
       expect(screen.getByText("Something went wrong (ARD-SET-003)")).toBeVisible();
     });
     expect(screen.getByRole("switch", { name: "Developer mode" })).not.toBeChecked();
+  });
+});
+
+describe("Advanced → Diagnostics", () => {
+  it("records normal detail by default, and saves the level that is chosen", async () => {
+    const calls = startApp();
+    const user = userEvent.setup();
+    renderTab();
+    expect(await screen.findByRole("radio", { name: "Normal" })).toBeChecked();
+
+    await user.click(screen.getByRole("radio", { name: "Everything (debug)" }));
+
+    await waitFor(() => {
+      expect(asked(calls, "change_setting").map((call) => call.payload)).toEqual([
+        { change: { advancedLogLevel: "debug" } },
+      ]);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: "Everything (debug)" })).toBeChecked();
+    });
+  });
+
+  it("opens the log viewer, and the logs folder", async () => {
+    const calls = startApp();
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.click(await screen.findByRole("button", { name: "View logs" }));
+    await user.click(screen.getByRole("button", { name: "Open logs folder" }));
+
+    expect(onViewLogs).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(asked(calls, "open_logs_folder")).toHaveLength(1);
+    });
+  });
+
+  it("says where the diagnostics were saved", async () => {
+    startApp({ diagnosticsTo: "C:\\Users\\Ada\\arden-diagnostics.zip" });
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.click(await screen.findByRole("button", { name: "Export diagnostics" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/^Diagnostics exported to C:/)).toBeVisible();
+    });
+  });
+
+  it("says nothing when the person cancels the export", async () => {
+    const calls = startApp({ diagnosticsTo: null });
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.click(await screen.findByRole("button", { name: "Export diagnostics" }));
+
+    await waitFor(() => {
+      expect(asked(calls, "export_diagnostics")).toHaveLength(1);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(screen.queryByText(/^Diagnostics exported/)).toBeNull();
   });
 });
 

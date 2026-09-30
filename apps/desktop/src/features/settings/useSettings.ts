@@ -69,6 +69,9 @@ function applyChange(settings: Settings, change: SettingChange): Settings {
   if (change.layoutInspectorWidth !== undefined) {
     return { ...settings, layout: { ...layout, inspectorWidth: change.layoutInspectorWidth } };
   }
+  if (change.advancedLogLevel !== undefined) {
+    return { ...settings, advanced: { ...advanced, logLevel: change.advancedLogLevel } };
+  }
   if (change.advancedDeveloperMode !== undefined) {
     return { ...settings, advanced: { ...advanced, developerMode: change.advancedDeveloperMode } };
   }

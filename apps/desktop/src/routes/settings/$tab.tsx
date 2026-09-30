@@ -1,4 +1,4 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { AboutTab } from "@/features/settings/AboutTab";
@@ -17,6 +17,7 @@ export const Route = createFileRoute("/settings/$tab")({
 /** What a tab holds. Tabs that have nothing yet say so. */
 function TabContent({ tab }: { tab: SettingsTab }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   switch (tab) {
     case "general":
@@ -27,7 +28,13 @@ function TabContent({ tab }: { tab: SettingsTab }) {
       return <KeyboardTab />;
     }
     case "advanced": {
-      return <AdvancedTab />;
+      return (
+        <AdvancedTab
+          onViewLogs={() => {
+            void navigate({ to: "/logs" });
+          }}
+        />
+      );
     }
     case "about": {
       return <AboutTab />;

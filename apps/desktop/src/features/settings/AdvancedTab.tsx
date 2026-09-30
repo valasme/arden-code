@@ -56,11 +56,24 @@ function resetArdenCode() {
   commands.resetApp().catch(report);
 }
 
+function openLogsFolder() {
+  commands.openLogsFolder().catch(report);
+}
+
 /** Advanced: the settings for people who look under the hood, and the ways to back up or reset. */
-export function AdvancedTab() {
+export function AdvancedTab({ onViewLogs }: { onViewLogs: () => void }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState<"settings" | "app" | undefined>(undefined);
+
+  const exportDiagnostics = () => {
+    commands
+      .exportDiagnostics()
+      .then((path) => {
+        if (path) toast.success(t("settings.advanced.diagnostics.done", { path }));
+      })
+      .catch(report);
+  };
 
   const exportSettings = () => {
     commands
@@ -95,6 +108,28 @@ export function AdvancedTab() {
   return (
     <div>
       <SettingsList tab="advanced" />
+      <h2 className="mt-4 text-sm font-medium">{t("settings.advanced.diagnostics.title")}</h2>
+      <ActionRow
+        id="view-logs"
+        label={t("settings.advanced.logs.view.label")}
+        description={t("settings.advanced.logs.view.description")}
+        button={t("settings.advanced.logs.view.button")}
+        onClick={onViewLogs}
+      />
+      <ActionRow
+        id="open-logs-folder"
+        label={t("settings.advanced.logs.folder.label")}
+        description={t("settings.advanced.logs.folder.description")}
+        button={t("settings.advanced.logs.folder.button")}
+        onClick={openLogsFolder}
+      />
+      <ActionRow
+        id="export-diagnostics"
+        label={t("settings.advanced.diagnostics.label")}
+        description={t("settings.advanced.diagnostics.description")}
+        button={t("settings.advanced.diagnostics.button")}
+        onClick={exportDiagnostics}
+      />
       <h2 className="mt-4 text-sm font-medium">{t("settings.advanced.files")}</h2>
       <ActionRow
         id="open-settings-file"

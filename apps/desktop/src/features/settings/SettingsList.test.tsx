@@ -32,6 +32,7 @@ const places = {
   appearanceShowStatusBar: ["appearance", "showStatusBar"],
   layoutSidebarWidth: ["layout", "sidebarWidth"],
   layoutInspectorWidth: ["layout", "inspectorWidth"],
+  advancedLogLevel: ["advanced", "logLevel"],
   advancedDeveloperMode: ["advanced", "developerMode"],
   advancedNativeTitleBar: ["advanced", "nativeTitleBar"],
   advancedHardwareAcceleration: ["advanced", "hardwareAcceleration"],

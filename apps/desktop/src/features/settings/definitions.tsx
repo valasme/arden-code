@@ -3,6 +3,7 @@ import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type {
+  LogLevel,
   OnStartup,
   ReduceMotion,
   RegionalFormat,
@@ -48,6 +49,7 @@ const same = defaultSettings;
 const startupChoices = ["restore", "fresh"] as const satisfies readonly OnStartup[];
 const themeChoices = ["system", "light", "dark"] as const satisfies readonly Theme[];
 const regionChoices = ["windows", "english"] as const satisfies readonly RegionalFormat[];
+const logLevelChoices = ["error", "warn", "info", "debug"] as const satisfies readonly LogLevel[];
 const motionChoices = ["system", "on", "off"] as const satisfies readonly ReduceMotion[];
 
 export const settingDefinitions: readonly SettingDefinition[] = [
@@ -271,6 +273,30 @@ export const settingDefinitions: readonly SettingDefinition[] = [
         }}
       />
     ),
+  },
+  {
+    id: "log-level",
+    tab: "advanced",
+    key: "advancedLogLevel",
+    labelKey: "settings.advanced.logLevel.label",
+    descriptionKey: "settings.advanced.logLevel.description",
+    isDefault: (settings) => settings.advanced.logLevel === same.advanced.logLevel,
+    Control: function LogLevelControl({ id, settings, change }) {
+      const { t } = useTranslation();
+      return (
+        <ChoiceControl
+          id={id}
+          value={settings.advanced.logLevel}
+          options={logLevelChoices.map((value) => ({
+            value,
+            label: t(`settings.advanced.logLevel.${value}`),
+          }))}
+          onChange={(value) => {
+            change.mutate({ advancedLogLevel: value });
+          }}
+        />
+      );
+    },
   },
   {
     id: "developer-mode",

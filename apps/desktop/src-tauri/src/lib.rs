@@ -11,9 +11,11 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use arden_core::paths::{AppPaths, DATA_DIR_VARIABLE};
+use arden_diagnostics::logging::UiLevel;
 use arden_diagnostics::redact::Redactor;
 use arden_diagnostics::{crash, logging};
 use arden_settings::service::SettingsService;
+use arden_settings::settings::LogLevel;
 use arden_windows::preferences;
 use specta_typescript::Typescript;
 use tauri::Manager;
@@ -47,6 +49,12 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::get_system_info,
         commands::open_settings_file,
         commands::open_project_page,
+        commands::open_bug_report,
+        commands::read_logs,
+        commands::export_diagnostics,
+        commands::pending_crashes,
+        commands::acknowledge_crashes,
+        commands::take_web_engine_notice,
         commands::export_settings,
         commands::import_settings,
         commands::reset_settings,
@@ -72,6 +80,12 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::get_system_info,
         commands::open_settings_file,
         commands::open_project_page,
+        commands::open_bug_report,
+        commands::read_logs,
+        commands::export_diagnostics,
+        commands::pending_crashes,
+        commands::acknowledge_crashes,
+        commands::take_web_engine_notice,
         commands::export_settings,
         commands::import_settings,
         commands::reset_settings,
@@ -130,7 +144,7 @@ fn resolve_paths(app: &tauri::App) -> tauri::Result<AppPaths> {
 
 /// Starts logging and crash reporting, and returns the redactor that removes private details from
 /// anything the user might share. Neither is worth stopping the app for if it fails.
-fn start_diagnostics(app: &tauri::App, paths: &AppPaths) -> Redactor {
+fn start_diagnostics(app: &tauri::App, paths: &AppPaths, level: UiLevel) -> Redactor {
     let home = app.path().home_dir().ok();
     let user_folder = std::env::var("USERPROFILE").ok();
     let profile_folders: Vec<&str> = home
@@ -146,7 +160,7 @@ fn start_diagnostics(app: &tauri::App, paths: &AppPaths) -> Redactor {
         env!("CARGO_PKG_VERSION"),
         redactor.clone(),
     );
-    if let Err(error) = logging::init(&paths.logs_dir(), &profile_folders) {
+    if let Err(error) = logging::init(&paths.logs_dir(), &profile_folders, level) {
         eprintln!("Arden Code could not start logging: {error}");
     } else {
         tracing::info!(version = env!("CARGO_PKG_VERSION"), "Arden Code started");
@@ -170,6 +184,16 @@ fn watch_system_preferences(handle: tauri::AppHandle) -> preferences::Watcher {
             .emit(&handle);
         },
     )
+}
+
+/// What the log level setting means to the logging.
+const fn ui_level(level: LogLevel) -> UiLevel {
+    match level {
+        LogLevel::Error => UiLevel::Error,
+        LogLevel::Warn => UiLevel::Warn,
+        LogLevel::Info => UiLevel::Info,
+        LogLevel::Debug => UiLevel::Debug,
+    }
 }
 
 /// The folders of the app's files, worked out from Windows' environment. The window does not exist
@@ -234,12 +258,17 @@ pub fn run() {
         .setup(move |app| {
             builder.mount_events(app);
             let paths = resolve_paths(app)?;
-            app.manage(start_diagnostics(app, &paths));
+            // Logging starts before the settings service, so the level is read from the file.
+            let log_level = arden_settings::store::peek(&paths.config)
+                .map_or(LogLevel::default(), |settings| settings.advanced.log_level);
+            app.manage(start_diagnostics(app, &paths, ui_level(log_level)));
             let settings = SettingsService::start(&paths.config);
             let handle = app.handle().clone();
             settings.subscribe(move |settings, notice| {
                 window::apply_native_theme(&handle, settings.appearance.theme);
                 window::apply_advanced(&handle, &settings.advanced);
+                logging::set_level(ui_level(settings.advanced.log_level));
+                tracing::debug!("settings changed");
                 let _ = commands::SettingsChanged {
                     settings: settings.clone(),
                     notice: notice.cloned(),

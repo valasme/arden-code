@@ -6,10 +6,12 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use tauri::WebviewWindow;
+use tauri::{Manager, WebviewWindow};
 
 /// Whether developer mode is on. The key handler reads it on every key press.
 static DEVELOPER_MODE: AtomicBool = AtomicBool::new(false);
+/// Set when the web engine failed and the page was reloaded; the page asks for it once.
+static FAILED: AtomicBool = AtomicBool::new(false);
 /// Whether the key handler has been added to the web engine. It is added once.
 static KEYS_CAUGHT: AtomicBool = AtomicBool::new(false);
 
@@ -63,6 +65,11 @@ pub fn is_browser_shortcut(key: u32, ctrl: bool, shift: bool, alt: bool) -> bool
         ),
         _ => false,
     }
+}
+
+/// Whether the web engine failed since the last time this was asked, once.
+pub fn take_failure() -> bool {
+    FAILED.swap(false, Ordering::Relaxed)
 }
 
 /// Turns off the browser features that do not belong in an app window (plan sections 6.9 and 12),
@@ -176,6 +183,75 @@ fn apply(
                 arguments.VirtualKey(&raw mut key)?;
                 if is_browser_shortcut(key, held(VK_CONTROL), held(VK_SHIFT), held(VK_MENU)) {
                     arguments.SetHandled(true)?;
+                }
+                Ok(())
+            })),
+            &raw mut token,
+        )?;
+    }
+    Ok(())
+}
+
+/// Reloads the page when the web engine's page process stops or stops answering, and restarts the
+/// app when the whole engine is gone. The person is told once the page is back.
+///
+/// # Errors
+///
+/// Returns an error when the window's web engine cannot be reached.
+#[cfg(windows)]
+pub fn recover_from_failures(window: &WebviewWindow) -> tauri::Result<()> {
+    let app = window.app_handle().clone();
+    window.with_webview(move |webview| {
+        if let Err(error) = watch_failures(&webview, app) {
+            tracing::warn!(%error, "could not watch for web engine failures");
+        }
+    })
+}
+
+/// Only Windows has a web engine to recover.
+#[cfg(not(windows))]
+#[allow(clippy::unnecessary_wraps)]
+pub fn recover_from_failures(_window: &WebviewWindow) -> tauri::Result<()> {
+    Ok(())
+}
+
+#[cfg(windows)]
+fn watch_failures(
+    webview: &tauri::webview::PlatformWebview,
+    app: tauri::AppHandle,
+) -> windows::core::Result<()> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED,
+        COREWEBVIEW2_PROCESS_FAILED_KIND_FRAME_RENDER_PROCESS_EXITED,
+        COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED,
+        COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE,
+    };
+    use webview2_com::ProcessFailedEventHandler;
+
+    // SAFETY: the controller and the web view are live COM objects owned by the web engine, and
+    // this runs on the thread that created them. The handler only reads the event and reloads.
+    #[allow(unsafe_code)]
+    unsafe {
+        let core = webview.controller().CoreWebView2()?;
+        let page = core.clone();
+        let mut token = Default::default();
+        core.add_ProcessFailed(
+            &ProcessFailedEventHandler::create(Box::new(move |_sender, arguments| {
+                let Some(arguments) = arguments else {
+                    return Ok(());
+                };
+                let mut kind = COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED;
+                arguments.ProcessFailedKind(&raw mut kind)?;
+                tracing::error!(kind = kind.0, "the web engine failed");
+                if kind == COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED {
+                    // Nothing is left to reload: the app starts again.
+                    app.request_restart();
+                } else if kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED
+                    || kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE
+                    || kind == COREWEBVIEW2_PROCESS_FAILED_KIND_FRAME_RENDER_PROCESS_EXITED
+                {
+                    FAILED.store(true, Ordering::Relaxed);
+                    page.Reload()?;
                 }
                 Ok(())
             })),

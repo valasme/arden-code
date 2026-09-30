@@ -151,7 +151,9 @@ export function AboutTab() {
         <Button
           variant="outline"
           onClick={() => {
-            openPage("issues");
+            commands.openBugReport().catch((error: unknown) => {
+              showErrorToast(toAppError(error));
+            });
           }}
         >
           {t("settings.about.reportBug")}

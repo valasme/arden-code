@@ -180,6 +180,18 @@ export function webViewCommandLines(profileFolder: string): string[] {
   return z.array(z.string()).parse(JSON.parse(output || "[]"));
 }
 
+/** Ends the process of the web engine that draws the page, as a crash of it would. */
+export function killWebViewRenderers(profileFolder: string) {
+  powershell(`
+    Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe'" |
+      Where-Object {
+        $_.CommandLine -like "*--type=renderer*" -and
+        $_.CommandLine -like "*${profileFolder.replaceAll("'", "''")}*"
+      } |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+  `);
+}
+
 /** Ends every Arden Code process, also one the app started for itself by restarting. */
 export function killAllApps() {
   powershell(`Get-Process arden-code -ErrorAction SilentlyContinue | Stop-Process -Force`);

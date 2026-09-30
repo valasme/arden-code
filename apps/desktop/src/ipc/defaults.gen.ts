@@ -25,6 +25,7 @@ export const defaultSettings: Settings = {
     "shortcuts": {}
   },
   "advanced": {
+    "logLevel": "info",
     "developerMode": false,
     "nativeTitleBar": false,
     "hardwareAcceleration": true

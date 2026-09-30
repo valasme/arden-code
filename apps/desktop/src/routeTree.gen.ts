@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LogsRouteImport } from './routes/logs'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as DevDesignSystemRouteImport } from './routes/dev/design-system'
 import { Route as DevErrorsRouteImport } from './routes/dev/errors'
@@ -19,6 +20,11 @@ import { Route as SettingsTabRouteImport } from './routes/settings/$tab'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogsRoute = LogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -49,6 +55,7 @@ const SettingsTabRoute = SettingsTabRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/logs': typeof LogsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/dev/design-system': typeof DevDesignSystemRoute
   '/dev/errors': typeof DevErrorsRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/logs': typeof LogsRoute
   '/dev/design-system': typeof DevDesignSystemRoute
   '/dev/errors': typeof DevErrorsRoute
   '/settings/$tab': typeof SettingsTabRoute
@@ -65,6 +73,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/logs': typeof LogsRoute
   '/settings': typeof SettingsRouteWithChildren
   '/dev/design-system': typeof DevDesignSystemRoute
   '/dev/errors': typeof DevErrorsRoute
@@ -75,6 +84,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/logs'
     | '/settings'
     | '/dev/design-system'
     | '/dev/errors'
@@ -82,10 +92,16 @@ export interface FileRouteTypes {
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/dev/design-system' | '/dev/errors' | '/settings/$tab' | '/settings'
+    | '/'
+    | '/logs'
+    | '/dev/design-system'
+    | '/dev/errors'
+    | '/settings/$tab'
+    | '/settings'
   id:
     | '__root__'
     | '/'
+    | '/logs'
     | '/settings'
     | '/dev/design-system'
     | '/dev/errors'
@@ -95,6 +111,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LogsRoute: typeof LogsRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   DevDesignSystemRoute: typeof DevDesignSystemRoute
   DevErrorsRoute: typeof DevErrorsRoute
@@ -107,6 +124,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logs': {
+      id: '/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof LogsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -163,6 +187,7 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LogsRoute: LogsRoute,
   SettingsRoute: SettingsRouteWithChildren,
   DevDesignSystemRoute: DevDesignSystemRoute,
   DevErrorsRoute: DevErrorsRoute,

@@ -43,7 +43,7 @@ pub fn file_name(date: Date) -> String {
 }
 
 /// The day a log file name stands for, or `None` for any other file.
-fn parse_file_name(name: &str) -> Option<Date> {
+pub(crate) fn parse_file_name(name: &str) -> Option<Date> {
     let stem = name.strip_prefix(PREFIX)?.strip_suffix(SUFFIX)?;
     let mut parts = stem.split('-');
     let year: i32 = parts.next()?.parse().ok()?;

@@ -5,6 +5,8 @@ import { RouterProvider, type RouterHistory } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
+import { CrashRecovery } from "@/features/diagnostics/CrashRecovery";
+import { WebEngineNotice } from "@/features/diagnostics/WebEngineNotice";
 import { SettingsSync } from "@/features/settings/SettingsSync";
 import { StartupSettingsProvider } from "@/features/settings/startup";
 import { AppearanceFromSettings } from "@/features/settings/AppearanceFromSettings";
@@ -45,11 +47,13 @@ export function App({ history, initialSettings, initialSystemPreferences }: AppP
       <StartupSettingsProvider settings={initialSettings}>
         <SettingsSync />
         <SystemPreferencesSync />
+        <WebEngineNotice />
         <AppearanceFromSettings />
         <AppErrorBoundary>
           <RouterProvider router={router} />
         </AppErrorBoundary>
         <Toaster />
+        <CrashRecovery />
       </StartupSettingsProvider>
     </QueryClientProvider>
   );
