@@ -194,6 +194,34 @@ fn start_diagnostics(app: &tauri::App, paths: &AppPaths, level: UiLevel) -> Reda
     redactor
 }
 
+/// The variable that sets the port of the web engine's debugging endpoint. Debug builds only.
+#[cfg(debug_assertions)]
+const DEBUG_PORT_VARIABLE: &str = "ARDEN_CODE_DEBUG_PORT";
+
+/// Makes the main window from its configuration. It is made here, and not by Tauri, so that a debug
+/// build can give the web engine its debugging port in the way that works everywhere: an
+/// environment variable for the engine is ignored by some runners.
+fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == "main")
+        .ok_or(tauri::Error::WindowNotFound)?;
+    let builder = tauri::WebviewWindowBuilder::from_config(app.handle(), config)?;
+    #[cfg(debug_assertions)]
+    let builder = match std::env::var(DEBUG_PORT_VARIABLE) {
+        // The arguments Tauri gives every window, and the port.
+        Ok(port) => builder.additional_browser_args(&format!(
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port}"
+        )),
+        Err(_) => builder,
+    };
+    builder.build()?;
+    Ok(())
+}
+
 /// Makes the Playground folder on the first launch, and starts the store of sessions.
 fn manage_sessions(app: &tauri::App, paths: &AppPaths) {
     let folder = paths.playground_dir();
@@ -326,6 +354,7 @@ pub fn run() {
                 }
                 .emit(&handle);
             });
+            create_main_window(app)?;
             window::prepare_main_window(app, &paths, &settings.get())?;
             app.manage(settings);
             manage_sessions(app, &paths);

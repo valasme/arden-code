@@ -14,6 +14,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Arden Code",
         "width": 1280,
         "height": 800,

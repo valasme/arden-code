@@ -1,8 +1,6 @@
 //! Windows notifications, and the one rule that governs them: with notifications off, nothing is
 //! shown. Every notification goes through [`send`], so no future feature can forget the rule.
 
-use std::io::Write;
-
 use tauri::AppHandle;
 use tauri_plugin_notification::NotificationExt;
 
@@ -56,6 +54,8 @@ pub struct File(pub std::path::PathBuf);
 #[cfg(debug_assertions)]
 impl Sink for File {
     fn show(&self, title: &str, body: &str) -> Result<(), String> {
+        use std::io::Write;
+
         let mut file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)

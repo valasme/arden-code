@@ -39,6 +39,8 @@ export function appEnvironment(
     ARDEN_CODE_DATA_DIR: dataDir,
     WEBVIEW2_USER_DATA_FOLDER: webViewProfile,
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
+    // The engine ignores that variable on some machines, so the app is told the port as well.
+    ARDEN_CODE_DEBUG_PORT: String(debugPort),
   };
 }
 
@@ -68,6 +70,8 @@ function describeWebView(profile: string): string {
         "-NonInteractive",
         "-Command",
         `
+        $elevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        "running as an administrator: $elevated"
         $processes = @(Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe' OR Name = 'arden-code.exe'")
         foreach ($p in $processes) {
           $line = [string]$p.CommandLine
