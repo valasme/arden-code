@@ -28,3 +28,16 @@ WebView2 speaks the Chrome DevTools Protocol, which means Playwright can drive t
 
 - End-to-end tests only run on Windows, which matches the platform.
 - Coverage is tracked but not enforced.
+
+## What was built (ticket 28)
+
+- **Rust tests use `cargo test`**, not cargo-nextest, and there are no insta snapshots: the expected values are
+  written out in the tests, which reads better for the small outputs the crates produce.
+- **UI flows with the Rust side mocked run in Vitest's browser mode**, in a real Chromium, with the calls to Rust
+  answered by `mockIPC`. There is no Playwright run against the Vite dev server: it would test the same thing a
+  second time. Playwright is used for the real app (`e2e/`), the design system page (`visual/`) and the
+  installer (`e2e/installer.spec.ts`).
+- **Performance gates** are described in [performance.md](../performance.md). Cold start, idle memory and the
+  time a settings change takes fail the check past their target times a margin. Warm start and idle CPU are
+  reported: the warm start is about 0.6 s on the machine it was measured on, and no gate is set that the
+  app does not meet.

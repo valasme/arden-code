@@ -115,7 +115,7 @@ mod windows_registry {
     fn open(path: &str) -> io::Result<Key> {
         let path = wide(path);
         let mut key = HKEY::default();
-        // SAFETY: \`path\` is a null-terminated string that lives for the call, and \`key\` is a
+        // SAFETY: `path` is a null-terminated string that lives for the call, and `key` is a
         // valid place for the answer.
         let status = unsafe {
             RegCreateKeyExW(
@@ -143,7 +143,7 @@ mod windows_registry {
         let name = wide(name);
         let mut kind = REG_VALUE_TYPE::default();
         let mut size = 0_u32;
-        // SAFETY: the first call only asks how large the value is; \`name\` lives for the call.
+        // SAFETY: the first call only asks how large the value is; `name` lives for the call.
         let status = unsafe {
             RegQueryValueExW(
                 key.0,
@@ -164,7 +164,7 @@ mod windows_registry {
             return Err(io::Error::other("the value is not text"));
         }
         let mut buffer = vec![0_u8; size as usize];
-        // SAFETY: \`buffer\` is \`size\` bytes long, as the first call said the value needs.
+        // SAFETY: `buffer` is `size` bytes long, as the first call said the value needs.
         let status = unsafe {
             RegQueryValueExW(
                 key.0,
@@ -192,7 +192,7 @@ mod windows_registry {
     fn write(key: &Key, name: &str, text: &str, kind: REG_VALUE_TYPE) -> io::Result<()> {
         let name = wide(name);
         let bytes: Vec<u8> = wide(text).into_iter().flat_map(u16::to_le_bytes).collect();
-        // SAFETY: \`name\` and \`bytes\` live for the call, and \`bytes\` holds the null-terminated
+        // SAFETY: `name` and `bytes` live for the call, and `bytes` holds the null-terminated
         // text the value's kind promises.
         let status =
             unsafe { RegSetValueExW(key.0, PCWSTR(name.as_ptr()), None, kind, Some(&bytes)) };
@@ -243,7 +243,7 @@ mod windows_registry {
     #[allow(unsafe_code)]
     pub fn broadcast() {
         let setting = wide("Environment");
-        // SAFETY: \`setting\` is a null-terminated string that lives for the call. A program that
+        // SAFETY: `setting` is a null-terminated string that lives for the call. A program that
         // does not answer within five seconds is skipped.
         unsafe {
             let _ = SendMessageTimeoutW(

@@ -561,7 +561,7 @@ These are release gates: no release ships unless they all pass.
 - **Zoom:** 80% to 200% without breaking the layout.
 - **Pointer targets:** at least 24×24 px.
 - **Contrast:** 4.5:1 for text, and 3:1 for control borders and focus outlines, verified for every token pair.
-- **Checks:** axe runs in the unit and end-to-end tests. A manual checklist runs before each release.
+- **Checks:** axe runs in the unit and end-to-end tests. A manual checklist ([accessibility-checklist.md](accessibility-checklist.md)) runs before each release.
 
 ## 11. Performance targets
 
@@ -623,10 +623,10 @@ Every row is measured by CI on the release build, and the ones that can fail the
 
 | Layer | Tools |
 |---|---|
-| Rust unit and integration | cargo-nextest, insta snapshots |
+| Rust unit and integration | `cargo test` (see the addendum to ADR 0019) |
 | TypeScript unit | Vitest 5 (Node) |
 | Components | Vitest browser mode on Chromium (the same engine family as WebView2) + Testing Library + axe |
-| UI flows with a mocked backend | Playwright against the Vite dev server, with the Rust side mocked |
+| UI flows with a mocked backend | The same Vitest browser mode, with the calls to Rust answered by `mockIPC` |
 | End to end (the real app) | Playwright attached to the app's WebView2 over CDP (debug builds only) |
 | Visual regression | Playwright screenshots of the design system page in light, dark, high contrast and 200% zoom |
 | Contracts | Bindings drift check; hard-coded-text lint; brand outputs up to date |
