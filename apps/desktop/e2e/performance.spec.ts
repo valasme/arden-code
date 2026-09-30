@@ -49,9 +49,11 @@ const names = [
 
 /**
  * How far past a target a measurement may go before it fails. A shared CI machine is slower and
- * noisier than the one the targets are for, so it gets more room. Set ARDEN_PERF_MARGIN to change it.
+ * noisier than the one the targets are for, so it gets more room: the GitHub runner's web engine
+ * takes about a second longer to set up a new folder, and a cold start there takes about 1.9 s where
+ * a developer's machine takes 0.7 s. Set ARDEN_PERF_MARGIN to change it.
  */
-const margin = Number(process.env["ARDEN_PERF_MARGIN"] ?? (process.env["CI"] ? 1.5 : 1.25));
+const margin = Number(process.env["ARDEN_PERF_MARGIN"] ?? (process.env["CI"] ? 2.5 : 1.25));
 
 /** How many times the app is started, cold and then warm, for the start-up measurements. */
 const rounds = 4;
