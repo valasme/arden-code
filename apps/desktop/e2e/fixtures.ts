@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { type Page, chromium, test as base } from "@playwright/test";
+import { type Browser, type Page, chromium, test as base } from "@playwright/test";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -134,6 +134,19 @@ async function waitForDebugEndpoint(app: ChildProcess, output: () => string, deb
 }
 /* oxlint-enable no-await-in-loop */
 
+/* oxlint-disable no-await-in-loop -- polling is sequential by nature */
+/** The app's page. The debugging port can answer a moment before the web engine has made the page. */
+async function waitForPage(browser: Browser): Promise<Page | undefined> {
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const page = browser.contexts()[0]?.pages()[0];
+    if (page) return page;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return undefined;
+}
+/* oxlint-enable no-await-in-loop */
+
 export interface RunningApp {
   process: ChildProcess;
   pid: number;
@@ -210,7 +223,7 @@ export async function launchApp({
   try {
     await waitForDebugEndpoint(app, output, debugPort);
     const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
-    const page = browser.contexts()[0]?.pages()[0];
+    const page = await waitForPage(browser);
     if (!page) throw new Error("the app has no page to attach to");
     // The page is attached while still blank; the app navigates to its own address a moment later.
     // Tests must not start before that, or their own navigation would race the app's.
