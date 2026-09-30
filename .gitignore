@@ -16,6 +16,8 @@ apps/desktop/src-tauri/gen/
 .env
 .env.*
 !.env.example
+# Not a secret: it only switches on the development pages in debug builds.
+!.env.debug
 *.key
 *.pem
 *.pfx
