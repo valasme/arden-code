@@ -62,9 +62,9 @@ jobs:
             "Signing with the real update key."
           } else {
             $key = Join-Path $env:RUNNER_TEMP "trial.key"
-            pnpm --filter @arden/desktop exec tauri signer generate --ci -p "" -w $key
+            pnpm --filter @arden/desktop exec tauri signer generate --ci -p trial-key -w $key
             "TAURI_SIGNING_PRIVATE_KEY=$key" >> $env:GITHUB_ENV
-            "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=" >> $env:GITHUB_ENV
+            "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=trial-key" >> $env:GITHUB_ENV
             "::warning::The TAURI_SIGNING_PRIVATE_KEY secret is not set, so this trial signed with a throwaway key."
           }
 
