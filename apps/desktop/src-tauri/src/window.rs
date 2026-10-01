@@ -1,16 +1,75 @@
 //! The main window's first moments: where it opens, no white flash, and never stuck hidden.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use arden_core::paths::AppPaths;
 use arden_settings::settings::{Advanced, Settings, Theme as ThemeSetting};
+use serde::Serialize;
+use tauri::webview::{PageLoadEvent, PageLoadPayload};
 use tauri::window::Color;
-use tauri::{AppHandle, Manager, Theme};
+use tauri::{AppHandle, Manager, Theme, WebviewWindow};
 
+use crate::settings::SystemPreferences;
 use crate::window_state;
 
 /// How long the UI has to show the window before Rust shows it anyway.
 const SHOW_FALLBACK: Duration = Duration::from_secs(5);
+
+/// Where the page finds what its first frame needs. `src/lib/firstFrame.ts` reads the same name; a
+/// contract test checks that they agree.
+pub const FIRST_FRAME_GLOBAL: &str = "__ARDEN_FIRST_FRAME__";
+
+/// What the page's first frame is drawn with, in the shape the commands return.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FirstFrame<'a> {
+    settings: &'a Settings,
+    system_preferences: &'a SystemPreferences,
+}
+
+/// A script that runs before the page's own code and hands it the settings and Windows' text size
+/// and regional format. The first frame then does not wait for a round trip to Rust, which goes
+/// through the isolation frame and is the slowest part of a start. `None` if they cannot be written.
+#[must_use]
+pub fn first_frame_script(
+    settings: &Settings,
+    system_preferences: &SystemPreferences,
+) -> Option<String> {
+    let first_frame = FirstFrame {
+        settings,
+        system_preferences,
+    };
+    let json = serde_json::to_string(&first_frame).ok()?;
+    // JSON is a JavaScript expression, so it can be assigned as it is.
+    Some(format!("window.{FIRST_FRAME_GLOBAL} = {json};"))
+}
+
+/// Whether the main window's page has loaded before.
+#[derive(Default)]
+struct FirstLoad(AtomicBool);
+
+impl FirstLoad {
+    /// True the first time the page has finished loading, and never after.
+    fn should_show(&self, event: PageLoadEvent) -> bool {
+        event == PageLoadEvent::Finished && !self.0.swap(true, Ordering::Relaxed)
+    }
+}
+
+/// Shows the window the first time its page has finished loading.
+///
+/// A page that was handed its first frame (`first_frame_script`) has drawn it by then: it draws
+/// while it loads, and loading ends after that. Showing the window from here saves the round trip
+/// through the isolation frame that the page's own call takes, which is 150 to 250 ms of a start.
+/// The page still asks for it after drawing, which does nothing once the window is shown.
+pub fn show_when_first_loaded() -> impl Fn(WebviewWindow, PageLoadPayload<'_>) + Send + Sync {
+    let first_load = FirstLoad::default();
+    move |window, payload| {
+        if first_load.should_show(payload.event()) {
+            let _ = window.show();
+        }
+    }
+}
 
 /// The color behind the web page, as red, green, blue and alpha.
 ///
@@ -72,8 +131,9 @@ pub fn apply_advanced(app: &AppHandle, advanced: &Advanced) {
 /// Puts the hidden main window where it was last time, paints it in the current Windows theme, and
 /// makes sure it appears.
 ///
-/// The window starts hidden (see `tauri.conf.json`). The UI shows it once its first themed frame is
-/// drawn. If the UI never does, for example because it failed to load, this shows it after a few
+/// The window starts hidden (see `tauri.conf.json`). It is shown once the first themed frame is
+/// drawn: when the page has loaded (`show_when_first_loaded`), and by the UI itself after drawing. If
+/// neither happens, for example because the page failed to load, this shows it after a few
 /// seconds so the app is never invisible.
 ///
 /// # Errors
@@ -128,6 +188,44 @@ mod tests {
         assert!(!starts_dark(ThemeSetting::Light, true));
         assert!(starts_dark(ThemeSetting::System, true));
         assert!(!starts_dark(ThemeSetting::System, false));
+    }
+
+    #[test]
+    fn the_first_frame_script_hands_the_page_the_settings_and_windows_preferences() {
+        let mut settings = Settings::default();
+        settings.appearance.theme = ThemeSetting::Dark;
+        let preferences = SystemPreferences {
+            text_scale_percent: 150,
+            locale: "el-GR".to_owned(),
+        };
+
+        let script = first_frame_script(&settings, &preferences).expect("a script");
+
+        let json = script
+            .strip_prefix(&format!("window.{FIRST_FRAME_GLOBAL} = "))
+            .and_then(|rest| rest.strip_suffix(';'))
+            .expect("an assignment to the global the page reads");
+        let handed: serde_json::Value = serde_json::from_str(json).expect("JSON");
+        // The same as the commands return, so the page can use either.
+        assert_eq!(
+            handed["settings"],
+            serde_json::to_value(&settings).expect("settings")
+        );
+        assert_eq!(
+            handed["systemPreferences"],
+            serde_json::to_value(&preferences).expect("preferences")
+        );
+    }
+
+    #[test]
+    fn the_window_is_shown_when_the_page_has_first_loaded_and_never_again() {
+        let first_load = FirstLoad::default();
+
+        assert!(!first_load.should_show(PageLoadEvent::Started));
+        assert!(first_load.should_show(PageLoadEvent::Finished));
+        // A reload, after the page's web engine process stopped, leaves the window as it is.
+        assert!(!first_load.should_show(PageLoadEvent::Started));
+        assert!(!first_load.should_show(PageLoadEvent::Finished));
     }
 
     #[test]

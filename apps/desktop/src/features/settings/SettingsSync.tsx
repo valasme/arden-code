@@ -15,12 +15,16 @@ import { useTauriListener } from "@/lib/useTauriListener";
 export function SettingsSync() {
   const queryClient = useQueryClient();
 
-  useTauriListener(() =>
-    events.settingsChanged.listen(({ payload }) => {
+  useTauriListener(async () => {
+    const stopListening = await events.settingsChanged.listen(({ payload }) => {
       queryClient.setQueryData(settingsQuery.queryKey, payload.settings);
       if (payload.notice) showNoticeToast(payload.notice);
-    }),
-  );
+    });
+    // The page starts with the settings Rust handed over when it made the window. A change made
+    // before this listened, or before the page was reloaded, sent no event it heard: read them again.
+    queryClient.fetchQuery({ ...settingsQuery, staleTime: 0 }).catch(() => {});
+    return stopListening;
+  });
 
   // A problem found while starting was waiting for the UI to be ready.
   useEffect(() => {

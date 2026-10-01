@@ -14,7 +14,7 @@ mod webview;
 mod window;
 mod window_state;
 
-pub use window::startup_background;
+pub use window::{FIRST_FRAME_GLOBAL, startup_background};
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -27,7 +27,7 @@ use arden_diagnostics::redact::Redactor;
 use arden_diagnostics::{crash, logging};
 use arden_process::supervisor::Supervisor;
 use arden_settings::service::SettingsService;
-use arden_settings::settings::LogLevel;
+use arden_settings::settings::{LogLevel, Settings};
 use arden_windows::preferences;
 use specta_typescript::Typescript;
 use tauri::Manager;
@@ -232,9 +232,10 @@ fn browser_arguments(hardware_acceleration: bool, debug_port: Option<&str>) -> S
 }
 
 /// Makes the main window from its configuration. It is made here, and not by Tauri, so that the
-/// web engine's arguments are given in the way that works everywhere: an environment variable for
-/// the engine is ignored by some machines, such as a CI runner.
-fn create_main_window(app: &tauri::App, hardware_acceleration: bool) -> tauri::Result<()> {
+/// web engine's arguments are given in the way that works everywhere (an environment variable for
+/// the engine is ignored by some machines, such as a CI runner), and so that the page is handed what
+/// its first frame needs.
+fn create_main_window(app: &tauri::App, settings: &Settings) -> tauri::Result<()> {
     let config = app
         .config()
         .app
@@ -246,11 +247,20 @@ fn create_main_window(app: &tauri::App, hardware_acceleration: bool) -> tauri::R
     let debug_port = std::env::var(DEBUG_PORT_VARIABLE).ok();
     #[cfg(not(debug_assertions))]
     let debug_port: Option<String> = None;
-    let arguments = browser_arguments(hardware_acceleration, debug_port.as_deref());
+    let arguments = browser_arguments(
+        settings.advanced.hardware_acceleration,
+        debug_port.as_deref(),
+    );
     tracing::info!(%arguments, "the web engine's arguments");
-    tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
-        .additional_browser_args(&arguments)
-        .build()?;
+    let mut builder = tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
+        .additional_browser_args(&arguments);
+    let system_preferences = preferences::read().into();
+    if let Some(script) = window::first_frame_script(settings, &system_preferences) {
+        builder = builder
+            .initialization_script(script)
+            .on_page_load(window::show_when_first_loaded());
+    }
+    builder.build()?;
     Ok(())
 }
 
@@ -402,7 +412,7 @@ pub fn run() {
                 }
                 .emit(&handle);
             });
-            create_main_window(app, settings.get().advanced.hardware_acceleration)?;
+            create_main_window(app, &settings.get())?;
             window::prepare_main_window(app, &paths, &settings.get())?;
             app.manage(snap_layouts::add_overlay(app));
             app.manage(settings);
