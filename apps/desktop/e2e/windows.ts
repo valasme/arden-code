@@ -53,6 +53,12 @@ public static class W {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+  [StructLayout(LayoutKind.Sequential)] public struct MINMAXINFO { public POINT Reserved, MaxSize, MaxPosition, MinTrackSize, MaxTrackSize; }
+  [DllImport("user32.dll", EntryPoint = "SendMessage")] public static extern IntPtr SendMinMax(IntPtr h, uint message, IntPtr w, ref MINMAXINFO l);
+  [DllImport("user32.dll")] public static extern IntPtr ChildWindowFromPointEx(IntPtr parent, POINT point, uint flags);
+  [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT point);
+  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint message, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc p, IntPtr l);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder text, int max);
   /** The window inside the app that receives keys for the web page. */
@@ -105,6 +111,41 @@ export function showWindow(pid: number, command: keyof typeof showCommands) {
 /** Asks the window to close, as the close button would. */
 export function closeMainWindow(pid: number) {
   powershell(`[void][W]::PostMessage((Main-Window ${pid}), 0x10, [IntPtr]::Zero, [IntPtr]::Zero)`);
+}
+
+/**
+ * What Windows is told is at a point of the window's client area, given in the screen's pixels:
+ * the answer of the window there to `WM_NCHITTEST`, as when the pointer rests on it. Snap Layouts
+ * appear where the answer is 9, a Maximize button.
+ */
+export function hitTest(pid: number, x: number, y: number): number {
+  return Number(
+    powershell(`
+      $top = Main-Window ${pid}
+      $point = New-Object W+POINT
+      $point.X = ${Math.round(x)}; $point.Y = ${Math.round(y)}
+      # Skipping hidden and transparent windows, as the pointer does.
+      $child = [W]::ChildWindowFromPointEx($top, $point, 5)
+      [void][W]::ClientToScreen($top, [ref]$point)
+      $position = [IntPtr](($point.Y -shl 16) -bor ($point.X -band 0xFFFF))
+      [W]::SendMessage($child, 0x84, [IntPtr]::Zero, $position).ToInt64()
+    `),
+  );
+}
+
+/**
+ * How narrow the window tells Windows it can be made, in the screen's pixels: its answer to
+ * `WM_GETMINMAXINFO`, which Windows asks before it fits the window into a zone of a Snap Layout.
+ * Windows copies the answer across from the app's process.
+ */
+export function narrowestWidth(pid: number): number {
+  return Number(
+    powershell(`
+      $info = New-Object W+MINMAXINFO
+      [void][W]::SendMinMax((Main-Window ${pid}), 0x24, [IntPtr]::Zero, [ref]$info)
+      $info.MinTrackSize.X
+    `),
+  );
 }
 
 /** The bounds of all monitors together. */

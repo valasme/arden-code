@@ -1,9 +1,10 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { ArrowLeftIcon, ArrowRightIcon, SearchIcon } from "lucide-react";
-import { type ComponentProps, type MouseEvent, useEffect } from "react";
+import { type ComponentProps, type MouseEvent, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { commands } from "@/ipc/bindings";
+import { useSnapLayouts } from "@/lib/snapLayouts";
 import { cn } from "@/lib/utils";
 import { useWindowMaximized, windowControls } from "@/lib/useWindowControls";
 
@@ -57,6 +58,8 @@ export function TitleBar({
 }: TitleBarProps) {
   const { t } = useTranslation();
   const maximized = useWindowMaximized();
+  const maximizeButton = useRef<HTMLButtonElement>(null);
+  const maximizeLook = useSnapLayouts(maximizeButton, !native);
 
   // Alt+Space opens the system menu, as in every Windows app. With the title bar of Windows,
   // Windows does it.
@@ -146,9 +149,12 @@ export function TitleBar({
           >
             <MinimizeGlyph />
           </BarButton>
+          {/* Under Rust's Snap Layouts overlay, which takes the pointer and says how to look. */}
           <BarButton
+            ref={maximizeButton}
+            data-look={maximizeLook}
             aria-label={maximized ? t("titleBar.restore") : t("titleBar.maximize")}
-            className="w-[46px]"
+            className="w-[46px] data-[look=hover]:bg-muted data-[look=pressed]:bg-border forced-colors:data-[look=hover]:outline forced-colors:data-[look=hover]:outline-1"
             onClick={() => void windowControls.toggleMaximize()}
           >
             {maximized ? <RestoreGlyph /> : <MaximizeGlyph />}

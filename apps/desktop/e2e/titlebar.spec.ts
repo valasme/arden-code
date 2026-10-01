@@ -1,5 +1,49 @@
+import type { Page } from "@playwright/test";
+
 import { expect, launchApp, test } from "./fixtures";
-import { getWindow, isMenuOpen } from "./windows";
+import { getWindow, hitTest, isMenuOpen, narrowestWidth } from "./windows";
+
+/** Windows' answer for a Maximize button, the one that brings up Snap Layouts. */
+const maximizeButtonAnswer = 9;
+
+/** The middle of one of the page's buttons, in the screen's pixels from the top left of the page. */
+async function middleOf(page: Page, name: string) {
+  const box = await page.getByRole("button", { name, exact: true }).boundingBox();
+  if (!box) throw new Error(`the page has no ${name} button`);
+  const scale = await page.evaluate(() => globalThis.devicePixelRatio);
+  return { x: (box.x + box.width / 2) * scale, y: (box.y + box.height / 2) * scale };
+}
+
+test.describe("Snap Layouts on the title bar's Maximize button", () => {
+  test("Windows finds a Maximize button exactly where the page draws one", async () => {
+    const app = await launchApp();
+    try {
+      await expect.poll(() => getWindow(app.pid), { timeout: 15_000 }).toBeDefined();
+      const maximize = await middleOf(app.page, "Maximize");
+      const minimize = await middleOf(app.page, "Minimize");
+
+      await expect
+        .poll(() => hitTest(app.pid, maximize.x, maximize.y), { timeout: 10_000 })
+        .toBe(maximizeButtonAnswer);
+      expect(hitTest(app.pid, minimize.x, minimize.y)).not.toBe(maximizeButtonAnswer);
+    } finally {
+      app.kill();
+    }
+  });
+
+  test("Windows is told the window can be as narrow as Snap Layouts' zones need", async () => {
+    const app = await launchApp();
+    try {
+      await expect.poll(() => getWindow(app.pid), { timeout: 15_000 }).toBeDefined();
+      const scale = await app.page.evaluate(() => globalThis.devicePixelRatio);
+
+      // Windows asks for 500 px or less, or a window does not fit a zone of a layout.
+      expect(Math.round(narrowestWidth(app.pid) / scale)).toBeLessThanOrEqual(500);
+    } finally {
+      app.kill();
+    }
+  });
+});
 
 test.describe("the title bar in the real app", () => {
   test("its window buttons minimize, maximize and restore the real window", async () => {

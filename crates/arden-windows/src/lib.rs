@@ -2,6 +2,8 @@
 
 pub mod placement;
 pub mod preferences;
+#[cfg(windows)]
+pub mod snap_layouts;
 pub mod store;
 #[cfg(windows)]
 pub mod system_menu;

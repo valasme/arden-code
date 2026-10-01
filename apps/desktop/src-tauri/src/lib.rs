@@ -6,6 +6,7 @@ mod launch;
 mod navigation;
 mod notifications;
 mod sessions;
+mod snap_layouts;
 mod updates;
 mod webview;
 mod window;
@@ -46,6 +47,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
     let commands = collect_commands![
         commands::app_info,
         commands::show_system_menu,
+        snap_layouts::set_maximize_button,
         commands::log_from_ui,
         commands::open_logs_folder,
         commands::redact_text,
@@ -91,6 +93,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
     let commands = collect_commands![
         commands::app_info,
         commands::show_system_menu,
+        snap_layouts::set_maximize_button,
         commands::log_from_ui,
         commands::open_logs_folder,
         commands::redact_text,
@@ -132,6 +135,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
     builder.commands(commands).events(collect_events![
         commands::SettingsChanged,
         commands::SystemPreferencesChanged,
+        snap_layouts::MaximizeButtonChanged,
         updates::UpdateStatusChanged,
         sessions::SessionRequested
     ])
@@ -376,6 +380,7 @@ pub fn run() {
             });
             create_main_window(app, settings.get().advanced.hardware_acceleration)?;
             window::prepare_main_window(app, &paths, &settings.get())?;
+            app.manage(snap_layouts::add_overlay(app));
             app.manage(settings);
             manage_sessions(app, &paths);
             app.manage(sessions::PendingOpen::default());

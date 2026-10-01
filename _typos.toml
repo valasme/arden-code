@@ -5,6 +5,8 @@ PN = "PN"
 vor = "vor"
 # The NSIS instruction that copies a string, in the installer hooks.
 Cpy = "Cpy"
+# Win32's TrackMouseEvent flags (TME_LEAVE, TME_NONCLIENT), in the Snap Layouts overlay.
+TME = "TME"
 
 [files]
 extend-exclude = [

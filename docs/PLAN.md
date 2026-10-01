@@ -237,6 +237,7 @@ The sidebar lists sessions grouped by project. The foundation ships one built-in
 - **Panes:** the sidebar and the inspector can be collapsed and resized. Their sizes are remembered.
 - **No white flash:** the window starts hidden, with its background already in the current theme. It appears after the first frame is drawn.
 - **Window memory:** size, position, monitor and maximized state are restored. A position that would now be off-screen is corrected.
+- **Smallest size:** 500 × 560 px. Windows asks for 500 px or less, or the window does not fit the zones of Snap Layouts; the sidebar and the session view at their smallest fit in it.
 
 ### 6.2 Title bar and Snap Layouts
 

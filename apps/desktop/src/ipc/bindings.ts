@@ -23,6 +23,21 @@ export const commands = {
 	 *  `ARD-WIN-001` when the window handle is missing or Windows refuses the request.
 	 */
 	showSystemMenu: () => __TAURI_INVOKE<null>("show_system_menu"),
+	/**
+	 *  Where the page's Maximize button is now, or `None` when the page has none, as with the title
+	 *  bar of Windows.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails: without the overlay the button still works, only without Snap Layouts, so a failure
+	 *  is logged.
+	 */
+	setMaximizeButton: (area: {
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+} | null) => __TAURI_INVOKE<null>("set_maximize_button", { area }),
 	/**  Records a message from the UI in the same log files as Rust's own. */
 	logFromUi: (level: UiLogLevel, source: string, message: string, code: string | null) => __TAURI_INVOKE<void>("log_from_ui", { level, source, message, code }),
 	/**
@@ -319,6 +334,7 @@ export const commands = {
 
 /** Events */
 export const events = {
+	maximizeButtonChanged: makeEvent<MaximizeButtonChanged>("maximize-button-changed"),
 	sessionRequested: makeEvent<SessionRequested>("session-requested"),
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	systemPreferencesChanged: makeEvent<SystemPreferencesChanged>("system-preferences-changed"),
@@ -537,6 +553,25 @@ export type LogLevel =
 "info" | 
 /**  Everything, for finding a bug. Files grow faster. */
 "debug";
+
+/**  Where the page's Maximize button is, in physical pixels from the top left of the page. */
+export type MaximizeButtonArea = {
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+};
+
+/**
+ *  Sent to the UI when the Maximize button should look different: the page cannot see the pointer
+ *  on it, because the overlay takes it.
+ */
+export type MaximizeButtonChanged = {
+	look: MaximizeButtonLook,
+};
+
+/**  How the Maximize button should look while the pointer is on it or presses it. */
+export type MaximizeButtonLook = "normal" | "hover" | "pressed";
 
 /**  Whether Arden Code may show Windows notifications. */
 export type Notifications = {
