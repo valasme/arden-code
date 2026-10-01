@@ -1,6 +1,6 @@
 # 0024. Areas, context menus and the browser's own features
 
-- Status: Accepted
+- Status: Accepted; the part on resetting Arden Code is superseded by [0031](0031-restarts-and-reset.md)
 - Date: 2026-09-30
 
 ## Context

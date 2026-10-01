@@ -18,6 +18,7 @@ do), and add a row here. Never reuse or renumber a code.
 | `ARD-APP-003` | Arden Code could not get ready to reset itself | Settings → Advanced → Reset Arden Code |
 | `ARD-APP-004` | A link was not opened: it is not allowed, or Windows could not open it | Choosing a link in an agent's reply |
 | `ARD-APP-005` | A notification could not be shown | Settings → Notifications → Send a test notification |
+| `ARD-APP-006` | A reset could not finish, so the settings were kept and the next start tries again | Starting the app after Settings → Advanced → Reset Arden Code |
 | `ARD-SET-001` | The settings could not be saved | Changing any setting |
 | `ARD-SET-002` | The settings file was not valid, so defaults are in use | Starting the app, or editing `settings.json` by hand |
 | `ARD-SET-003` | A settings file could not be imported | Settings → Advanced → Import settings |

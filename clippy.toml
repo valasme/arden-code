@@ -1,0 +1,5 @@
+disallowed-methods = [
+  { path = "tauri::AppHandle::request_restart", reason = "start the app again through `restart::request`, so the new start waits for this one to end (ADR 0031)" },
+  { path = "tauri::AppHandle::restart", reason = "start the app again through `restart::request`, so the new start waits for this one to end (ADR 0031)" },
+  { path = "tauri::process::restart", reason = "start the app again through `restart::request`, so the new start waits for this one to end (ADR 0031)" },
+]

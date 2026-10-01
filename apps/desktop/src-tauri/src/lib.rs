@@ -6,6 +6,8 @@ mod diagnostics;
 mod launch;
 mod navigation;
 mod notifications;
+mod restart;
+mod restarter;
 mod sessions;
 mod settings;
 mod snap_layouts;
@@ -21,6 +23,7 @@ use std::sync::Arc;
 
 use arden_agents::playground;
 use arden_agents::store::SessionStore;
+use arden_core::error::ErrorCode;
 use arden_core::paths::{AppPaths, DATA_DIR_VARIABLE};
 use arden_diagnostics::logging::UiLevel;
 use arden_diagnostics::redact::Redactor;
@@ -77,6 +80,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         settings::import_settings,
         settings::reset_settings,
         commands::reset_app,
+        commands::take_reset_notice,
         commands::restart_app,
         sessions::list_projects,
         sessions::create_session,
@@ -123,6 +127,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         settings::import_settings,
         settings::reset_settings,
         commands::reset_app,
+        commands::take_reset_notice,
         commands::restart_app,
         sessions::list_projects,
         sessions::create_session,
@@ -233,9 +238,14 @@ fn browser_arguments(hardware_acceleration: bool, debug_port: Option<&str>) -> S
 
 /// Makes the main window from its configuration. It is made here, and not by Tauri, so that the
 /// web engine's arguments are given in the way that works everywhere (an environment variable for
-/// the engine is ignored by some machines, such as a CI runner), and so that the page is handed what
-/// its first frame needs.
-fn create_main_window(app: &tauri::App, settings: &Settings) -> tauri::Result<()> {
+/// the engine is ignored by some machines, such as a CI runner), so that the page is handed what
+/// its first frame needs, and so that the engine keeps its files in the app's `local` folder even
+/// when `ARDEN_CODE_DATA_DIR` moves it: a reset wipes them with the rest.
+fn create_main_window(
+    app: &tauri::App,
+    paths: &AppPaths,
+    settings: &Settings,
+) -> tauri::Result<()> {
     let config = app
         .config()
         .app
@@ -253,7 +263,8 @@ fn create_main_window(app: &tauri::App, settings: &Settings) -> tauri::Result<()
     );
     tracing::info!(%arguments, "the web engine's arguments");
     let mut builder = tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
-        .additional_browser_args(&arguments);
+        .additional_browser_args(&arguments)
+        .data_directory(paths.local.clone());
     let system_preferences = preferences::read().into();
     if let Some(script) = window::first_frame_script(settings, &system_preferences) {
         builder = builder
@@ -352,24 +363,58 @@ fn early_paths() -> AppPaths {
     )
 }
 
-/// What has to happen before the window is made: a reset that was asked for.
-fn prepare_before_start() {
-    let paths = early_paths();
-    if let Err(error) = arden_core::reset::apply_pending(&paths) {
-        eprintln!("Arden Code could not finish resetting itself: {error}");
+/// How long a reset keeps trying a file that another program has open for a moment.
+const RESET_PATIENCE: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// What happened before the window was made, kept for the logs, which start later.
+struct BeforeStart {
+    /// When this start replaces another: whether that one, and all it started, ended in time.
+    previous_ended: Option<bool>,
+    /// Whether a reset that was asked for was done.
+    reset: std::io::Result<bool>,
+}
+
+impl BeforeStart {
+    fn log(&self) {
+        if self.previous_ended == Some(false) {
+            tracing::warn!("the start this one replaces had not ended in time");
+        }
+        match &self.reset {
+            Ok(true) => tracing::info!("Arden Code reset itself"),
+            Ok(false) => {}
+            Err(error) => tracing::error!(
+                code = ErrorCode::ResetUnfinished.as_str(),
+                %error,
+                "Arden Code could not finish resetting itself; the next start tries again"
+            ),
+        }
     }
 }
 
-/// Starts the app.
+/// What has to happen before the window is made: when this start replaces another, waiting for it
+/// to end, and then a reset that was asked for.
+fn prepare_before_start() -> BeforeStart {
+    let previous_ended = restart::wait_for_previous();
+    let reset = arden_core::reset::apply_pending(&early_paths(), RESET_PATIENCE);
+    BeforeStart {
+        previous_ended,
+        reset,
+    }
+}
+
+/// Starts the app. In a development build, this process becomes the restarter that runs it.
 ///
 /// # Panics
 ///
 /// Panics when the Tauri runtime fails to start.
 pub fn run() {
-    prepare_before_start();
+    if restarter::wanted() {
+        restarter::run();
+    }
+    let before_start = prepare_before_start();
     let builder = specta_builder();
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         // This plugin must come first. A second launch ends here and brings the first window forward.
         .plugin(tauri_plugin_single_instance::init(
             |app, arguments, working_directory| {
@@ -399,6 +444,8 @@ pub fn run() {
             let log_level = arden_settings::store::peek(&paths.config)
                 .map_or(LogLevel::default(), |settings| settings.advanced.log_level);
             app.manage(start_diagnostics(app, &paths, ui_level(log_level)));
+            before_start.log();
+            app.manage(commands::ResetNotice::after(&before_start.reset));
             let settings = SettingsService::start(&paths.config);
             let handle = app.handle().clone();
             settings.subscribe(move |settings, notice| {
@@ -413,7 +460,7 @@ pub fn run() {
                 .emit(&handle);
             });
             let started_with = settings.get();
-            create_main_window(app, &started_with)?;
+            create_main_window(app, &paths, &started_with)?;
             window::prepare_main_window(app, &paths, &started_with)?;
             app.manage(snap_layouts::add_overlay(app));
             app.manage(settings);
@@ -433,8 +480,10 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("failed to run Arden Code");
+    let code = app.run_return(|_, _| {});
+    restart::finish(code);
 }
 
 #[cfg(test)]

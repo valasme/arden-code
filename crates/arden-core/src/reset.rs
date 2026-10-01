@@ -1,12 +1,15 @@
 //! Resetting Arden Code: wiping its settings, logs, crash reports and caches.
 //!
 //! The logs are open while the app runs, and so is the web engine's cache, so a reset is done in two
-//! steps. [`request`] leaves a marker file and the app restarts; on the next start,
-//! [`apply_pending`] runs before anything is opened and removes the folders.
+//! steps. [`request`] leaves a marker file and the app restarts; on the next start, once the old one
+//! and its web engine have ended, [`apply_pending`] runs before anything is opened and removes the
+//! folders (ADR 0031).
 
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::APP_IDENTIFIER;
 use crate::error::{AppError, ErrorCode};
@@ -43,32 +46,68 @@ fn is_app_folder(folder: &Path) -> bool {
 
 /// Wipes the app's folders when a reset was asked for. Returns whether one was done.
 ///
+/// The logs, crash reports and caches go first: they are what another program may still have open,
+/// and they are worth nothing once a reset was asked for. The settings go next, and the request
+/// last. So a reset that cannot finish keeps the settings and the request, and the next start
+/// finishes it. A file that another program has open is tried again, for up to `patience` in all:
+/// programs such as virus scanners open new files for a moment.
+///
 /// # Errors
 ///
-/// Returns the first problem met while removing files, after trying everything else. A folder that
-/// is not named like one of the app's is refused.
-pub fn apply_pending(paths: &AppPaths) -> io::Result<bool> {
-    if !marker(paths).exists() {
+/// Returns the problem that stopped the reset. A folder that is not named like one of the app's is
+/// refused, and then nothing is removed.
+pub fn apply_pending(paths: &AppPaths, patience: Duration) -> io::Result<bool> {
+    let deadline = Instant::now() + patience;
+    let remove = |path: &Path| remove_by(path, deadline);
+    let marker = marker(paths);
+    if !marker.exists() {
         return Ok(false);
     }
-    let mut first_problem = None;
-    for folder in [&paths.config, &paths.local] {
-        if !is_app_folder(folder) {
-            first_problem.get_or_insert_with(|| {
-                io::Error::new(
-                    io::ErrorKind::PermissionDenied,
-                    format!("{} is not one of the app's folders", folder.display()),
-                )
-            });
-            continue;
-        }
-        if folder.exists()
-            && let Err(error) = fs::remove_dir_all(folder)
-        {
-            first_problem.get_or_insert(error);
+    if let Some(folder) = [&paths.config, &paths.local]
+        .into_iter()
+        .find(|folder| !is_app_folder(folder))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("{} is not one of the app's folders", folder.display()),
+        ));
+    }
+    if paths.local.exists() {
+        for entry in fs::read_dir(&paths.local)? {
+            let path = entry?.path();
+            if path != marker {
+                remove(&path)?;
+            }
         }
     }
-    first_problem.map_or(Ok(true), Err)
+    if paths.config.exists() {
+        remove(&paths.config)?;
+    }
+    fs::remove_file(&marker)?;
+    // Empty now. It is made again when something is written to it.
+    let _ = fs::remove_dir(&paths.local);
+    Ok(true)
+}
+
+/// How long to wait before trying again to remove something that is in use.
+const RETRY_AFTER: Duration = Duration::from_millis(50);
+
+/// Removes a file, or a folder with everything in it, trying again until `deadline` while it fails.
+fn remove_by(path: &Path, deadline: Instant) -> io::Result<()> {
+    loop {
+        let removed = if path.is_dir() {
+            fs::remove_dir_all(path)
+        } else {
+            fs::remove_file(path)
+        };
+        match removed {
+            Err(error) if error.kind() != io::ErrorKind::NotFound && Instant::now() < deadline => {
+                thread::sleep(RETRY_AFTER);
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+            other => return other,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -93,7 +132,7 @@ mod tests {
     fn nothing_is_removed_until_a_reset_is_asked_for() {
         let (_data, paths) = used_app();
 
-        assert!(!apply_pending(&paths).unwrap());
+        assert!(!apply_pending(&paths, Duration::ZERO).unwrap());
 
         assert!(paths.config.join("settings.json").exists());
         assert!(paths.logs_dir().join("arden.jsonl").exists());
@@ -117,7 +156,7 @@ mod tests {
         let (_data, paths) = used_app();
         request(&paths).unwrap();
 
-        assert!(apply_pending(&paths).unwrap());
+        assert!(apply_pending(&paths, Duration::ZERO).unwrap());
 
         assert!(!paths.config.exists());
         assert!(!paths.local.exists(), "the marker goes with the rest");
@@ -127,13 +166,73 @@ mod tests {
     fn a_reset_is_done_once() {
         let (_data, paths) = used_app();
         request(&paths).unwrap();
-        apply_pending(&paths).unwrap();
+        apply_pending(&paths, Duration::ZERO).unwrap();
         fs::create_dir_all(&paths.config).unwrap();
         fs::write(paths.config.join("settings.json"), "{}").unwrap();
 
-        assert!(!apply_pending(&paths).unwrap());
+        assert!(!apply_pending(&paths, Duration::ZERO).unwrap());
 
         assert!(paths.config.join("settings.json").exists());
+    }
+
+    /// Opens `file` the way the web engine opens its own files: no other program may delete it while
+    /// it is open. It stays open until the returned sender is dropped or sent to.
+    #[cfg(windows)]
+    fn hold(file: &Path) -> std::sync::mpsc::Sender<()> {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let (opened_tx, opened) = std::sync::mpsc::channel();
+        let (release, released) = std::sync::mpsc::channel::<()>();
+        let file = file.to_path_buf();
+        std::thread::spawn(move || {
+            let open = fs::OpenOptions::new()
+                .read(true)
+                .share_mode(0)
+                .open(&file)
+                .unwrap();
+            opened_tx.send(()).unwrap();
+            let _ = released.recv();
+            drop(open);
+        });
+        opened.recv().unwrap();
+        release
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_reset_that_cannot_finish_keeps_the_settings_and_finishes_at_the_next_start() {
+        let (_data, paths) = used_app();
+        request(&paths).unwrap();
+        let engine_file = paths.local.join("EBWebView").join("cache");
+        let in_use = hold(&engine_file);
+
+        assert!(apply_pending(&paths, Duration::from_millis(200)).is_err());
+        assert!(
+            paths.config.join("settings.json").exists(),
+            "the settings stay"
+        );
+        assert!(paths.local.join(MARKER_FILE).exists(), "the request stays");
+
+        drop(in_use);
+        assert!(apply_pending(&paths, Duration::from_millis(200)).unwrap());
+        assert!(!paths.config.exists());
+        assert!(!paths.local.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_file_that_is_in_use_for_a_moment_does_not_stop_the_reset() {
+        let (_data, paths) = used_app();
+        request(&paths).unwrap();
+        let in_use = hold(&paths.local.join("EBWebView").join("cache"));
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            drop(in_use);
+        });
+
+        assert!(apply_pending(&paths, Duration::from_secs(5)).unwrap());
+        assert!(!paths.config.exists());
+        assert!(!paths.local.exists());
     }
 
     #[test]
@@ -142,11 +241,11 @@ mod tests {
         let paths = AppPaths::resolve(Some(data.path()), Path::new("."), Path::new("."));
         request(&paths).unwrap();
 
-        assert!(apply_pending(&paths).unwrap());
+        assert!(apply_pending(&paths, Duration::ZERO).unwrap());
     }
 
     #[test]
-    fn a_folder_that_is_not_named_like_the_apps_is_never_removed() {
+    fn a_reset_that_would_reach_a_folder_that_is_not_the_apps_removes_nothing() {
         let data = tempfile::tempdir().unwrap();
         let documents = data.path().join("Documents");
         fs::create_dir_all(&documents).unwrap();
@@ -155,12 +254,15 @@ mod tests {
             config: documents.clone(),
             local: data.path().join("local"),
         };
+        fs::create_dir_all(paths.logs_dir()).unwrap();
+        fs::write(paths.logs_dir().join("arden.jsonl"), "line").unwrap();
         request(&paths).unwrap();
 
-        let result = apply_pending(&paths);
+        let result = apply_pending(&paths, Duration::ZERO);
 
         assert!(result.is_err());
         assert!(documents.join("thesis.docx").exists());
-        assert!(!paths.local.exists(), "the app's own folder is still wiped");
+        assert!(paths.logs_dir().join("arden.jsonl").exists());
+        assert!(paths.local.join(MARKER_FILE).exists(), "the request stays");
     }
 }

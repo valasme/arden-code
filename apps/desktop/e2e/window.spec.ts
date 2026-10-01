@@ -131,9 +131,8 @@ test("launching the app again brings the running window forward instead of openi
     showWindow(first.pid, "minimize");
     await expect.poll(() => getWindow(first.pid)?.minimized).toBe(true);
 
-    const profile = mkdtempSync(path.join(tmpdir(), "arden-e2e-second-"));
     const second = spawn(executable, [], {
-      env: appEnvironment(dataDir, profile, 0),
+      env: appEnvironment(dataDir, 0),
       stdio: "ignore",
     });
     const exitCode = await new Promise<number | null>((resolve) => {
@@ -144,7 +143,6 @@ test("launching the app again brings the running window forward instead of openi
     expect(exitCode, "the second launch should end by itself").toBe(0);
     await expect.poll(() => getWindow(first.pid)?.minimized).toBe(false);
     expect(countAppProcesses()).toBe(1);
-    rmSync(profile, { recursive: true, force: true });
   } finally {
     first.kill();
     rmSync(dataDir, { recursive: true, force: true });

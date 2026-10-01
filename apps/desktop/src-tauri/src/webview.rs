@@ -245,7 +245,7 @@ fn watch_failures(
                 tracing::error!(kind = kind.0, "the web engine failed");
                 if kind == COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED {
                     // Nothing is left to reload: the app starts again.
-                    app.request_restart();
+                    crate::restart::request(&app);
                 } else if kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED
                     || kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE
                     || kind == COREWEBVIEW2_PROCESS_FAILED_KIND_FRAME_RENDER_PROCESS_EXITED

@@ -28,20 +28,21 @@ function freePort(): Promise<number> {
   });
 }
 
-/** Runs the app with all of its files in a folder of its own, so tests never touch real data. */
-export function appEnvironment(
-  dataDir: string,
-  webViewProfile: string,
-  debugPort: number,
-): NodeJS.ProcessEnv {
-  return {
+/**
+ * Runs the app with all of its files in a folder of its own, so tests never touch real data. The web
+ * engine keeps its files in the app's `local` folder there, as on a real install.
+ */
+export function appEnvironment(dataDir: string, debugPort: number): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
     ...process.env,
     ARDEN_CODE_DATA_DIR: dataDir,
-    WEBVIEW2_USER_DATA_FOLDER: webViewProfile,
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
     // The engine ignores that variable on some machines, so the app is told the port as well.
     ARDEN_CODE_DEBUG_PORT: String(debugPort),
   };
+  // It would move the engine's files out of the app's folder.
+  delete env["WEBVIEW2_USER_DATA_FOLDER"];
+  return env;
 }
 
 /** The last lines of the app's own log files, to show what it was doing when a launch failed. */
@@ -152,7 +153,7 @@ export interface RunningApp {
   pid: number;
   /** The folder holding all of the app's files: settings, logs and crash reports. */
   dataDir: string;
-  /** The folder the web engine keeps its files in for this launch. */
+  /** The folder the web engine keeps its files in: the app's `local` folder, as on a real install. */
   webViewProfile: string;
   /** The port the web engine listens on for the Chrome DevTools Protocol. */
   debugPort: number;
@@ -182,12 +183,11 @@ export async function launchApp({
   const ownedFolders: string[] = [];
   const data = dataDir ?? mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
   if (!dataDir) ownedFolders.push(data);
-  const profile = mkdtempSync(path.join(tmpdir(), "arden-e2e-webview-"));
-  ownedFolders.push(profile);
+  const profile = path.join(data, "local");
 
   const debugPort = await freePort();
   const app = spawn(executable, args, {
-    env: { ...appEnvironment(data, profile, debugPort), ...env },
+    env: { ...appEnvironment(data, debugPort), ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const output = collectOutput(app);

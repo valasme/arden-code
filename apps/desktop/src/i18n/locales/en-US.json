@@ -78,6 +78,11 @@
       "what": "The notification was not shown.",
       "why": "Windows would not show it."
     },
+    "ARD-APP-006": {
+      "action": "Close any program that may be using Arden Code's folders, such as an Explorer window or a terminal, then restart Arden Code to finish the reset.",
+      "what": "Arden Code could not finish resetting itself.",
+      "why": "Some of its files could not be deleted, usually because another program had them open. Your settings were kept."
+    },
     "ARD-LOG-001": {
       "action": "Open it yourself in Explorer, at %LOCALAPPDATA%\\io.github.valasme.arden\\logs.",
       "what": "The logs folder could not be opened.",

@@ -6,7 +6,7 @@ import type { Page } from "@playwright/test";
 import { z } from "zod";
 
 import { expect, launchApp, logText, test } from "./fixtures";
-import { frameHeight, killAllApps, webViewCommandLines } from "./windows";
+import { countAppProcesses, frameHeight, killAllApps, webViewCommandLines } from "./windows";
 
 const settingsFile = z.object({
   appearance: z.object({ zoom: z.number() }),
@@ -152,16 +152,25 @@ test.describe("Advanced settings in the real app", () => {
   );
 
   test(
-    "Reset Arden Code wipes its files and starts it again as new",
+    "Reset Arden Code wipes its files, the web engine's too, and starts it again as new",
     withFolder(async () => {
       const app = await launchApp();
       try {
+        // As on a real install, the engine keeps its files in the app's folder, and has them open
+        // until a moment after the app has ended.
+        const engineFolder = path.join(app.dataDir, "local", "EBWebView");
+        expect(existsSync(engineFolder)).toBe(true);
         await openAdvanced(app.page);
         await app.page.keyboard.press("Control+=");
         await expect.poll(() => readSettings(app.dataDir).appearance.zoom).toBe(110);
-        const oldFile = path.join(app.dataDir, "local", "logs", "left-over.txt");
-        mkdirSync(path.dirname(oldFile), { recursive: true });
-        writeFileSync(oldFile, "from before the reset");
+        const oldFiles = [
+          path.join(app.dataDir, "local", "logs", "left-over.txt"),
+          path.join(engineFolder, "left-over.txt"),
+        ];
+        for (const file of oldFiles) {
+          mkdirSync(path.dirname(file), { recursive: true });
+          writeFileSync(file, "from before the reset");
+        }
 
         await app.page.getByRole("button", { name: "Reset Arden Code" }).click();
         await app.page
@@ -174,7 +183,10 @@ test.describe("Advanced settings in the real app", () => {
           .poll(
             () => {
               try {
-                return !existsSync(oldFile) && readSettings(app.dataDir).appearance.zoom === 100;
+                return (
+                  oldFiles.every((file) => !existsSync(file)) &&
+                  readSettings(app.dataDir).appearance.zoom === 100
+                );
               } catch {
                 // The new start has not written the settings yet.
                 return false;
@@ -184,6 +196,7 @@ test.describe("Advanced settings in the real app", () => {
           )
           .toBe(true);
         expect(existsSync(path.join(app.dataDir, "local", "reset-requested"))).toBe(false);
+        expect(countAppProcesses(), "only the new start runs").toBe(1);
       } finally {
         killAllApps();
         app.kill();
