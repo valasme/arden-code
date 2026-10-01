@@ -10,7 +10,10 @@ const devPort = 1420;
 
 export default defineConfig({
   plugins: [
-    tanstackRouter({ target: "react", autoCodeSplitting: true }),
+    // Pages load on demand in the app. In tests they load up front: on demand, the first test to
+    // open a page also waits for Vite to compile it, which on a busy CI machine can take longer than
+    // the test waits for anything.
+    tanstackRouter({ target: "react", autoCodeSplitting: process.env["VITEST"] === undefined }),
     tailwindcss(),
     react(),
     babel({ presets: [reactCompilerPreset()] }),
