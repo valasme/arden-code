@@ -117,20 +117,20 @@ export interface Start {
 }
 
 export interface StartTimer {
-  /** Starts the app on these folders and resolves once its window is shown. */
-  start(dataDir: string, webViewProfile: string): Promise<Start>;
+  /** Starts the app on this data folder and resolves once its window is shown. */
+  start(dataDir: string): Promise<Start>;
   /** Closes the app the way a person would, and ends it if it does not go. */
   close(start: Start): Promise<void>;
   stop(): void;
 }
 
-/** The environment of a person's app: its own folders, and nothing that opens a debugging port. */
-function plainEnvironment(dataDir: string, webViewProfile: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ARDEN_CODE_DATA_DIR: dataDir,
-    WEBVIEW2_USER_DATA_FOLDER: webViewProfile,
-  };
+/**
+ * The environment of a person's app: its own folders, with the web engine's files in its `local`
+ * folder, and nothing that opens a debugging port.
+ */
+function plainEnvironment(dataDir: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, ARDEN_CODE_DATA_DIR: dataDir };
+  delete env["WEBVIEW2_USER_DATA_FOLDER"];
   delete env["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"];
   delete env["ARDEN_CODE_DEBUG_PORT"];
   return env;
@@ -172,10 +172,10 @@ export async function startTimer(): Promise<StartTimer> {
   if (ready !== "ready") throw new Error(`the window watcher said ${ready}`);
 
   return {
-    async start(dataDir, webViewProfile) {
+    async start(dataDir) {
       const startedAt = Date.now();
       const app = spawn(executable, [], {
-        env: plainEnvironment(dataDir, webViewProfile),
+        env: plainEnvironment(dataDir),
         stdio: "ignore",
       });
       const pid = app.pid;

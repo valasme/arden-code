@@ -148,6 +148,32 @@ async function waitForPage(browser: Browser): Promise<Page | undefined> {
 }
 /* oxlint-enable no-await-in-loop */
 
+/**
+ * Waits for the web engine on this profile folder to end. It goes on for a moment after the app has
+ * ended, with files in the app's folder open (ADR 0031), so a test that removes that folder, or
+ * starts the app on it again, must wait for it too. Whatever is left after a few seconds is ended.
+ */
+function waitForWebView(profile: string) {
+  const folder = profile.replaceAll("'", "''");
+  const script = `
+    $engine = { @(Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe'" |
+      Where-Object { $_.CommandLine -like '*${folder}*' }) }
+    $deadline = (Get-Date).AddSeconds(5)
+    while ((& $engine).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 100 }
+    foreach ($left in (& $engine)) {
+      Stop-Process -Id $left.ProcessId -Force -ErrorAction SilentlyContinue
+      Wait-Process -Id $left.ProcessId -Timeout 5 -ErrorAction SilentlyContinue
+    }
+  `;
+  try {
+    execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], {
+      stdio: "ignore",
+    });
+  } catch {
+    // PowerShell could not look. The test goes on, and finds out if the folder is still in use.
+  }
+}
+
 export interface RunningApp {
   process: ChildProcess;
   pid: number;
@@ -159,7 +185,7 @@ export interface RunningApp {
   debugPort: number;
   /** The app's web page, attached over the Chrome DevTools Protocol. */
   page: Page;
-  /** Closes the window the way the user would, and waits for the app to save and exit. */
+  /** Closes the window the way the user would, and waits for the app to save and exit, and its web engine to end. */
   close(): Promise<void>;
   /** Ends the app and everything it started. Safe to call after `close`. */
   kill(): void;
@@ -201,6 +227,7 @@ export async function launchApp({
     } catch {
       // Already gone.
     }
+    waitForWebView(profile);
   };
   const cleanUp = () => {
     // Cleaning up temporary folders is best effort. It must never hide a test's own error, and the

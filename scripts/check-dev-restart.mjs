@@ -1,4 +1,4 @@
-// Checks by hand what CI cannot: that a `pnpm dev` session keeps serving Arden Code when the app
+// Checks by hand what CI cannot: that `pnpm dev` keeps serving Arden Code when the app
 // starts itself again, after a plain restart and after Reset Arden Code, and ends when the app is
 // closed. Run it after changing how the app restarts: `pnpm check:dev-restart` (docs/dev-setup.md).
 import { execFileSync, spawn } from "node:child_process";
@@ -163,12 +163,12 @@ async function run(scenario) {
   };
   delete env["WEBVIEW2_USER_DATA_FOLDER"];
   // pnpm is a .cmd file, which only a shell runs.
-  const session = spawn("pnpm dev", { cwd: root, env, shell: true });
+  const dev = spawn("pnpm dev", { cwd: root, env, shell: true });
   let output = "";
-  session.stdout.on("data", (chunk) => (output += chunk));
-  session.stderr.on("data", (chunk) => (output += chunk));
+  dev.stdout.on("data", (chunk) => (output += chunk));
+  dev.stderr.on("data", (chunk) => (output += chunk));
   let ended = false;
-  session.on("exit", () => (ended = true));
+  dev.on("exit", () => (ended = true));
 
   try {
     let { browser, page } = await attach(port, 15 * 60_000);
@@ -176,13 +176,13 @@ async function run(scenario) {
     await browser.close().catch(() => {});
 
     ({ browser, page } = await attach(port, 60_000));
-    check(!ended, "the dev session still runs");
+    check(!ended, "`pnpm dev` still runs");
     check(await serves(devServer), "the dev server still serves");
     scenario.verify(data);
 
-    // Closing the app ends the session, as it would without a restart.
+    // Closing the app ends `pnpm dev`, as it would without a restart.
     await page.getByRole("button", { name: "Close" }).click();
-    check(await until(() => ended, 30_000), "closing the app ends the dev session");
+    check(await until(() => ended, 30_000), "closing the app ends `pnpm dev`");
     check(appProcesses(true).length === 0, "no start of the app is left running");
     console.log(`  ✓ ${scenario.name}`);
     return true;
@@ -191,7 +191,7 @@ async function run(scenario) {
     console.log(output.split("\n").slice(-15).join("\n"));
     return false;
   } finally {
-    if (!ended) killTree(session.pid);
+    if (!ended) killTree(dev.pid);
     for (const pid of appProcesses(true)) killTree(pid);
     if (await serves(devServer)) {
       const owner = powershell(
@@ -218,7 +218,7 @@ console.log(
 );
 let passed = true;
 for (const scenario of scenarios) {
-  // oxlint-disable-next-line no-await-in-loop -- one dev session at a time, on vite's one port
+  // oxlint-disable-next-line no-await-in-loop -- one `pnpm dev` at a time, on vite's one port
   passed = (await run(scenario)) && passed;
 }
 process.exit(passed ? 0 : 1);

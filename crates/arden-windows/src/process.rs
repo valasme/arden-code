@@ -181,11 +181,11 @@ fn children_by_parent() -> HashMap<u32, Vec<u32>> {
 }
 
 /// The processes of a tree that run now: the root itself, what it started, what those started, and
-/// so on. `known` holds every member found so far with the time it started, and gains the new ones:
+/// so on. `known` holds every member found so far, and gains the new ones:
 /// a member that has ended is still looked through, because what it started is linked to the root
 /// in no other way. A process's record of who started it is only a number, so a process counts as
 /// started by another only if it started after it. The process that asks is never part of the tree.
-fn running_tree(root: Identity, known: &mut Vec<(u32, u64)>) -> Vec<Opened> {
+fn running_tree(root: Identity, known: &mut Vec<Identity>) -> Vec<Opened> {
     let children = children_by_parent();
     let me = std::process::id();
     let mut running = Vec::new();
@@ -198,20 +198,24 @@ fn running_tree(root: Identity, known: &mut Vec<(u32, u64)>) -> Vec<Opened> {
     }
     let mut visited = vec![root.id];
     let mut parents = known.clone();
-    while let Some((parent, parent_started)) = parents.pop() {
-        for &id in children.get(&parent).into_iter().flatten() {
+    while let Some(parent) = parents.pop() {
+        for &id in children.get(&parent.id).into_iter().flatten() {
             if id == me || visited.contains(&id) {
                 continue;
             }
             visited.push(id);
-            let Some(process) = Opened::open(id).filter(|child| child.started >= parent_started)
+            let Some(process) = Opened::open(id).filter(|child| child.started >= parent.started)
             else {
                 continue;
             };
-            if !known.contains(&(id, process.started)) {
-                known.push((id, process.started));
+            let member = Identity {
+                id,
+                started: process.started,
+            };
+            if !known.contains(&member) {
+                known.push(member);
             }
-            parents.push((id, process.started));
+            parents.push(member);
             if !process.has_ended() {
                 running.push(process);
             }
@@ -225,7 +229,7 @@ fn running_tree(root: Identity, known: &mut Vec<(u32, u64)>) -> Vec<Opened> {
 #[must_use]
 pub fn wait_for_tree(root: Identity, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
-    let mut known = vec![(root.id, root.started)];
+    let mut known = vec![root];
     loop {
         let running = running_tree(root, &mut known);
         if running.is_empty() {

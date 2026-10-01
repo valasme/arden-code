@@ -21,7 +21,7 @@ use tauri::AppHandle;
 use crate::restarter;
 
 /// The variable that hands a new start the identity of the one it replaces.
-pub const RESTARTED_FROM_VARIABLE: &str = "ARDEN_CODE_RESTARTED_FROM";
+const RESTARTED_FROM_VARIABLE: &str = "ARDEN_CODE_RESTARTED_FROM";
 
 /// How long a new start waits for the old one. The web engine needs a fraction of a second; past
 /// this, something holds on, and the app starts anyway.
@@ -53,13 +53,22 @@ pub fn finish(code: i32) -> ! {
     std::process::exit(0);
 }
 
-/// Starts this program again with the same arguments, handing over this process's identity.
+/// Starts this program again, handing over this process's identity.
 fn start_again() -> io::Result<()> {
-    Command::new(std::env::current_exe()?)
-        .args(std::env::args_os().skip(1))
-        .env(RESTARTED_FROM_VARIABLE, Identity::current()?.to_string())
+    this_program_again(Some(Identity::current()?))?
         .spawn()
         .map(drop)
+}
+
+/// This program, with this process's arguments, to start again. `replaces` is the start it replaces,
+/// which it waits for.
+pub fn this_program_again(replaces: Option<Identity>) -> io::Result<Command> {
+    let mut program = Command::new(std::env::current_exe()?);
+    program.args(std::env::args_os().skip(1));
+    if let Some(previous) = replaces {
+        program.env(RESTARTED_FROM_VARIABLE, previous.to_string());
+    }
+    Ok(program)
 }
 
 /// When this start replaces another, waits for that one and everything it started to end. Returns

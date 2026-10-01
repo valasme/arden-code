@@ -68,7 +68,7 @@ The Tauri CLI rejects `CI=1`; if your shell sets it, run `$env:CI = "true"` firs
 
 In `pnpm dev`, the `arden-code.exe` that `tauri dev` runs is a restarter: it shows no window, runs the app as its
 child, and runs it again when the app restarts itself (a reset, or a setting that needs it). So the dev server
-keeps serving the new start, and the session ends when you close the app (ADR 0031). Task Manager shows two
+keeps serving the new start, and `pnpm dev` ends when you close the app (ADR 0031). Task Manager shows two
 `arden-code.exe` processes for it.
 
 ## Checks and tools
@@ -87,8 +87,8 @@ pnpm typos    # spelling
 
 `pnpm test:e2e` builds a debug app and drives it through WebView2 with Playwright.
 
-`pnpm check:dev-restart` runs `pnpm dev` through a restart and a reset, and checks that the session keeps serving the
-app and ends when it is closed. CI cannot run it; run it after changing how the app restarts. It builds the app in
+`pnpm check:dev-restart` runs `pnpm dev` through a restart and a reset, and checks that it keeps serving the app, and
+ends when the app is closed. CI cannot run it; run it after changing how the app restarts. It builds the app in
 `target\dev-check` (a few minutes the first time), and needs `pnpm dev` and Arden Code closed.
 
 `pnpm test:perf` builds the release app and measures start-up time, idle memory and CPU, and how long a

@@ -7,7 +7,7 @@
 
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -18,7 +18,7 @@ use crate::paths::AppPaths;
 /// The file whose presence asks for a reset at the next start.
 pub const MARKER_FILE: &str = "reset-requested";
 
-fn marker(paths: &AppPaths) -> std::path::PathBuf {
+fn marker(paths: &AppPaths) -> PathBuf {
     paths.local.join(MARKER_FILE)
 }
 
@@ -47,9 +47,9 @@ fn is_app_folder(folder: &Path) -> bool {
 /// Wipes the app's folders when a reset was asked for. Returns whether one was done.
 ///
 /// The logs, crash reports and caches go first: they are what another program may still have open,
-/// and they are worth nothing once a reset was asked for. The settings go next, and the request
-/// last. So a reset that cannot finish keeps the settings and the request, and the next start
-/// finishes it. A file that another program has open is tried again, for up to `patience` in all:
+/// and they are worth nothing once a reset was asked for. The settings go next, all at once, and the
+/// request last. So a reset that cannot finish keeps the settings and the request, and the next start
+/// finishes it. Something that another program has open is tried again, for up to `patience` in all:
 /// programs such as virus scanners open new files for a moment.
 ///
 /// # Errors
@@ -58,7 +58,15 @@ fn is_app_folder(folder: &Path) -> bool {
 /// refused, and then nothing is removed.
 pub fn apply_pending(paths: &AppPaths, patience: Duration) -> io::Result<bool> {
     let deadline = Instant::now() + patience;
-    let remove = |path: &Path| remove_by(path, deadline);
+    let remove = |path: &Path| {
+        retry_until(deadline, || {
+            if path.is_dir() {
+                fs::remove_dir_all(path)
+            } else {
+                fs::remove_file(path)
+            }
+        })
+    };
     let marker = marker(paths);
     if !marker.exists() {
         return Ok(false);
@@ -80,32 +88,36 @@ pub fn apply_pending(paths: &AppPaths, patience: Duration) -> io::Result<bool> {
             }
         }
     }
-    if paths.config.exists() {
-        remove(&paths.config)?;
-    }
+    // Removed file by file, the settings could be half gone when one of them is in use. Windows does
+    // not move a folder while a file in it is open, so the folder is moved out of the way first.
+    let settings_going = going(&paths.config);
+    remove(&settings_going)?;
+    retry_until(deadline, || fs::rename(&paths.config, &settings_going))?;
+    remove(&settings_going)?;
     fs::remove_file(&marker)?;
     // Empty now. It is made again when something is written to it.
     let _ = fs::remove_dir(&paths.local);
     Ok(true)
 }
 
-/// How long to wait before trying again to remove something that is in use.
+/// Where `folder` is moved on its way out: next to it, so the move stays on its drive.
+fn going(folder: &Path) -> PathBuf {
+    let mut name = folder.file_name().unwrap_or_default().to_os_string();
+    name.push(".removing");
+    folder.with_file_name(name)
+}
+
+/// How long to wait before trying again to change something that is in use.
 const RETRY_AFTER: Duration = Duration::from_millis(50);
 
-/// Removes a file, or a folder with everything in it, trying again until `deadline` while it fails.
-fn remove_by(path: &Path, deadline: Instant) -> io::Result<()> {
+/// Runs `attempt` until it works, or until `deadline` while it fails. What is not there counts as
+/// done: it is what removing and moving are for.
+fn retry_until(deadline: Instant, mut attempt: impl FnMut() -> io::Result<()>) -> io::Result<()> {
     loop {
-        let removed = if path.is_dir() {
-            fs::remove_dir_all(path)
-        } else {
-            fs::remove_file(path)
-        };
-        match removed {
-            Err(error) if error.kind() != io::ErrorKind::NotFound && Instant::now() < deadline => {
-                thread::sleep(RETRY_AFTER);
-            }
+        match attempt() {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
-            other => return other,
+            Err(_) if Instant::now() < deadline => thread::sleep(RETRY_AFTER),
+            done => return done,
         }
     }
 }
@@ -153,13 +165,22 @@ mod tests {
 
     #[test]
     fn a_pending_reset_removes_settings_logs_crash_reports_and_caches() {
-        let (_data, paths) = used_app();
+        let (data, paths) = used_app();
         request(&paths).unwrap();
+        // Left by a reset that stopped while it removed the settings.
+        let half_removed = data.path().join("config.removing");
+        fs::create_dir_all(&half_removed).unwrap();
+        fs::write(half_removed.join("settings.json"), "{}").unwrap();
 
         assert!(apply_pending(&paths, Duration::ZERO).unwrap());
 
         assert!(!paths.config.exists());
         assert!(!paths.local.exists(), "the marker goes with the rest");
+        assert_eq!(
+            fs::read_dir(data.path()).unwrap().count(),
+            0,
+            "nothing is left"
+        );
     }
 
     #[test]
@@ -205,6 +226,29 @@ mod tests {
         request(&paths).unwrap();
         let engine_file = paths.local.join("EBWebView").join("cache");
         let in_use = hold(&engine_file);
+
+        assert!(apply_pending(&paths, Duration::from_millis(200)).is_err());
+        assert!(
+            paths.config.join("settings.json").exists(),
+            "the settings stay"
+        );
+        assert!(paths.local.join(MARKER_FILE).exists(), "the request stays");
+
+        drop(in_use);
+        assert!(apply_pending(&paths, Duration::from_millis(200)).unwrap());
+        assert!(!paths.config.exists());
+        assert!(!paths.local.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn settings_that_cannot_all_go_all_stay() {
+        let (_data, paths) = used_app();
+        request(&paths).unwrap();
+        // Removed one by one, the settings file would go before this one is found in use.
+        let schema = paths.config.join("settings.schema.json");
+        fs::write(&schema, "{}").unwrap();
+        let in_use = hold(&schema);
 
         assert!(apply_pending(&paths, Duration::from_millis(200)).is_err());
         assert!(

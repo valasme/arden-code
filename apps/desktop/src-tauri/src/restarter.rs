@@ -6,11 +6,11 @@
 //! as its child, and runs it again each time the app exits asking for that (see `restart`).
 
 use std::io;
-use std::process::{Child, Command};
+use std::process::Child;
 
 use arden_windows::process::Identity;
 
-use crate::restart::RESTARTED_FROM_VARIABLE;
+use crate::restart;
 
 /// The exit code with which the app asks the restarter to run it again.
 pub const RESTART_EXIT_CODE: i32 = tauri::RESTART_EXIT_CODE;
@@ -31,22 +31,15 @@ pub fn runs_this() -> bool {
 
 /// Runs the app under this restarter, with this process's arguments, and ends with its exit code.
 pub fn run() -> ! {
-    let code = std::env::current_exe()
-        .and_then(|program| {
-            supervise(|previous| {
-                let mut app = Command::new(&program);
-                app.args(std::env::args_os().skip(1))
-                    .env(RESTARTER_VARIABLE, "1");
-                if let Some(previous) = previous {
-                    app.env(RESTARTED_FROM_VARIABLE, previous.to_string());
-                }
-                app.spawn()
-            })
-        })
-        .unwrap_or_else(|error| {
-            eprintln!("Arden Code's restarter could not run the app: {error}");
-            1
-        });
+    let code = supervise(|previous| {
+        restart::this_program_again(previous)?
+            .env(RESTARTER_VARIABLE, "1")
+            .spawn()
+    })
+    .unwrap_or_else(|error| {
+        eprintln!("Arden Code's restarter could not run the app: {error}");
+        1
+    });
     std::process::exit(code)
 }
 
@@ -71,6 +64,7 @@ pub fn supervise(mut start: impl FnMut(Option<Identity>) -> io::Result<Child>) -
 #[cfg(test)]
 mod tests {
     use std::os::windows::process::CommandExt;
+    use std::process::Command;
 
     use super::*;
 
