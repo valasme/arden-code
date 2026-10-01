@@ -30,10 +30,16 @@ fn app_error(error: StoreError) -> AppError {
 }
 
 /// The projects and their sessions, for the sidebar.
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Tauri hands commands their state by value; every command returns a `Result` (ADR 0008).
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn list_projects(sessions: State<'_, Sessions>) -> Vec<ProjectListing> {
-    sessions.projects()
+pub fn list_projects(sessions: State<'_, Sessions>) -> Result<Vec<ProjectListing>, AppError> {
+    Ok(sessions.projects())
 }
 
 /// Starts an empty Demo agent session in the Playground.
@@ -180,12 +186,18 @@ pub fn open_folder(app: &tauri::AppHandle, folder: &std::path::Path) {
 
 /// The session the page should show because a folder was opened before the page was ready. Asking
 /// takes it: it is never returned twice.
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Tauri hands commands their state by value; every command returns a `Result` (ADR 0008).
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn take_pending_open(pending: State<'_, PendingOpen>) -> Option<String> {
-    pending
+pub fn take_pending_open(pending: State<'_, PendingOpen>) -> Result<Option<String>, AppError> {
+    Ok(pending
         .0
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .take()
+        .take())
 }

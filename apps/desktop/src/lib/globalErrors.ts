@@ -5,8 +5,8 @@ import { logger } from "./logger";
 
 type Notify = (error: AppError) => void;
 
-/** Logs an error nobody handled, and passes it on so the user can be told. */
-function report(what: string, thrown: unknown, notify: Notify) {
+/** Logs an error nobody else handles, and passes it on so the user can be told. */
+export function reportError(what: string, thrown: unknown, notify: Notify) {
   const error = toAppError(thrown);
   logger.error("ui", `${what}: ${error.details ?? error.messageKey}`, error.code);
   notify(error);
@@ -28,12 +28,12 @@ export function handleUncaughtError(event: ErrorEvent, notify: Notify) {
     logger.debug("ui", `Ignored: ${event.message}`);
     return;
   }
-  report("Uncaught error", event.error ?? event.message, notify);
+  reportError("Uncaught error", event.error ?? event.message, notify);
 }
 
 /** Runs for a promise that was rejected without anything handling the rejection. */
 export function handleUnhandledRejection(event: PromiseRejectionEvent, notify: Notify) {
-  report("Unhandled rejection", event.reason, notify);
+  reportError("Unhandled rejection", event.reason, notify);
 }
 
 /** Starts listening for uncaught errors and unhandled rejections. Returns a function that stops. */

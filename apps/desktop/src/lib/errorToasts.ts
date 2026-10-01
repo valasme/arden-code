@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import type { AppError } from "@/ipc/bindings";
 
 import { copyErrorDetails } from "./copyDetails";
+import { reportError } from "./globalErrors";
 
 /** The text for a code, or the generic text when this version of the UI has none for it. */
 function what(error: AppError): string {
@@ -41,4 +42,12 @@ export function showNoticeToast(error: AppError) {
     duration: 12_000,
     action: copyAction(error, description),
   });
+}
+
+/**
+ * For something the person asked for that failed, and that nothing else will mention: logs it and tells
+ * them, with its code, as for an error nobody handled.
+ */
+export function reportFailure(action: string, thrown: unknown) {
+  reportError(action, thrown, showErrorToast);
 }

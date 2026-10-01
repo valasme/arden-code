@@ -81,7 +81,7 @@ const paragraph = (number: number): TurnEvent => ({
   text: `Paragraph ${number} of a long reply that goes on and on.\n\n`,
 });
 
-const transcript = () => screen.getByRole("main", { name: "Conversation" });
+const transcript = () => screen.getByRole("main", { name: "Session" });
 const rows = () => transcript().querySelectorAll("article");
 const jump = () => screen.queryByRole("button", { name: "Jump to latest" });
 const distanceFromEnd = () => {

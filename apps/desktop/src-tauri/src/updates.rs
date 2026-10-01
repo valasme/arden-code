@@ -278,11 +278,16 @@ pub fn start(app: AppHandle) {
 }
 
 /// Where an update is now.
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Tauri hands commands their state by value; every command returns a `Result` (ADR 0008).
 #[tauri::command]
 #[specta::specta]
-#[allow(clippy::needless_pass_by_value)]
-pub fn get_update_status(updates: State<'_, Updates>) -> UpdateStatus {
-    updates.status()
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
+pub fn get_update_status(updates: State<'_, Updates>) -> Result<UpdateStatus, AppError> {
+    Ok(updates.status())
 }
 
 /// Looks for a new version now, for the person who asked, and downloads it when there is one. What

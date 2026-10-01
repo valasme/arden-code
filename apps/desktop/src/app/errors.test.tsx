@@ -1,12 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
-import { mockIPC } from "@tauri-apps/api/mocks";
+import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
 import { Toaster } from "@/components/ui/sonner";
 import type { AppError } from "@/ipc/bindings";
 import { showErrorToast } from "@/lib/errorToasts";
+import { settingsWith } from "@/test/settings";
 
 import { App } from "./App";
 import { AppErrorBoundary } from "./AppErrorBoundary";
@@ -62,6 +64,61 @@ describe("a failure above the pages", () => {
 
     expect(screen.getByRole("heading", { name: "Something went wrong" })).toBeVisible();
     expect(screen.getByText("ARD-APP-002")).toBeVisible();
+  });
+});
+
+/** The real app in a pretend Tauri window, where one command fails as Rust would fail it. */
+function startFailing(failing: string, error: unknown) {
+  Object.assign(globalThis, { isTauri: true });
+  mockWindows("main");
+  mockIPC(
+    (command) => {
+      if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
+      if (command === "get_settings") return settingsWith();
+      if (command === "list_projects") return [];
+      if (command === "plugin:window|is_fullscreen") return false;
+      if (command === failing) throw error;
+      return null;
+    },
+    { shouldMockEvents: true },
+  );
+}
+
+describe("a window action that Windows refuses", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, "isTauri");
+  });
+
+  it("says so with its code when the window menu cannot be opened", async () => {
+    startFailing(
+      "show_system_menu",
+      JSON.stringify({ code: "ARD-WIN-001", messageKey: "errors.ARD-WIN-001", details: null }),
+    );
+    const user = userEvent.setup();
+    render(<App history={createMemoryHistory({ initialEntries: ["/"] })} />);
+
+    await user.click(await screen.findByRole("button", { name: "Window menu" }));
+
+    const notice = await screen.findByText("Something went wrong (ARD-WIN-001)");
+    await waitFor(() => {
+      expect(notice).toBeVisible();
+    });
+  });
+
+  it("says so when the window cannot go full screen", async () => {
+    startFailing("plugin:window|set_fullscreen", "the window refused");
+    const user = userEvent.setup();
+    render(<App history={createMemoryHistory({ initialEntries: ["/"] })} />);
+    await screen.findByRole("main");
+
+    await user.keyboard("{F11}");
+
+    // A failure that is not one of Rust's errors is the interface's own: ARD-APP-002. Another test's
+    // notice with the same code may still be on its way out.
+    const [notice] = await screen.findAllByText("Something went wrong (ARD-APP-002)");
+    await waitFor(() => {
+      expect(notice).toBeVisible();
+    });
   });
 });
 

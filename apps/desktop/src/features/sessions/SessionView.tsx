@@ -23,7 +23,7 @@ const ESTIMATED_HEIGHT = 180;
 const OVERSCAN = 6;
 
 /**
- * A conversation: the turns so far, and the box to write the next message in. Only the messages
+ * The session view: the session's turns so far, and the message box. Only the messages
  * that are on the screen are drawn, so a session of thousands of messages scrolls as easily as a
  * short one. While a reply streams, the view follows it as long as the person is at the end; once
  * they scroll up it stays where they put it, and "Jump to latest" brings them back.

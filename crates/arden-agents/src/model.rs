@@ -212,7 +212,7 @@ impl Turn {
     }
 }
 
-/// A conversation with one agent, in one project.
+/// A session: the turns with one agent, in one project.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {

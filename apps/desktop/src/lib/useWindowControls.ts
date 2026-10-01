@@ -1,39 +1,24 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+
+import { useTauriListener } from "./useTauriListener";
 
 /** Whether the window is maximized, kept up to date as the user resizes it. */
 export function useWindowMaximized(): boolean {
   const [maximized, setMaximized] = useState(false);
 
-  useEffect(() => {
-    if (!isTauri()) return undefined;
+  useTauriListener(() => {
     const current = getCurrentWindow();
-    let active = true;
-    let stopListening: (() => void) | undefined;
-
     const refresh = () => {
       current
         .isMaximized()
-        .then((value) => {
-          if (active) setMaximized(value);
-        })
+        .then(setMaximized)
         .catch(() => {});
     };
     refresh();
-    current
-      .onResized(refresh)
-      .then((unlisten) => {
-        if (active) stopListening = unlisten;
-        else unlisten();
-      })
-      .catch(() => {});
-
-    return () => {
-      active = false;
-      stopListening?.();
-    };
-  }, []);
+    return current.onResized(refresh);
+  });
 
   return maximized;
 }

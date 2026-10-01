@@ -75,22 +75,36 @@ impl From<UiLogLevel> for UiLevel {
 }
 
 /// Records a message from the UI in the same log files as Rust's own.
-// Tauri hands commands their arguments by value.
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Errors
+///
+/// Never fails: a message that cannot be written is lost, as Rust's own would be.
+// Tauri hands commands their arguments by value; every command returns a `Result` (ADR 0008).
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn log_from_ui(level: UiLogLevel, source: String, message: String, code: Option<String>) {
+pub fn log_from_ui(
+    level: UiLogLevel,
+    source: String,
+    message: String,
+    code: Option<String>,
+) -> Result<(), AppError> {
     logging::ui(level.into(), &source, &message, code.as_deref());
+    Ok(())
 }
 
 /// Removes private details (the user's folder, email addresses, secrets) from text the user is about
 /// to share, using the same rules as the log files.
-// Tauri hands commands their arguments and state by value.
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Tauri hands commands their arguments and state by value; every command returns a `Result` (ADR 0008).
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn redact_text(text: String, redactor: State<'_, Redactor>) -> String {
-    redactor.redact(&text)
+pub fn redact_text(text: String, redactor: State<'_, Redactor>) -> Result<String, AppError> {
+    Ok(redactor.redact(&text))
 }
 
 /// Sent to the UI whenever the settings change: through the UI, or by editing the file by hand.
@@ -353,13 +367,17 @@ pub fn open_bug_report(app: AppHandle) -> Result<(), AppError> {
 }
 
 /// The newest entries of the log files, newest first, for the log viewer.
-// Tauri hands commands their state by value.
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Errors
+///
+/// Never fails: unreadable files are skipped.
+// Tauri hands commands their state by value; every command returns a `Result` (ADR 0008).
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn read_logs(paths: State<'_, AppPaths>) -> Vec<entries::Entry> {
+pub fn read_logs(paths: State<'_, AppPaths>) -> Result<Vec<entries::Entry>, AppError> {
     // Log files can be large; the viewer shows the newest part.
-    entries::read_newest(&paths.logs_dir(), 5000)
+    Ok(entries::read_newest(&paths.logs_dir(), 5000))
 }
 
 /// Saves a diagnostics bundle to a file the person chooses: the recent logs, the settings, system
@@ -406,31 +424,46 @@ pub async fn export_diagnostics(
 }
 
 /// The crash reports the person has not been told about yet.
-// Tauri hands commands their state by value.
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Errors
+///
+/// Never fails: a folder that cannot be read has none.
+// Tauri hands commands their state by value; every command returns a `Result` (ADR 0008).
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn pending_crashes(paths: State<'_, AppPaths>) -> Vec<String> {
-    crash::pending(&paths.crashes_dir())
+pub fn pending_crashes(paths: State<'_, AppPaths>) -> Result<Vec<String>, AppError> {
+    Ok(crash::pending(&paths.crashes_dir()))
 }
 
 /// Remembers that the person has been told about the crash reports there are now.
-// Tauri hands commands their state by value.
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Errors
+///
+/// Never fails: if it cannot be remembered, that is logged and the reports are offered again.
+// Tauri hands commands their state by value; every command returns a `Result` (ADR 0008).
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn acknowledge_crashes(paths: State<'_, AppPaths>) {
+pub fn acknowledge_crashes(paths: State<'_, AppPaths>) -> Result<(), AppError> {
     if let Err(error) = crash::acknowledge(&paths.crashes_dir()) {
         tracing::warn!(%error, "could not remember that the crash reports were shown");
     }
+    Ok(())
 }
 
 /// The notice for a web engine that stopped and was started again, once. The window reloads
 /// itself, so the notice waits until the page is back and asks for it.
+///
+/// # Errors
+///
+/// Never fails: the notice itself is the error to show, not a failure of this command.
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn take_web_engine_notice() -> Option<AppError> {
-    crate::webview::take_failure().then(|| AppError::new(ErrorCode::WebEngineFailed))
+pub fn take_web_engine_notice() -> Result<Option<AppError>, AppError> {
+    Ok(crate::webview::take_failure().then(|| AppError::new(ErrorCode::WebEngineFailed)))
 }
 
 /// Opens `settings.json` in the program Windows uses for JSON files.
@@ -557,12 +590,17 @@ pub fn reset_app(app: AppHandle, paths: State<'_, AppPaths>) -> Result<(), AppEr
 }
 
 /// Starts the app again, for a setting that needs it.
-// Tauri hands commands their app handle by value.
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Errors
+///
+/// Never fails: the app is on its way out.
+// Tauri hands commands their app handle by value; every command returns a `Result` (ADR 0008).
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn restart_app(app: AppHandle) {
+pub fn restart_app(app: AppHandle) -> Result<(), AppError> {
     app.request_restart();
+    Ok(())
 }
 
 /// What Windows says about the text size and the regional format.
@@ -604,12 +642,18 @@ pub fn get_system_preferences() -> Result<SystemPreferences, AppError> {
 }
 
 /// The problem found with the settings file when the app started, if any. It is handed over once.
-// Tauri hands commands their state by value.
-#[allow(clippy::needless_pass_by_value)]
+///
+/// # Errors
+///
+/// Never fails: the notice itself is the error to show, not a failure of this command.
+// Tauri hands commands their state by value; every command returns a `Result` (ADR 0008).
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn take_settings_notice(settings: State<'_, SettingsService>) -> Option<AppError> {
-    settings.take_notice()
+pub fn take_settings_notice(
+    settings: State<'_, SettingsService>,
+) -> Result<Option<AppError>, AppError> {
+    Ok(settings.take_notice())
 }
 
 /// Opens the folder that holds the log files in Explorer.
@@ -647,13 +691,20 @@ pub fn debug_fail() -> Result<(), AppError> {
 }
 
 /// Panics on purpose, so tests can check that a crash report is written. Debug builds only.
+///
+/// # Errors
+///
+/// Never returns one: the panic is on another thread.
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps)]
 #[cfg(debug_assertions)]
 #[tauri::command]
 #[specta::specta]
-pub fn debug_panic() {
+pub fn debug_panic() -> Result<(), AppError> {
     // A panic on a Tauri command thread is caught and reported by Tauri; this one is on its own
     // thread, like a real crash in background work.
     std::thread::spawn(|| panic!("deliberate panic for testing"));
+    Ok(())
 }
 
 #[cfg(test)]

@@ -47,6 +47,59 @@ fn tauri_config_sets_a_strict_content_security_policy() {
     );
 }
 
+/// The name and return type of every `#[tauri::command]` function in the app crate's sources.
+fn commands_and_their_return_types() -> Vec<(String, String)> {
+    let mut commands = Vec::new();
+    for entry in fs::read_dir(crate_dir().join("src")).expect("src is readable") {
+        let path = entry.expect("a source file").path();
+        if path.extension().is_none_or(|extension| extension != "rs") {
+            continue;
+        }
+        let source = fs::read_to_string(&path).expect("the source is readable");
+        for (_, rest) in source
+            .match_indices("#[tauri::command")
+            .map(|(at, _)| source.split_at(at))
+        {
+            let function = &rest[rest.find("pub ").expect("a command is public")..];
+            let signature = &function[..function.find('{').expect("a body")];
+            let name = signature
+                .split("fn ")
+                .nth(1)
+                .and_then(|after| after.split(['(', '<']).next())
+                .unwrap_or_default()
+                .to_owned();
+            let returns = signature
+                .rsplit_once("->")
+                .map_or("()", |(_, returns)| returns)
+                .trim()
+                .to_owned();
+            commands.push((name, returns));
+        }
+    }
+    commands
+}
+
+/// ADR 0008: every command returns `Result<T, AppError>`, so the UI handles every one the same way.
+#[test]
+fn every_command_returns_a_result_with_an_app_error() {
+    let commands = commands_and_their_return_types();
+    assert!(
+        commands.len() > 20,
+        "the scan found only {} commands",
+        commands.len()
+    );
+
+    let without: Vec<String> = commands
+        .iter()
+        .filter(|(_, returns)| !(returns.starts_with("Result<") && returns.ends_with("AppError>")))
+        .map(|(name, returns)| format!("{name} -> {returns}"))
+        .collect();
+    assert!(
+        without.is_empty(),
+        "commands without Result<_, AppError>: {without:#?}"
+    );
+}
+
 #[test]
 fn committed_bindings_match_the_rust_commands() {
     let generated: PathBuf = std::env::temp_dir().join("arden-code-bindings-drift-check.ts");

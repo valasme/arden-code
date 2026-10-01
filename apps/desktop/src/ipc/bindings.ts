@@ -38,8 +38,14 @@ export const commands = {
 	width: number,
 	height: number,
 } | null) => __TAURI_INVOKE<null>("set_maximize_button", { area }),
-	/**  Records a message from the UI in the same log files as Rust's own. */
-	logFromUi: (level: UiLogLevel, source: string, message: string, code: string | null) => __TAURI_INVOKE<void>("log_from_ui", { level, source, message, code }),
+	/**
+	 *  Records a message from the UI in the same log files as Rust's own.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails: a message that cannot be written is lost, as Rust's own would be.
+	 */
+	logFromUi: (level: UiLogLevel, source: string, message: string, code: string | null) => __TAURI_INVOKE<null>("log_from_ui", { level, source, message, code }),
 	/**
 	 *  Opens the folder that holds the log files in Explorer.
 	 * 
@@ -51,6 +57,10 @@ export const commands = {
 	/**
 	 *  Removes private details (the user's folder, email addresses, secrets) from text the user is about
 	 *  to share, using the same rules as the log files.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
 	 */
 	redactText: (text: string) => __TAURI_INVOKE<string>("redact_text", { text }),
 	/**
@@ -94,7 +104,13 @@ export const commands = {
 	 *  `ARD-SET-001` when the settings file cannot be written.
 	 */
 	resetShortcuts: (command: string | null) => __TAURI_INVOKE<Settings>("reset_shortcuts", { command }),
-	/**  The problem found with the settings file when the app started, if any. It is handed over once. */
+	/**
+	 *  The problem found with the settings file when the app started, if any. It is handed over once.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails: the notice itself is the error to show, not a failure of this command.
+	 */
 	takeSettingsNotice: () => __TAURI_INVOKE<{
 	code: ErrorCode,
 	/**  The key in the UI's language file that says what happened, why, and what to do. */
@@ -144,7 +160,13 @@ export const commands = {
 	 *  Returns `ARD-APP-004` when the link is not allowed or cannot be opened.
 	 */
 	openLink: (url: string, confirmed: boolean) => __TAURI_INVOKE<null>("open_link", { url, confirmed }),
-	/**  Where an update is now. */
+	/**
+	 *  Where an update is now.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
 	getUpdateStatus: () => __TAURI_INVOKE<UpdateStatus>("get_update_status"),
 	/**
 	 *  Looks for a new version now, for the person who asked, and downloads it when there is one. What
@@ -177,7 +199,13 @@ export const commands = {
 	 *  `ARD-APP-001` when Windows cannot open the browser.
 	 */
 	openBugReport: () => __TAURI_INVOKE<null>("open_bug_report"),
-	/**  The newest entries of the log files, newest first, for the log viewer. */
+	/**
+	 *  The newest entries of the log files, newest first, for the log viewer.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails: unreadable files are skipped.
+	 */
 	readLogs: () => __TAURI_INVOKE<Entry[]>("read_logs"),
 	/**
 	 *  Saves a diagnostics bundle to a file the person chooses: the recent logs, the settings, system
@@ -189,13 +217,29 @@ export const commands = {
 	 *  `ARD-LOG-002` when the bundle cannot be written.
 	 */
 	exportDiagnostics: () => __TAURI_INVOKE<string | null>("export_diagnostics"),
-	/**  The crash reports the person has not been told about yet. */
+	/**
+	 *  The crash reports the person has not been told about yet.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails: a folder that cannot be read has none.
+	 */
 	pendingCrashes: () => __TAURI_INVOKE<string[]>("pending_crashes"),
-	/**  Remembers that the person has been told about the crash reports there are now. */
-	acknowledgeCrashes: () => __TAURI_INVOKE<void>("acknowledge_crashes"),
+	/**
+	 *  Remembers that the person has been told about the crash reports there are now.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails: if it cannot be remembered, that is logged and the reports are offered again.
+	 */
+	acknowledgeCrashes: () => __TAURI_INVOKE<null>("acknowledge_crashes"),
 	/**
 	 *  The notice for a web engine that stopped and was started again, once. The window reloads
 	 *  itself, so the notice waits until the page is back and asks for it.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails: the notice itself is the error to show, not a failure of this command.
 	 */
 	takeWebEngineNotice: () => __TAURI_INVOKE<{
 	code: ErrorCode,
@@ -248,9 +292,21 @@ export const commands = {
 	 *  `ARD-APP-003` when the request cannot be written.
 	 */
 	resetApp: () => __TAURI_INVOKE<null>("reset_app"),
-	/**  Starts the app again, for a setting that needs it. */
-	restartApp: () => __TAURI_INVOKE<void>("restart_app"),
-	/**  The projects and their sessions, for the sidebar. */
+	/**
+	 *  Starts the app again, for a setting that needs it.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails: the app is on its way out.
+	 */
+	restartApp: () => __TAURI_INVOKE<null>("restart_app"),
+	/**
+	 *  The projects and their sessions, for the sidebar.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
 	listProjects: () => __TAURI_INVOKE<ProjectListing[]>("list_projects"),
 	/**
 	 *  Starts an empty Demo agent session in the Playground.
@@ -289,6 +345,10 @@ export const commands = {
 	/**
 	 *  The session the page should show because a folder was opened before the page was ready. Asking
 	 *  takes it: it is never returned twice.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
 	 */
 	takePendingOpen: () => __TAURI_INVOKE<string | null>("take_pending_open"),
 	/**
@@ -328,8 +388,14 @@ export const commands = {
 	 *  Always `ARD-APP-001`, with details that contain a user folder so redaction can be checked.
 	 */
 	debugFail: () => __TAURI_INVOKE<null>("debug_fail"),
-	/**  Panics on purpose, so tests can check that a crash report is written. Debug builds only. */
-	debugPanic: () => __TAURI_INVOKE<void>("debug_panic"),
+	/**
+	 *  Panics on purpose, so tests can check that a crash report is written. Debug builds only.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never returns one: the panic is on another thread.
+	 */
+	debugPanic: () => __TAURI_INVOKE<null>("debug_panic"),
 };
 
 /** Events */
@@ -635,7 +701,7 @@ export type RegionalFormat =
 /**  English (US), whatever Windows says. */
 "english";
 
-/**  A conversation with one agent, in one project. */
+/**  A session: the turns with one agent, in one project. */
 export type Session = {
 	id: string,
 	projectId: string,

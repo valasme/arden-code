@@ -4,6 +4,7 @@ import { type ComponentProps, type MouseEvent, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { commands } from "@/ipc/bindings";
+import { reportFailure } from "@/lib/errorToasts";
 import { useSnapLayouts } from "@/lib/snapLayouts";
 import { cn } from "@/lib/utils";
 import { useWindowMaximized, windowControls } from "@/lib/useWindowControls";
@@ -26,7 +27,9 @@ interface TitleBarProps {
 
 function showSystemMenu() {
   if (!isTauri()) return;
-  commands.showSystemMenu().catch(() => {});
+  commands.showSystemMenu().catch((error: unknown) => {
+    reportFailure("Opening the window menu", error);
+  });
 }
 
 /** A button in the bar: 32 px high, with Windows-like hover and pressed states. */

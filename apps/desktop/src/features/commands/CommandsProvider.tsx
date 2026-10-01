@@ -9,7 +9,7 @@ import { nextZoom } from "@/features/settings/zoom";
 import { commands as ipc } from "@/ipc/bindings";
 import { defaultSettings } from "@/ipc/defaults.gen";
 import { projectsQuery } from "@/ipc/queries";
-import { showErrorToast } from "@/lib/errorToasts";
+import { reportFailure, showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 import { moveToArea } from "./areas";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
@@ -134,7 +134,12 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
         run: () => findMessageBox()?.focus(),
         enabled: () => findMessageBox() !== null,
       },
-      "window.fullScreen": { run: () => void toggleFullScreen().catch(() => {}) },
+      "window.fullScreen": {
+        run: () =>
+          void toggleFullScreen().catch((error: unknown) => {
+            reportFailure("Switching full screen", error);
+          }),
+      },
       "shortcuts.show": { run: () => setCheatSheetOpen(true) },
       "navigate.back": { run: history.onBack, enabled: () => history.canGoBack },
       "navigate.forward": { run: history.onForward, enabled: () => history.canGoForward },

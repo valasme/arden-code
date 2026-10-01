@@ -3,6 +3,8 @@ import { type RefObject, useEffect, useState } from "react";
 
 import { commands, events, type MaximizeButtonArea, type MaximizeButtonLook } from "@/ipc/bindings";
 
+import { useTauriListener } from "./useTauriListener";
+
 /** Where an element is in the screen's pixels, Windows' own unit, from the top left of the page. */
 function screenArea(element: Element): MaximizeButtonArea {
   const rect = element.getBoundingClientRect();
@@ -88,26 +90,13 @@ export function useSnapLayouts(
     };
   }, [button, enabled]);
 
-  useEffect(() => {
-    if (!isTauri() || !enabled) return undefined;
-    let active = true;
-    let stopListening: (() => void) | undefined;
-
-    events.maximizeButtonChanged
-      .listen(({ payload }) => {
+  useTauriListener(
+    () =>
+      events.maximizeButtonChanged.listen(({ payload }) => {
         setLook(payload.look);
-      })
-      .then((unlisten) => {
-        if (active) stopListening = unlisten;
-        else unlisten();
-      })
-      .catch(() => {});
-
-    return () => {
-      active = false;
-      stopListening?.();
-    };
-  }, [enabled]);
+      }),
+    enabled,
+  );
 
   return enabled ? look : "normal";
 }
