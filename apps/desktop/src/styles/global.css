@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "./fonts.css";
+@import "./tokens.css";
+@import "./theme.css";
+@import "./base.css";
+@import "streamdown/styles.css";
+
+/* Streamdown draws its Markdown with utility classes, so Tailwind has to read its files. */
+@source "../../node_modules/streamdown/dist/*.js";

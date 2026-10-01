@@ -1,0 +1,110 @@
+name: Release trial
+
+# Builds everything a release needs (the installer, its update signature and latest.json) and
+# publishes none of it. Run it by hand, or let it run when a file that shapes a release changes, so a
+# broken release is found on a pull request and not on release day.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/release*.yml"
+      - "apps/desktop/src-tauri/tauri.conf.json"
+      - "apps/desktop/src-tauri/installer/**"
+      - "apps/desktop/src-tauri/Cargo.toml"
+      - "scripts/latest-json.ts"
+      - "packaging/**"
+      - "release-please-config.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-trial-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  trial:
+    name: Trial release (nothing is published)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      # Until the real signing key is a repository secret, the trial signs with a key made just now.
+      # The installer it makes then carries signatures the app would not trust, and it is thrown away.
+      - name: Choose the update signing key
+        shell: pwsh
+        env:
+          REAL_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          REAL_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if ($env:REAL_KEY) {
+            "TAURI_SIGNING_PRIVATE_KEY<<KEY_END`n$env:REAL_KEY`nKEY_END" >> $env:GITHUB_ENV
+            "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$env:REAL_KEY_PASSWORD" >> $env:GITHUB_ENV
+            "Signing with the real update key."
+          } else {
+            $key = Join-Path $env:RUNNER_TEMP "trial.key"
+            pnpm --filter @arden/desktop exec tauri signer generate --ci -p trial-key -w $key
+            "TAURI_SIGNING_PRIVATE_KEY=$key" >> $env:GITHUB_ENV
+            "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=trial-key" >> $env:GITHUB_ENV
+            "::warning::The TAURI_SIGNING_PRIVATE_KEY secret is not set, so this trial signed with a throwaway key."
+          }
+
+      - name: Build the installer
+        run: pnpm --filter @arden/desktop exec tauri build
+
+      - name: Find the installer and its signature
+        id: files
+        shell: pwsh
+        run: |
+          $bundle = "target/release/bundle/nsis"
+          $installer = Get-ChildItem $bundle -Filter "*-setup.exe" | Select-Object -First 1
+          if (-not $installer) { throw "No installer was made in $bundle" }
+          $signature = "$($installer.FullName).sig"
+          if (-not (Test-Path $signature)) { throw "The installer has no update signature" }
+          "installer=$($installer.FullName)" >> $env:GITHUB_OUTPUT
+          "signature=$signature" >> $env:GITHUB_OUTPUT
+          "name=$($installer.Name)" >> $env:GITHUB_OUTPUT
+          "size=$($installer.Length)" >> $env:GITHUB_OUTPUT
+          "The installer is $($installer.Name), $([math]::Round($installer.Length / 1MB, 1)) MB."
+
+      - name: Install it silently, check the terminal command and the PATH, and uninstall it
+        run: pnpm --filter @arden/desktop test:e2e:installer
+
+      - name: Make latest.json
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if (-not $version) { $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value }
+          $url = "https://github.com/${{ github.repository }}/releases/download/v$version/" + [uri]::EscapeDataString("${{ steps.files.outputs.name }}")
+          node scripts/latest-json.ts --version $version --url $url --signature-file "${{ steps.files.outputs.signature }}" --notes "Trial release" > latest.json
+          Get-Content latest.json
+
+      - name: Keep the results for a few days
+        uses: actions/upload-artifact@v4
+        with:
+          name: trial-release
+          path: |
+            ${{ steps.files.outputs.installer }}
+            ${{ steps.files.outputs.signature }}
+            latest.json
+          retention-days: 3
+          if-no-files-found: error

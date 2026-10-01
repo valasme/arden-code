@@ -1,0 +1,122 @@
+/*
+ * Theme tokens (plan section 7.1): the neutral OKLCH theme with accessibility corrections.
+ * The corner radius is 0 everywhere. tokens.test.ts checks every pair for WCAG AA contrast.
+ */
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.546 0 0); /* corrected from 0.556: 4.5:1 on --muted */
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0); /* decorative: cards and dividers */
+  --input: oklch(0.646 0 0); /* corrected from 0.922: control borders need 3:1 */
+  --ring: oklch(0.646 0 0); /* corrected from 0.708: focus outline needs 3:1 */
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.646 0 0); /* corrected from 0.708 */
+  --brand: oklch(0.737 0.126 47.7); /* the logo's orange: graphics only, never text */
+  --brand-wordmark: oklch(0.375 0.051 42.9); /* the logo's brown */
+  --selection: oklch(0.737 0.126 47.7 / 25%); /* warm tint behind selected text */
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 34%); /* corrected from 15%: control borders need 3:1 */
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.922 0 0); /* corrected from shadcn's stock blue */
+  --sidebar-primary-foreground: oklch(0.205 0 0); /* corrected: readable on the line above */
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+  --brand: oklch(0.737 0.126 47.7);
+  --brand-wordmark: oklch(0.937 0.014 57.6); /* warm off-white, #F2E8E1 */
+  --selection: oklch(0.737 0.126 47.7 / 35%);
+}
+
+/*
+ * Windows contrast themes. The browser swaps text, background and border colors for the user's
+ * palette. These rules make the tokens that components read follow that palette, so borders and
+ * focus outlines stay visible.
+ *
+ * Fills stay Canvas or ButtonFace on purpose. Text on a Highlight or ButtonText fill gets a backplate
+ * from the browser and becomes unreadable. Selected and hovered states are shown with borders and
+ * underlines instead of fills (see base.css).
+ */
+@media (forced-colors: active) {
+  :root,
+  .dark {
+    --background: Canvas;
+    --foreground: CanvasText;
+    --card: Canvas;
+    --card-foreground: CanvasText;
+    --popover: Canvas;
+    --popover-foreground: CanvasText;
+    --primary: ButtonFace;
+    --primary-foreground: ButtonText;
+    --secondary: ButtonFace;
+    --secondary-foreground: ButtonText;
+    --muted: Canvas;
+    --muted-foreground: CanvasText;
+    --accent: Canvas;
+    --accent-foreground: CanvasText;
+    --destructive: CanvasText;
+    --border: CanvasText;
+    --input: ButtonBorder;
+    --ring: Highlight;
+    --sidebar: Canvas;
+    --sidebar-foreground: CanvasText;
+    --sidebar-primary: Canvas;
+    --sidebar-primary-foreground: CanvasText;
+    --sidebar-accent: Canvas;
+    --sidebar-accent-foreground: CanvasText;
+    --sidebar-border: CanvasText;
+    --sidebar-ring: Highlight;
+    --brand: CanvasText;
+    --brand-wordmark: CanvasText;
+    --selection: Highlight;
+  }
+}

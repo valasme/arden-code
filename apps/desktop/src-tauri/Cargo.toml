@@ -1,0 +1,54 @@
+[package]
+name = "arden-desktop"
+description = "Arden Code: a Windows cockpit for Claude Code and Codex"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+authors.workspace = true
+default-run = "arden-code"
+
+[lib]
+name = "arden_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "arden-code"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6", features = ["isolation"] }
+
+[dependencies]
+arden-agents.workspace = true
+arden-core.workspace = true
+arden-diagnostics.workspace = true
+arden-process.workspace = true
+arden-settings.workspace = true
+arden-windows.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+specta.workspace = true
+specta-typescript = "=0.0.12"
+tauri = { version = "2.12", features = ["isolation"] }
+tauri-plugin-clipboard-manager = "2.4"
+tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2.5"
+tauri-plugin-updater = "2"
+tracing = "0.1"
+tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_UI_Input_KeyboardAndMouse"] }
+
+[dev-dependencies]
+strum.workspace = true
+tempfile = "3"
+
+[lints]
+workspace = true

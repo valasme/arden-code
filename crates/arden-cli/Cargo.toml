@@ -1,0 +1,31 @@
+[package]
+name = "arden-cli"
+description = "The arden-code terminal command: opens Arden Code, or a folder as a project, from any terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+# Built as arden-cli.exe and installed as bin\arden-code.exe, next to the app's own arden-code.exe.
+[[bin]]
+name = "arden-cli"
+path = "src/main.rs"
+
+[dependencies]
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Registry",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

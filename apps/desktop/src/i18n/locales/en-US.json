@@ -1,0 +1,551 @@
+{
+  "brand": {
+    "name": "Arden Code"
+  },
+  "cheatSheet": {
+    "command": "Command",
+    "description": "Every shortcut, and the command it runs.",
+    "none": "None",
+    "shortcut": "Shortcut",
+    "title": "Keyboard shortcuts"
+  },
+  "commands": {
+    "focusNext": "Move to the next area",
+    "focusPrevious": "Move to the previous area",
+    "inspectorToggle": "Toggle inspector",
+    "messageBoxFocus": "Focus the message box",
+    "navigateBack": "Back",
+    "navigateForward": "Forward",
+    "paletteOpen": "Command palette",
+    "replyStop": "Stop the reply",
+    "sessionNew": "New session",
+    "settingsOpen": "Settings",
+    "shortcutsShow": "Keyboard shortcuts",
+    "sidebarToggle": "Toggle sidebar",
+    "windowFullScreen": "Full screen",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomReset": "Reset zoom"
+  },
+  "common": {
+    "cancel": "Cancel"
+  },
+  "contextMenu": {
+    "copy": "Copy",
+    "cut": "Cut",
+    "paste": "Paste",
+    "selectAll": "Select all"
+  },
+  "crash": {
+    "description": "It left a crash report on this computer. You can export diagnostics, without private details, to attach to a bug report.",
+    "export": "Export diagnostics",
+    "later": "Not now",
+    "title": "Arden Code closed unexpectedly"
+  },
+  "errors": {
+    "ARD-AGT-001": {
+      "action": "Start a new session with New session.",
+      "what": "That session does not exist any more.",
+      "why": "Sessions live in memory for now, so they are gone after Arden Code restarts."
+    },
+    "ARD-AGT-002": {
+      "action": "Wait for the reply to finish, or stop it with Esc, then send your message again.",
+      "what": "Your message was not sent.",
+      "why": "The agent is still answering the last message."
+    },
+    "ARD-APP-001": {
+      "action": "Try again. If it keeps happening, copy the details and report it.",
+      "what": "Something unexpected went wrong inside Arden Code.",
+      "why": "This is a bug in Arden Code, not something you did."
+    },
+    "ARD-APP-002": {
+      "action": "Reload the window. If it keeps happening, copy the details and report it.",
+      "what": "The interface hit an error it could not handle.",
+      "why": "A part of the screen failed to draw or to respond."
+    },
+    "ARD-APP-003": {
+      "action": "Try again. If it keeps happening, delete the folders named io.github.valasme.arden in %APPDATA% and %LOCALAPPDATA% yourself.",
+      "what": "Arden Code could not get ready to reset itself.",
+      "why": "The file that asks for the reset could not be written."
+    },
+    "ARD-APP-004": {
+      "action": "Copy the address and open it yourself if you trust it.",
+      "what": "That link was not opened.",
+      "why": "Arden Code does not open some kinds of link, such as programs and scripts, or Windows could not open it."
+    },
+    "ARD-APP-005": {
+      "action": "Check that notifications are allowed for Arden Code in Windows settings, and that Focus assist is off.",
+      "what": "The notification was not shown.",
+      "why": "Windows would not show it."
+    },
+    "ARD-LOG-001": {
+      "action": "Open it yourself in Explorer, at %LOCALAPPDATA%\\io.github.valasme.arden\\logs.",
+      "what": "The logs folder could not be opened.",
+      "why": "Windows refused, or the folder could not be created."
+    },
+    "ARD-LOG-002": {
+      "action": "Choose another folder, and check that it is writable.",
+      "what": "The diagnostics could not be saved.",
+      "why": "The file could not be written. The folder may be read-only, or the disk full."
+    },
+    "ARD-PROC-001": {
+      "action": "Restart Arden Code. If it keeps happening, report it.",
+      "what": "Arden Code cannot start other programs on this computer.",
+      "why": "Windows did not let it make the group that keeps agent programs together with the app."
+    },
+    "ARD-SET-001": {
+      "action": "Check that the folder is writable, then change the setting again.",
+      "what": "Your settings could not be saved.",
+      "why": "The settings file could not be written. The disk may be full, or the file may be locked by another program."
+    },
+    "ARD-SET-002": {
+      "action": "Your old file was kept next to it as settings.invalid-<date>.json. Fix it there and copy it back, or keep the defaults.",
+      "what": "The settings file was not valid, so the default settings are in use.",
+      "why": "The file was damaged, or it was edited into something Arden Code cannot read."
+    },
+    "ARD-SET-003": {
+      "action": "Choose a file that was exported from Arden Code, or fix the file and try again. Your current settings were not changed.",
+      "what": "That settings file could not be imported.",
+      "why": "The file is not valid JSON, or a setting in it has a value that is not allowed."
+    },
+    "ARD-SET-004": {
+      "action": "Choose another folder, and check that it is writable.",
+      "what": "Your settings could not be exported.",
+      "why": "The file could not be written. The folder may be read-only, or the disk full."
+    },
+    "ARD-SET-005": {
+      "action": "Open it yourself in Explorer, at %APPDATA%\\io.github.valasme.arden\\settings.json.",
+      "what": "settings.json could not be opened.",
+      "why": "Windows refused, or no program is set to open JSON files."
+    },
+    "ARD-UPD-001": {
+      "action": "Try again. If it keeps happening, download the newest version from the releases page.",
+      "what": "The update could not be installed.",
+      "why": "The installer did not start, or it was stopped."
+    },
+    "ARD-WIN-001": {
+      "action": "Use the buttons at the right of the title bar instead.",
+      "what": "Windows' window menu could not be opened.",
+      "why": "Windows did not accept the request."
+    },
+    "ARD-WIN-002": {
+      "action": "Your work is not lost. If it keeps happening, turn off hardware acceleration in Settings → Advanced, and report it.",
+      "what": "The part of Arden Code that draws the window stopped, and was started again.",
+      "why": "Its process crashed or stopped answering. A graphics driver problem is the usual cause."
+    }
+  },
+  "errorScreen": {
+    "code": "Error code",
+    "copied": "Copied",
+    "copyDetails": "Copy details",
+    "openLogs": "Open logs",
+    "reload": "Reload",
+    "title": "Something went wrong",
+    "whatHappened": "What happened",
+    "whatToDo": "What to do",
+    "why": "Why"
+  },
+  "inspector": {
+    "empty": "Details of the open session will appear here.",
+    "title": "Inspector"
+  },
+  "items": {
+    "error": {
+      "label": "Error:"
+    },
+    "file": {
+      "created": "Created",
+      "deleted": "Deleted",
+      "lines": "{{added}} lines added, {{removed}} lines removed",
+      "modified": "Changed"
+    },
+    "status": {
+      "started": "The agent started working",
+      "stopped": "You stopped the reply"
+    },
+    "thinking": {
+      "done": "Thinking",
+      "running": "Thinking…"
+    },
+    "tool": {
+      "done": "Done",
+      "failed": "Failed",
+      "running": "Running…",
+      "stopped": "Stopped"
+    }
+  },
+  "logs": {
+    "description": "The newest entries of the log files. Private details were removed when they were written.",
+    "empty": "No entry matches.",
+    "filters": "Filters",
+    "folder": "Open logs folder",
+    "level": "Level",
+    "levelAll": "All levels",
+    "levels": {
+      "debug": "Debug",
+      "error": "Error",
+      "info": "Info",
+      "trace": "Trace",
+      "warn": "Warning"
+    },
+    "message": "Message",
+    "more": "Show more",
+    "none": "There are no log entries yet.",
+    "refresh": "Refresh",
+    "search": "Search the messages",
+    "showing": "Showing {{shown}} of {{total}} entries.",
+    "source": "Source",
+    "sourceAll": "All sources",
+    "time": "Time",
+    "title": "Logs"
+  },
+  "markdown": {
+    "codeRegion": "Code ({{language}})",
+    "copied": "Copied",
+    "copyCode": "Copy code",
+    "copyTable": "Copy table",
+    "copyTableAsCsv": "Copy as CSV",
+    "copyTableAsMarkdown": "Copy as Markdown",
+    "copyTableAsTsv": "Copy as TSV",
+    "image": {
+      "blocked": "Image not shown",
+      "blockedWithName": "Image not shown: {{name}}"
+    },
+    "link": {
+      "blocked": "link not opened",
+      "confirmDescription": "This link is not a web address, so Windows would open it in another program: {{url}}",
+      "confirmTitle": "Open this link?",
+      "open": "Open link"
+    },
+    "tableRegion": "Table"
+  },
+  "notFound": {
+    "home": "Go to the session view",
+    "message": "This page does not exist."
+  },
+  "notices": {
+    "title": "Notice ({{code}})",
+    "uiError": "Something went wrong ({{code}})"
+  },
+  "palette": {
+    "description": "Search for a command and press Enter to run it.",
+    "empty": "No command matches.",
+    "placeholder": "Type a command",
+    "title": "Command palette"
+  },
+  "regions": {
+    "inspector": "Inspector",
+    "sidebar": "Sidebar"
+  },
+  "sessions": {
+    "announce": {
+      "done": "Reply finished.",
+      "failed": "Reply failed.",
+      "stopped": "Reply stopped."
+    },
+    "demoAgent": "Demo agent",
+    "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
+    "jumpToLatest": "Jump to latest",
+    "messageBox": {
+      "label": "Message",
+      "placeholder": "Message the Demo agent",
+      "send": "Send"
+    },
+    "messages": "Messages",
+    "new": "New session",
+    "playground": "Playground",
+    "replying": "The Demo agent is replying…",
+    "stopped": "The reply stopped.",
+    "transcript": "Session",
+    "untitled": "New session",
+    "you": "You"
+  },
+  "settings": {
+    "about": {
+      "build": "Build",
+      "buildValue": "{{commit}} ({{date}})",
+      "checkForUpdates": {
+        "busy": "Already looking for updates.",
+        "button": "Check for updates",
+        "checking": "Looking for updates…",
+        "ready": "An update is ready. Restart Arden Code from the status bar to install it.",
+        "rejected": "An update was found, but its signature is not valid, so it was not used.",
+        "unavailable": "Could not check for updates right now. Try again later.",
+        "upToDate": "Arden Code is up to date."
+      },
+      "copied": "System information copied",
+      "copy": "Copy system info",
+      "license": "MIT license",
+      "notAffiliated": "Arden Code is not affiliated with Anthropic or OpenAI.",
+      "openSource": {
+        "description": "Arden Code is built with these open-source packages.",
+        "license": "License",
+        "more": "Showing {{shown}} of {{total}}. Type to narrow the list.",
+        "none": "No package matches.",
+        "package": "Package",
+        "search": "Search packages",
+        "title": "Open-source licenses ({{count}} packages)"
+      },
+      "privacy": {
+        "detail": "There is no telemetry, no analytics and no crash uploading. Your settings and logs stay on this computer.",
+        "read": "Read the privacy statement",
+        "statement": "Arden Code collects nothing.",
+        "title": "Privacy"
+      },
+      "releaseNotes": "Release notes",
+      "reportBug": "Report a bug",
+      "systemInfoTemplate": "{{name}} {{version}}\nBuild: {{commit}} ({{date}})\nWindows: {{windows}}\nWebView2: {{webview}}",
+      "version": "Version",
+      "webview": "WebView2",
+      "windows": "Windows"
+    },
+    "advanced": {
+      "developerMode": {
+        "description": "Turns on the developer tools (F12) and the browser's own menu. For people who work on Arden Code.",
+        "label": "Developer mode"
+      },
+      "diagnostics": {
+        "button": "Export…",
+        "description": "Save a zip file with the recent logs, your settings, system information and crash reports, without private details. You decide whether to share it.",
+        "done": "Diagnostics exported to {{path}}",
+        "label": "Export diagnostics",
+        "title": "Diagnostics"
+      },
+      "export": {
+        "button": "Export…",
+        "description": "Save a copy of your settings to a file.",
+        "done": "Settings exported to {{path}}",
+        "label": "Export settings"
+      },
+      "files": "Files",
+      "hardwareAcceleration": {
+        "description": "Lets your graphics card draw the window. Turn it off to work around graphics problems. It takes a restart.",
+        "label": "Hardware acceleration",
+        "restartNote": "Restart Arden Code to apply this.",
+        "restartPrompt": "Hardware acceleration changes the next time Arden Code starts."
+      },
+      "import": {
+        "button": "Import…",
+        "description": "Replace your settings with the ones in a file you exported.",
+        "done": "Settings imported",
+        "label": "Import settings"
+      },
+      "logLevel": {
+        "debug": "Everything (debug)",
+        "description": "How much the log files record. Debug records everything and is for finding a bug.",
+        "error": "Errors only",
+        "info": "Normal",
+        "label": "Log level",
+        "warn": "Warnings and errors"
+      },
+      "logs": {
+        "folder": {
+          "button": "Open",
+          "description": "Show the log files in Explorer.",
+          "label": "Open logs folder"
+        },
+        "view": {
+          "button": "View logs",
+          "description": "Read the log files here, with filters.",
+          "label": "View logs"
+        }
+      },
+      "nativeTitleBar": {
+        "description": "Lets Windows draw the title bar and the window buttons. Use it if the window does not behave well on your setup.",
+        "label": "Use the Windows title bar"
+      },
+      "openFile": {
+        "button": "Open",
+        "description": "Edit the settings file by hand. Changes apply while Arden Code runs.",
+        "label": "Open settings.json"
+      },
+      "reset": {
+        "button": "Reset…",
+        "confirm": "Reset settings",
+        "confirmDescription": "Every setting, including your shortcuts, goes back to its default. This cannot be undone.",
+        "confirmTitle": "Reset all settings?",
+        "description": "Put every setting, including your shortcuts, back to its default.",
+        "done": "Settings reset",
+        "label": "Reset settings",
+        "title": "Reset"
+      },
+      "resetApp": {
+        "button": "Reset…",
+        "confirm": "Reset Arden Code",
+        "confirmDescription": "This deletes your settings, logs, crash reports and caches, and starts Arden Code again. This cannot be undone.",
+        "confirmTitle": "Reset Arden Code?",
+        "description": "Delete your settings, logs, crash reports and caches, and start again as if it were new.",
+        "label": "Reset Arden Code"
+      }
+    },
+    "agents": {
+      "checkAgain": "Check again",
+      "description": "Claude Code and Codex are separate programs. Arden Code looks for them on this computer. It never installs them, updates them or signs in to them. Real integration is coming later.",
+      "install": "How to install",
+      "installed": "Installed",
+      "installLabel": "How to install {{name}}",
+      "looking": "Looking for agents…",
+      "names": {
+        "claude": "Claude Code",
+        "codex": "Codex"
+      },
+      "notFound": "{{name}} was not found. Install it, then check again.",
+      "notInstalled": "Not installed",
+      "path": "Location",
+      "version": "Version",
+      "versionUnknown": "Unknown"
+    },
+    "appearance": {
+      "codeFontSize": {
+        "description": "The size of code in replies, from 11 to 20 pixels.",
+        "label": "Code font size",
+        "value": "{{value}} px"
+      },
+      "codeLigatures": {
+        "description": "Join characters such as => and != into one symbol in code.",
+        "label": "Code ligatures"
+      },
+      "codePreview": "Code preview",
+      "followTextSize": {
+        "description": "Make everything larger when the Windows text size is larger.",
+        "label": "Follow Windows text size"
+      },
+      "reduceMotion": {
+        "description": "Play fewer animations. Follows the Windows Show animations setting by default.",
+        "label": "Reduce motion",
+        "off": "Do not reduce",
+        "on": "Reduce",
+        "system": "Same as Windows"
+      },
+      "showStatusBar": {
+        "description": "The bar along the bottom of the window.",
+        "label": "Show status bar"
+      },
+      "theme": {
+        "dark": "Dark",
+        "description": "Light or dark, or the same as Windows.",
+        "label": "Theme",
+        "light": "Light",
+        "system": "Same as Windows"
+      },
+      "zoom": {
+        "description": "Makes everything larger or smaller, from 80 to 200 percent.",
+        "label": "Zoom",
+        "value": "{{value}}%"
+      }
+    },
+    "general": {
+      "checkForUpdates": {
+        "description": "Look for a new version in the background. Nothing installs without you.",
+        "label": "Check for updates automatically"
+      },
+      "onStartup": {
+        "description": "What Arden Code opens when it starts.",
+        "fresh": "Start fresh",
+        "label": "On startup",
+        "restore": "Restore the last session"
+      },
+      "regionalFormat": {
+        "description": "How dates, numbers and times are written.",
+        "english": "English (US)",
+        "label": "Regional format",
+        "preview": "Example: {{date}}, {{number}}, {{relative}}",
+        "windows": "Same as Windows"
+      }
+    },
+    "keyboard": {
+      "add": "Add a shortcut for {{command}}",
+      "cancel": "Cancel",
+      "change": "Change shortcut {{shortcut}} for {{command}}",
+      "command": "Command",
+      "conflict": "{{shortcut}} is already used by {{command}}.",
+      "empty": "No command matches.",
+      "none": "No shortcut",
+      "pressKeys": "Press keys…",
+      "problems": {
+        "altgr": "Many keyboards type characters with Ctrl and Alt together, so a shortcut cannot use both. Press another shortcut.",
+        "editing": "{{shortcut}} edits text in every text field. Press another shortcut.",
+        "needsModifier": "{{shortcut}} would take over typing. Hold Ctrl or Alt as well, or use a function key.",
+        "reserved": "Windows keeps {{shortcut}} for itself. Press another shortcut."
+      },
+      "recording": "Press the new shortcut, or Esc to cancel.",
+      "remove": "Remove shortcut {{shortcut}} from {{command}}",
+      "replace": "Use it here instead",
+      "resetAll": "Reset all shortcuts",
+      "resetRow": "Reset the shortcuts of {{command}}",
+      "search": {
+        "label": "Search shortcuts",
+        "placeholder": "Search commands and shortcuts"
+      },
+      "shortcuts": "Shortcuts"
+    },
+    "notifications": {
+      "desktop": {
+        "description": "Show a Windows notification when something needs you, such as an agent asking a question. With this off, Arden Code shows none.",
+        "label": "Desktop notifications"
+      },
+      "off": "Notifications are off, so none was shown.",
+      "sent": "Test notification sent",
+      "test": {
+        "button": "Send",
+        "description": "Show a notification now, to see how it looks.",
+        "label": "Send a test notification"
+      }
+    },
+    "reset": "Reset {{name}} to its default",
+    "resetButton": "Reset",
+    "restart": {
+      "later": "Later",
+      "now": "Restart now",
+      "title": "Restart Arden Code?"
+    },
+    "search": {
+      "empty": "No setting matches.",
+      "label": "Search settings",
+      "placeholder": "Search settings",
+      "resultsLabel": "Search results"
+    },
+    "tabs": {
+      "about": "About",
+      "advanced": "Advanced",
+      "agents": "Agents",
+      "appearance": "Appearance",
+      "general": "General",
+      "keyboard": "Keyboard",
+      "notifications": "Notifications"
+    },
+    "tabsLabel": "Settings sections"
+  },
+  "sidebar": {
+    "navigation": "Main navigation",
+    "noSessions": "No sessions yet.",
+    "projects": "Projects",
+    "settings": "Settings"
+  },
+  "statusBar": {
+    "hideInspector": "Hide inspector",
+    "hideSidebar": "Hide sidebar",
+    "showInspector": "Show inspector",
+    "showSidebar": "Show sidebar",
+    "updateDownloading": "Downloading an update…",
+    "updateReady": "Update ready: restart",
+    "version": "Version {{version}}"
+  },
+  "titleBar": {
+    "back": "Back",
+    "close": "Close",
+    "forward": "Forward",
+    "maximize": "Maximize",
+    "menu": "Window menu",
+    "minimize": "Minimize",
+    "restore": "Restore",
+    "search": "Search or run a command",
+    "searchShortcut": "Ctrl+K"
+  },
+  "welcome": {
+    "line": "Real agents are coming. Try the Demo agent.",
+    "newSession": "New session",
+    "palette": "Command palette",
+    "settings": "Settings"
+  }
+}

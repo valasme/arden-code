@@ -1,0 +1,20 @@
+{
+  "name": "@arden/brand",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node src/build.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "catalog:",
+    "@types/node": "catalog:",
+    "@types/pngjs": "catalog:",
+    "opentype.js": "catalog:",
+    "pngjs": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

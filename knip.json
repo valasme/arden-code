@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreBinaries": ["typos", "reg"],
+  "ignoreExportsUsedInFile": true,
+  "workspaces": {
+    "apps/desktop": {
+      "entry": ["isolation/index.js", "i18next.config.ts", "visual/*.spec.ts"],
+      "ignore": ["src/components/ui/**"]
+    },
+    "brand": {
+      "ignore": ["assets/affinity/**"],
+      "ignoreDependencies": ["opentype.js"]
+    }
+  }
+}

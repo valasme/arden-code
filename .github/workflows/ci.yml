@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main, foundation]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # The foundation branch takes many pushes in a row; let each run finish so none is lost.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/foundation' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Check (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install the browser for component tests
+        run: pnpm --filter @arden/desktop exec playwright install chromium-headless-shell
+
+      - name: Format
+        run: pnpm format:check && pnpm format:rust:check
+
+      - name: Lint
+        run: pnpm lint && pnpm lint:rust
+
+      - name: Type-check
+        run: pnpm typecheck
+
+      - name: Unused code and dependencies
+        run: pnpm knip
+
+      - name: Hard-coded UI text
+        run: pnpm i18n:lint
+
+      - name: UI tests
+        run: pnpm test
+
+      - name: Design system screenshots and interaction tests
+        run: pnpm test:visual
+
+      - name: Rust tests
+        run: pnpm test:rust
+
+      - name: Bindings drift check
+        shell: bash
+        run: |
+          pnpm bindings
+          git diff --exit-code -- apps/desktop/src/ipc/bindings.ts
+
+      - name: Brand outputs are up to date
+        run: pnpm brand:check
+
+      - name: The list of open-source licenses is up to date
+        run: pnpm licenses:check
+
+      - name: Build the app
+        run: pnpm build
+
+      - name: WebView2 runtime version
+        shell: pwsh
+        run: |
+          $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+          if (Test-Path $key) { "WebView2 runtime $((Get-ItemProperty $key).pv)" } else { "WebView2 runtime is NOT installed" }
+
+      - name: End-to-end test against the real app
+        run: pnpm test:e2e
+
+      - name: Performance against the plan's targets, on the release build
+        run: pnpm --filter @arden/desktop test:perf
+
+      - name: What was running when a test failed
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-Process | Where-Object { $_.ProcessName -match "arden|webview2" } | Format-Table Id, ProcessName, MainWindowTitle
+
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Spelling
+        uses: crate-ci/typos@v1.50.3
+      - name: Dependency advisories and licenses
+        uses: EmbarkStudios/cargo-deny-action@v2

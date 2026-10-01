@@ -1,0 +1,100 @@
+name: Release
+
+# Builds, signs and uploads a release when release-please tags a version. It is switched off: it
+# does nothing until the repository variable RELEASES_ENABLED is "true". Try everything first with
+# the "Release trial" workflow, which publishes nothing.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Build and upload the release
+    if: ${{ vars.RELEASES_ENABLED == 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write # upload the files to the release
+      id-token: write # sign the build provenance
+      attestations: write # store the build provenance
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      # A secret cannot be read in an "if", so the step below looks at these instead.
+      CODE_SIGNING_CERTIFICATE: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE }}
+      CODE_SIGNING_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The update signing key must exist
+        shell: pwsh
+        run: |
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw "The TAURI_SIGNING_PRIVATE_KEY secret is not set. Without it the update signature cannot be made, and no installed copy could ever update." }
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build the installer
+        run: pnpm --filter @arden/desktop exec tauri build
+
+      - name: Find the installer and its signature
+        id: files
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "target/release/bundle/nsis" -Filter "*-setup.exe" | Select-Object -First 1
+          if (-not $installer) { throw "No installer was made" }
+          if (-not (Test-Path "$($installer.FullName).sig")) { throw "The installer has no update signature" }
+          "installer=$($installer.FullName)" >> $env:GITHUB_OUTPUT
+          "signature=$($installer.FullName).sig" >> $env:GITHUB_OUTPUT
+          "name=$($installer.Name)" >> $env:GITHUB_OUTPUT
+
+      # Signs the installer with a code signing certificate, so Windows SmartScreen trusts it. It
+      # does nothing until the certificate secrets exist. The update signature made above is a
+      # different thing and is always made. Signing changes the file, so the update signature is
+      # made again after it.
+      - name: Sign the installer with the code signing certificate
+        if: ${{ env.CODE_SIGNING_CERTIFICATE != '' }}
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "code-signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CODE_SIGNING_CERTIFICATE))
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -Match "x64" | Select-Object -Last 1).FullName
+          & $signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f $pfx /p $env:CODE_SIGNING_PASSWORD "${{ steps.files.outputs.installer }}"
+          Remove-Item $pfx
+          pnpm --filter @arden/desktop exec tauri signer sign "${{ steps.files.outputs.installer }}"
+
+      - name: Make latest.json
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/" + [uri]::EscapeDataString("${{ steps.files.outputs.name }}")
+          node scripts/latest-json.ts --version $version --url $url --signature-file "${{ steps.files.outputs.signature }}" > latest.json
+
+      - name: Attest where the installer came from
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ steps.files.outputs.installer }}
+
+      - name: Upload to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" "${{ steps.files.outputs.installer }}" "${{ steps.files.outputs.signature }}" latest.json --clobber

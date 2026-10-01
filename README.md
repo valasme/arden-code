@@ -1,6 +1,11 @@
-# Arden Code
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/assets/github/readme-header-dark.png">
+    <img src="brand/assets/github/readme-header-light.png" alt="Arden Code" width="640">
+  </picture>
+</h1>
 
-A Windows cockpit for Claude Code and Codex.
+<p align="center">A Windows cockpit for Claude Code and Codex.</p>
 
 > **Status: pre-alpha, work in progress.** There is nothing to install yet.
 
@@ -31,7 +36,7 @@ Tauri 2 (Rust) · React 19 · TypeScript 7 · TanStack Router and Query · shadc
 
 ## Development
 
-Setup notes are in [docs/dev-setup.md](docs/dev-setup.md). Build instructions arrive with the first code milestone.
+Setup, build and test instructions are in [docs/dev-setup.md](docs/dev-setup.md). See also [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md).
 
 Design decisions are recorded in [docs/adr](docs/adr/README.md).
 

@@ -237,6 +237,7 @@ The sidebar lists sessions grouped by project. The foundation ships one built-in
 - **Panes:** the sidebar and the inspector can be collapsed and resized. Their sizes are remembered.
 - **No white flash:** the window starts hidden, with its background already in the current theme. It appears after the first frame is drawn.
 - **Window memory:** size, position, monitor and maximized state are restored. A position that would now be off-screen is corrected.
+- **Smallest size:** 500 × 560 px. Windows asks for 500 px or less, or the window does not fit the zones of Snap Layouts; the sidebar and the session view at their smallest fit in it.
 
 ### 6.2 Title bar and Snap Layouts
 
@@ -532,7 +533,7 @@ The mark is a graphic, not text. It contrasts 2.4:1 against white and 8.2:1 agai
 - **What it is:** an editable Affinity 3.3 document with one artboard per asset, color swatches and a type sample.
 - **How it's built:** through Affinity's MCP server. That's enabled in Affinity under Settings → Model Context Protocol, and it listens on `http://[::1]:6767/sse` (IPv6 localhost).
 - **Tools used:** `execute_script`, `render_spread` (to check the result visually) and `save_script_to_library`.
-- **Saved scripts:** they go to Affinity's Scripts Library under an "Arden Code" category (Window › Scripting › Scripts Library). Click a script there to run it.
+- **Saved scripts:** they go to Affinity's Scripts Library with titles starting "Arden Code:" (Window › Scripting › Scripts Library); the library has no categories. Click a script there to run it. The brand library is `brand/assets/affinity/build-brand-library.js`, written by `pnpm brand:build`.
 - **File access:** Affinity's MCP can only reach the Desktop, so exports go there first and are then copied into `brand/`.
 - **The rule:** changes made in Affinity are carried back into the generator's parameters. The code stays the source of truth.
 
@@ -561,7 +562,7 @@ These are release gates: no release ships unless they all pass.
 - **Zoom:** 80% to 200% without breaking the layout.
 - **Pointer targets:** at least 24×24 px.
 - **Contrast:** 4.5:1 for text, and 3:1 for control borders and focus outlines, verified for every token pair.
-- **Checks:** axe runs in the unit and end-to-end tests. A manual checklist runs before each release.
+- **Checks:** axe runs in the unit and end-to-end tests. A manual checklist ([accessibility-checklist.md](accessibility-checklist.md)) runs before each release.
 
 ## 11. Performance targets
 
@@ -576,7 +577,8 @@ These are release gates. There are deliberately no installer or bundle size limi
 | Demo agent streaming | 60 fps with 10,000 messages in a session |
 | Applying a settings change | < 50 ms |
 
-Startup time is measured in CI. The rest is profiled before each release.
+Every row is measured by CI on the release build, and the ones that can fail the check are listed in
+[performance.md](performance.md).
 
 ## 12. Security
 
@@ -622,10 +624,10 @@ Startup time is measured in CI. The rest is profiled before each release.
 
 | Layer | Tools |
 |---|---|
-| Rust unit and integration | cargo-nextest, insta snapshots |
+| Rust unit and integration | `cargo test` (see the addendum to ADR 0019) |
 | TypeScript unit | Vitest 5 (Node) |
 | Components | Vitest browser mode on Chromium (the same engine family as WebView2) + Testing Library + axe |
-| UI flows with a mocked backend | Playwright against the Vite dev server, with the Rust side mocked |
+| UI flows with a mocked backend | The same Vitest browser mode, with the calls to Rust answered by `mockIPC` |
 | End to end (the real app) | Playwright attached to the app's WebView2 over CDP (debug builds only) |
 | Visual regression | Playwright screenshots of the design system page in light, dark, high contrast and 200% zoom |
 | Contracts | Bindings drift check; hard-coded-text lint; brand outputs up to date |
@@ -647,7 +649,7 @@ Every change must pass formatting, linting, type-checking and tests. Test covera
 - **Git hooks and commits:**
   - lefthook runs formatting and linting on staged files before each commit.
   - Commit messages follow Conventional Commits, checked by commitlint.
-- **CI** (GitHub Actions, Windows x64): format → lint → type-check → unit tests → Rust tests → end-to-end smoke test → installer build.
+- **CI** (GitHub Actions, Windows x64): format → lint → type-check → unused code → hard-coded UI text → UI tests → screenshot tests → Rust tests → bindings, brand and license checks → build → end-to-end tests on the real app → performance of the release build ([performance.md](performance.md)). A Linux job checks spelling, advisories and licenses. The release trial builds the installer when a file that shapes a release changes.
 - **Releases** (built now, switched on later):
   - release-please handles versions and the changelog.
   - tauri-action builds the installer, update signatures and `latest.json`.

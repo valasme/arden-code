@@ -1,0 +1,63 @@
+/** Every color token, in the order the design system page lists them. */
+export const colorTokens = [
+  "background",
+  "foreground",
+  "card",
+  "card-foreground",
+  "popover",
+  "popover-foreground",
+  "primary",
+  "primary-foreground",
+  "secondary",
+  "secondary-foreground",
+  "muted",
+  "muted-foreground",
+  "accent",
+  "accent-foreground",
+  "destructive",
+  "border",
+  "input",
+  "ring",
+  "sidebar",
+  "sidebar-foreground",
+  "sidebar-primary",
+  "sidebar-primary-foreground",
+  "sidebar-accent",
+  "sidebar-accent-foreground",
+  "sidebar-border",
+  "sidebar-ring",
+  "chart-1",
+  "chart-2",
+  "chart-3",
+  "chart-4",
+  "chart-5",
+  "brand",
+  "brand-wordmark",
+] as const;
+
+/** Text colors shown on the surfaces they are meant for. */
+export const textSamples = [
+  ["foreground", "background"],
+  ["card-foreground", "card"],
+  ["popover-foreground", "popover"],
+  ["primary-foreground", "primary"],
+  ["secondary-foreground", "secondary"],
+  ["muted-foreground", "muted"],
+  ["muted-foreground", "background"],
+  ["accent-foreground", "accent"],
+  ["destructive", "background"],
+  ["sidebar-foreground", "sidebar"],
+  ["sidebar-primary-foreground", "sidebar-primary"],
+  ["sidebar-accent-foreground", "sidebar-accent"],
+] as const;
+
+/** The type scale from the plan: name, Tailwind class and size. */
+export const typeScale = [
+  ["2xs", "text-2xs", "11 px"],
+  ["xs", "text-xs", "12 px"],
+  ["sm", "text-sm", "13 px, the UI default"],
+  ["base", "text-base", "14 px, message text"],
+  ["lg", "text-lg", "16 px"],
+  ["xl", "text-xl", "20 px"],
+  ["2xl", "text-2xl", "24 px"],
+] as const;

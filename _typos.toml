@@ -1,0 +1,19 @@
+[default.extend-words]
+# "PNGs" is split into "PN" + "Gs" by the tokenizer.
+PN = "PN"
+# German, in the tests that check dates and relative times in other languages ("vor 5 Minuten").
+vor = "vor"
+# The NSIS instruction that copies a string, in the installer hooks.
+Cpy = "Cpy"
+# Win32's TrackMouseEvent flags (TME_LEAVE, TME_NONCLIENT), in the Snap Layouts overlay.
+TME = "TME"
+
+[files]
+extend-exclude = [
+  "pnpm-lock.yaml",
+  "Cargo.lock",
+  "**/icons/**",
+  "**/bindings.ts",
+  "**/routeTree.gen.ts",
+  "**/licenses.gen.json",
+]

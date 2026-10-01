@@ -1,0 +1,7 @@
+/*
+ * Fonts are bundled with the app and never loaded from the network. Each package declares one
+ * @font-face per script with a unicode-range, so a script's file only loads when characters from it
+ * appear on screen.
+ */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/cascadia-code";

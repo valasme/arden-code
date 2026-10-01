@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "jsx-a11y", "import", "unicorn", "vitest", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "options": {
+    "typeAware": true,
+    "typeCheck": false
+  },
+  "env": { "browser": true, "es2024": true },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "unicorn/filename-case": "off",
+    "no-underscore-dangle": "off",
+    "vitest/valid-expect": ["error", { "maxArgs": 2 }],
+    "vitest/expect-expect": [
+      "error",
+      { "assertFunctionNames": ["expect", "expectNoAccessibilityViolations"] }
+    ],
+    "import/no-unassigned-import": "off"
+  },
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/target/**",
+    "**/node_modules/**",
+    "**/src-tauri/gen/**",
+    "**/src/ipc/bindings.ts",
+    "**/src/routeTree.gen.ts",
+    "**/src/components/ui/**",
+    "**/*.gen.ts",
+    "**/brand/assets/affinity/**"
+  ]
+}
