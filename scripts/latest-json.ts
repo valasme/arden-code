@@ -1,6 +1,9 @@
 // Makes the update manifest (latest.json) that the app looks for, from the installer's signature.
 //
 //   node scripts/latest-json.ts --version 1.2.3 --url https://.../setup.exe --signature-file setup.exe.sig
+//     [--trusted-key <plugins.updater.pubkey from tauri.conf.json>]
+//
+// With --trusted-key it refuses a signature made with any other key: the app would refuse that update.
 //
 // The manifest holds only what the updater needs: the version, when it was published, notes, and for
 // each platform where to download the installer and its signature. The app checks the signature
@@ -58,6 +61,32 @@ export function buildLatestJson(manifest: Manifest): string {
   )}\n`;
 }
 
+/**
+ * The id of the key in a Tauri public key or signature, as minisign writes it (`2DC1D186A8270EF5`).
+ * Both are base64 of minisign's text, whose second line is base64 of the algorithm (2 bytes), the key
+ * id (8 bytes, little-endian) and the key or signature itself.
+ */
+export function minisignKeyId(value: string): string {
+  const line = Buffer.from(value.trim(), "base64").toString("utf8").split("\n")[1]?.trim() ?? "";
+  const bytes = Buffer.from(line, "base64");
+  if (bytes.length < 10) throw new Error("this is not a minisign key or signature");
+  return Buffer.from(bytes.subarray(2, 10).toReversed()).toString("hex").toUpperCase();
+}
+
+/**
+ * Refuses a signature made with any key but the one the app trusts (`plugins.updater.pubkey` in
+ * `tauri.conf.json`): every installed copy would refuse that update.
+ */
+export function checkSignedWith(signature: string, trustedKey: string): void {
+  const signedWith = minisignKeyId(signature);
+  const trusted = minisignKeyId(trustedKey);
+  if (signedWith !== trusted) {
+    throw new Error(
+      `the installer was signed with key ${signedWith}, but the app trusts key ${trusted}: the TAURI_SIGNING_PRIVATE_KEY secret is not the key in tauri.conf.json`,
+    );
+  }
+}
+
 /** The value after each `--name` in a list of arguments. */
 export function parseArguments(argv: readonly string[]): Record<string, string> {
   const values: Record<string, string> = {};
@@ -79,6 +108,9 @@ function main() {
     if (value === undefined) throw new Error(`--${name} is missing`);
     return value;
   };
+  const signature = readFileSync(need("signature-file"), "utf8");
+  const trustedKey = options["trusted-key"];
+  if (trustedKey !== undefined) checkSignedWith(signature, trustedKey);
   process.stdout.write(
     buildLatestJson({
       version: need("version"),
@@ -87,7 +119,7 @@ function main() {
       platforms: {
         [options["platform"] ?? "windows-x86_64"]: {
           url: need("url"),
-          signature: readFileSync(need("signature-file"), "utf8"),
+          signature,
         },
       },
     }),

@@ -1,4 +1,10 @@
-import { buildLatestJson, parseArguments, type Manifest } from "../../../../scripts/latest-json";
+import {
+  buildLatestJson,
+  checkSignedWith,
+  minisignKeyId,
+  parseArguments,
+  type Manifest,
+} from "../../../../scripts/latest-json";
 
 const manifest: Manifest = {
   version: "1.2.3",
@@ -71,5 +77,41 @@ describe("The update manifest", () => {
     });
     expect(() => parseArguments(["version", "1.0.0"])).toThrow(/expected/u);
     expect(() => parseArguments(["--version"])).toThrow(/expected/u);
+  });
+});
+
+/**
+ * A key or signature as Tauri writes it: base64 of minisign's text, whose second line is base64 of
+ * the algorithm (2 bytes), the key id (8 bytes, little-endian) and the key or signature itself.
+ */
+function minisign(comment: string, algorithm: string, keyId: string, rest: number): string {
+  const id = Buffer.from(keyId, "hex").toReversed();
+  const payload = Buffer.concat([Buffer.from(algorithm), id, Buffer.alloc(rest, 7)]);
+  return Buffer.from(`untrusted comment: ${comment}\n${payload.toString("base64")}\n`).toString(
+    "base64",
+  );
+}
+
+const publicKey = (keyId: string) => minisign(`minisign public key: ${keyId}`, "Ed", keyId, 32);
+const signature = (keyId: string) => minisign("signature from tauri secret key", "ED", keyId, 64);
+
+describe("The key an installer was signed with", () => {
+  it("is read from a public key and from a signature, as minisign names it", () => {
+    expect(minisignKeyId(publicKey("2DC1D186A8270EF5"))).toBe("2DC1D186A8270EF5");
+    expect(minisignKeyId(signature("2DC1D186A8270EF5"))).toBe("2DC1D186A8270EF5");
+  });
+
+  it("must be the key the app trusts, or every installed copy would refuse the update", () => {
+    expect(() => {
+      checkSignedWith(signature("2DC1D186A8270EF5"), publicKey("2DC1D186A8270EF5"));
+    }).not.toThrow();
+    expect(() => {
+      checkSignedWith(signature("050BF62F82230125"), publicKey("2DC1D186A8270EF5"));
+    }).toThrow(/signed with key 050BF62F82230125, but the app trusts key 2DC1D186A8270EF5/u);
+  });
+
+  it("refuses text that is not a key or a signature", () => {
+    expect(() => minisignKeyId("not base64 of anything")).toThrow(/not a minisign/u);
+    expect(() => minisignKeyId("")).toThrow(/not a minisign/u);
   });
 });
