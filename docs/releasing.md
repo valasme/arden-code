@@ -29,9 +29,16 @@ secret, and says so as a warning.
 1. **Back up the update signing key.** It is at `%USERPROFILE%\.tauri\arden-code-update.key` on the
    computer that made it. Put a copy in your password manager. Lose it, and no installed copy can ever
    be updated: an update signed with another key is refused.
-2. **Add the key as repository secrets** (Settings → Secrets and variables → Actions):
-   `TAURI_SIGNING_PRIVATE_KEY` (the whole contents of the key file) and
-   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty, as the key has no password).
+2. **Add the key as a repository secret** (Settings → Secrets and variables → Actions):
+   `TAURI_SIGNING_PRIVATE_KEY`, the whole contents of the key file. The key has no password, so
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` stays unset. From PowerShell (which has no `<` redirection):
+
+   ```powershell
+   gh secret set TAURI_SIGNING_PRIVATE_KEY --repo valasme/arden-code --body (Get-Content -Raw "$env:USERPROFILE\.tauri\arden-code-update.key").Trim()
+   ```
+
+   Then run **Release trial** from the Actions tab: its "Choose the update signing key" step says
+   "Signing with the real update key". If it warns that the secret is not set, the secret is empty.
 3. **Switch releases on** when the trial is green: add the repository variable `RELEASES_ENABLED` with
    the value `true`. From then on, release-please keeps a release pull request open. Merging it tags
    the version and the release workflow uploads the installer, its signature and `latest.json`.

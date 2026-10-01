@@ -175,7 +175,7 @@ test.describe("errors and logs in the real app", () => {
       await expect.poll(() => readCrashReports(app.dataDir).length).toBe(1);
       const [report] = readCrashReports(app.dataDir);
       expect(report?.message).toContain("deliberate panic for testing");
-      expect(report?.location).toContain("commands.rs");
+      expect(report?.location).toContain("diagnostics.rs");
       expect(report?.backtrace.length).toBeGreaterThan(0);
       expect(report?.version).toMatch(/^\d+\.\d+\.\d+$/);
       // A panic on a background thread does not take the app down.
