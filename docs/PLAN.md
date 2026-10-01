@@ -649,7 +649,7 @@ Every change must pass formatting, linting, type-checking and tests. Test covera
 - **Git hooks and commits:**
   - lefthook runs formatting and linting on staged files before each commit.
   - Commit messages follow Conventional Commits, checked by commitlint.
-- **CI** (GitHub Actions, Windows x64): format → lint → type-check → unit tests → Rust tests → end-to-end smoke test → installer build.
+- **CI** (GitHub Actions, Windows x64): format → lint → type-check → unused code → hard-coded UI text → UI tests → screenshot tests → Rust tests → bindings, brand and license checks → build → end-to-end tests on the real app → performance of the release build ([performance.md](performance.md)). A Linux job checks spelling, advisories and licenses. The release trial builds the installer when a file that shapes a release changes.
 - **Releases** (built now, switched on later):
   - release-please handles versions and the changelog.
   - tauri-action builds the installer, update signatures and `latest.json`.
