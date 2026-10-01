@@ -1,6 +1,6 @@
 # Arden Code
 
-A Windows 11 desktop cockpit for Claude Code and Codex, built on Tauri 2 and React. Pre-alpha: the app foundation is under construction.
+A Windows 11 desktop cockpit for Claude Code and Codex, built on Tauri 2 and React. Pre-alpha: the app foundation is built (merged in #29); work continues issue by issue.
 
 ## Sources of truth
 
@@ -10,10 +10,10 @@ A Windows 11 desktop cockpit for Claude Code and Codex, built on Tauri 2 and Rea
 
 ## Workflow
 
-- The whole foundation is built on one integration branch, `foundation`, with one draft pull request that is merged when every ticket is done.
-- Work the tickets (GitHub issues) in dependency order. After each ticket: commit, push, and close its issue with a comment linking the commit, so a session can end at any point without losing work.
+- Work happens on a branch from `main` with one pull request, merged when CI is green on the Windows runner. Related issues can share a branch, one commit each.
+- Work the issues in dependency order. After each issue: commit and push; once CI is green, close it with a comment linking the commit, so a session can end at any point without losing work.
 - Build test-first with /tdd.
-- At the end, review the full diff with /code-review. Run its Standards and Spec axes yourself, one after the other, with separate reports: this repo works in a single agent, without subagents.
+- Before merging, review the pull request's diff with /code-review. Run its Standards and Spec axes yourself, one after the other, with separate reports: this repo works in a single agent, without subagents.
 - Write Conventional Commits.
 
 ## Agent skills
