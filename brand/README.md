@@ -65,6 +65,27 @@ Below that the letters stop being legible. The app icon is drawn separately at s
   (Lora scores about 0.95; the closest other serif installed with Windows scores 0.69).
 - `src/logo-files.test.ts` checks every file: colors, composition, tight edges, and no live text.
 
+## The Affinity library: a sketchbook, not the source of truth
+
+`brand/affinity/Arden Code brand library.af` is an Affinity document of the whole kit, for trying ideas by
+eye: an artboard for every file in `assets/svg/` and every image made from the logo, the light and dark
+colors as swatches, and Lora as outlines (so it needs no font installed). `preview.jpg` shows it.
+
+It is made by a script, which `pnpm brand:build` writes from the same files as everything else:
+`assets/affinity/build-brand-library.js`. The script is also in Affinity's Scripts Library as
+**Arden Code: Brand library** (Window › Scripting › Scripts Library); click it there to get a fresh document.
+After the script changes, put the new one in the library again.
+
+**The rule.** Nothing drawn in Affinity flows back on its own. When a change looks right there, make it in
+the generator instead (the parameters in `src/mark.ts`, the colors in `src/colors.ts`, the wordmark in
+`src/wordmark.ts`), run `pnpm brand:build`, and remake the document from the new script. CI fails when the
+script is out of date with the generator, as it does for every other brand file.
+
+To remake the saved document: run the script in Affinity, save it with File › Save As to the Desktop
+(Affinity's scripts can only reach the Desktop, and only when file access is allowed in its settings), then
+copy it into `brand/affinity/`. Through Affinity's MCP server (Settings › Model Context Protocol, at
+`http://[::1]:6767/sse`) an agent can run the script, render it to check it, and save it to the library.
+
 ## Licenses
 
 The brand assets are released under the repository's [MIT license](../LICENSE).

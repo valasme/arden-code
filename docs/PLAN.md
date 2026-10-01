@@ -533,7 +533,7 @@ The mark is a graphic, not text. It contrasts 2.4:1 against white and 8.2:1 agai
 - **What it is:** an editable Affinity 3.3 document with one artboard per asset, color swatches and a type sample.
 - **How it's built:** through Affinity's MCP server. That's enabled in Affinity under Settings → Model Context Protocol, and it listens on `http://[::1]:6767/sse` (IPv6 localhost).
 - **Tools used:** `execute_script`, `render_spread` (to check the result visually) and `save_script_to_library`.
-- **Saved scripts:** they go to Affinity's Scripts Library under an "Arden Code" category (Window › Scripting › Scripts Library). Click a script there to run it.
+- **Saved scripts:** they go to Affinity's Scripts Library with titles starting "Arden Code:" (Window › Scripting › Scripts Library); the library has no categories. Click a script there to run it. The brand library is `brand/assets/affinity/build-brand-library.js`, written by `pnpm brand:build`.
 - **File access:** Affinity's MCP can only reach the Desktop, so exports go there first and are then copied into `brand/`.
 - **The rule:** changes made in Affinity are carried back into the generator's parameters. The code stays the source of truth.
 

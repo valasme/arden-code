@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { affinityScript } from "./affinity.ts";
 import { buildRasterAssets } from "./assets.ts";
 import { buildShapes } from "./lockups.ts";
 import { buildLogoFiles } from "./logo-files.ts";
@@ -22,6 +23,9 @@ const svgFiles = buildLogoFiles();
 for (const [name, svg] of Object.entries(svgFiles).toSorted(([a], [b]) => a.localeCompare(b))) {
   write(`brand/assets/svg/${name}`, svg);
 }
+
+// The Affinity script that draws the whole kit as a document (plan section 8.5).
+write("brand/assets/affinity/build-brand-library.js", affinityScript());
 
 // The app's <Logo />, <Mark /> and <Wordmark /> components draw these same outlines.
 write(

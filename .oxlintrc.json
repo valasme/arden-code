@@ -30,6 +30,7 @@
     "**/src/ipc/bindings.ts",
     "**/src/routeTree.gen.ts",
     "**/src/components/ui/**",
-    "**/*.gen.ts"
+    "**/*.gen.ts",
+    "**/brand/assets/affinity/**"
   ]
 }

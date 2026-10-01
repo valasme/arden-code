@@ -8,6 +8,7 @@
       "ignore": ["src/components/ui/**"]
     },
     "brand": {
+      "ignore": ["assets/affinity/**"],
       "ignoreDependencies": ["opentype.js"]
     }
   }

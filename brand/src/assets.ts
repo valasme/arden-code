@@ -71,12 +71,46 @@ function socialPreviewSvg(): string {
 const iconSizes = [16, 20, 24, 32, 40, 48, 64, 256] as const;
 const traySizes = [16, 20, 24, 32] as const;
 
+/**
+ * The SVG drawing of each image made from the logo, by name: the images are rendered from these, and
+ * the Affinity library shows them too.
+ */
+export function rasterSources(): Record<string, string> {
+  const readmeHeader = (variant: "color-on-light" | "color-on-dark") =>
+    canvas(
+      1280,
+      320,
+      undefined,
+      placeLogo("logo-horizontal", variant, { x: 40, y: 40, width: 1200, height: 240 }),
+    );
+  return {
+    "app-icon-1024": markIconSvg(1024),
+    "installer-header": canvas(
+      150,
+      57,
+      "#FFFFFF",
+      placeLogo("logo-horizontal", "color-on-light", { x: 8, y: 8, width: 134, height: 41 }),
+    ),
+    "installer-sidebar": canvas(
+      164,
+      314,
+      "#FFFFFF",
+      placeLogo("logo-stacked", "color-on-light", { x: 16, y: 96, width: 132, height: 122 }),
+    ),
+    "readme-header-light": readmeHeader("color-on-light"),
+    "readme-header-dark": readmeHeader("color-on-dark"),
+    "social-preview": socialPreviewSvg(),
+  };
+}
+
 /** Repository-relative path to file contents. */
 export function buildRasterAssets(): Record<string, Uint8Array> {
   const assets: Record<string, Uint8Array> = {};
   const text = new TextEncoder();
+  const sources = rasterSources();
+  const source = (name: string) => sources[name] ?? "";
 
-  assets["brand/assets/png/app-icon-1024.png"] = renderPng(markIconSvg(1024));
+  assets["brand/assets/png/app-icon-1024.png"] = renderPng(source("app-icon-1024"));
 
   assets["apps/desktop/src-tauri/icons/icon.ico"] = buildIco(
     iconSizes.map((size) => ({ size, png: renderPng(markIconSvg(size)) })),
@@ -87,44 +121,22 @@ export function buildRasterAssets(): Record<string, Uint8Array> {
   }
 
   assets["apps/desktop/src-tauri/installer/header.bmp"] = encodeBmp(
-    renderImage(
-      canvas(
-        150,
-        57,
-        "#FFFFFF",
-        placeLogo("logo-horizontal", "color-on-light", { x: 8, y: 8, width: 134, height: 41 }),
-      ),
-    ),
+    renderImage(source("installer-header")),
   );
   assets["apps/desktop/src-tauri/installer/sidebar.bmp"] = encodeBmp(
-    renderImage(
-      canvas(
-        164,
-        314,
-        "#FFFFFF",
-        placeLogo("logo-stacked", "color-on-light", { x: 16, y: 96, width: 132, height: 122 }),
-      ),
-    ),
+    renderImage(source("installer-sidebar")),
   );
 
   assets["apps/desktop/public/brand/favicon.svg"] = text.encode(
     buildLogoFiles()["mark-color-on-light.svg"] ?? "",
   );
 
-  for (const [theme, variant] of [
-    ["light", "color-on-light"],
-    ["dark", "color-on-dark"],
-  ] as const) {
+  for (const theme of ["light", "dark"] as const) {
     assets[`brand/assets/github/readme-header-${theme}.png`] = renderPng(
-      canvas(
-        1280,
-        320,
-        undefined,
-        placeLogo("logo-horizontal", variant, { x: 40, y: 40, width: 1200, height: 240 }),
-      ),
+      source(`readme-header-${theme}`),
     );
   }
-  assets["brand/assets/github/social-preview.png"] = renderPng(socialPreviewSvg());
+  assets["brand/assets/github/social-preview.png"] = renderPng(source("social-preview"));
 
   return assets;
 }
