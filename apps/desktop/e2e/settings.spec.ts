@@ -168,6 +168,9 @@ test.describe("settings in the real app", () => {
       await openAppearance(app.page);
       await app.page.getByRole("radio", { name: "Dark" }).click();
       await expect(app.page.locator("html")).toHaveClass(/dark/);
+      // The page shows a change before Rust has saved it. Break the file only once the save is in,
+      // or the save would land on top of the broken file and replace it.
+      await expect.poll(() => readSettings(app.dataDir).appearance.theme).toBe("dark");
 
       writeFileSync(settingsPath(app.dataDir), '{"appearance":{"theme":"purple"}}');
 
