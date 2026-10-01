@@ -2,10 +2,12 @@
 
 mod agents;
 mod commands;
+mod diagnostics;
 mod launch;
 mod navigation;
 mod notifications;
 mod sessions;
+mod settings;
 mod snap_layouts;
 mod updates;
 mod webview;
@@ -48,33 +50,33 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::app_info,
         commands::show_system_menu,
         snap_layouts::set_maximize_button,
-        commands::log_from_ui,
-        commands::open_logs_folder,
-        commands::redact_text,
-        commands::get_settings,
-        commands::change_setting,
-        commands::reset_setting,
-        commands::set_shortcuts,
-        commands::reset_shortcuts,
-        commands::take_settings_notice,
-        commands::get_system_preferences,
+        diagnostics::log_from_ui,
+        diagnostics::open_logs_folder,
+        diagnostics::redact_text,
+        settings::get_settings,
+        settings::change_setting,
+        settings::reset_setting,
+        settings::set_shortcuts,
+        settings::reset_shortcuts,
+        settings::take_settings_notice,
+        settings::get_system_preferences,
         commands::get_system_info,
-        commands::open_settings_file,
+        settings::open_settings_file,
         commands::open_project_page,
         commands::open_link,
         updates::get_update_status,
         updates::check_for_updates,
         updates::restart_to_update,
         commands::send_test_notification,
-        commands::open_bug_report,
-        commands::read_logs,
-        commands::export_diagnostics,
-        commands::pending_crashes,
-        commands::acknowledge_crashes,
-        commands::take_web_engine_notice,
-        commands::export_settings,
-        commands::import_settings,
-        commands::reset_settings,
+        diagnostics::open_bug_report,
+        diagnostics::read_logs,
+        diagnostics::export_diagnostics,
+        diagnostics::pending_crashes,
+        diagnostics::acknowledge_crashes,
+        diagnostics::take_web_engine_notice,
+        settings::export_settings,
+        settings::import_settings,
+        settings::reset_settings,
         commands::reset_app,
         commands::restart_app,
         sessions::list_projects,
@@ -86,41 +88,41 @@ fn specta_builder() -> Builder<tauri::Wry> {
         agents::detect_agents,
         sessions::debug_fill_session,
         agents::debug_spawn_sleeper,
-        commands::debug_fail,
-        commands::debug_panic,
+        diagnostics::debug_fail,
+        diagnostics::debug_panic,
     ];
     #[cfg(not(debug_assertions))]
     let commands = collect_commands![
         commands::app_info,
         commands::show_system_menu,
         snap_layouts::set_maximize_button,
-        commands::log_from_ui,
-        commands::open_logs_folder,
-        commands::redact_text,
-        commands::get_settings,
-        commands::change_setting,
-        commands::reset_setting,
-        commands::set_shortcuts,
-        commands::reset_shortcuts,
-        commands::take_settings_notice,
-        commands::get_system_preferences,
+        diagnostics::log_from_ui,
+        diagnostics::open_logs_folder,
+        diagnostics::redact_text,
+        settings::get_settings,
+        settings::change_setting,
+        settings::reset_setting,
+        settings::set_shortcuts,
+        settings::reset_shortcuts,
+        settings::take_settings_notice,
+        settings::get_system_preferences,
         commands::get_system_info,
-        commands::open_settings_file,
+        settings::open_settings_file,
         commands::open_project_page,
         commands::open_link,
         updates::get_update_status,
         updates::check_for_updates,
         updates::restart_to_update,
         commands::send_test_notification,
-        commands::open_bug_report,
-        commands::read_logs,
-        commands::export_diagnostics,
-        commands::pending_crashes,
-        commands::acknowledge_crashes,
-        commands::take_web_engine_notice,
-        commands::export_settings,
-        commands::import_settings,
-        commands::reset_settings,
+        diagnostics::open_bug_report,
+        diagnostics::read_logs,
+        diagnostics::export_diagnostics,
+        diagnostics::pending_crashes,
+        diagnostics::acknowledge_crashes,
+        diagnostics::take_web_engine_notice,
+        settings::export_settings,
+        settings::import_settings,
+        settings::reset_settings,
         commands::reset_app,
         commands::restart_app,
         sessions::list_projects,
@@ -133,8 +135,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
     ];
 
     builder.commands(commands).events(collect_events![
-        commands::SettingsChanged,
-        commands::SystemPreferencesChanged,
+        settings::SettingsChanged,
+        settings::SystemPreferencesChanged,
         snap_layouts::MaximizeButtonChanged,
         updates::UpdateStatusChanged,
         sessions::SessionRequested
@@ -286,7 +288,7 @@ fn watch_system_preferences(handle: tauri::AppHandle) -> preferences::Watcher {
         SYSTEM_PREFERENCES_INTERVAL,
         preferences::read,
         move |now| {
-            let _ = commands::SystemPreferencesChanged {
+            let _ = settings::SystemPreferencesChanged {
                 preferences: now.clone().into(),
             }
             .emit(&handle);
@@ -372,7 +374,7 @@ pub fn run() {
                 window::apply_advanced(&handle, &settings.advanced);
                 logging::set_level(ui_level(settings.advanced.log_level));
                 tracing::debug!("settings changed");
-                let _ = commands::SettingsChanged {
+                let _ = settings::SettingsChanged {
                     settings: settings.clone(),
                     notice: notice.cloned(),
                 }
