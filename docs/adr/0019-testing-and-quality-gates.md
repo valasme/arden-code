@@ -41,3 +41,11 @@ WebView2 speaks the Chrome DevTools Protocol, which means Playwright can drive t
   time a settings change takes fail the check past their target times a margin. Warm start and idle CPU are
   reported: the warm start is about 0.6 s on the machine it was measured on, and no gate is set that the
   app does not meet.
+
+## The warm start is gated (issue #30)
+
+- The warm start is now gated like the cold start: it fails past 0.4 s times the margin. It went from about
+  0.65 s to about 0.46 s on the machine it was measured on, as the window no longer waits for two round trips
+  through the isolation frame. Rust hands the page its first settings and Windows' text size and regional
+  format in an initialization script, and shows the window when the page has first loaded, by which time the
+  page has drawn its first frame. [performance.md](../performance.md) has the numbers.

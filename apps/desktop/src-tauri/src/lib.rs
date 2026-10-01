@@ -2,21 +2,22 @@
 
 mod agents;
 mod commands;
+mod diagnostics;
 mod launch;
 mod navigation;
 mod notifications;
 mod sessions;
+mod settings;
 mod snap_layouts;
 mod updates;
 mod webview;
 mod window;
 mod window_state;
 
-pub use window::startup_background;
+pub use window::{FIRST_FRAME_GLOBAL, startup_background};
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
 use arden_agents::playground;
 use arden_agents::store::SessionStore;
@@ -26,7 +27,7 @@ use arden_diagnostics::redact::Redactor;
 use arden_diagnostics::{crash, logging};
 use arden_process::supervisor::Supervisor;
 use arden_settings::service::SettingsService;
-use arden_settings::settings::LogLevel;
+use arden_settings::settings::{LogLevel, Settings};
 use arden_windows::preferences;
 use specta_typescript::Typescript;
 use tauri::Manager;
@@ -48,33 +49,33 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::app_info,
         commands::show_system_menu,
         snap_layouts::set_maximize_button,
-        commands::log_from_ui,
-        commands::open_logs_folder,
-        commands::redact_text,
-        commands::get_settings,
-        commands::change_setting,
-        commands::reset_setting,
-        commands::set_shortcuts,
-        commands::reset_shortcuts,
-        commands::take_settings_notice,
-        commands::get_system_preferences,
+        diagnostics::log_from_ui,
+        diagnostics::open_logs_folder,
+        diagnostics::redact_text,
+        settings::get_settings,
+        settings::change_setting,
+        settings::reset_setting,
+        settings::set_shortcuts,
+        settings::reset_shortcuts,
+        settings::take_settings_notice,
+        settings::get_system_preferences,
         commands::get_system_info,
-        commands::open_settings_file,
+        settings::open_settings_file,
         commands::open_project_page,
         commands::open_link,
         updates::get_update_status,
         updates::check_for_updates,
         updates::restart_to_update,
         commands::send_test_notification,
-        commands::open_bug_report,
-        commands::read_logs,
-        commands::export_diagnostics,
-        commands::pending_crashes,
-        commands::acknowledge_crashes,
-        commands::take_web_engine_notice,
-        commands::export_settings,
-        commands::import_settings,
-        commands::reset_settings,
+        diagnostics::open_bug_report,
+        diagnostics::read_logs,
+        diagnostics::export_diagnostics,
+        diagnostics::pending_crashes,
+        diagnostics::acknowledge_crashes,
+        diagnostics::take_web_engine_notice,
+        settings::export_settings,
+        settings::import_settings,
+        settings::reset_settings,
         commands::reset_app,
         commands::restart_app,
         sessions::list_projects,
@@ -86,41 +87,41 @@ fn specta_builder() -> Builder<tauri::Wry> {
         agents::detect_agents,
         sessions::debug_fill_session,
         agents::debug_spawn_sleeper,
-        commands::debug_fail,
-        commands::debug_panic,
+        diagnostics::debug_fail,
+        diagnostics::debug_panic,
     ];
     #[cfg(not(debug_assertions))]
     let commands = collect_commands![
         commands::app_info,
         commands::show_system_menu,
         snap_layouts::set_maximize_button,
-        commands::log_from_ui,
-        commands::open_logs_folder,
-        commands::redact_text,
-        commands::get_settings,
-        commands::change_setting,
-        commands::reset_setting,
-        commands::set_shortcuts,
-        commands::reset_shortcuts,
-        commands::take_settings_notice,
-        commands::get_system_preferences,
+        diagnostics::log_from_ui,
+        diagnostics::open_logs_folder,
+        diagnostics::redact_text,
+        settings::get_settings,
+        settings::change_setting,
+        settings::reset_setting,
+        settings::set_shortcuts,
+        settings::reset_shortcuts,
+        settings::take_settings_notice,
+        settings::get_system_preferences,
         commands::get_system_info,
-        commands::open_settings_file,
+        settings::open_settings_file,
         commands::open_project_page,
         commands::open_link,
         updates::get_update_status,
         updates::check_for_updates,
         updates::restart_to_update,
         commands::send_test_notification,
-        commands::open_bug_report,
-        commands::read_logs,
-        commands::export_diagnostics,
-        commands::pending_crashes,
-        commands::acknowledge_crashes,
-        commands::take_web_engine_notice,
-        commands::export_settings,
-        commands::import_settings,
-        commands::reset_settings,
+        diagnostics::open_bug_report,
+        diagnostics::read_logs,
+        diagnostics::export_diagnostics,
+        diagnostics::pending_crashes,
+        diagnostics::acknowledge_crashes,
+        diagnostics::take_web_engine_notice,
+        settings::export_settings,
+        settings::import_settings,
+        settings::reset_settings,
         commands::reset_app,
         commands::restart_app,
         sessions::list_projects,
@@ -133,8 +134,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
     ];
 
     builder.commands(commands).events(collect_events![
-        commands::SettingsChanged,
-        commands::SystemPreferencesChanged,
+        settings::SettingsChanged,
+        settings::SystemPreferencesChanged,
         snap_layouts::MaximizeButtonChanged,
         updates::UpdateStatusChanged,
         sessions::SessionRequested
@@ -231,9 +232,10 @@ fn browser_arguments(hardware_acceleration: bool, debug_port: Option<&str>) -> S
 }
 
 /// Makes the main window from its configuration. It is made here, and not by Tauri, so that the
-/// web engine's arguments are given in the way that works everywhere: an environment variable for
-/// the engine is ignored by some machines, such as a CI runner.
-fn create_main_window(app: &tauri::App, hardware_acceleration: bool) -> tauri::Result<()> {
+/// web engine's arguments are given in the way that works everywhere (an environment variable for
+/// the engine is ignored by some machines, such as a CI runner), and so that the page is handed what
+/// its first frame needs.
+fn create_main_window(app: &tauri::App, settings: &Settings) -> tauri::Result<()> {
     let config = app
         .config()
         .app
@@ -245,11 +247,20 @@ fn create_main_window(app: &tauri::App, hardware_acceleration: bool) -> tauri::R
     let debug_port = std::env::var(DEBUG_PORT_VARIABLE).ok();
     #[cfg(not(debug_assertions))]
     let debug_port: Option<String> = None;
-    let arguments = browser_arguments(hardware_acceleration, debug_port.as_deref());
+    let arguments = browser_arguments(
+        settings.advanced.hardware_acceleration,
+        debug_port.as_deref(),
+    );
     tracing::info!(%arguments, "the web engine's arguments");
-    tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
-        .additional_browser_args(&arguments)
-        .build()?;
+    let mut builder = tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
+        .additional_browser_args(&arguments);
+    let system_preferences = preferences::read().into();
+    if let Some(script) = window::first_frame_script(settings, &system_preferences) {
+        builder = builder
+            .initialization_script(script)
+            .on_page_load(window::show_when_first_loaded());
+    }
+    builder.build()?;
     Ok(())
 }
 
@@ -276,22 +287,45 @@ fn manage_programs(app: &tauri::App, paths: &AppPaths) {
     app.manage(agents::Programs(supervisor));
 }
 
-/// How often Windows' text size and regional format are looked at for a change.
-const SYSTEM_PREFERENCES_INTERVAL: Duration = Duration::from_millis(1500);
+/// How often a debug build looks at the file that stands in for Windows' settings.
+#[cfg(debug_assertions)]
+const STAND_IN_INTERVAL: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// The watch on Windows' text size and regional format, kept for as long as the app runs.
+enum PreferencesWatch {
+    /// Windows says when one of them changes; nothing runs in between.
+    Windows(#[allow(dead_code)] arden_windows::registry::KeyWatcher),
+    /// A debug build that stands a file in for Windows looks at the file on a timer.
+    #[cfg(debug_assertions)]
+    StandIn(#[allow(dead_code)] preferences::Watcher),
+    /// Windows could not be watched: changes are seen at the next start.
+    Off,
+}
 
 /// Tells the UI when the person changes the text size or the regional format in Windows.
-fn watch_system_preferences(handle: tauri::AppHandle) -> preferences::Watcher {
-    preferences::Watcher::start(
-        preferences::read(),
-        SYSTEM_PREFERENCES_INTERVAL,
-        preferences::read,
-        move |now| {
-            let _ = commands::SystemPreferencesChanged {
-                preferences: now.clone().into(),
-            }
-            .emit(&handle);
-        },
-    )
+fn watch_system_preferences(handle: tauri::AppHandle) -> PreferencesWatch {
+    let tell = move |now: &preferences::SystemPreferences| {
+        let _ = settings::SystemPreferencesChanged {
+            preferences: now.clone().into(),
+        }
+        .emit(&handle);
+    };
+    #[cfg(debug_assertions)]
+    if std::env::var_os("ARDEN_CODE_SYSTEM_PREFERENCES_FILE").is_some() {
+        return PreferencesWatch::StandIn(preferences::Watcher::start(
+            preferences::read(),
+            STAND_IN_INTERVAL,
+            preferences::read,
+            tell,
+        ));
+    }
+    match preferences::watch(preferences::read(), tell) {
+        Ok(watcher) => PreferencesWatch::Windows(watcher),
+        Err(error) => {
+            tracing::warn!(%error, "could not watch Windows' text size and regional format");
+            PreferencesWatch::Off
+        }
+    }
 }
 
 /// What the log level setting means to the logging.
@@ -372,14 +406,15 @@ pub fn run() {
                 window::apply_advanced(&handle, &settings.advanced);
                 logging::set_level(ui_level(settings.advanced.log_level));
                 tracing::debug!("settings changed");
-                let _ = commands::SettingsChanged {
+                let _ = settings::SettingsChanged {
                     settings: settings.clone(),
                     notice: notice.cloned(),
                 }
                 .emit(&handle);
             });
-            create_main_window(app, settings.get().advanced.hardware_acceleration)?;
-            window::prepare_main_window(app, &paths, &settings.get())?;
+            let started_with = settings.get();
+            create_main_window(app, &started_with)?;
+            window::prepare_main_window(app, &paths, &started_with)?;
             app.manage(snap_layouts::add_overlay(app));
             app.manage(settings);
             manage_sessions(app, &paths);

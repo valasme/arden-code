@@ -15,7 +15,7 @@ run's summary. The results are also written to `target/performance.json`.
 | Measurement | Target | How | Fails CI |
 |---|---|---|---|
 | Cold start to a usable window | ≤ 1.0 s | From starting the process to its window becoming visible (the app shows it once the first frame is drawn), seen from outside through Windows, on a new settings folder and a new web engine folder. The best of 4 starts. | Past the target × 2.5 |
-| Warm start | ≤ 0.4 s | The same, on the folders the first start left behind. The best of 4 starts. | Reported only |
+| Warm start | ≤ 0.4 s | The same, on the folders the first start left behind. The best of 4 starts. | Past the target × 2.5 |
 | Idle memory, web engine included | ≤ 200 MB | Private working set of the app and every process it started, after the window has been up for 8 s | Past the target × 2.5 |
 | Idle CPU | ≈ 0% | Processor time of the same processes over 20 s | Reported only |
 | Applying a settings change | < 50 ms | `src/app/settingsChange.test.tsx`, part of `pnpm test`: the real app in Chromium, from clicking a switch to the change being on screen. The median of 6 changes. The UI applies a change before Rust has saved it, so this is the whole of what a person waits for. | Past the target × 2.5 |
@@ -51,19 +51,25 @@ through the debugging port, and under 1% without.
 
 ## What the start-up time is made of
 
-Measured on a development machine (release build, quiet machine):
+Measured on a development machine (release build, warm start, quiet machine), from the app's log and marks
+the page took while it started:
 
 | Step | Time |
 |---|---|
-| The app starts and Rust sets everything up | 5 ms |
-| The web engine's browser process starts and the window exists | ≈ 300 ms |
-| The page loads | ≈ 100 ms |
-| The page runs, asks Rust for the settings, draws, and shows the window | ≈ 200 ms |
-| **Together** | **≈ 650 ms** |
+| The app starts and Rust sets everything up | ≈ 30 ms |
+| The web engine's browser process starts and the window exists | ≈ 310 ms |
+| The page loads, runs and draws its first frame | ≈ 105 ms |
+| The page finishes loading, and Rust shows the window | ≈ 15 ms |
+| **Together** | **≈ 460 ms** |
 
-The web engine's own start is nearly half of it and is not something the app can shorten. On that machine the
-cold start meets its target and the warm start (≈ 600 ms) does not meet 0.4 s, which is why it is reported and
-not gated. The two settings the page asks for before its first frame, and the window being shown, go through
-the isolation iframe that Tauri's isolation pattern adds; when the machine is busy that first round trip is
-what takes the extra 500 to 900 ms that some starts show. Handing the first settings to the page when the
-window is made, so that the first frame does not wait for that round trip, is the next thing to try.
+The web engine's own start is two thirds of it and is not something the app can shorten.
+
+Nothing before the first frame goes through the isolation iframe that Tauri's isolation pattern adds. A round
+trip through it takes 150 to 250 ms at that moment, and more on a busy machine, and the start used to make
+two: the page asked Rust for the settings and Windows' text size and regional format before drawing, and
+then asked Rust to show the window. Now Rust hands both to the page in an initialization script when it
+makes the window (`first_frame_script` in `window.rs`, read by `src/lib/firstFrame.ts`), and shows the window
+itself when the page has first finished loading (`show_when_first_loaded`), which comes after the first frame
+is drawn. That took the warm start from about 650 ms to about 460 ms and the cold start from about 650 ms to
+about 480 ms. The page still asks for the window to be shown once it has drawn, which does nothing by then,
+and Rust still shows it after 5 s if the page never loads.

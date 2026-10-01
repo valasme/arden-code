@@ -86,8 +86,43 @@ mod system {
     };
     use windows::core::w;
 
-    /// The regional format the person chose in Windows, as a language tag.
+    /// The regional format the person chose in Windows, as a language tag. It is read from the key
+    /// the watcher listens to, so a read made when Windows signals a change sees that change; the
+    /// value Windows keeps for the process is the fallback.
     pub fn locale() -> Option<String> {
+        locale_in_registry().or_else(user_default_locale)
+    }
+
+    /// `LocaleName` in `HKEY_CURRENT_USER\Control Panel\International`, where Windows writes the
+    /// regional format.
+    pub fn locale_in_registry() -> Option<String> {
+        // LOCALE_NAME_MAX_LENGTH is 85 UTF-16 units, including the ending zero.
+        let mut buffer = [0u16; 85];
+        let mut size = u32::try_from(size_of_val(&buffer)).ok()?;
+        // SAFETY: the buffer is valid for writes and `size` is its size in bytes.
+        #[allow(unsafe_code)]
+        let result = unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                w!("Control Panel\\International"),
+                w!("LocaleName"),
+                RRF_RT_REG_SZ,
+                None,
+                Some(buffer.as_mut_ptr().cast()),
+                Some(&raw mut size),
+            )
+        };
+        if result.is_err() {
+            return None;
+        }
+        // `size` counts bytes, the ending zero included.
+        let length = usize::try_from(size).ok()? / 2;
+        let text = String::from_utf16(&buffer[..length.saturating_sub(1)]).ok()?;
+        (!text.is_empty()).then_some(text)
+    }
+
+    /// The user's locale as Windows reports it to the process.
+    pub fn user_default_locale() -> Option<String> {
         // LOCALE_NAME_MAX_LENGTH is 85 UTF-16 units, including the ending zero.
         let mut buffer = [0u16; 85];
         // SAFETY: the buffer is valid for writes and its length is passed with it.
@@ -221,8 +256,33 @@ fn read_system() -> SystemPreferences {
     SystemPreferences::default()
 }
 
+/// Where Windows keeps the two settings, under `HKEY_CURRENT_USER`: the text size and the regional
+/// format.
+#[cfg(windows)]
+const KEYS: [&str; 2] = [
+    r"Software\Microsoft\Accessibility",
+    r"Control Panel\International",
+];
+
+/// Calls `on_change` with the preferences when the person changes them in Windows. Nothing runs in
+/// between: the watching thread sleeps until Windows says that one of the keys changed. `first` is
+/// what the caller already knows; a change that leaves the preferences as they were is not reported,
+/// as Windows writes several values for one change of the regional format.
+///
+/// # Errors
+///
+/// Returns an error when Windows cannot start the watch.
+#[cfg(windows)]
+pub fn watch(
+    first: SystemPreferences,
+    on_change: impl Fn(&SystemPreferences) + Send + 'static,
+) -> windows::core::Result<crate::registry::KeyWatcher> {
+    crate::registry::KeyWatcher::start_reading(&KEYS, read, first, on_change)
+}
+
 /// Calls a function whenever a value that is read on a timer changes. The thread ends when this is
-/// dropped.
+/// dropped. Only the stand-in file of debug builds is watched this way; Windows itself is watched
+/// with [`watch`], which needs no timer.
 pub struct Watcher {
     stop: Arc<AtomicBool>,
     thread: Mutex<Option<JoinHandle<()>>>,
@@ -231,9 +291,6 @@ pub struct Watcher {
 impl Watcher {
     /// Reads `read` every `interval`, and calls `on_change` with the new value when it differs from
     /// the last one. `first` is what the caller already knows.
-    ///
-    /// Windows only offers change notifications for these settings through a window's message loop,
-    /// which the web engine owns; a slow timer is simpler and costs nothing measurable.
     pub fn start<T>(
         first: T,
         interval: Duration,
@@ -280,6 +337,15 @@ mod tests {
     use std::sync::mpsc;
 
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn the_regional_format_in_the_registry_is_the_one_windows_reports() {
+        // The watcher reads the registry, so it sees a change as soon as Windows signals it.
+        let in_registry = system::locale_in_registry();
+        assert!(in_registry.is_some(), "Windows keeps LocaleName");
+        assert_eq!(in_registry, system::user_default_locale());
+    }
 
     #[test]
     fn the_text_size_is_a_percentage_from_100_to_225() {

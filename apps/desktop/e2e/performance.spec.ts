@@ -33,7 +33,7 @@ const measurements = {
     label: "Warm start to a shown window (best of the rounds)",
     unit: "ms",
     target: 400,
-    gated: false,
+    gated: true,
   },
   idleMemoryMb: { label: "Idle memory, web engine included", unit: "MB", target: 200, gated: true },
   idleCpuPercent: { label: "Idle CPU, of one core", unit: "%", target: 1, gated: false },

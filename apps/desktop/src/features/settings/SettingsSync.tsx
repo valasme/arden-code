@@ -3,7 +3,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 
 import { commands, events } from "@/ipc/bindings";
-import { settingsQuery } from "@/ipc/queries";
+import { readAgain, settingsQuery } from "@/ipc/queries";
 import { showNoticeToast } from "@/lib/errorToasts";
 import { useTauriListener } from "@/lib/useTauriListener";
 
@@ -15,12 +15,16 @@ import { useTauriListener } from "@/lib/useTauriListener";
 export function SettingsSync() {
   const queryClient = useQueryClient();
 
-  useTauriListener(() =>
-    events.settingsChanged.listen(({ payload }) => {
+  useTauriListener(async () => {
+    const stopListening = await events.settingsChanged.listen(({ payload }) => {
       queryClient.setQueryData(settingsQuery.queryKey, payload.settings);
       if (payload.notice) showNoticeToast(payload.notice);
-    }),
-  );
+    });
+    // The page starts with the settings Rust handed over when it made the window. A change made
+    // before this listened, or before the page was reloaded, sent no event it heard: read them again.
+    readAgain(queryClient, settingsQuery.queryKey, commands.getSettings).catch(() => {});
+    return stopListening;
+  });
 
   // A problem found while starting was waiting for the UI to be ready.
   useEffect(() => {

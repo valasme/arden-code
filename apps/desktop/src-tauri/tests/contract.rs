@@ -195,6 +195,18 @@ fn startup_background_is_white_in_light_and_near_black_in_dark() {
 }
 
 #[test]
+fn the_page_reads_the_first_frame_where_rust_puts_it() {
+    // If these drift apart, the page asks Rust for the settings again and starts more slowly.
+    let source = fs::read_to_string(crate_dir().join("../src/lib/firstFrame.ts"))
+        .expect("firstFrame.ts exists");
+    let declaration = format!(
+        "FIRST_FRAME_GLOBAL = \"{}\"",
+        arden_desktop_lib::FIRST_FRAME_GLOBAL
+    );
+    assert!(source.contains(&declaration), "{declaration}");
+}
+
+#[test]
 fn the_main_window_starts_hidden_until_the_ui_has_drawn() {
     let conf = read_tauri_conf();
     assert_eq!(conf["app"]["windows"][0]["visible"], false);

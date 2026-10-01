@@ -19,6 +19,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # release-please moves the version in Cargo.toml, not in Cargo.lock. The lock file follows on
+      # the same pull request, so nothing is left to do by hand after merging it. release-please
+      # rewrites its branch whenever it updates the pull request, so this runs again each time.
+      - name: Check out the release pull request
+        if: ${{ steps.release.outputs.prs_created == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+
+      - name: Bring Cargo.lock to the new version
+        if: ${{ steps.release.outputs.prs_created == 'true' }}
+        run: |
+          rustup show active-toolchain
+          cargo update --workspace
+          if git diff --quiet -- Cargo.lock; then
+            echo "Cargo.lock already matches the new version."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: update Cargo.lock for the release" -- Cargo.lock
+          git push
