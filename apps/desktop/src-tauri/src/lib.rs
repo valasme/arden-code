@@ -18,7 +18,6 @@ pub use window::startup_background;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
 use arden_agents::playground;
 use arden_agents::store::SessionStore;
@@ -278,22 +277,45 @@ fn manage_programs(app: &tauri::App, paths: &AppPaths) {
     app.manage(agents::Programs(supervisor));
 }
 
-/// How often Windows' text size and regional format are looked at for a change.
-const SYSTEM_PREFERENCES_INTERVAL: Duration = Duration::from_millis(1500);
+/// How often a debug build looks at the file that stands in for Windows' settings.
+#[cfg(debug_assertions)]
+const STAND_IN_INTERVAL: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// The watch on Windows' text size and regional format, kept for as long as the app runs.
+enum PreferencesWatch {
+    /// Windows says when one of them changes; nothing runs in between.
+    Windows(#[allow(dead_code)] arden_windows::registry::KeyWatcher),
+    /// A debug build that stands a file in for Windows looks at the file on a timer.
+    #[cfg(debug_assertions)]
+    StandIn(#[allow(dead_code)] preferences::Watcher),
+    /// Windows could not be watched: changes are seen at the next start.
+    Off,
+}
 
 /// Tells the UI when the person changes the text size or the regional format in Windows.
-fn watch_system_preferences(handle: tauri::AppHandle) -> preferences::Watcher {
-    preferences::Watcher::start(
-        preferences::read(),
-        SYSTEM_PREFERENCES_INTERVAL,
-        preferences::read,
-        move |now| {
-            let _ = settings::SystemPreferencesChanged {
-                preferences: now.clone().into(),
-            }
-            .emit(&handle);
-        },
-    )
+fn watch_system_preferences(handle: tauri::AppHandle) -> PreferencesWatch {
+    let tell = move |now: &preferences::SystemPreferences| {
+        let _ = settings::SystemPreferencesChanged {
+            preferences: now.clone().into(),
+        }
+        .emit(&handle);
+    };
+    #[cfg(debug_assertions)]
+    if std::env::var_os("ARDEN_CODE_SYSTEM_PREFERENCES_FILE").is_some() {
+        return PreferencesWatch::StandIn(preferences::Watcher::start(
+            preferences::read(),
+            STAND_IN_INTERVAL,
+            preferences::read,
+            tell,
+        ));
+    }
+    match preferences::watch(preferences::read(), tell) {
+        Ok(watcher) => PreferencesWatch::Windows(watcher),
+        Err(error) => {
+            tracing::warn!(%error, "could not watch Windows' text size and regional format");
+            PreferencesWatch::Off
+        }
+    }
 }
 
 /// What the log level setting means to the logging.

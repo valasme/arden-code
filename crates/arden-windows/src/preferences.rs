@@ -221,8 +221,43 @@ fn read_system() -> SystemPreferences {
     SystemPreferences::default()
 }
 
+/// Where Windows keeps the two settings, under `HKEY_CURRENT_USER`: the text size and the regional
+/// format.
+#[cfg(windows)]
+const KEYS: [&str; 2] = [
+    r"Software\Microsoft\Accessibility",
+    r"Control Panel\International",
+];
+
+/// Calls `on_change` with the preferences when the person changes them in Windows. Nothing runs in
+/// between: the watching thread sleeps until Windows says that one of the keys changed. `first` is
+/// what the caller already knows; a change that leaves the preferences as they were is not reported,
+/// as Windows writes several values for one change of the regional format.
+///
+/// # Errors
+///
+/// Returns an error when Windows cannot start the watch.
+#[cfg(windows)]
+pub fn watch(
+    first: SystemPreferences,
+    on_change: impl Fn(&SystemPreferences) + Send + 'static,
+) -> windows::core::Result<crate::registry::KeyWatcher> {
+    let last = Mutex::new(first);
+    crate::registry::KeyWatcher::start(&KEYS, move || {
+        let now = read();
+        let mut last = last
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if *last != now {
+            on_change(&now);
+            *last = now;
+        }
+    })
+}
+
 /// Calls a function whenever a value that is read on a timer changes. The thread ends when this is
-/// dropped.
+/// dropped. Only the stand-in file of debug builds is watched this way; Windows itself is watched
+/// with [`watch`], which needs no timer.
 pub struct Watcher {
     stop: Arc<AtomicBool>,
     thread: Mutex<Option<JoinHandle<()>>>,
@@ -231,9 +266,6 @@ pub struct Watcher {
 impl Watcher {
     /// Reads `read` every `interval`, and calls `on_change` with the new value when it differs from
     /// the last one. `first` is what the caller already knows.
-    ///
-    /// Windows only offers change notifications for these settings through a window's message loop,
-    /// which the web engine owns; a slow timer is simpler and costs nothing measurable.
     pub fn start<T>(
         first: T,
         interval: Duration,
