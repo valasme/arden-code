@@ -6,7 +6,7 @@
 #![allow(unsafe_code)]
 
 use std::ffi::c_void;
-use std::sync::mpsc;
+use std::sync::{Mutex, PoisonError, mpsc};
 use std::thread::{self, JoinHandle};
 
 use windows::Win32::Foundation::{CloseHandle, E_FAIL, HANDLE, WAIT_OBJECT_0};
@@ -31,7 +31,8 @@ impl KeyWatcher {
     ///
     /// # Errors
     ///
-    /// Returns an error when Windows cannot make the stop event or the thread.
+    /// Returns an error when Windows cannot make the stop event or the thread, or when the thread
+    /// ends before it is watching.
     pub fn start(
         keys: &[&str],
         on_change: impl Fn() + Send + 'static,
@@ -40,14 +41,53 @@ impl KeyWatcher {
         let stop = unsafe { CreateEventW(None, true, false, PCWSTR::null())? }.0 as isize;
         let paths: Vec<String> = keys.iter().map(|&key| key.to_owned()).collect();
         let (ready, started) = mpsc::channel();
-        let thread = thread::Builder::new()
+        let spawned = thread::Builder::new()
             .name("registry watcher".to_owned())
-            .spawn(move || watch(&paths, handle(stop), &ready, &on_change))
-            .map_err(|error| windows::core::Error::new(E_FAIL, error.to_string()))?;
-        let _ = started.recv();
-        Ok(Self {
+            .spawn(move || watch(&paths, handle(stop), &ready, &on_change));
+        let thread = match spawned {
+            Ok(thread) => thread,
+            Err(error) => {
+                // SAFETY: the event was made above, and nothing else has it.
+                let _ = unsafe { CloseHandle(handle(stop)) };
+                return Err(windows::core::Error::new(E_FAIL, error.to_string()));
+            }
+        };
+        // From here the watcher owns the event: dropping it ends the thread and closes the event.
+        let watcher = Self {
             stop,
             thread: Some(thread),
+        };
+        if started.recv().is_err() {
+            drop(watcher);
+            return Err(windows::core::Error::new(
+                E_FAIL,
+                "the registry watcher ended before it was watching",
+            ));
+        }
+        Ok(watcher)
+    }
+
+    /// Starts watching `keys`, and after each change reads what they hold with `read`. `on_change`
+    /// is called only when that differs from what was read last (`first` at the start): Windows
+    /// writes several values for one change of a setting, and most leave the reading as it was.
+    ///
+    /// # Errors
+    ///
+    /// As [`KeyWatcher::start`].
+    pub fn start_reading<T: PartialEq + Send + 'static>(
+        keys: &[&str],
+        read: impl Fn() -> T + Send + 'static,
+        first: T,
+        on_change: impl Fn(&T) + Send + 'static,
+    ) -> windows::core::Result<Self> {
+        let last = Mutex::new(first);
+        Self::start(keys, move || {
+            let now = read();
+            let mut last = last.lock().unwrap_or_else(PoisonError::into_inner);
+            if *last != now {
+                on_change(&now);
+                *last = now;
+            }
         })
     }
 }
@@ -70,6 +110,7 @@ fn handle(value: isize) -> HANDLE {
 
 /// A key being watched, and the event Windows signals when it changes.
 struct Watched {
+    path: String,
     key: HKEY,
     event: HANDLE,
 }
@@ -98,8 +139,12 @@ impl Watched {
             let _ = unsafe { RegCloseKey(key) };
             return None;
         };
-        let watched = Self { key, event };
-        if watched.arm() {
+        let watched = Self {
+            path: path.to_owned(),
+            key,
+            event,
+        };
+        if watched.arm().is_ok() {
             Some(watched)
         } else {
             watched.close();
@@ -108,7 +153,7 @@ impl Watched {
     }
 
     /// Asks Windows to signal the event at the next change to the key's values or subkeys.
-    fn arm(&self) -> bool {
+    fn arm(&self) -> windows::core::Result<()> {
         // SAFETY: the key and the event are open, and this thread stays alive while it waits, as an
         // asynchronous notification needs.
         unsafe {
@@ -120,7 +165,7 @@ impl Watched {
                 true,
             )
         }
-        .is_ok()
+        .ok()
     }
 
     fn close(self) {
@@ -152,7 +197,10 @@ fn watch(paths: &[String], stop: HANDLE, ready: &mpsc::Sender<()>, on_change: &d
             break;
         };
         // Asked again before reading, so a change made while the value is read is not missed.
-        changed.arm();
+        if let Err(error) = changed.arm() {
+            // The key was most likely deleted; its changes are seen at the next start.
+            tracing::warn!(%error, key = %changed.path, "stopped watching a registry key");
+        }
         on_change();
     }
     for watched in watched {

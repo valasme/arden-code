@@ -14,6 +14,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+tracing = "0.1"
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Globalization",

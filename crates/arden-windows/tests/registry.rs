@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 
 use arden_windows::registry::KeyWatcher;
 use windows::Win32::System::Registry::{
-    HKEY, HKEY_CURRENT_USER, KEY_WRITE, REG_DWORD, REG_OPTION_VOLATILE, RegCloseKey,
-    RegCreateKeyExW, RegDeleteTreeW, RegSetKeyValueW,
+    HKEY, HKEY_CURRENT_USER, KEY_WRITE, REG_DWORD, REG_OPTION_VOLATILE, RRF_RT_REG_DWORD,
+    RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegGetValueW, RegSetKeyValueW,
 };
 use windows::core::HSTRING;
 
@@ -71,6 +71,26 @@ impl Drop for TemporaryKey {
     }
 }
 
+/// A number in a key under `HKEY_CURRENT_USER`, if it is there.
+fn read_number(path: &str, name: &str) -> Option<u32> {
+    let mut value = 0u32;
+    let mut size = 4u32;
+    // SAFETY: `value` and `size` are valid for writes and `size` is the size of `value`.
+    unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            &HSTRING::from(path),
+            &HSTRING::from(name),
+            RRF_RT_REG_DWORD,
+            None,
+            Some((&raw mut value).cast()),
+            Some(&raw mut size),
+        )
+    }
+    .is_ok()
+    .then_some(value)
+}
+
 /// A watcher on `key`, and what it reports.
 fn watch(key: &TemporaryKey) -> (KeyWatcher, mpsc::Receiver<()>) {
     let (sender, changes) = mpsc::channel();
@@ -111,6 +131,33 @@ fn nothing_is_reported_while_nothing_changes() {
     let (_watcher, changes) = watch(&key);
 
     assert!(changes.recv_timeout(Duration::from_millis(500)).is_err());
+}
+
+#[test]
+fn a_reading_watcher_reports_only_a_change_to_what_it_reads() {
+    let key = TemporaryKey::new("reading");
+    key.set("TextScaleFactor", 100);
+    let path = key.path().to_owned();
+    let (sender, changes) = mpsc::channel();
+    let _watcher = KeyWatcher::start_reading(
+        &[key.path()],
+        move || read_number(&path, "TextScaleFactor"),
+        Some(100),
+        move |now| {
+            let _ = sender.send(*now);
+        },
+    )
+    .expect("a watcher");
+
+    // Windows writes several values for one change; one that leaves the reading as it was is quiet.
+    key.set("SomethingElse", 1);
+    assert!(changes.recv_timeout(Duration::from_millis(500)).is_err());
+
+    key.set("TextScaleFactor", 150);
+    assert_eq!(
+        changes.recv_timeout(Duration::from_secs(1)).ok(),
+        Some(Some(150))
+    );
 }
 
 #[test]

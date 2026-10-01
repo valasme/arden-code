@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { type QueryClient, type QueryKey, queryOptions } from "@tanstack/react-query";
 import { isTauri } from "@tauri-apps/api/core";
 
 import { defaultSettings } from "@/ipc/defaults.gen";
@@ -87,3 +87,19 @@ export const updateStatusQuery = queryOptions({
     isTauri() ? commands.getUpdateStatus() : Promise.resolve({ state: "idle" }),
   staleTime: Number.POSITIVE_INFINITY,
 });
+
+/**
+ * Reads a query's data from Rust again, and keeps the answer only if nothing changed the data while
+ * it was being read: a change made in the meantime, such as one the person just made, is newer.
+ */
+export async function readAgain<T>(
+  client: QueryClient,
+  queryKey: QueryKey,
+  read: () => Promise<T>,
+): Promise<void> {
+  const updates = client.getQueryState(queryKey)?.dataUpdateCount;
+  const answer = await read();
+  if (client.getQueryState(queryKey)?.dataUpdateCount === updates) {
+    client.setQueryData(queryKey, answer);
+  }
+}

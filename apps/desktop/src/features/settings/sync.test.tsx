@@ -9,9 +9,8 @@ import { settingsQuery, systemPreferencesQuery } from "@/ipc/queries";
 import { SettingsSync } from "./SettingsSync";
 import { SystemPreferencesSync } from "./SystemPreferencesSync";
 
-// The page starts with what Rust handed over when it made the window. After the page is reloaded
-// (when its web engine process stopped, say) that is out of date, and a change made before the
-// page listened sent no event it heard. So both are read again once the page listens.
+// The page starts with what Rust handed over when it made the window. A change made before the page
+// listened sent no event it heard, so both are read again once the page listens.
 
 const darkSettings: Settings = {
   ...defaultSettings,
@@ -20,22 +19,31 @@ const darkSettings: Settings = {
 const before: SystemPreferences = { textScalePercent: 100, locale: "en-US" };
 const now: SystemPreferences = { textScalePercent: 150, locale: "el-GR" };
 
-function startWith(client: QueryClient) {
+/**
+ * Runs the two components as Tauri does and records, in order, what they ask Rust. `settingsAnswer`
+ * is what reading the settings returns, so a test can hold the answer back.
+ */
+function startWith(client: QueryClient, settingsAnswer: () => Promise<Settings> | Settings) {
   Object.assign(globalThis, { isTauri: true });
-  mockIPC(
-    (command) => {
-      if (command === "get_settings") return darkSettings;
-      if (command === "get_system_preferences") return now;
-      return null;
-    },
-    { shouldMockEvents: true },
-  );
-  return render(
+  const asked: string[] = [];
+  mockIPC((command, payload) => {
+    if (command === "plugin:event|listen") {
+      const event = typeof payload === "object" && "event" in payload ? payload.event : undefined;
+      asked.push(`listen ${String(event)}`);
+      return asked.length;
+    }
+    asked.push(command);
+    if (command === "get_settings") return settingsAnswer();
+    if (command === "get_system_preferences") return now;
+    return null;
+  });
+  render(
     <QueryClientProvider client={client}>
       <SettingsSync />
       <SystemPreferencesSync />
     </QueryClientProvider>,
   );
+  return asked;
 }
 
 afterEach(() => {
@@ -43,25 +51,53 @@ afterEach(() => {
 });
 
 describe("keeping the page in step with Rust", () => {
-  it("reads the settings again once it listens, in case they changed before", async () => {
+  it("reads the settings again once it listens for changes, not before", async () => {
     const client = new QueryClient();
     client.setQueryData(settingsQuery.queryKey, defaultSettings);
 
-    startWith(client);
+    const asked = startWith(client, () => darkSettings);
 
     await waitFor(() => {
       expect(client.getQueryData(settingsQuery.queryKey)).toEqual(darkSettings);
     });
+    expect(asked.indexOf("listen settings-changed")).toBeGreaterThanOrEqual(0);
+    expect(asked.indexOf("listen settings-changed")).toBeLessThan(asked.indexOf("get_settings"));
   });
 
-  it("reads Windows' text size and regional format again once it listens", async () => {
+  it("reads Windows' text size and regional format again once it listens for changes", async () => {
     const client = new QueryClient();
     client.setQueryData(systemPreferencesQuery.queryKey, before);
 
-    startWith(client);
+    const asked = startWith(client, () => defaultSettings);
 
     await waitFor(() => {
       expect(client.getQueryData(systemPreferencesQuery.queryKey)).toEqual(now);
     });
+    expect(asked.indexOf("listen system-preferences-changed")).toBeLessThan(
+      asked.indexOf("get_system_preferences"),
+    );
+  });
+
+  it("does not undo a change made while the settings were being read again", async () => {
+    const client = new QueryClient();
+    client.setQueryData(settingsQuery.queryKey, defaultSettings);
+    let answer: ((settings: Settings) => void) | undefined;
+    const asked = startWith(
+      client,
+      () =>
+        new Promise<Settings>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    await waitFor(() => {
+      expect(asked).toContain("get_settings");
+    });
+
+    // The person changes a setting; the UI shows it at once, before Rust has answered the read.
+    client.setQueryData(settingsQuery.queryKey, darkSettings);
+    answer?.(defaultSettings);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(client.getQueryData(settingsQuery.queryKey)).toEqual(darkSettings);
   });
 });

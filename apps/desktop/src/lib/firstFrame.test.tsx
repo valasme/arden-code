@@ -54,6 +54,20 @@ describe("readFirstFrame", () => {
     expect(FIRST_FRAME_GLOBAL in globalThis).toBe(false);
   });
 
+  it("asks Rust after a reload, as what was handed over is from when the app started", async () => {
+    const commands = runInTauri();
+    Object.assign(globalThis, {
+      [FIRST_FRAME_GLOBAL]: { settings: defaultSettings, systemPreferences: greek },
+    });
+
+    await expect(readFirstFrame({ reloaded: true })).resolves.toEqual({
+      settings: darkSettings,
+      systemPreferences: greek,
+    });
+    expect(commands.toSorted()).toEqual(["get_settings", "get_system_preferences"]);
+    expect(FIRST_FRAME_GLOBAL in globalThis).toBe(false);
+  });
+
   it("asks Rust when nothing was handed over", async () => {
     const commands = runInTauri();
 

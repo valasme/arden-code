@@ -412,8 +412,9 @@ pub fn run() {
                 }
                 .emit(&handle);
             });
-            create_main_window(app, &settings.get())?;
-            window::prepare_main_window(app, &paths, &settings.get())?;
+            let started_with = settings.get();
+            create_main_window(app, &started_with)?;
+            window::prepare_main_window(app, &paths, &started_with)?;
             app.manage(snap_layouts::add_overlay(app));
             app.manage(settings);
             manage_sessions(app, &paths);

@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 
-import { events } from "@/ipc/bindings";
-import { systemPreferencesQuery } from "@/ipc/queries";
+import { commands, events } from "@/ipc/bindings";
+import { readAgain, systemPreferencesQuery } from "@/ipc/queries";
 import { useTauriListener } from "@/lib/useTauriListener";
 
 /**
@@ -16,7 +16,9 @@ export function SystemPreferencesSync() {
       queryClient.setQueryData(systemPreferencesQuery.queryKey, payload.preferences);
     });
     // As with the settings: a change made before this listened sent no event it heard.
-    queryClient.fetchQuery({ ...systemPreferencesQuery, staleTime: 0 }).catch(() => {});
+    readAgain(queryClient, systemPreferencesQuery.queryKey, commands.getSystemPreferences).catch(
+      () => {},
+    );
     return stopListening;
   });
 

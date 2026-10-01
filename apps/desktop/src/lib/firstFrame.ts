@@ -51,14 +51,22 @@ async function readSystemPreferences(): Promise<SystemPreferences> {
   }
 }
 
+/** Whether this page replaced one that was reloaded, such as after its web engine process stopped. */
+function pageWasReloaded(): boolean {
+  return performance
+    .getEntriesByType("navigation")
+    .some((entry) => entry instanceof PerformanceNavigationTiming && entry.type === "reload");
+}
+
 /**
  * The settings and system preferences for the first frame. Rust hands them to the page when it makes
- * the window, so the first frame does not wait for a round trip to Rust. Without them, such as in a
- * browser, they are asked for, and the defaults stand in when there is no answer.
+ * the window, so the first frame does not wait for a round trip to Rust. They are from when the app
+ * started, so a reloaded page asks for them instead, as does a page that was handed nothing, such as
+ * in a browser. The defaults stand in when there is no answer.
  */
-export async function readFirstFrame(): Promise<FirstFrame> {
+export async function readFirstFrame({ reloaded = pageWasReloaded() } = {}): Promise<FirstFrame> {
   const handedOver = takeHandedOver();
-  if (handedOver) return handedOver;
+  if (handedOver && !reloaded) return handedOver;
   const [settings, systemPreferences] = await Promise.all([
     readSettings(),
     readSystemPreferences(),
