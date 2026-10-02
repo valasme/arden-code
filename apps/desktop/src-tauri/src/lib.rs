@@ -37,18 +37,11 @@ use tauri::Manager;
 use tauri_specta::Event;
 use tauri_specta::{Builder, ErrorHandlingMode, collect_commands, collect_events};
 
-/// The typed contract between Rust and the UI.
-fn specta_builder() -> Builder<tauri::Wry> {
-    // A failed command makes the UI's promise reject with its `AppError`, instead of returning a
-    // result object.
-    let builder = Builder::<tauri::Wry>::new()
-        .error_handling(ErrorHandlingMode::Throw)
-        // One shape per type, the one Rust sends, instead of separate "serialize" and "deserialize"
-        // versions for types whose fields have defaults.
-        .disable_serde_phases();
-
-    #[cfg(debug_assertions)]
-    let commands = collect_commands![
+/// Every command the UI can call. A debug build also has the ones that make test data and
+/// failures on purpose.
+#[cfg(debug_assertions)]
+fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
+    collect_commands![
         commands::app_info,
         commands::show_system_menu,
         snap_layouts::set_maximize_button,
@@ -82,7 +75,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::reset_app,
         commands::take_reset_notice,
         commands::restart_app,
-        sessions::list_projects,
+        sessions::list_sessions,
+        sessions::take_sessions_notice,
         sessions::create_session,
         sessions::get_session,
         sessions::send_message,
@@ -93,9 +87,13 @@ fn specta_builder() -> Builder<tauri::Wry> {
         agents::debug_spawn_sleeper,
         diagnostics::debug_fail,
         diagnostics::debug_panic,
-    ];
-    #[cfg(not(debug_assertions))]
-    let commands = collect_commands![
+    ]
+}
+
+/// Every command the UI can call.
+#[cfg(not(debug_assertions))]
+fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
+    collect_commands![
         commands::app_info,
         commands::show_system_menu,
         snap_layouts::set_maximize_button,
@@ -129,16 +127,28 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::reset_app,
         commands::take_reset_notice,
         commands::restart_app,
-        sessions::list_projects,
+        sessions::list_sessions,
+        sessions::take_sessions_notice,
         sessions::create_session,
         sessions::get_session,
         sessions::send_message,
         sessions::stop_reply,
         sessions::take_pending_open,
         agents::detect_agents,
-    ];
+    ]
+}
 
-    builder.commands(commands).events(collect_events![
+/// The typed contract between Rust and the UI.
+fn specta_builder() -> Builder<tauri::Wry> {
+    // A failed command makes the UI's promise reject with its `AppError`, instead of returning a
+    // result object.
+    let builder = Builder::<tauri::Wry>::new()
+        .error_handling(ErrorHandlingMode::Throw)
+        // One shape per type, the one Rust sends, instead of separate "serialize" and "deserialize"
+        // versions for types whose fields have defaults.
+        .disable_serde_phases();
+
+    builder.commands(ui_commands()).events(collect_events![
         settings::SettingsChanged,
         settings::SystemPreferencesChanged,
         snap_layouts::MaximizeButtonChanged,
@@ -275,14 +285,17 @@ fn create_main_window(
     Ok(())
 }
 
-/// Makes the Playground folder on the first launch, and starts the store of sessions.
+/// Makes the Playground folder on the first launch, and opens the sessions kept in the sessions
+/// file (ADR 0035), keeping what went wrong with it, if anything, for the page.
 fn manage_sessions(app: &tauri::App, paths: &AppPaths) {
     let folder = paths.playground_dir();
     let playground = playground::ensure(&folder).unwrap_or_else(|error| {
         tracing::error!(%error, "could not create the Playground folder");
         playground::describe(&folder)
     });
-    let store: sessions::Sessions = Arc::new(SessionStore::new(vec![playground]));
+    let opened = SessionStore::open(&paths.sessions_file(), &playground);
+    app.manage(sessions::SessionsNotice::after(opened.problem.as_ref()));
+    let store: sessions::Sessions = Arc::new(opened.store);
     app.manage(store);
 }
 

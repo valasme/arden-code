@@ -3,15 +3,15 @@
 // Tauri hands commands their arguments by value; a command that only reads one cannot borrow it.
 #![allow(clippy::needless_pass_by_value)]
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
 use arden_agents::demo::DemoDriver;
 #[cfg(debug_assertions)]
 use arden_agents::model::Item;
-use arden_agents::model::{AgentKind, ProjectListing, Session, SessionSummary, TurnEvent};
+use arden_agents::model::{AgentKind, Session, SessionList, SessionSummary, TurnEvent};
 use arden_agents::playground::PLAYGROUND_ID;
-use arden_agents::store::{SessionStore, StoreError};
+use arden_agents::store::{OpenProblem, SessionStore, StoreError};
 use arden_core::error::{AppError, ErrorCode};
 use tauri::State;
 use tauri::ipc::Channel;
@@ -26,7 +26,64 @@ fn app_error(error: StoreError) -> AppError {
             AppError::new(ErrorCode::SessionNotFound)
         }
         StoreError::TurnRunning => AppError::new(ErrorCode::TurnRunning),
+        StoreError::NotSaved(reason) => {
+            AppError::new(ErrorCode::SessionsNotSaved).with_details(reason)
+        }
+        StoreError::NotRead(reason) => {
+            AppError::new(ErrorCode::SessionsUnreadable).with_details(reason)
+        }
     }
+}
+
+/// What went wrong with the sessions file at start, until the page has asked for it.
+#[derive(Default)]
+pub struct SessionsNotice(Mutex<Option<AppError>>);
+
+impl SessionsNotice {
+    /// Logs what went wrong with the sessions file, and keeps it for the page.
+    pub fn after(problem: Option<&OpenProblem>) -> Self {
+        let notice = match problem {
+            None => None,
+            Some(OpenProblem::SetAside { kept_as, reason }) => {
+                tracing::error!(
+                    code = ErrorCode::SessionsUnreadable.as_str(),
+                    %reason,
+                    kept_as = %kept_as.display(),
+                    "the sessions file could not be read, so it was set aside"
+                );
+                Some(AppError::new(ErrorCode::SessionsUnreadable).with_details(reason.clone()))
+            }
+            Some(OpenProblem::NotSaving { reason }) => {
+                tracing::error!(
+                    code = ErrorCode::SessionsNotSaved.as_str(),
+                    %reason,
+                    "the sessions file could not be opened, so sessions are kept in memory"
+                );
+                Some(AppError::new(ErrorCode::SessionsNotSaved).with_details(reason.clone()))
+            }
+        };
+        Self(Mutex::new(notice))
+    }
+}
+
+/// What went wrong with the sessions file at start, if anything. Asking takes it: it is never
+/// returned twice.
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps)]
+#[tauri::command]
+#[specta::specta]
+pub fn take_sessions_notice(
+    notice: State<'_, SessionsNotice>,
+) -> Result<Option<AppError>, AppError> {
+    Ok(notice
+        .0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take())
 }
 
 /// The projects and their sessions, for the sidebar.
@@ -34,19 +91,19 @@ fn app_error(error: StoreError) -> AppError {
 /// # Errors
 ///
 /// Never fails today; it returns a `Result` like every command.
-// Tauri hands commands their state by value; every command returns a `Result` (ADR 0008).
-#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn list_projects(sessions: State<'_, Sessions>) -> Result<Vec<ProjectListing>, AppError> {
-    Ok(sessions.projects())
+pub fn list_sessions(sessions: State<'_, Sessions>) -> Result<SessionList, AppError> {
+    Ok(sessions.list())
 }
 
 /// Starts an empty Demo agent session in the Playground.
 ///
 /// # Errors
 ///
-/// Returns an error when the Playground does not exist.
+/// Returns an error when the Playground does not exist, or the session cannot be saved.
 #[tauri::command]
 #[specta::specta]
 pub fn create_session(sessions: State<'_, Sessions>) -> Result<SessionSummary, AppError> {
@@ -61,13 +118,11 @@ pub fn create_session(sessions: State<'_, Sessions>) -> Result<SessionSummary, A
 ///
 /// # Errors
 ///
-/// Returns an error when there is no such session.
+/// Returns an error when there is no such session, or its turns cannot be read.
 #[tauri::command]
 #[specta::specta]
 pub fn get_session(id: String, sessions: State<'_, Sessions>) -> Result<Session, AppError> {
-    sessions
-        .session(&id)
-        .ok_or_else(|| AppError::new(ErrorCode::SessionNotFound))
+    sessions.session(&id).map_err(app_error)
 }
 
 /// Stops the reply that is running in a session. The turn ends as stopped, and the reply's channel
@@ -86,7 +141,7 @@ pub fn stop_reply(session_id: String, sessions: State<'_, Sessions>) -> Result<(
 ///
 /// # Errors
 ///
-/// Returns an error when the Playground does not exist.
+/// Returns an error when the Playground does not exist, or the session cannot be saved.
 #[cfg(debug_assertions)]
 #[tauri::command]
 #[specta::specta]
@@ -97,19 +152,22 @@ pub fn debug_fill_session(
     let session = sessions
         .create_session(PLAYGROUND_ID, AgentKind::Demo)
         .map_err(app_error)?;
-    for number in 1..=count {
-        let reply = Item::Text {
-            id: format!("filled-{number}"),
-            text: format!("Reply number {number}. It is a short answer with **bold** text."),
-        };
-        sessions
-            .add_finished_turn(
-                &session.id,
-                &format!("Message number {number}"),
-                vec![reply],
+    let replies = (1..=count)
+        .map(|number| {
+            (
+                format!("Message number {number}"),
+                vec![Item::Text {
+                    id: format!("filled-{number}"),
+                    text: format!(
+                        "Reply number {number}. It is a short answer with **bold** text."
+                    ),
+                }],
             )
-            .map_err(app_error)?;
-    }
+        })
+        .collect();
+    sessions
+        .add_finished_turns(&session.id, replies)
+        .map_err(app_error)?;
     Ok(session)
 }
 
@@ -118,7 +176,8 @@ pub fn debug_fill_session(
 ///
 /// # Errors
 ///
-/// Returns an error when there is no such session, or its agent is still answering.
+/// Returns an error when there is no such session, its agent is still answering, or the message
+/// cannot be saved.
 #[tauri::command]
 #[specta::specta]
 pub fn send_message(
@@ -127,24 +186,30 @@ pub fn send_message(
     on_event: Channel<TurnEvent>,
     sessions: State<'_, Sessions>,
 ) -> Result<Session, AppError> {
-    let session = sessions
-        .session(&session_id)
-        .ok_or_else(|| AppError::new(ErrorCode::SessionNotFound))?;
     let turn = sessions.start_turn(&session_id, &text).map_err(app_error)?;
     // Taken before the reply starts, so the events that follow never overlap with it.
-    let snapshot = sessions
-        .session(&session_id)
-        .ok_or_else(|| AppError::new(ErrorCode::SessionNotFound))?;
+    let snapshot = sessions.session(&session_id).map_err(app_error)?;
 
     let store = Arc::clone(sessions.inner());
+    let agent = snapshot.agent;
     let running = turn.clone();
     thread::spawn(move || {
-        match session.agent {
+        let saved = match agent {
             AgentKind::Demo => {
                 store.stream_reply(&DemoDriver::new(), &session_id, &running, |event| {
                     on_event.send(event.clone()).is_ok()
-                });
+                })
             }
+        };
+        if let Err(error) = saved {
+            let error = app_error(error);
+            tracing::error!(
+                code = error.code.as_str(),
+                details = error.details.as_deref().unwrap_or_default(),
+                session = %session_id,
+                turn = %running.id,
+                "the reply could not be saved"
+            );
         }
         tracing::debug!(session = %session_id, turn = %running.id, "reply ended");
     });
@@ -154,7 +219,7 @@ pub fn send_message(
 /// The session that was made for a folder the app was asked to open, until the page has asked
 /// for it. The page may not be there yet when the first launch is asked to open a folder.
 #[derive(Default)]
-pub struct PendingOpen(std::sync::Mutex<Option<String>>);
+pub struct PendingOpen(Mutex<Option<String>>);
 
 /// Tells the page to show a session, such as the one made for a folder that was opened.
 #[derive(Debug, Clone, serde::Serialize, specta::Type, tauri_specta::Event)]
@@ -169,15 +234,26 @@ pub fn open_folder(app: &tauri::AppHandle, folder: &std::path::Path) {
     use tauri_specta::Event;
 
     let store = app.state::<Sessions>();
-    let project = store.open_folder(folder);
-    let Ok(session) = store.create_session(&project.id, AgentKind::Demo) else {
-        return;
+    let session = store
+        .open_folder(folder)
+        .and_then(|project| store.create_session(&project.id, AgentKind::Demo));
+    let session = match session {
+        Ok(session) => session,
+        Err(error) => {
+            let error = app_error(error);
+            tracing::error!(
+                code = error.code.as_str(),
+                details = error.details.as_deref().unwrap_or_default(),
+                "a folder could not be opened as a project"
+            );
+            return;
+        }
     };
-    tracing::info!(project = %project.id, session = %session.id, "a folder was opened as a project");
+    tracing::info!(project = %session.project_id, session = %session.id, "a folder was opened as a project");
     *app.state::<PendingOpen>()
         .0
         .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(session.id.clone());
+        .unwrap_or_else(PoisonError::into_inner) = Some(session.id.clone());
     let _ = SessionRequested {
         session_id: session.id,
     }
@@ -191,13 +267,13 @@ pub fn open_folder(app: &tauri::AppHandle, folder: &std::path::Path) {
 ///
 /// Never fails today; it returns a `Result` like every command.
 // Tauri hands commands their state by value; every command returns a `Result` (ADR 0008).
-#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
+#[allow(clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
 pub fn take_pending_open(pending: State<'_, PendingOpen>) -> Result<Option<String>, AppError> {
     Ok(pending
         .0
         .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .unwrap_or_else(PoisonError::into_inner)
         .take())
 }

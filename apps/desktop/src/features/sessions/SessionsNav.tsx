@@ -7,13 +7,13 @@ import { ShortcutHint } from "@/components/layout/ShortcutHint";
 import { sidebarRow } from "@/components/layout/sidebarRow";
 import { CommandTooltip } from "@/features/commands/CommandTooltip";
 import { useCommands } from "@/features/commands/CommandsProvider";
-import { projectsQuery } from "@/ipc/queries";
+import { noSessions, sessionListQuery } from "@/ipc/queries";
 
 /** The projects and their sessions, with the button that starts a new one. */
 export function SessionsNav() {
   const { t } = useTranslation();
   const { run } = useCommands();
-  const { data: projects = [] } = useQuery(projectsQuery);
+  const { data: list = noSessions } = useQuery(sessionListQuery);
 
   return (
     <>
@@ -31,7 +31,7 @@ export function SessionsNav() {
         </button>
       </CommandTooltip>
       <h2 className="sr-only">{t("sidebar.projects")}</h2>
-      {projects.map(({ project, sessions }) => (
+      {list.projects.map(({ project, sessions }) => (
         <section key={project.id} aria-labelledby={`project-${project.id}`} className="pt-3">
           <h3
             id={`project-${project.id}`}

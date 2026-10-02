@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { Locator, Page } from "@playwright/test";
@@ -89,6 +90,38 @@ test.describe("sessions in the real app", () => {
       await expect(session.getByText(/^first\nsecond$/).first()).toBeVisible();
     } finally {
       app.kill();
+    }
+  });
+});
+
+test.describe("sessions kept between starts in the real app", () => {
+  test("a session and its reply are there after the app is closed and started again", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-sessions-"));
+    try {
+      const first = await launchApp({ dataDir });
+      try {
+        await untilTheReplyEnds(await ask(first.page, "Keep this session"));
+        expect(existsSync(path.join(dataDir, "local", "sessions.db"))).toBe(true);
+      } finally {
+        await first.close();
+      }
+
+      const second = await launchApp({ dataDir });
+      try {
+        const sidebar = second.page.getByRole("complementary", { name: "Sidebar" });
+        await sidebar.getByRole("link", { name: "Keep this session" }).click();
+        const session = second.page.getByRole("main", { name: "Session" });
+        await expect(
+          second.page.getByRole("heading", { level: 1, name: "Keep this session" }),
+        ).toBeVisible();
+        // The person's message comes first; the Demo agent's reply quotes it.
+        await expect(session.getByText("Keep this session", { exact: true }).first()).toBeVisible();
+        await expect(session.getByText(/shows how an unusual link asks first/)).toBeVisible();
+      } finally {
+        second.kill();
+      }
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
     }
   });
 });

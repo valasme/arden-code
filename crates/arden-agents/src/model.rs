@@ -223,6 +223,8 @@ pub struct Session {
     pub title: Option<String>,
     /// When the session was created, in UTC.
     pub created_at: String,
+    /// When a message was last sent in it, or when it was created if none was, in UTC.
+    pub updated_at: String,
     pub turns: Vec<Turn>,
 }
 
@@ -235,14 +237,23 @@ pub struct SessionSummary {
     pub agent: AgentKind,
     pub title: Option<String>,
     pub created_at: String,
+    pub updated_at: String,
 }
 
-/// A project and its sessions, the newest first.
+/// A project and its sessions, the most recently used first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectListing {
     pub project: Project,
     pub sessions: Vec<SessionSummary>,
+}
+
+/// The sessions as the sidebar lists them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionList {
+    /// Every project, the Playground first and the others in the order they were opened.
+    pub projects: Vec<ProjectListing>,
 }
 
 /// What happens while a reply streams. The store applies these, and the UI receives them through a

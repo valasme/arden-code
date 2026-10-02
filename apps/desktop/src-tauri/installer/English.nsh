@@ -24,7 +24,7 @@ LangString webview2DownloadSuccess ${LANG_ENGLISH} "WebView2 bootstrapper downlo
 LangString webview2Downloading ${LANG_ENGLISH} "Downloading WebView2 bootstrapper..."
 LangString webview2InstallError ${LANG_ENGLISH} "Error: Installing WebView2 failed with exit code $1"
 LangString webview2InstallSuccess ${LANG_ENGLISH} "WebView2 installed successfully"
-LangString deleteAppData ${LANG_ENGLISH} "Also delete my settings and logs"
+LangString deleteAppData ${LANG_ENGLISH} "Also delete my settings, sessions and logs"
 LangString windows11Required ${LANG_ENGLISH} "Arden Code needs Windows 11 or newer, and this computer has an older version of Windows. Nothing was installed. You can find newer releases at https://github.com/valasme/arden-code/releases."
 LangString terminalCommandTitle ${LANG_ENGLISH} "Terminal command"
 LangString terminalCommandSubtitle ${LANG_ENGLISH} "Open Arden Code from any terminal"

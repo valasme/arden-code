@@ -284,9 +284,9 @@ export const commands = {
 	 */
 	resetSettings: () => __TAURI_INVOKE<Settings>("reset_settings"),
 	/**
-	 *  Wipes the settings, logs, crash reports and caches, and starts the app again. The wiping is done
-	 *  by the new start, once this one and its web engine have ended: the logs and caches are in use
-	 *  until then.
+	 *  Wipes the settings, sessions, logs, crash reports and caches, and starts the app again. The
+	 *  wiping is done by the new start, once this one and its web engine have ended: the sessions, logs
+	 *  and caches are in use until then.
 	 * 
 	 *  # Errors
 	 * 
@@ -322,13 +322,28 @@ export const commands = {
 	 * 
 	 *  Never fails today; it returns a `Result` like every command.
 	 */
-	listProjects: () => __TAURI_INVOKE<ProjectListing[]>("list_projects"),
+	listSessions: () => __TAURI_INVOKE<SessionList>("list_sessions"),
+	/**
+	 *  What went wrong with the sessions file at start, if anything. Asking takes it: it is never
+	 *  returned twice.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	takeSessionsNotice: () => __TAURI_INVOKE<{
+	code: ErrorCode,
+	/**  The key in the UI's language file that says what happened, why, and what to do. */
+	messageKey: string,
+	/**  Technical detail that helps find the cause. Never shown as the message itself. */
+	details: string | null,
+} | null>("take_sessions_notice"),
 	/**
 	 *  Starts an empty Demo agent session in the Playground.
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns an error when the Playground does not exist.
+	 *  Returns an error when the Playground does not exist, or the session cannot be saved.
 	 */
 	createSession: () => __TAURI_INVOKE<SessionSummary>("create_session"),
 	/**
@@ -336,7 +351,7 @@ export const commands = {
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns an error when there is no such session.
+	 *  Returns an error when there is no such session, or its turns cannot be read.
 	 */
 	getSession: (id: string) => __TAURI_INVOKE<Session>("get_session", { id }),
 	/**
@@ -345,7 +360,8 @@ export const commands = {
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns an error when there is no such session, or its agent is still answering.
+	 *  Returns an error when there is no such session, its agent is still answering, or the message
+	 *  cannot be saved.
 	 */
 	sendMessage: (sessionId: string, text: string, onEvent: Channel<TurnEvent>) => __TAURI_INVOKE<Session>("send_message", { sessionId, text, onEvent }),
 	/**
@@ -382,7 +398,7 @@ export const commands = {
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns an error when the Playground does not exist.
+	 *  Returns an error when the Playground does not exist, or the session cannot be saved.
 	 */
 	debugFillSession: (count: number) => __TAURI_INVOKE<SessionSummary>("debug_fill_session", { count }),
 	/**
@@ -564,6 +580,10 @@ export type ErrorCode =
 "ARD-AGT-001" | 
 /**  A message was sent while the agent was still answering the last one. */
 "ARD-AGT-002" | 
+/**  The sessions could not be saved, so they last only until Arden Code closes. */
+"ARD-AGT-003" | 
+/**  The saved sessions could not be read, so Arden Code started without them. */
+"ARD-AGT-004" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -686,7 +706,7 @@ export type ProjectKind =
 /**  A folder the person opened, for example with the `arden-code` command. */
 "folder";
 
-/**  A project and its sessions, the newest first. */
+/**  A project and its sessions, the most recently used first. */
 export type ProjectListing = {
 	project: Project,
 	sessions: SessionSummary[],
@@ -727,7 +747,15 @@ export type Session = {
 	title: string | null,
 	/**  When the session was created, in UTC. */
 	createdAt: string,
+	/**  When a message was last sent in it, or when it was created if none was, in UTC. */
+	updatedAt: string,
 	turns: Turn[],
+};
+
+/**  The sessions as the sidebar lists them. */
+export type SessionList = {
+	/**  Every project, the Playground first and the others in the order they were opened. */
+	projects: ProjectListing[],
 };
 
 /**  Tells the page to show a session, such as the one made for a folder that was opened. */
@@ -742,6 +770,7 @@ export type SessionSummary = {
 	agent: AgentKind,
 	title: string | null,
 	createdAt: string,
+	updatedAt: string,
 };
 
 /**  One change to one setting. The UI sends these, so each setting keeps its own type. */

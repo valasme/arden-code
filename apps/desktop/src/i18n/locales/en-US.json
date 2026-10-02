@@ -52,12 +52,22 @@
     "ARD-AGT-001": {
       "action": "Start a new session with New session.",
       "what": "That session does not exist any more.",
-      "why": "Sessions live in memory for now, so they are gone after Arden Code restarts."
+      "why": "It was deleted, or the file it was kept in could not be read."
     },
     "ARD-AGT-002": {
       "action": "Wait for the reply to finish, or stop it with Esc, then send your message again.",
       "what": "Your message was not sent.",
       "why": "The agent is still answering the last message."
+    },
+    "ARD-AGT-003": {
+      "action": "Your sessions keep working until Arden Code closes. Free some space or check the folder, then restart Arden Code.",
+      "what": "Your sessions are not being saved.",
+      "why": "Arden Code could not write to its sessions file. The disk may be full, or the folder may be read-only."
+    },
+    "ARD-AGT-004": {
+      "action": "The old file was kept next to the new one as sessions.invalid-<date>.db, in Arden Code's local data folder.",
+      "what": "Your saved sessions could not be read, so Arden Code started without them.",
+      "why": "The sessions file was damaged, or it was made by a newer version of Arden Code."
     },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
@@ -393,9 +403,9 @@
       "resetApp": {
         "button": "Reset…",
         "confirm": "Reset Arden Code",
-        "confirmDescription": "This deletes your settings, logs, crash reports and caches, and starts Arden Code again. This cannot be undone.",
+        "confirmDescription": "This deletes your settings, sessions, logs, crash reports and caches, and starts Arden Code again. This cannot be undone.",
         "confirmTitle": "Reset Arden Code?",
-        "description": "Delete your settings, logs, crash reports and caches, and start again as if it were new.",
+        "description": "Delete your settings, sessions, logs, crash reports and caches, and start again as if it were new.",
         "label": "Reset Arden Code"
       }
     },

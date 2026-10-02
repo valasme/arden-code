@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { page } from "vitest/browser";
 
+import { noSessions } from "@/ipc/queries";
 import type { AppError, Settings, SystemPreferences } from "@/ipc/bindings";
 import { settingsWith } from "@/test/settings";
 
@@ -42,7 +43,7 @@ function startApp({
   mockIPC(
     (command) => {
       if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
-      if (command === "list_projects") return [];
+      if (command === "list_sessions") return noSessions;
       if (command === "get_settings") return settings;
       if (command === "change_setting") return savedAs;
       if (command === "take_settings_notice") return notice;

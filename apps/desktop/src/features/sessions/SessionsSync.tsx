@@ -4,21 +4,23 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useEffectEvent } from "react";
 
 import { commands, events } from "@/ipc/bindings";
-import { projectsQuery } from "@/ipc/queries";
+import { sessionListQuery } from "@/ipc/queries";
+import { showNoticeToast } from "@/lib/errorToasts";
 import { useTauriListener } from "@/lib/useTauriListener";
 
 /**
- * Shows the session Rust made for a folder that was opened, for example by the `arden-code`
- * terminal command: the one that was waiting when the page came up, and any that come later.
- * Draws nothing.
+ * Keeps the page in step with what Rust did with the sessions on its own. It shows the session Rust
+ * made for a folder that was opened, for example by the `arden-code` terminal command: the one that
+ * was waiting when the page came up, and any that come later. It also shows the notice for a
+ * sessions file that could not be used (ADR 0035). Draws nothing.
  */
-export function OpenSessionSync() {
+export function SessionsSync() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const show = useEffectEvent((id: string) => {
     queryClient
-      .invalidateQueries({ queryKey: projectsQuery.queryKey })
+      .invalidateQueries({ queryKey: sessionListQuery.queryKey })
       .then(() => navigate({ to: "/session/$id", params: { id } }))
       .catch(() => {});
   });
@@ -29,7 +31,8 @@ export function OpenSessionSync() {
     }),
   );
 
-  // A folder opened before the page was ready left its session waiting.
+  // A folder opened before the page was ready left its session waiting, and a problem with the
+  // sessions file found while starting waited for the page too.
   useEffect(() => {
     if (!isTauri()) return undefined;
     let active = true;
@@ -37,6 +40,12 @@ export function OpenSessionSync() {
       .takePendingOpen()
       .then((id) => {
         if (id !== null && active) show(id);
+      })
+      .catch(() => {});
+    commands
+      .takeSessionsNotice()
+      .then((notice) => {
+        if (notice && active) showNoticeToast(notice);
       })
       .catch(() => {});
     return () => {

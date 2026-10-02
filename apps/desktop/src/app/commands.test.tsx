@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
 import { z } from "zod";
 
+import { noSessions } from "@/ipc/queries";
 import { commandDefinitions } from "@/features/commands/registry";
 import { formatShortcut } from "@/features/commands/shortcuts";
 import { useLayoutStore } from "@/state/layout";
@@ -28,7 +29,7 @@ function renderApp(entries = ["/"], initialIndex = entries.length - 1) {
     (command, payload) => {
       calls.push({ command, payload });
       if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
-      if (command === "list_projects") return [];
+      if (command === "list_sessions") return noSessions;
       if (command === "get_settings") return startingSettings;
       if (command === "change_setting") {
         const { change } = z

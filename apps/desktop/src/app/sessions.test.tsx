@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
 import { z } from "zod";
 
-import type { Item, ProjectListing, Session, TurnEvent } from "@/ipc/bindings";
+import type { AppError, Item, ProjectListing, Session, TurnEvent } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
@@ -29,11 +29,14 @@ function startRust({
   emitBeforeAnswering = [],
   failCreate = false,
   regionalFormat = "windows",
+  sessionsNotice = null,
 }: {
   regionalFormat?: "windows" | "english";
   /** Events sent before the answer to send_message, as a fast reply can. */
   emitBeforeAnswering?: TurnEvent[];
   failCreate?: boolean;
+  /** What went wrong with the sessions file when Rust started. */
+  sessionsNotice?: AppError | null;
 } = {}) {
   Object.assign(globalThis, { isTauri: true });
   mockWindows("main");
@@ -46,12 +49,17 @@ function startRust({
       calls.push({ command, payload });
       if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
       if (command === "get_settings") return settingsWith({ general: { regionalFormat } });
-      if (command === "list_projects") {
+      if (command === "list_sessions") {
         const listing: ProjectListing = {
           project: playground,
           sessions: sessions.toReversed().map(({ turns: _turns, ...summary }) => summary),
         };
-        return [listing];
+        return { projects: [listing] };
+      }
+      if (command === "take_sessions_notice") {
+        const notice = sessionsNotice;
+        sessionsNotice = null;
+        return notice;
       }
       if (command === "create_session") {
         if (failCreate) {
@@ -67,6 +75,7 @@ function startRust({
           agent: "demo",
           title: null,
           createdAt: "2026-09-30T14:05:09Z",
+          updatedAt: "2026-09-30T14:05:09Z",
           turns: [],
         };
         sessions.push(session);
@@ -178,6 +187,28 @@ describe("With no session open", () => {
     const playgroundName = await screen.findByRole("heading", { name: "Playground" });
     expect(playgroundName).toBeVisible();
     expect(within(sidebar()).getByText("No sessions yet.")).toBeVisible();
+  });
+
+  it("says so when the saved sessions could not be read, with the code", async () => {
+    startRust({
+      sessionsNotice: {
+        code: "ARD-AGT-004",
+        messageKey: "errors.ARD-AGT-004",
+        details: "file is not a database",
+      },
+    });
+    renderApp();
+
+    await screen.findByText("Notice (ARD-AGT-004)");
+    // The notice slides in.
+    await waitFor(() => {
+      expect(screen.getByText("Notice (ARD-AGT-004)")).toBeVisible();
+    });
+    expect(
+      screen.getByText(
+        "Your saved sessions could not be read, so Arden Code started without them.",
+      ),
+    ).toBeVisible();
   });
 
   it("has no accessibility violations", async () => {

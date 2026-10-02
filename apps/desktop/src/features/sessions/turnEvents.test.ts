@@ -8,6 +8,7 @@ const session: Session = {
   agent: "demo",
   title: "Hello",
   createdAt: "2026-09-30T14:05:09Z",
+  updatedAt: "2026-09-30T14:05:10Z",
   turns: [
     {
       id: "turn-2",

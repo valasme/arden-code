@@ -217,9 +217,9 @@ pub(crate) async fn choose_file(app: &AppHandle, kind: FileKind) -> Option<PathB
     .flatten()
 }
 
-/// Wipes the settings, logs, crash reports and caches, and starts the app again. The wiping is done
-/// by the new start, once this one and its web engine have ended: the logs and caches are in use
-/// until then.
+/// Wipes the settings, sessions, logs, crash reports and caches, and starts the app again. The
+/// wiping is done by the new start, once this one and its web engine have ended: the sessions, logs
+/// and caches are in use until then.
 ///
 /// # Errors
 ///

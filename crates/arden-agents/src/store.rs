@@ -1,26 +1,54 @@
-//! Projects and sessions, kept in memory (ADR 0016). They disappear when the app closes.
+//! Projects and sessions (ADR 0016), kept in a file between starts (ADR 0035). The store holds them
+//! in memory while the app runs, and writes each change to the file.
 
 use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
+use crate::database::{Database, DatabaseError};
 use crate::driver::{AgentDriver, Flow};
 use crate::model::{
-    AgentKind, Item, Project, ProjectListing, Session, SessionSummary, Turn, TurnEvent, TurnStatus,
+    AgentKind, Item, Project, ProjectKind, ProjectListing, Session, SessionList, SessionSummary,
+    Turn, TurnEvent, TurnStatus,
 };
 
 /// How many characters of the first message become the session's title.
 const TITLE_LENGTH: usize = 60;
 
 /// Why the store could not do what it was asked.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StoreError {
     UnknownProject,
     UnknownSession,
     /// The session's agent is still replying to the last message.
     TurnRunning,
+    /// The change could not be written to the file, so it was not made. Says why, for the logs.
+    NotSaved(String),
+    /// What the file holds could not be read. Says why, for the logs.
+    NotRead(String),
+}
+
+fn not_saved(error: DatabaseError) -> StoreError {
+    StoreError::NotSaved(error.0)
+}
+
+/// What went wrong with the file when the store was opened. The store works either way.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenProblem {
+    /// The file could not be read. It was kept under another name, and the store started empty.
+    SetAside { kept_as: PathBuf, reason: String },
+    /// The file could not be opened or written, so the sessions are kept in memory until the app
+    /// closes.
+    NotSaving { reason: String },
+}
+
+/// A store just opened, and what went wrong with its file, if anything.
+pub struct Opened {
+    pub store: SessionStore,
+    pub problem: Option<OpenProblem>,
 }
 
 /// The current time in UTC, as `2026-09-30T14:05:09Z`. Times are stored this way and shown in
@@ -44,27 +72,113 @@ fn title_of(prompt: &str) -> Option<String> {
     Some(title)
 }
 
-#[derive(Default)]
+/// A session as the store holds it.
+struct Entry {
+    session: Session,
+    /// Whether `session.turns` holds its turns: they are read from the file when it is first opened.
+    loaded: bool,
+    /// When it was last used, as a number that only grows: the list's order.
+    used: u64,
+}
+
+impl Entry {
+    /// The session without its turns: what the file keeps of it, apart from them. The turns are not
+    /// copied, however many there are.
+    fn header(&self) -> Session {
+        let session = &self.session;
+        Session {
+            id: session.id.clone(),
+            project_id: session.project_id.clone(),
+            agent: session.agent,
+            title: session.title.clone(),
+            created_at: session.created_at.clone(),
+            updated_at: session.updated_at.clone(),
+            turns: Vec::new(),
+        }
+    }
+
+    fn summary(&self) -> SessionSummary {
+        let session = &self.session;
+        SessionSummary {
+            id: session.id.clone(),
+            project_id: session.project_id.clone(),
+            agent: session.agent,
+            title: session.title.clone(),
+            created_at: session.created_at.clone(),
+            updated_at: session.updated_at.clone(),
+        }
+    }
+
+    /// Reads its turns from the file, the first time they are needed.
+    fn load(&mut self, database: &Database) -> Result<(), StoreError> {
+        if !self.loaded {
+            self.session.turns = database
+                .turns(&self.session.id)
+                .map_err(|error| StoreError::NotRead(error.0))?;
+            self.loaded = true;
+        }
+        Ok(())
+    }
+}
+
+fn find<'a>(sessions: &'a mut [Entry], id: &str) -> Result<&'a mut Entry, StoreError> {
+    sessions
+        .iter_mut()
+        .find(|entry| entry.session.id == id)
+        .ok_or(StoreError::UnknownSession)
+}
+
 struct Inner {
     projects: Vec<Project>,
-    sessions: Vec<Session>,
+    sessions: Vec<Entry>,
+    /// The last number given to an id or an order. Kept in the file, so no number is used twice.
     last_id: u64,
     /// The turns whose reply the person has asked to stop, until their driver has noticed.
     stopping: HashSet<String>,
+    database: Database,
 }
 
 impl Inner {
-    fn next_id(&mut self, kind: &str) -> String {
+    fn next_number(&mut self) -> u64 {
         self.last_id += 1;
-        format!("{kind}-{}", self.last_id)
+        self.last_id
     }
 
-    fn session_mut(&mut self, id: &str) -> Result<&mut Session, StoreError> {
-        self.sessions
-            .iter_mut()
-            .find(|session| session.id == id)
-            .ok_or(StoreError::UnknownSession)
+    fn next_id(&mut self, kind: &str) -> String {
+        format!("{kind}-{}", self.next_number())
     }
+}
+
+/// Moves a file that cannot be read out of the way, with the files SQLite keeps beside it, and keeps
+/// it for the person. Answers where it went.
+fn set_aside(file: &Path, now: OffsetDateTime) -> std::io::Result<PathBuf> {
+    let stamp = format!(
+        "{:04}{:02}{:02}-{:02}{:02}{:02}",
+        now.year(),
+        u8::from(now.month()),
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second()
+    );
+    let folder = file.parent().unwrap_or_else(|| Path::new("."));
+    let mut target = folder.join(format!("sessions.invalid-{stamp}.db"));
+    let mut attempt = 2;
+    while target.exists() {
+        target = folder.join(format!("sessions.invalid-{stamp}-{attempt}.db"));
+        attempt += 1;
+    }
+    std::fs::rename(file, &target)?;
+    for companion in ["-wal", "-shm"] {
+        let mut from = file.as_os_str().to_owned();
+        from.push(companion);
+        let mut to = target.as_os_str().to_owned();
+        to.push(companion);
+        if Path::new(&from).exists() {
+            std::fs::rename(&from, &to)?;
+        }
+    }
+    Ok(target)
 }
 
 /// Every project and session the app knows.
@@ -73,15 +187,99 @@ pub struct SessionStore {
 }
 
 impl SessionStore {
-    /// A store with the given projects and no sessions.
+    /// A store with the given projects and no sessions, kept in memory only: nothing is saved.
+    ///
+    /// # Panics
+    ///
+    /// When SQLite cannot keep a database in memory, which only happens when memory runs out.
     #[must_use]
     pub fn new(projects: Vec<Project>) -> Self {
+        let mut database = Database::in_memory();
+        for (position, project) in projects.iter().enumerate() {
+            database
+                .save_project(project, position, 0)
+                .expect("a database in memory takes a project");
+        }
+        Self::with(database, projects, Vec::new(), 0)
+    }
+
+    fn with(
+        database: Database,
+        projects: Vec<Project>,
+        sessions: Vec<Entry>,
+        last_id: u64,
+    ) -> Self {
         Self {
             inner: Mutex::new(Inner {
                 projects,
-                ..Inner::default()
+                sessions,
+                last_id,
+                stopping: HashSet::new(),
+                database,
             }),
         }
+    }
+
+    /// Opens the store kept in `file`, which is made when it is not there. The Playground is the
+    /// built-in project, as it is described on this start. It never fails: a file that cannot be
+    /// read is set aside and the store starts empty, and a file that cannot be opened at all leaves
+    /// the store in memory.
+    #[must_use]
+    pub fn open(file: &Path, playground: &Project) -> Opened {
+        Self::open_at(file, playground, OffsetDateTime::now_utc())
+    }
+
+    /// [`Self::open`] with the time given, so that tests can predict the name of a file set aside.
+    #[must_use]
+    pub fn open_at(file: &Path, playground: &Project, now: OffsetDateTime) -> Opened {
+        let reason = match Self::read(file, playground) {
+            Ok(store) => {
+                return Opened {
+                    store,
+                    problem: None,
+                };
+            }
+            Err(error) => error.0,
+        };
+        let in_memory = |reason: String| Opened {
+            store: Self::new(vec![playground.clone()]),
+            problem: Some(OpenProblem::NotSaving { reason }),
+        };
+        if !file.is_file() {
+            return in_memory(reason);
+        }
+        let kept_as = match set_aside(file, now) {
+            Ok(kept_as) => kept_as,
+            Err(error) => {
+                return in_memory(format!("{reason}; it could not be set aside: {error}"));
+            }
+        };
+        match Self::read(file, playground) {
+            Ok(store) => Opened {
+                store,
+                problem: Some(OpenProblem::SetAside { kept_as, reason }),
+            },
+            Err(error) => in_memory(error.0),
+        }
+    }
+
+    fn read(file: &Path, playground: &Project) -> Result<Self, DatabaseError> {
+        let mut database = Database::open(file)?;
+        let saved = database.load(playground)?;
+        let mut projects = saved.projects;
+        // The Playground is listed first, as it is described on this start.
+        projects.retain(|project| project.id != playground.id);
+        projects.insert(0, playground.clone());
+        let sessions = saved
+            .sessions
+            .into_iter()
+            .map(|saved| Entry {
+                session: saved.session,
+                loaded: false,
+                used: saved.used,
+            })
+            .collect();
+        Ok(Self::with(database, projects, sessions, saved.last_id))
     }
 
     // A panic while the lock is held cannot leave the sessions half changed in a way that matters
@@ -90,29 +288,35 @@ impl SessionStore {
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// The projects with their sessions, the newest session first.
+    /// The projects with their sessions, the most recently used first.
     #[must_use]
-    pub fn projects(&self) -> Vec<ProjectListing> {
+    pub fn list(&self) -> SessionList {
         let inner = self.lock();
-        inner
-            .projects
-            .iter()
-            .map(|project| ProjectListing {
-                project: project.clone(),
-                sessions: inner
-                    .sessions
-                    .iter()
-                    .rev()
-                    .filter(|session| session.project_id == project.id)
-                    .map(summary_of)
-                    .collect(),
-            })
-            .collect()
+        let mut sessions: Vec<&Entry> = inner.sessions.iter().collect();
+        sessions.sort_by_key(|entry| std::cmp::Reverse(entry.used));
+        SessionList {
+            projects: inner
+                .projects
+                .iter()
+                .map(|project| ProjectListing {
+                    project: project.clone(),
+                    sessions: sessions
+                        .iter()
+                        .filter(|entry| entry.session.project_id == project.id)
+                        .map(|entry| entry.summary())
+                        .collect(),
+                })
+                .collect(),
+        }
     }
 
     /// Adds a folder as a project, and returns it. A folder that is a project already (the same
     /// path, whatever the case of its letters or a closing backslash) is returned as it is.
-    pub fn open_folder(&self, folder: &std::path::Path) -> Project {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NotSaved`] when the project cannot be written.
+    pub fn open_folder(&self, folder: &Path) -> Result<Project, StoreError> {
         let path = folder.display().to_string();
         let same = |other: &str| {
             let plain = |text: &str| text.trim_end_matches(['\\', '/']).to_lowercase();
@@ -120,26 +324,32 @@ impl SessionStore {
         };
         let mut inner = self.lock();
         if let Some(known) = inner.projects.iter().find(|project| same(&project.path)) {
-            return known.clone();
+            return Ok(known.clone());
         }
         let name = folder
             .file_name()
             .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
         let project = Project {
             id: inner.next_id("folder"),
-            kind: crate::model::ProjectKind::Folder,
+            kind: ProjectKind::Folder,
             name,
             path,
         };
+        let (position, last_id) = (inner.projects.len(), inner.last_id);
+        inner
+            .database
+            .save_project(&project, position, last_id)
+            .map_err(not_saved)?;
         inner.projects.push(project.clone());
-        project
+        Ok(project)
     }
 
     /// Starts an empty session in a project.
     ///
     /// # Errors
     ///
-    /// Returns [`StoreError::UnknownProject`] when there is no such project.
+    /// Returns [`StoreError::UnknownProject`] when there is no such project, and
+    /// [`StoreError::NotSaved`] when the session cannot be written.
     pub fn create_session(
         &self,
         project_id: &str,
@@ -153,100 +363,179 @@ impl SessionStore {
         {
             return Err(StoreError::UnknownProject);
         }
-        let session = Session {
-            id: inner.next_id("session"),
-            project_id: project_id.to_owned(),
-            agent,
-            title: None,
-            created_at: now_utc(),
-            turns: Vec::new(),
+        let now = now_utc();
+        let entry = Entry {
+            session: Session {
+                id: inner.next_id("session"),
+                project_id: project_id.to_owned(),
+                agent,
+                title: None,
+                created_at: now.clone(),
+                updated_at: now,
+                turns: Vec::new(),
+            },
+            loaded: true,
+            used: inner.next_number(),
         };
-        let summary = summary_of(&session);
-        inner.sessions.push(session);
+        let last_id = inner.last_id;
+        inner
+            .database
+            .save_session(&entry.session, entry.used, last_id)
+            .map_err(not_saved)?;
+        let summary = entry.summary();
+        inner.sessions.push(entry);
         Ok(summary)
     }
 
     /// A session with all of its turns.
-    #[must_use]
-    pub fn session(&self, id: &str) -> Option<Session> {
-        self.lock()
-            .sessions
-            .iter()
-            .find(|session| session.id == id)
-            .cloned()
-    }
-
-    /// Adds the person's message to a session as a turn that is still running. The session takes
-    /// its title from the first message.
     ///
     /// # Errors
     ///
     /// Returns [`StoreError::UnknownSession`] when there is no such session, and
-    /// [`StoreError::TurnRunning`] while the agent is still answering the last message.
+    /// [`StoreError::NotRead`] when its turns cannot be read from the file.
+    pub fn session(&self, id: &str) -> Result<Session, StoreError> {
+        let mut inner = self.lock();
+        let Inner {
+            sessions, database, ..
+        } = &mut *inner;
+        let entry = find(sessions, id)?;
+        entry.load(database)?;
+        Ok(entry.session.clone())
+    }
+
+    /// Adds the person's message to a session as a turn that is still running. The session takes
+    /// its title from the first message, unless it has one, and becomes the most recently used.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session,
+    /// [`StoreError::TurnRunning`] while the agent is still answering the last message, and
+    /// [`StoreError::NotSaved`] when the message cannot be written.
     pub fn start_turn(&self, session_id: &str, prompt: &str) -> Result<Turn, StoreError> {
         let mut inner = self.lock();
         let turn_id = inner.next_id("turn");
-        let session = inner.session_mut(session_id)?;
-        if session
+        let used = inner.next_number();
+        let last_id = inner.last_id;
+        let Inner {
+            sessions, database, ..
+        } = &mut *inner;
+        let entry = find(sessions, session_id)?;
+        entry.load(database)?;
+        if entry
+            .session
             .turns
             .iter()
             .any(|turn| turn.status == TurnStatus::Running)
         {
             return Err(StoreError::TurnRunning);
         }
-        if session.title.is_none() {
-            session.title = title_of(prompt);
-        }
+        let now = now_utc();
         let turn = Turn {
             id: turn_id,
             prompt: prompt.to_owned(),
-            started_at: now_utc(),
+            started_at: now.clone(),
             status: TurnStatus::Running,
             items: Vec::new(),
         };
-        session.turns.push(turn.clone());
+        let mut header = entry.header();
+        if header.title.is_none() {
+            header.title = title_of(prompt);
+        }
+        header.updated_at = now;
+        let position = entry.session.turns.len();
+        database
+            .save_session_and_turns(&header, used, &[(position, &turn)], last_id)
+            .map_err(not_saved)?;
+        entry.session.title = header.title;
+        entry.session.updated_at = header.updated_at;
+        entry.used = used;
+        entry.session.turns.push(turn.clone());
         Ok(turn)
     }
 
-    /// Records an event of a reply. Events for a session or turn that is gone are ignored.
-    pub fn apply(&self, session_id: &str, event: &TurnEvent) {
-        let mut inner = self.lock();
-        let Ok(session) = inner.session_mut(session_id) else {
-            return;
-        };
-        if let Some(turn) = session
-            .turns
-            .iter_mut()
-            .find(|turn| turn.id == event.turn_id())
-        {
-            turn.apply(event);
-        }
-    }
-
-    /// Adds a turn that is already over, with the given reply. Tests use it to make long sessions.
+    /// Records an event of a reply. Events for a session or turn that is gone are ignored. The turn
+    /// is written when its reply ends.
     ///
     /// # Errors
     ///
-    /// Returns [`StoreError::UnknownSession`] when there is no such session.
-    pub fn add_finished_turn(
+    /// Returns [`StoreError::NotSaved`] when the turn that ended cannot be written. The event is
+    /// recorded in memory all the same.
+    pub fn apply(&self, session_id: &str, event: &TurnEvent) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let last_id = inner.last_id;
+        let Inner {
+            sessions, database, ..
+        } = &mut *inner;
+        let Ok(entry) = find(sessions, session_id) else {
+            return Ok(());
+        };
+        let Some(position) = entry
+            .session
+            .turns
+            .iter()
+            .position(|turn| turn.id == event.turn_id())
+        else {
+            return Ok(());
+        };
+        let turn = &mut entry.session.turns[position];
+        turn.apply(event);
+        if turn.status == TurnStatus::Running {
+            return Ok(());
+        }
+        database
+            .save_turn(session_id, position, turn, last_id)
+            .map_err(not_saved)
+    }
+
+    /// Adds turns that are already over, each a message with its reply, in one write. The debug
+    /// tools use it to make long sessions.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotSaved`] when the turns cannot be written.
+    pub fn add_finished_turns(
         &self,
         session_id: &str,
-        prompt: &str,
-        items: Vec<Item>,
+        replies: Vec<(String, Vec<Item>)>,
     ) -> Result<(), StoreError> {
         let mut inner = self.lock();
-        let id = inner.next_id("turn");
-        let session = inner.session_mut(session_id)?;
-        if session.title.is_none() {
-            session.title = title_of(prompt);
+        let now = now_utc();
+        let mut turns = Vec::with_capacity(replies.len());
+        for (prompt, items) in replies {
+            turns.push(Turn {
+                id: inner.next_id("turn"),
+                prompt,
+                started_at: now.clone(),
+                status: TurnStatus::Done,
+                items,
+            });
         }
-        session.turns.push(Turn {
-            id,
-            prompt: prompt.to_owned(),
-            started_at: now_utc(),
-            status: TurnStatus::Done,
-            items,
-        });
+        let used = inner.next_number();
+        let last_id = inner.last_id;
+        let Inner {
+            sessions, database, ..
+        } = &mut *inner;
+        let entry = find(sessions, session_id)?;
+        entry.load(database)?;
+        let mut header = entry.header();
+        if header.title.is_none() {
+            header.title = turns.first().and_then(|turn| title_of(&turn.prompt));
+        }
+        header.updated_at = now;
+        let first = entry.session.turns.len();
+        let placed: Vec<(usize, &Turn)> = turns
+            .iter()
+            .enumerate()
+            .map(|(offset, turn)| (first + offset, turn))
+            .collect();
+        database
+            .save_session_and_turns(&header, used, &placed, last_id)
+            .map_err(not_saved)?;
+        entry.session.title = header.title;
+        entry.session.updated_at = header.updated_at;
+        entry.used = used;
+        entry.session.turns.extend(turns);
         Ok(())
     }
 
@@ -258,8 +547,8 @@ impl SessionStore {
     /// Returns [`StoreError::UnknownSession`] when there is no such session.
     pub fn stop_turn(&self, session_id: &str) -> Result<(), StoreError> {
         let mut inner = self.lock();
-        let running = inner
-            .session_mut(session_id)?
+        let running = find(&mut inner.sessions, session_id)?
+            .session
             .turns
             .iter()
             .find(|turn| turn.status == TurnStatus::Running)
@@ -278,19 +567,28 @@ impl SessionStore {
     /// answer from `on_event` means nobody is listening any more, and stops the reply; the turn is
     /// then marked as failed, so the session is not left waiting for it. A reply that the person
     /// stopped ends as stopped, and `on_event` is told.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NotSaved`] when the turn could not be written when it ended. The reply
+    /// still reached `on_event`, and the session holds it until the app closes.
     pub fn stream_reply(
         &self,
         driver: &dyn AgentDriver,
         session_id: &str,
         turn: &Turn,
         mut on_event: impl FnMut(&TurnEvent) -> bool,
-    ) {
+    ) -> Result<(), StoreError> {
         let mut ended = false;
+        let mut saved = Ok(());
         driver.reply(&turn.id, &turn.prompt, &mut |event| {
             if self.is_stopping(&turn.id) {
                 return Flow::Stop;
             }
-            self.apply(session_id, &event);
+            let applied = self.apply(session_id, &event);
+            if saved.is_ok() {
+                saved = applied;
+            }
             ended = matches!(event, TurnEvent::Finished { .. } | TurnEvent::Failed { .. });
             if on_event(&event) {
                 Flow::Continue
@@ -309,22 +607,16 @@ impl SessionStore {
                     turn_id: turn.id.clone(),
                 }
             };
-            self.apply(session_id, &event);
+            let applied = self.apply(session_id, &event);
+            if saved.is_ok() {
+                saved = applied;
+            }
             if stopped {
                 on_event(&event);
             }
         }
         self.lock().stopping.remove(&turn.id);
-    }
-}
-
-fn summary_of(session: &Session) -> SessionSummary {
-    SessionSummary {
-        id: session.id.clone(),
-        project_id: session.project_id.clone(),
-        agent: session.agent,
-        title: session.title.clone(),
-        created_at: session.created_at.clone(),
+        saved
     }
 }
 
@@ -343,7 +635,7 @@ mod tests {
 
     #[test]
     fn lists_the_playground_with_no_sessions_at_first() {
-        let listing = store().projects();
+        let listing = store().list().projects;
 
         assert_eq!(listing.len(), 1);
         assert_eq!(listing[0].project.id, playground::PLAYGROUND_ID);
@@ -354,7 +646,9 @@ mod tests {
     fn an_opened_folder_becomes_a_project_named_after_it_and_can_have_sessions() {
         let store = store();
 
-        let project = store.open_folder(Path::new(r"C:\Work\my-app"));
+        let project = store
+            .open_folder(Path::new(r"C:\Work\my-app"))
+            .expect("a project");
         let session = store
             .create_session(&project.id, AgentKind::Demo)
             .expect("a session");
@@ -362,7 +656,7 @@ mod tests {
         assert_eq!(project.name, "my-app");
         assert_eq!(project.path, r"C:\Work\my-app");
         assert_eq!(project.kind, crate::model::ProjectKind::Folder);
-        let listing = store.projects();
+        let listing = store.list().projects;
         assert_eq!(listing.len(), 2, "the Playground and the folder");
         assert_eq!(listing[1].project, project);
         assert_eq!(listing[1].sessions[0].id, session.id);
@@ -372,16 +666,20 @@ mod tests {
     fn opening_the_same_folder_again_gives_the_same_project_whatever_its_spelling() {
         let store = store();
 
-        let first = store.open_folder(Path::new(r"C:\Work\my-app"));
-        let again = store.open_folder(Path::new(r"c:\work\MY-APP\"));
+        let first = store
+            .open_folder(Path::new(r"C:\Work\my-app"))
+            .expect("a project");
+        let again = store
+            .open_folder(Path::new(r"c:\work\MY-APP\"))
+            .expect("the same project");
 
         assert_eq!(again, first);
-        assert_eq!(store.projects().len(), 2);
+        assert_eq!(store.list().projects.len(), 2);
     }
 
     #[test]
     fn a_drive_root_is_named_by_its_path() {
-        let project = store().open_folder(Path::new(r"D:\"));
+        let project = store().open_folder(Path::new(r"D:\")).expect("a project");
 
         assert_eq!(project.name, r"D:\");
     }
@@ -396,7 +694,7 @@ mod tests {
             .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
             .expect("a session");
 
-        let ids: Vec<String> = store.projects()[0]
+        let ids: Vec<String> = store.list().projects[0]
             .sessions
             .iter()
             .map(|session| session.id.clone())
@@ -435,7 +733,9 @@ mod tests {
         let turn = store
             .start_turn(&session.id, "  Fix the build\nplease ")
             .expect("a turn");
-        store.apply(&session.id, &TurnEvent::Finished { turn_id: turn.id });
+        store
+            .apply(&session.id, &TurnEvent::Finished { turn_id: turn.id })
+            .expect("saved");
         store
             .start_turn(&session.id, "Another thing")
             .expect("a turn");
@@ -449,7 +749,7 @@ mod tests {
             Some("Fix the build")
         );
         assert_eq!(
-            store.projects()[0].sessions[0].title.as_deref(),
+            store.list().projects[0].sessions[0].title.as_deref(),
             Some("Fix the build")
         );
     }
@@ -505,10 +805,12 @@ mod tests {
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
         let mut heard = Vec::new();
-        store.stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
-            heard.push(event.clone());
-            true
-        });
+        store
+            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
+                heard.push(event.clone());
+                true
+            })
+            .expect("saved");
 
         let saved = store.session(&session.id).expect("the session");
         let reply = &saved.turns[0];
@@ -543,7 +845,9 @@ mod tests {
             .expect("a session");
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
-        store.stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| false);
+        store
+            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| false)
+            .expect("saved");
 
         let saved = store.session(&session.id).expect("the session");
         assert_eq!(saved.turns[0].status, TurnStatus::Failed);
@@ -559,20 +863,22 @@ mod tests {
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
         let mut heard = Vec::new();
-        store.stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
-            heard.push(event.clone());
-            // The person presses Esc while the first tool is running.
-            if matches!(
-                event,
-                TurnEvent::ItemAdded {
-                    item: Item::ToolCall { .. },
-                    ..
+        store
+            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
+                heard.push(event.clone());
+                // The person presses Esc while the first tool is running.
+                if matches!(
+                    event,
+                    TurnEvent::ItemAdded {
+                        item: Item::ToolCall { .. },
+                        ..
+                    }
+                ) {
+                    store.stop_turn(&session.id).expect("the session exists");
                 }
-            ) {
-                store.stop_turn(&session.id).expect("the session exists");
-            }
-            true
-        });
+                true
+            })
+            .expect("saved");
 
         let saved = store.session(&session.id).expect("the session");
         let reply = &saved.turns[0];
@@ -622,10 +928,291 @@ mod tests {
         );
         // A reply that starts afterwards is not affected by the earlier request.
         let turn = store.start_turn(&session.id, "hi").expect("a turn");
-        store.stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| true);
+        store
+            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| true)
+            .expect("saved");
         assert_eq!(
             store.session(&session.id).expect("the session").turns[0].status,
             TurnStatus::Done
+        );
+    }
+
+    /// A store kept in `file`, as the app keeps one in its data folder.
+    fn store_in(file: &Path) -> SessionStore {
+        let opened = SessionStore::open(file, &playground::describe(Path::new(r"C:\Playground")));
+        assert!(opened.problem.is_none(), "{:?}", opened.problem);
+        opened.store
+    }
+
+    #[test]
+    fn a_session_and_its_reply_are_there_when_the_store_is_opened_again() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            let turn = store
+                .start_turn(&session.id, "Remember me")
+                .expect("a turn");
+            store
+                .stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| true)
+                .expect("the reply is saved");
+            session.id
+        };
+
+        let store = store_in(&file);
+
+        let listed = &store.list().projects[0].sessions;
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, id);
+        assert_eq!(listed[0].title.as_deref(), Some("Remember me"));
+        let session = store.session(&id).expect("the session");
+        assert_eq!(session.turns.len(), 1);
+        assert_eq!(session.turns[0].prompt, "Remember me");
+        assert_eq!(session.turns[0].status, TurnStatus::Done);
+        assert!(
+            session.turns[0].items.iter().any(
+                |item| matches!(item, Item::Text { text, .. } if text.contains("> Remember me"))
+            )
+        );
+    }
+
+    #[test]
+    fn a_reply_cut_off_by_closing_the_app_comes_back_as_failed() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            store
+                .start_turn(&session.id, "Never answered")
+                .expect("a turn");
+            session.id
+        };
+
+        let store = store_in(&file);
+
+        let session = store.session(&id).expect("the session");
+        assert_eq!(session.turns[0].prompt, "Never answered");
+        assert_eq!(session.turns[0].status, TurnStatus::Failed);
+        assert!(
+            store.start_turn(&id, "Again").is_ok(),
+            "the session is free for the next message"
+        );
+    }
+
+    #[test]
+    fn ids_go_on_from_where_they_were_so_none_is_used_twice() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let mut earlier = Vec::new();
+        {
+            let store = store_in(&file);
+            for _ in 0..3 {
+                let session = store
+                    .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                    .expect("a session");
+                let turn = store.start_turn(&session.id, "hi").expect("a turn");
+                earlier.push(session.id);
+                earlier.push(turn.id);
+            }
+        }
+
+        let store = store_in(&file);
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        let turn = store.start_turn(&session.id, "hi").expect("a turn");
+
+        assert!(
+            !earlier.contains(&session.id),
+            "{} was used before",
+            session.id
+        );
+        assert!(!earlier.contains(&turn.id), "{} was used before", turn.id);
+    }
+
+    #[test]
+    fn the_session_written_in_last_is_listed_first() {
+        let store = store();
+        let older = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        let newer = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+
+        store.start_turn(&older.id, "Back to this").expect("a turn");
+
+        let ids: Vec<String> = store.list().projects[0]
+            .sessions
+            .iter()
+            .map(|session| session.id.clone())
+            .collect();
+        assert_eq!(ids, vec![older.id.clone(), newer.id]);
+        let listed = &store.list().projects[0].sessions[0];
+        assert!(listed.updated_at >= older.created_at);
+    }
+
+    #[test]
+    fn the_order_of_use_is_kept_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let (older, newer) = {
+            let store = store_in(&file);
+            let older = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            let newer = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            store.start_turn(&older.id, "Back to this").expect("a turn");
+            (older.id, newer.id)
+        };
+
+        let ids: Vec<String> = store_in(&file).list().projects[0]
+            .sessions
+            .iter()
+            .map(|session| session.id.clone())
+            .collect();
+
+        assert_eq!(ids, vec![older, newer]);
+    }
+
+    #[test]
+    fn an_opened_folder_is_still_a_project_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let project = {
+            let store = store_in(&file);
+            let project = store
+                .open_folder(Path::new(r"C:\Work\my-app"))
+                .expect("a project");
+            store
+                .create_session(&project.id, AgentKind::Demo)
+                .expect("a session");
+            project
+        };
+
+        let listing = store_in(&file).list().projects;
+
+        assert_eq!(listing.len(), 2);
+        assert_eq!(listing[0].project.id, playground::PLAYGROUND_ID);
+        assert_eq!(listing[1].project, project);
+        assert_eq!(listing[1].sessions.len(), 1);
+    }
+
+    #[test]
+    fn the_playground_is_where_it_is_on_this_start() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        drop(store_in(&file));
+
+        let moved = SessionStore::open(&file, &playground::describe(Path::new(r"D:\Moved")));
+
+        assert!(moved.problem.is_none());
+        assert_eq!(moved.store.list().projects[0].project.path, r"D:\Moved");
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_read_is_set_aside_and_the_store_starts_empty() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        std::fs::write(&file, "this is not a database, it is a note").expect("a broken file");
+        let now = OffsetDateTime::parse("2026-09-30T14:05:09Z", &Rfc3339).expect("a time");
+
+        let opened = SessionStore::open_at(
+            &file,
+            &playground::describe(Path::new(r"C:\Playground")),
+            now,
+        );
+
+        let kept = folder.path().join("sessions.invalid-20260930-140509.db");
+        let Some(OpenProblem::SetAside { kept_as, reason }) = opened.problem else {
+            panic!("the file is set aside, not {:?}", opened.problem);
+        };
+        assert_eq!(kept_as, kept);
+        assert!(!reason.is_empty());
+        assert_eq!(
+            std::fs::read_to_string(&kept).expect("the file is kept"),
+            "this is not a database, it is a note"
+        );
+        let listing = opened.store.list().projects;
+        assert_eq!(listing.len(), 1);
+        assert!(listing[0].sessions.is_empty());
+        // The new file is used from now on.
+        let session = opened
+            .store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        drop(opened.store);
+        assert_eq!(
+            store_in(&file).list().projects[0].sessions[0].id,
+            session.id
+        );
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_opened_leaves_the_sessions_in_memory() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        // A folder where the file should be: nothing can be opened or set aside there.
+        let file = folder.path().join("sessions.db");
+        std::fs::create_dir(&file).expect("a folder in the way");
+
+        let opened = SessionStore::open(&file, &playground::describe(Path::new(r"C:\Playground")));
+
+        assert!(
+            matches!(opened.problem, Some(OpenProblem::NotSaving { .. })),
+            "{:?}",
+            opened.problem
+        );
+        let session = opened
+            .store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session works in memory");
+        assert_eq!(opened.store.list().projects[0].sessions[0].id, session.id);
+    }
+
+    #[test]
+    fn finished_turns_added_at_once_are_there_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            let replies = (1..=500)
+                .map(|number| {
+                    (
+                        format!("Message number {number}"),
+                        vec![Item::Text {
+                            id: format!("reply-{number}"),
+                            text: format!("Reply number {number}"),
+                        }],
+                    )
+                })
+                .collect();
+            store
+                .add_finished_turns(&session.id, replies)
+                .expect("the turns are written");
+            session.id
+        };
+
+        let session = store_in(&file).session(&id).expect("the session");
+
+        assert_eq!(session.title.as_deref(), Some("Message number 1"));
+        assert_eq!(session.turns.len(), 500);
+        assert_eq!(session.turns[499].prompt, "Message number 500");
+        assert!(
+            session
+                .turns
+                .iter()
+                .all(|turn| turn.status == TurnStatus::Done)
         );
     }
 
@@ -633,11 +1220,14 @@ mod tests {
     fn events_for_things_that_are_gone_are_ignored() {
         let store = store();
 
-        store.apply(
-            "session-99",
-            &TurnEvent::Finished {
-                turn_id: "turn-1".into(),
-            },
+        assert_eq!(
+            store.apply(
+                "session-99",
+                &TurnEvent::Finished {
+                    turn_id: "turn-1".into(),
+                },
+            ),
+            Ok(())
         );
     }
 }

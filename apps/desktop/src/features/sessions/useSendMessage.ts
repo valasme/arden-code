@@ -3,7 +3,7 @@ import { Channel } from "@tauri-apps/api/core";
 import { useCallback } from "react";
 
 import { commands, type TurnEvent } from "@/ipc/bindings";
-import { projectsQuery, sessionQuery } from "@/ipc/queries";
+import { sessionListQuery, sessionQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 
@@ -39,7 +39,7 @@ export function useSendMessage() {
         const session = await commands.sendMessage(sessionId, text, channel);
         queryClient.setQueryData(key, session);
         for (const event of waiting.splice(0)) apply(event);
-        await queryClient.invalidateQueries({ queryKey: projectsQuery.queryKey });
+        await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
       } catch (error) {
         showErrorToast(toAppError(error));
       }

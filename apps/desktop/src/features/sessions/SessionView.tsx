@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
-import { projectsQuery, sessionQuery } from "@/ipc/queries";
+import { noSessions, sessionListQuery, sessionQuery } from "@/ipc/queries";
 import { toAppError } from "@/lib/errors";
 import { useRepliesStore } from "@/state/replies";
 
@@ -32,7 +32,7 @@ export function SessionView({ id }: { id: string }) {
   const { t } = useTranslation();
   const { run } = useCommands();
   const { data: session, error } = useQuery(sessionQuery(id));
-  const { data: projects = [] } = useQuery(projectsQuery);
+  const { data: list = noSessions } = useQuery(sessionListQuery);
   const send = useSendMessage();
   const transcript = useRef<HTMLElement>(null);
   const stuck = useRef(true);
@@ -109,7 +109,9 @@ export function SessionView({ id }: { id: string }) {
   }
   if (!session) return null;
 
-  const project = projects.find((listing) => listing.project.id === session.projectId)?.project;
+  const project = list.projects.find(
+    (listing) => listing.project.id === session.projectId,
+  )?.project;
   const context = t("sessions.context", {
     agent: t("sessions.demoAgent"),
     project:
