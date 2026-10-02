@@ -154,3 +154,26 @@ test("in a high contrast theme, borders and the focus outline stay visible", asy
   expect(look.outlineStyle).toBe("solid");
   expect(look.outlineColor).not.toBe(canvas);
 });
+
+test("in a high contrast theme, a link in an agent's reply has the theme's link color", async ({
+  page,
+}) => {
+  await page.emulateMedia({ forcedColors: "active", colorScheme: "dark" });
+  await openDesignSystem(page);
+
+  const link = page.getByRole("link", { name: "link", exact: true });
+  const colors = await link.evaluate((element) => {
+    // What the theme's system colors are, read from a sample drawn in each in turn.
+    const sample = document.createElement("span");
+    document.body.append(sample);
+    sample.style.color = "LinkText";
+    const linkText = getComputedStyle(sample).color;
+    sample.style.color = "Canvas";
+    const canvas = getComputedStyle(sample).color;
+    sample.remove();
+    return { link: getComputedStyle(element).color, linkText, canvas };
+  });
+
+  expect(colors.link, JSON.stringify(colors)).toBe(colors.linkText);
+  expect(colors.link).not.toBe(colors.canvas);
+});
