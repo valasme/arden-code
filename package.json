@@ -32,6 +32,7 @@
     "typos": "typos",
     "deny": "cargo deny check",
     "brand:check": "node scripts/check-brand-outputs.mjs",
+    "check:dev-restart": "node scripts/check-dev-restart.mjs",
     "licenses:build": "node scripts/generate-licenses.mjs",
     "licenses:check": "node scripts/generate-licenses.mjs --check",
     "test:visual": "pnpm --filter @arden/desktop test:visual",

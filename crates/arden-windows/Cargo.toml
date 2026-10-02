@@ -1,6 +1,6 @@
 [package]
 name = "arden-windows"
-description = "Windows integration for Arden Code: window placement, the system menu and Snap Layouts"
+description = "Windows integration for Arden Code: window placement, the system menu, Snap Layouts and processes"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -20,6 +20,7 @@ windows = { version = "0.62", features = [
   "Win32_Globalization",
   "Win32_Graphics_Gdi",
   "Win32_Security",
+  "Win32_System_Diagnostics_ToolHelp",
   "Win32_System_LibraryLoader",
   "Win32_System_Registry",
   "Win32_System_Threading",

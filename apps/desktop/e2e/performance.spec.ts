@@ -100,18 +100,13 @@ function report(): string {
   ].join("\n");
 }
 
-/** Two new, empty folders for the app's files and the web engine's: a first start on a machine. */
-function newFolders() {
-  return {
-    dataDir: mkdtempSync(path.join(tmpdir(), "arden-perf-data-")),
-    profile: mkdtempSync(path.join(tmpdir(), "arden-perf-webview-")),
-  };
+/** A new, empty folder for the app's files, the web engine's too: a first start on a machine. */
+function newDataDir() {
+  return mkdtempSync(path.join(tmpdir(), "arden-perf-data-"));
 }
 
-function removeFolders({ dataDir, profile }: ReturnType<typeof newFolders>) {
-  for (const folder of [dataDir, profile]) {
-    rmSync(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
-  }
+function removeDataDir(dataDir: string) {
+  rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }
 
 test.describe.configure({ mode: "serial" });
@@ -141,13 +136,13 @@ test.describe("performance of the release build", () => {
     const cold: number[] = [];
     const warm: number[] = [];
     for (let round = 0; round < rounds; round += 1) {
-      const folders = newFolders();
+      const dataDir = newDataDir();
       try {
         // A new web engine folder and new settings: the first start on a machine.
-        const first = await timer.start(folders.dataDir, folders.profile);
+        const first = await timer.start(dataDir);
         await timer.close(first);
         // Again, with everything the first start left behind.
-        const second = await timer.start(folders.dataDir, folders.profile);
+        const second = await timer.start(dataDir);
         await timer.close(second);
         cold.push(first.milliseconds);
         warm.push(second.milliseconds);
@@ -156,7 +151,7 @@ test.describe("performance of the release build", () => {
           `  round ${round + 1}: cold ${first.milliseconds} ms (page began after ${first.pageBeganAfter ?? "?"} ms), warm ${second.milliseconds} ms (page began after ${second.pageBeganAfter ?? "?"} ms)`,
         );
       } finally {
-        removeFolders(folders);
+        removeDataDir(dataDir);
       }
     }
     // The best start is what the app can do. A slower one only says the machine was busy at that
@@ -172,8 +167,8 @@ test.describe("performance of the release build", () => {
   });
 
   test("sits idle without using much memory or the processor", async () => {
-    const folders = newFolders();
-    const app = await timer.start(folders.dataDir, folders.profile);
+    const dataDir = newDataDir();
+    const app = await timer.start(dataDir);
     try {
       // The web engine is still starting helpers for a few seconds after the window is up.
       await new Promise((resolve) => setTimeout(resolve, 8000));
@@ -192,7 +187,7 @@ test.describe("performance of the release build", () => {
       check("idleCpuPercent");
     } finally {
       await timer.close(app);
-      removeFolders(folders);
+      removeDataDir(dataDir);
     }
   });
 });

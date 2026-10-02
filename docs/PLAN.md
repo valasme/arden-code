@@ -345,7 +345,7 @@ The theme follows Windows.
 - **Page error screens** offer Copy details, Reload and Open logs.
 - **Crashes** leave a report. On the next start, a dialog offers to export diagnostics.
 - **Web engine failure:** if the WebView2 process fails, the UI reloads and shows a notice.
-- **Reset Arden Code** (in Advanced) wipes settings, logs and caches after a confirmation. The uninstaller offers the same.
+- **Reset Arden Code** (in Advanced) wipes settings, logs and caches after a confirmation. The uninstaller offers the same. A reset that another program stops keeps the settings, says so, and finishes at the next start (ADR 0031).
 
 ### 6.9 Quality-of-life details
 

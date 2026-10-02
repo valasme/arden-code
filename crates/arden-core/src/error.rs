@@ -26,6 +26,9 @@ pub enum ErrorCode {
     /// A notification could not be shown.
     #[serde(rename = "ARD-APP-005")]
     NotificationNotShown,
+    /// A reset could not finish, so the settings were kept and the next start tries again.
+    #[serde(rename = "ARD-APP-006")]
+    ResetUnfinished,
     /// The settings could not be saved.
     #[serde(rename = "ARD-SET-001")]
     SettingsSave,
@@ -77,6 +80,7 @@ impl ErrorCode {
             Self::ResetApp => "ARD-APP-003",
             Self::LinkNotOpened => "ARD-APP-004",
             Self::NotificationNotShown => "ARD-APP-005",
+            Self::ResetUnfinished => "ARD-APP-006",
             Self::SettingsSave => "ARD-SET-001",
             Self::SettingsInvalid => "ARD-SET-002",
             Self::SettingsImport => "ARD-SET-003",

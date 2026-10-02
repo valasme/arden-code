@@ -28,20 +28,21 @@ function freePort(): Promise<number> {
   });
 }
 
-/** Runs the app with all of its files in a folder of its own, so tests never touch real data. */
-export function appEnvironment(
-  dataDir: string,
-  webViewProfile: string,
-  debugPort: number,
-): NodeJS.ProcessEnv {
-  return {
+/**
+ * Runs the app with all of its files in a folder of its own, so tests never touch real data. The web
+ * engine keeps its files in the app's `local` folder there, as on a real install.
+ */
+export function appEnvironment(dataDir: string, debugPort: number): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
     ...process.env,
     ARDEN_CODE_DATA_DIR: dataDir,
-    WEBVIEW2_USER_DATA_FOLDER: webViewProfile,
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
     // The engine ignores that variable on some machines, so the app is told the port as well.
     ARDEN_CODE_DEBUG_PORT: String(debugPort),
   };
+  // It would move the engine's files out of the app's folder.
+  delete env["WEBVIEW2_USER_DATA_FOLDER"];
+  return env;
 }
 
 /** The last lines of the app's own log files, to show what it was doing when a launch failed. */
@@ -147,18 +148,44 @@ async function waitForPage(browser: Browser): Promise<Page | undefined> {
 }
 /* oxlint-enable no-await-in-loop */
 
+/**
+ * Waits for the web engine on this profile folder to end. It goes on for a moment after the app has
+ * ended, with files in the app's folder open (ADR 0031), so a test that removes that folder, or
+ * starts the app on it again, must wait for it too. Whatever is left after a few seconds is ended.
+ */
+function waitForWebView(profile: string) {
+  const folder = profile.replaceAll("'", "''");
+  const script = `
+    $engine = { @(Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe'" |
+      Where-Object { $_.CommandLine -like '*${folder}*' }) }
+    $deadline = (Get-Date).AddSeconds(5)
+    while ((& $engine).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 100 }
+    foreach ($left in (& $engine)) {
+      Stop-Process -Id $left.ProcessId -Force -ErrorAction SilentlyContinue
+      Wait-Process -Id $left.ProcessId -Timeout 5 -ErrorAction SilentlyContinue
+    }
+  `;
+  try {
+    execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], {
+      stdio: "ignore",
+    });
+  } catch {
+    // PowerShell could not look. The test goes on, and finds out if the folder is still in use.
+  }
+}
+
 export interface RunningApp {
   process: ChildProcess;
   pid: number;
   /** The folder holding all of the app's files: settings, logs and crash reports. */
   dataDir: string;
-  /** The folder the web engine keeps its files in for this launch. */
+  /** The folder the web engine keeps its files in: the app's `local` folder, as on a real install. */
   webViewProfile: string;
   /** The port the web engine listens on for the Chrome DevTools Protocol. */
   debugPort: number;
   /** The app's web page, attached over the Chrome DevTools Protocol. */
   page: Page;
-  /** Closes the window the way the user would, and waits for the app to save and exit. */
+  /** Closes the window the way the user would, and waits for the app to save and exit, and its web engine to end. */
   close(): Promise<void>;
   /** Ends the app and everything it started. Safe to call after `close`. */
   kill(): void;
@@ -182,12 +209,11 @@ export async function launchApp({
   const ownedFolders: string[] = [];
   const data = dataDir ?? mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
   if (!dataDir) ownedFolders.push(data);
-  const profile = mkdtempSync(path.join(tmpdir(), "arden-e2e-webview-"));
-  ownedFolders.push(profile);
+  const profile = path.join(data, "local");
 
   const debugPort = await freePort();
   const app = spawn(executable, args, {
-    env: { ...appEnvironment(data, profile, debugPort), ...env },
+    env: { ...appEnvironment(data, debugPort), ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const output = collectOutput(app);
@@ -201,6 +227,7 @@ export async function launchApp({
     } catch {
       // Already gone.
     }
+    waitForWebView(profile);
   };
   const cleanUp = () => {
     // Cleaning up temporary folders is best effort. It must never hide a test's own error, and the

@@ -1,7 +1,7 @@
 //! Commands the UI can call that belong to no other area: the app and the system it runs on, its
 //! window, links and pages. Each one returns a typed `AppError` on failure (ADR 0008).
 
-use crate::notifications;
+use crate::{notifications, restart};
 use arden_core::AppInfo;
 use arden_core::error::{AppError, ErrorCode};
 use arden_core::links;
@@ -12,6 +12,7 @@ use arden_windows::preferences;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::path::PathBuf;
+use std::sync::{Mutex, PoisonError};
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
@@ -217,7 +218,8 @@ pub(crate) async fn choose_file(app: &AppHandle, kind: FileKind) -> Option<PathB
 }
 
 /// Wipes the settings, logs, crash reports and caches, and starts the app again. The wiping is done
-/// by the new start, because the logs and caches are in use until then.
+/// by the new start, once this one and its web engine have ended: the logs and caches are in use
+/// until then.
 ///
 /// # Errors
 ///
@@ -228,8 +230,38 @@ pub(crate) async fn choose_file(app: &AppHandle, kind: FileKind) -> Option<PathB
 #[specta::specta]
 pub fn reset_app(app: AppHandle, paths: State<'_, AppPaths>) -> Result<(), AppError> {
     reset::request(&paths)?;
-    app.request_restart();
+    restart::request(&app);
     Ok(())
+}
+
+/// A reset that could not finish at this start, for the page to tell the person about once.
+#[derive(Debug, Default)]
+pub struct ResetNotice(Mutex<Option<AppError>>);
+
+impl ResetNotice {
+    /// The notice for the outcome of a reset that was asked for: one only when it could not finish.
+    pub fn after(reset: &std::io::Result<bool>) -> Self {
+        Self(Mutex::new(reset.as_ref().err().map(|error| {
+            AppError::new(ErrorCode::ResetUnfinished).with_details(error.to_string())
+        })))
+    }
+}
+
+/// Says, once, that the reset the person asked for could not finish at this start.
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Tauri hands commands their state by value; every command returns a `Result` (ADR 0008).
+#[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
+#[tauri::command]
+#[specta::specta]
+pub fn take_reset_notice(notice: State<'_, ResetNotice>) -> Result<Option<AppError>, AppError> {
+    Ok(notice
+        .0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take())
 }
 
 /// Starts the app again, for a setting that needs it.
@@ -242,7 +274,7 @@ pub fn reset_app(app: AppHandle, paths: State<'_, AppPaths>) -> Result<(), AppEr
 #[tauri::command]
 #[specta::specta]
 pub fn restart_app(app: AppHandle) -> Result<(), AppError> {
-    app.request_restart();
+    restart::request(&app);
     Ok(())
 }
 

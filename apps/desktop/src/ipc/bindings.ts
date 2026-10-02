@@ -285,13 +285,28 @@ export const commands = {
 	resetSettings: () => __TAURI_INVOKE<Settings>("reset_settings"),
 	/**
 	 *  Wipes the settings, logs, crash reports and caches, and starts the app again. The wiping is done
-	 *  by the new start, because the logs and caches are in use until then.
+	 *  by the new start, once this one and its web engine have ended: the logs and caches are in use
+	 *  until then.
 	 * 
 	 *  # Errors
 	 * 
 	 *  `ARD-APP-003` when the request cannot be written.
 	 */
 	resetApp: () => __TAURI_INVOKE<null>("reset_app"),
+	/**
+	 *  Says, once, that the reset the person asked for could not finish at this start.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	takeResetNotice: () => __TAURI_INVOKE<{
+	code: ErrorCode,
+	/**  The key in the UI's language file that says what happened, why, and what to do. */
+	messageKey: string,
+	/**  Technical detail that helps find the cause. Never shown as the message itself. */
+	details: string | null,
+} | null>("take_reset_notice"),
 	/**
 	 *  Starts the app again, for a setting that needs it.
 	 * 
@@ -529,6 +544,8 @@ export type ErrorCode =
 "ARD-APP-004" | 
 /**  A notification could not be shown. */
 "ARD-APP-005" | 
+/**  A reset could not finish, so the settings were kept and the next start tries again. */
+"ARD-APP-006" | 
 /**  The settings could not be saved. */
 "ARD-SET-001" | 
 /**  The settings file was not valid, so the defaults are in use. */

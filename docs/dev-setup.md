@@ -66,6 +66,11 @@ pnpm bindings     # regenerate apps/desktop/src/ipc/bindings.ts after changing a
 
 The Tauri CLI rejects `CI=1`; if your shell sets it, run `$env:CI = "true"` first.
 
+In `pnpm dev`, the `arden-code.exe` that `tauri dev` runs is a restarter: it shows no window, runs the app as its
+child, and runs it again when the app restarts itself (a reset, or a setting that needs it). So the dev server
+keeps serving the new start, and `pnpm dev` ends when you close the app (ADR 0031). Task Manager shows two
+`arden-code.exe` processes for it.
+
 ## Checks and tools
 
 `pnpm check` runs formatting, linting, type-checking, unused-code and hard-coded-text checks, and every test
@@ -82,6 +87,10 @@ pnpm typos    # spelling
 
 `pnpm test:e2e` builds a debug app and drives it through WebView2 with Playwright.
 
+`pnpm check:dev-restart` runs `pnpm dev` through a restart and a reset, and checks that it keeps serving the app, and
+ends when the app is closed. CI cannot run it; run it after changing how the app restarts. It builds the app in
+`target\dev-check` (a few minutes the first time), and needs `pnpm dev` and Arden Code closed.
+
 `pnpm test:perf` builds the release app and measures start-up time, idle memory and CPU, and how long a
 settings change takes, against the plan's targets: see [performance.md](performance.md).
 
@@ -91,8 +100,8 @@ settings change takes, against the plan's targets: see [performance.md](performa
 
 ## Keeping test data separate
 
-Set `ARDEN_CODE_DATA_DIR` to a folder and Arden Code keeps all its files (settings, window position, later logs)
-inside it instead of in `%APPDATA%` and `%LOCALAPPDATA%`. The end-to-end tests use this so they never touch your
+Set `ARDEN_CODE_DATA_DIR` to a folder and Arden Code keeps all its files (settings, window position, logs, the web
+engine's cache) inside it instead of in `%APPDATA%` and `%LOCALAPPDATA%`. The end-to-end tests use this so they never touch your
 real data. Only one Arden Code can run at a time, so close your own copy before running `pnpm test:e2e`.
 
 ## Logs and crash reports

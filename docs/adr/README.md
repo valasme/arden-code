@@ -31,10 +31,11 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0021](0021-terminal-command.md) | The `arden-code` terminal command | Accepted |
 | [0022](0022-high-contrast-and-component-adjustments.md) | High contrast and component adjustments | Accepted |
 | [0023](0023-zoom-and-the-root-size.md) | Zoom, and the size of one rem | Accepted |
-| [0024](0024-areas-context-menus-and-browser-features.md) | Areas, context menus and the browser's own features | Accepted |
+| [0024](0024-areas-context-menus-and-browser-features.md) | Areas, context menus and the browser's own features | Accepted; resetting superseded by [0031](0031-restarts-and-reset.md) |
 | [0025](0025-diagnostics.md) | Diagnostics: logs, bundles and crash recovery | Accepted |
 | [0026](0026-markdown-links-and-images.md) | Markdown, links and images in an agent's reply | Accepted |
 | [0027](0027-long-sessions-and-announcements.md) | Long sessions, stopping a reply, and what screen readers hear | Accepted |
 | [0028](0028-process-supervisor.md) | The process supervisor and agent detection | Accepted |
 | [0029](0029-notifications.md) | Notifications | Accepted |
 | [0030](0030-updates.md) | Updates | Accepted |
+| [0031](0031-restarts-and-reset.md) | Starting the app again, and resetting it | Accepted |
