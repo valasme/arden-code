@@ -1,7 +1,7 @@
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
 
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/Toaster";
 import type { AppError } from "@/ipc/bindings";
 
 import { ResetNotice } from "./ResetNotice";

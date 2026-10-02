@@ -235,6 +235,8 @@
     "message": "This page does not exist."
   },
   "notices": {
+    "close": "Close notice",
+    "region": "Notices (Alt+T)",
     "title": "Notice ({{code}})",
     "uiError": "Something went wrong ({{code}})"
   },

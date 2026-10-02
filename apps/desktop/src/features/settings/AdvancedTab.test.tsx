@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/Toaster";
 import type { Settings } from "@/ipc/bindings";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";

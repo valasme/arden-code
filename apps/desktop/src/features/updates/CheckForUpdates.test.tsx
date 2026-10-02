@@ -4,7 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/Toaster";
 import type { CheckResult } from "@/ipc/bindings";
 import { AboutTab } from "@/features/settings/AboutTab";
 

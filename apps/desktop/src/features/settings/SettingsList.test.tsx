@@ -5,7 +5,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { z } from "zod";
 
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/Toaster";
 import type { SettingKey, Settings, SystemPreferences } from "@/ipc/bindings";
 import { defaultSettings } from "@/ipc/defaults.gen";
 import { expectNoAccessibilityViolations } from "@/test/axe";

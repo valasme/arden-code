@@ -76,6 +76,18 @@ for (const { name, colorScheme, forcedColors } of themes) {
   });
 }
 
+for (const { name, colorScheme, forcedColors } of themes) {
+  test(`a toast looks right in ${name}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, forcedColors });
+    await openDesignSystem(page);
+
+    // The error toast has every part: icon, title, description, action and close button.
+    await page.getByRole("button", { name: "Error", exact: true }).click();
+
+    await expect(page.locator("[data-sonner-toast]")).toHaveScreenshot(`toast-${name}.png`);
+  });
+}
+
 test("the design system page looks right at 200% zoom", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await showWholePage(page, "?zoom=2");
