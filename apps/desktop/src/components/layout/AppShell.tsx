@@ -69,7 +69,8 @@ export function AppShell() {
 
   return (
     <CommandsProvider>
-      <div className="flex h-full flex-col bg-background text-foreground">
+      {/* The window, whatever the page around it: the regions inside scroll, never the page. */}
+      <div className="flex h-dvh flex-col bg-background text-foreground">
         <TitleBar
           {...navigation}
           native={advanced.nativeTitleBar}

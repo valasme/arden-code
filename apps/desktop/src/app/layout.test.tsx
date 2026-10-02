@@ -54,6 +54,21 @@ describe("the window's regions", () => {
     await expectNoAccessibilityViolations(container);
   });
 
+  it("opens the sidebar with New session and closes it with Settings, each showing its shortcut", async () => {
+    renderApp();
+    const sidebar = await screen.findByRole("complementary", { name: "Sidebar" });
+    const controls = [...sidebar.querySelectorAll<HTMLElement>("button, a[href]")];
+
+    const first = controls[0];
+    const last = controls.at(-1);
+    expect(first).toHaveAccessibleName("New session");
+    expect(first).toHaveTextContent("Ctrl+N");
+    expect(last).toHaveAccessibleName("Settings");
+    expect(last).toHaveTextContent("Ctrl+,");
+    // A row, not an outlined button.
+    expect(getComputedStyle(first ?? sidebar).borderTopWidth).toBe("0px");
+  });
+
   it("collapses and expands the sidebar", async () => {
     const user = userEvent.setup();
     renderApp();

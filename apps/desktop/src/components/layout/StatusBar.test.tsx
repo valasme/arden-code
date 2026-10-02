@@ -11,6 +11,7 @@ import userEvent from "@testing-library/user-event";
 
 import type { UpdateStatus } from "@/ipc/bindings";
 import { expectNoAccessibilityViolations } from "@/test/axe";
+import { useRepliesStore } from "@/state/replies";
 import { settingsWith } from "@/test/settings";
 
 import { StatusBar } from "./StatusBar";
@@ -89,5 +90,31 @@ describe("The status bar and updates", () => {
     await screen.findByRole("button", { name: "Update ready: restart" });
 
     await expectNoAccessibilityViolations(container);
+  });
+});
+
+describe("The status bar and the open session", () => {
+  afterEach(() => {
+    useRepliesStore.setState(useRepliesStore.getInitialState());
+  });
+
+  it("says when the open session's agent is replying, without speaking it to screen readers", async () => {
+    startApp({ state: "idle" });
+    useRepliesStore.setState({ sessionId: "session-1", busy: true });
+    renderBar();
+
+    const replying = await screen.findByText("Demo agent: replying");
+    expect(replying).toBeVisible();
+    // The reply announcer speaks for the reply (ADR 0027); the bar must not say it twice.
+    expect(replying.closest("[aria-live], [role=status], output")).toBeNull();
+  });
+
+  it("says nothing about the agent when no reply is running", async () => {
+    startApp({ state: "idle" });
+    useRepliesStore.setState({ sessionId: "session-1", busy: false });
+    renderBar();
+
+    await screen.findByText("Version 0.1.0");
+    expect(screen.queryByText("Demo agent: replying")).toBeNull();
   });
 });

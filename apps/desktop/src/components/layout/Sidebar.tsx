@@ -4,6 +4,9 @@ import { useTranslation } from "react-i18next";
 
 import { SessionsNav } from "@/features/sessions/SessionsNav";
 
+import { ShortcutHint } from "./ShortcutHint";
+import { sidebarRow } from "./sidebarRow";
+
 /** Projects and their sessions, with the way into Settings. */
 export function Sidebar({ hidden }: { hidden: boolean }) {
   const { t } = useTranslation();
@@ -15,17 +18,17 @@ export function Sidebar({ hidden }: { hidden: boolean }) {
       hidden={hidden}
       className="flex h-full min-w-0 flex-col bg-sidebar text-sidebar-foreground"
     >
-      <nav aria-label={t("sidebar.navigation")} className="flex min-h-0 flex-1 flex-col gap-2 p-2">
+      <nav
+        aria-label={t("sidebar.navigation")}
+        className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto p-2"
+      >
         <SessionsNav />
       </nav>
       <div className="border-t border-sidebar-border p-2">
-        <Link
-          to="/settings/$tab"
-          params={{ tab: "general" }}
-          className="flex h-7 items-center gap-2 px-2 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&.active]:bg-sidebar-accent [&.active]:font-medium forced-colors:[&.active]:underline"
-        >
-          <SettingsIcon aria-hidden className="size-4" strokeWidth={1.5} />
+        <Link to="/settings/$tab" params={{ tab: "general" }} className={sidebarRow}>
+          <SettingsIcon aria-hidden className="size-4 text-muted-foreground" strokeWidth={1.5} />
           {t("sidebar.settings")}
+          <ShortcutHint command="settings.open" />
         </Link>
       </div>
     </aside>

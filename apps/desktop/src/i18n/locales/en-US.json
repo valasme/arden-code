@@ -540,6 +540,7 @@
   "statusBar": {
     "hideInspector": "Hide inspector",
     "hideSidebar": "Hide sidebar",
+    "replying": "{{agent}}: replying",
     "showInspector": "Show inspector",
     "showSidebar": "Show sidebar",
     "updateDownloading": "Downloading an update…",
