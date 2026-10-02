@@ -18,6 +18,7 @@ import { isSettingsPage, useSettingsPageStore } from "@/state/settingsPage";
 
 import { TitleBar } from "../TitleBar";
 import { Inspector } from "./Inspector";
+import { LayoutControls } from "./LayoutControls";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
 
@@ -93,6 +94,7 @@ export function AppShell() {
         <TitleBar
           {...navigation}
           native={advanced.nativeTitleBar}
+          controls={<LayoutControls />}
           onSearch={() => {
             openPalette(true);
           }}

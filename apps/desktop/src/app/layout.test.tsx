@@ -3,20 +3,34 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
+import { z } from "zod";
 
+import type { Settings } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { expectNoAccessibilityViolations } from "@/test/axe";
+import { settingsWith } from "@/test/settings";
 
 import { App } from "./App";
 
 import "@/styles/global.css";
 
-function renderApp(entries = ["/"], initialIndex = entries.length - 1) {
-  mockIPC((command) => {
+function renderApp(entries = ["/"], initialIndex = entries.length - 1, settings?: Settings) {
+  mockIPC((command, payload) => {
     if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
+    if (command === "change_setting") {
+      const { change } = z
+        .object({ change: z.object({ appearanceShowStatusBar: z.boolean() }) })
+        .parse(payload);
+      return settingsWith({ appearance: { showStatusBar: change.appearanceShowStatusBar } });
+    }
     throw new Error(`unexpected command: ${command}`);
   });
-  return render(<App history={createMemoryHistory({ initialEntries: entries, initialIndex })} />);
+  return render(
+    <App
+      history={createMemoryHistory({ initialEntries: entries, initialIndex })}
+      {...(settings ? { initialSettings: settings } : {})}
+    />,
+  );
 }
 
 beforeEach(async () => {
@@ -69,30 +83,6 @@ describe("the window's regions", () => {
     expect(getComputedStyle(first ?? sidebar).borderTopWidth).toBe("0px");
   });
 
-  it("collapses and expands the sidebar", async () => {
-    const user = userEvent.setup();
-    renderApp();
-    await screen.findByRole("main");
-
-    await user.click(screen.getByRole("button", { name: "Hide sidebar" }));
-    expect(screen.queryByRole("complementary", { name: "Sidebar" })).toBeNull();
-
-    await user.click(screen.getByRole("button", { name: "Show sidebar" }));
-    expect(screen.getByRole("complementary", { name: "Sidebar" })).toBeVisible();
-  });
-
-  it("shows and hides the inspector", async () => {
-    const user = userEvent.setup();
-    renderApp();
-    await screen.findByRole("main");
-
-    await user.click(screen.getByRole("button", { name: "Show inspector" }));
-    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "Hide inspector" }));
-    expect(screen.queryByRole("complementary", { name: "Inspector" })).toBeNull();
-  });
-
   it("resizes the sidebar with the keyboard", async () => {
     const user = userEvent.setup();
     renderApp();
@@ -123,7 +113,50 @@ describe("the window's regions", () => {
     await waitFor(() => {
       expect(useLayoutStore.getState().sidebarOpen).toBe(false);
     });
-    expect(screen.getByRole("button", { name: "Show sidebar" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Sidebar", pressed: false })).toBeVisible();
+  });
+});
+
+describe("the layout controls in the title bar", () => {
+  const withoutStatusBar = settingsWith({ appearance: { showStatusBar: false } });
+
+  it("hide and show the sidebar, with the status bar hidden", async () => {
+    const user = userEvent.setup();
+    renderApp(["/"], 0, withoutStatusBar);
+    await screen.findByRole("main");
+    expect(screen.queryByRole("contentinfo")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Sidebar", pressed: true }));
+    expect(screen.queryByRole("complementary", { name: "Sidebar" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Sidebar", pressed: false }));
+    expect(screen.getByRole("complementary", { name: "Sidebar" })).toBeVisible();
+  });
+
+  it("show and hide the inspector, with the status bar hidden", async () => {
+    const user = userEvent.setup();
+    renderApp(["/"], 0, withoutStatusBar);
+    await screen.findByRole("main");
+
+    await user.click(screen.getByRole("button", { name: "Inspector", pressed: false }));
+    expect(screen.getByRole("complementary", { name: "Inspector" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Inspector", pressed: true }));
+    expect(screen.queryByRole("complementary", { name: "Inspector" })).toBeNull();
+  });
+
+  it("bring a hidden status bar back, and hide it again", async () => {
+    const user = userEvent.setup();
+    renderApp(["/"], 0, withoutStatusBar);
+    await screen.findByRole("main");
+
+    await user.click(screen.getByRole("button", { name: "Status bar", pressed: false }));
+    expect(await screen.findByRole("contentinfo")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Status bar", pressed: true }));
+    await waitFor(() => {
+      expect(screen.queryByRole("contentinfo")).toBeNull();
+    });
   });
 });
 

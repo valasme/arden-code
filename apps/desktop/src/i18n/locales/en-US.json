@@ -27,6 +27,7 @@
     "settingsOpen": "Settings",
     "shortcutsShow": "Keyboard shortcuts",
     "sidebarToggle": "Toggle sidebar",
+    "statusBarToggle": "Toggle status bar",
     "windowFullScreen": "Full screen",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
@@ -542,11 +543,7 @@
     "settings": "Settings"
   },
   "statusBar": {
-    "hideInspector": "Hide inspector",
-    "hideSidebar": "Hide sidebar",
     "replying": "{{agent}}: replying",
-    "showInspector": "Show inspector",
-    "showSidebar": "Show sidebar",
     "updateDownloading": "Downloading an update…",
     "updateReady": "Update ready: restart",
     "version": "Version {{version}}"
@@ -555,11 +552,14 @@
     "back": "Back",
     "close": "Close",
     "forward": "Forward",
+    "inspector": "Inspector",
     "maximize": "Maximize",
     "menu": "Window menu",
     "minimize": "Minimize",
     "restore": "Restore",
-    "search": "Search or run a command"
+    "search": "Search or run a command",
+    "sidebar": "Sidebar",
+    "statusBar": "Status bar"
   },
   "welcome": {
     "line": "Real agents are coming. Try the Demo agent.",

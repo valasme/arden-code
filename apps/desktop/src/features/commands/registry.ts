@@ -6,6 +6,7 @@ import {
   ChevronsRightIcon,
   KeyboardIcon,
   MaximizeIcon,
+  PanelBottomIcon,
   PanelLeftIcon,
   PanelRightIcon,
   RotateCcwIcon,
@@ -26,6 +27,7 @@ export type CommandId =
   | "settings.open"
   | "sidebar.toggle"
   | "inspector.toggle"
+  | "statusBar.toggle"
   | "messageBox.focus"
   | "window.fullScreen"
   | "shortcuts.show"
@@ -52,6 +54,7 @@ export interface CommandDefinition {
     | "commands.settingsOpen"
     | "commands.sidebarToggle"
     | "commands.inspectorToggle"
+    | "commands.statusBarToggle"
     | "commands.messageBoxFocus"
     | "commands.windowFullScreen"
     | "commands.shortcutsShow"
@@ -118,6 +121,13 @@ export const commandDefinitions = [
     labelKey: "commands.inspectorToggle",
     icon: PanelRightIcon,
     shortcuts: ["Ctrl+J"],
+  },
+  {
+    id: "statusBar.toggle",
+    group: "view",
+    labelKey: "commands.statusBarToggle",
+    icon: PanelBottomIcon,
+    shortcuts: [],
   },
   {
     id: "messageBox.focus",

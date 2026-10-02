@@ -1,6 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { ArrowLeftIcon, ArrowRightIcon, SearchIcon } from "lucide-react";
-import { type ComponentProps, type MouseEvent, useEffect, useRef } from "react";
+import { type ComponentProps, type MouseEvent, type ReactNode, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { commands } from "@/ipc/bindings";
@@ -26,6 +26,8 @@ interface TitleBarProps {
   onSearch: () => void;
   /** Windows draws the title bar's frame, its window buttons and its menu, so the bar keeps only what is the app's. */
   native?: boolean;
+  /** Drawn before the window buttons: the layout controls (ADR 0033). */
+  controls?: ReactNode;
 }
 
 function showSystemMenu() {
@@ -36,7 +38,7 @@ function showSystemMenu() {
 }
 
 /** A button in the bar: 32 px high, with Windows-like hover and pressed states. */
-function BarButton({ className, ...props }: ComponentProps<"button">) {
+export function BarButton({ className, ...props }: ComponentProps<"button">) {
   return (
     <button
       type="button"
@@ -61,6 +63,7 @@ export function TitleBar({
   onForward,
   onSearch,
   native = false,
+  controls,
 }: TitleBarProps) {
   const { t } = useTranslation();
   const maximized = useWindowMaximized();
@@ -151,6 +154,8 @@ export function TitleBar({
           </Kbd>
         ) : null}
       </button>
+
+      {controls}
 
       {native ? null : (
         <div className="flex">

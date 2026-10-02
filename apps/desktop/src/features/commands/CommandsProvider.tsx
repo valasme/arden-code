@@ -91,7 +91,7 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
   const setPaletteOpen = useOverlayStore((state) => state.setPaletteOpen);
   const setCheatSheetOpen = useOverlayStore((state) => state.setCheatSheetOpen);
   const { appearance, keyboard } = useSettings();
-  const { zoom } = appearance;
+  const { zoom, showStatusBar } = appearance;
   const changed = keyboard.shortcuts;
   const { mutate: changeSetting } = useChangeSetting();
   // Stopping a reply is offered while one is running; the list of commands follows it.
@@ -119,6 +119,9 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
       },
       "sidebar.toggle": { run: toggleSidebar },
       "inspector.toggle": { run: toggleInspector },
+      "statusBar.toggle": {
+        run: () => changeSetting({ appearanceShowStatusBar: !showStatusBar }),
+      },
       // Only a session has a message box; the command waits for one.
       "messageBox.focus": {
         run: () => findMessageBox()?.focus(),
@@ -166,6 +169,7 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
     setPaletteOpen,
     setCheatSheetOpen,
     zoom,
+    showStatusBar,
     changeSetting,
     changed,
     replying,

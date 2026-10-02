@@ -224,7 +224,7 @@ The sidebar lists sessions grouped by project. The foundation ships one built-in
 ### 6.1 Window and layout
 
 ```text
-┌ Title bar: logo menu · back/forward · search / command palette ··········· ─ □ ✕ ┐
+┌ Title bar: logo menu · back/forward · search / command palette · ◧ ◨ ⬓ ··· ─ □ ✕ ┐
 ├ Sidebar ─────────┬ Main ─────────────────────────────────┬ Inspector (hidden) ─┤
 │ New session ^N   │      ┌ reading column, 45rem ┐        │ later: diffs,       │
 │ PROJECT          │      │ turns                 │        │ files, terminal     │
@@ -235,6 +235,7 @@ The sidebar lists sessions grouped by project. The foundation ships one built-in
 ```
 
 - **Panes:** the sidebar and the inspector can be collapsed and resized. Their sizes are remembered.
+- **Layout controls** ([ADR 0033](adr/0033-layout-controls-in-the-title-bar.md)): toggles for the sidebar, the inspector and the status bar sit in the title bar, as in VS Code, so they are on screen whatever is hidden. The status bar only says things.
 - **The look** ([ADR 0032](adr/0032-the-redesign.md)): a quiet frame in the spirit of Linear, the session view in the spirit of Claude Desktop. New session is the sidebar's first row and Settings its last, each with its shortcut; each project is a small label over its sessions. Every enabled control shows the pointer cursor, the window buttons included.
 - **No white flash:** the window starts hidden, with its background already in the current theme. It appears after the first frame is drawn.
 - **Window memory:** size, position, monitor and maximized state are restored. A position that would now be off-screen is corrected.
@@ -247,6 +248,7 @@ The sidebar lists sessions grouped by project. The foundation ships one built-in
   - Alt+Space opens the system menu
   - window buttons with accessible names
   - hover and pressed states that match Windows (Close turns red)
+  - the layout controls before the window buttons, kept with the title bar of Windows too
 - **Snap Layouts:** Windows 11 shows its layout picker when the pointer rests on Maximize, but only if the window reports that spot as a maximize button (`WM_NCHITTEST` returning `HTMAXBUTTON`).
   - Tauri doesn't support this yet ([tauri#4531](https://github.com/tauri-apps/tauri/issues/4531)).
   - So `arden-windows` places a small native overlay over our Maximize button. We write it ourselves rather than depend on a lightly used plugin.
@@ -293,6 +295,7 @@ The command palette is a wide panel high on the screen: a large search line, the
 | New session | Ctrl+N |
 | Settings | Ctrl+, |
 | Toggle sidebar / inspector | Ctrl+B / Ctrl+J |
+| Toggle status bar | none (title bar, command palette) |
 | Focus the message box | Ctrl+L |
 | Send / new line | Enter / Shift+Enter |
 | Stop the reply / close a dialog | Esc |
