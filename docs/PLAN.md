@@ -44,7 +44,6 @@ All of it is production-grade, so real features plug into it later.
 
 **Out of scope for the foundation:**
 - Real Claude Code or Codex sessions.
-- Saving sessions (no database yet).
 - Tray icon and background mode.
 - App links and Explorer integration.
 - Agent-specific colors.
@@ -85,7 +84,7 @@ All of it is production-grade, so real features plug into it later.
 - **Runtime:** Tauri 2.12 on WebView2 (evergreen, preinstalled on Windows 11). Tauri 3 is in alpha; revisit when it's stable.
 - **Installer:** NSIS, per user, so no admin prompt.
   - It adds `arden-code` to the user PATH (a checkbox, on by default).
-  - The uninstaller offers "Also delete my settings and logs".
+  - The uninstaller offers "Also delete my settings, sessions and logs".
 - **Updates:** `tauri-plugin-updater`, with signed update manifests on GitHub Releases. See §6.7 for the user-facing behavior.
   - The private key that signs updates lives in the maintainer's password manager and in a GitHub Actions secret.
   - **If that key is lost, existing installs can never auto-update again.**
@@ -183,20 +182,24 @@ Versions are current at the time of writing. Renovate keeps them fresh.
 
 ### 5.6 Data and persistence
 
-- The foundation stores only `settings.json`. Sessions live in memory and disappear on restart.
-- SQLite arrives with the first feature that needs persistence.
+- **Settings** live in `settings.json`, in the roaming data folder.
+- **Sessions**, with their projects and turns, live in `sessions.db`, a SQLite file in the local data folder ([ADR 0035](adr/0035-saving-sessions.md)).
+  - The list of sessions is read at start; a session's turns when it is first opened.
+  - A session is written when it is made or changed, and a turn when its message is sent and when its reply ends. Nothing is written while a reply streams.
+  - A reply cut off by closing the app comes back as failed. Ids are never reused.
+  - A file that cannot be read is set aside, and the app starts with no sessions (`ARD-AGT-004`).
 - Timestamps are stored in UTC and shown in local time.
 
 ### 5.7 Domain model
 
 ```text
 Project   a folder on disk, where agents work
-└─ Session   one conversation with one agent (Claude, Codex or Demo)
+└─ Session   one conversation with one agent (Claude, Codex or Demo): pinned, archived, or linked from another
    └─ Turn   the user's message plus the agent's reply
       └─ Item   text · thinking · tool call · file change · error · status marker
 ```
 
-The sidebar lists sessions grouped by project. The foundation ships one built-in project, the **Playground**: a real folder the app creates for itself on first launch, in `%LOCALAPPDATA%io.github.valasme.ardenplayground`. It holds the Demo agent sessions, so every project, including this one, is a folder on disk.
+The sidebar lists the pinned sessions, then each project's other sessions, the most recently used first (§6.11). The foundation ships one built-in project, the **Playground**: a real folder the app creates for itself on first launch, in `%LOCALAPPDATA%io.github.valasme.ardenplayground`. It holds the Demo agent sessions, so every project, including this one, is a folder on disk.
 
 ### 5.8 Agent integration (direction only; not built in the foundation)
 
@@ -227,8 +230,10 @@ The sidebar lists sessions grouped by project. The foundation ships one built-in
 ┌ Title bar: logo · menu · back/forward · search / command palette · ◧ ◨ ⬓   ─ □ ✕ ┐
 ├ Sidebar ─────────┬ Main ─────────────────────────────────┬ Inspector (hidden) ─┤
 │ New session ^N   │      ┌ reading column, 45rem ┐        │ later: diffs,       │
-│ PROJECT          │      │ turns                 │        │ files, terminal     │
+│ PINNED           │      │ turns                 │        │ files, terminal     │
+│ PROJECT          │      │                       │        │                     │
 │  sessions        │      │                       │        │                     │
+│ Archived         │      │                       │        │                     │
 │ Settings    ^,   │      └ message box ──────────┘        │                     │
 ├──────────────────┴───────────────────────────────────────┴─────────────────────┤
 └ Status bar: what the agent is doing · update status · version                    ┘
@@ -293,6 +298,9 @@ The command palette is a wide panel high on the screen: a large search line, the
 |---|---|
 | Command palette | Ctrl+K (also Ctrl+Shift+P) |
 | New session | Ctrl+N |
+| New linked session | Ctrl+Shift+N |
+| Rename session | F2 |
+| Pin, unpin, archive, unarchive or delete the session | none (menus, command palette) |
 | Settings | Ctrl+, |
 | Toggle sidebar / inspector | Ctrl+B / Ctrl+J |
 | Toggle status bar | none (title bar, command palette) |
@@ -356,7 +364,7 @@ The theme follows Windows.
 - **Page error screens** offer Copy details, Reload and Open logs.
 - **Crashes** leave a report. On the next start, a dialog offers to export diagnostics.
 - **Web engine failure:** if the WebView2 process fails, the UI reloads and shows a notice.
-- **Reset Arden Code** (in Advanced) wipes settings, logs and caches after a confirmation. The uninstaller offers the same. A reset that another program stops keeps the settings, says so, and finishes at the next start (ADR 0031).
+- **Reset Arden Code** (in Advanced) wipes settings, sessions, logs and caches after a confirmation. The uninstaller offers the same. A reset that another program stops keeps the settings, says so, and finishes at the next start (ADR 0031).
 
 ### 6.9 Quality-of-life details
 
@@ -371,6 +379,20 @@ The theme follows Windows.
 A hidden page shows every design token, the type scale, colors, each component in every state, icons and brand assets. It has theme, contrast and zoom toggles.
 
 It replaces a Figma library, stays in sync with the code, and is the target for screenshot (visual regression) tests.
+
+### 6.11 Managing sessions
+
+The decisions and the options turned down are in [ADR 0036](adr/0036-managing-sessions.md).
+
+- **One menu per session:** from the "…" button at the end of its row in the sidebar, a right click, Shift+F10 or the Menu key on the row, and the "…" button in the open session's header. Each action is also a command for the open session.
+- **Rename** opens a small dialog (F2). A name has 1 to 100 characters, and a renamed session keeps its name after its first message.
+- **Pin** keeps a session under Pinned at the top of the sidebar, across projects, in the order it was pinned.
+- **Archive** puts a session away: off the sidebar's lists, listed on the Archived sessions page, and read-only until it is unarchived. A notice offers Undo.
+- **Delete** removes a session for good, after a confirmation.
+- **New linked session** (Ctrl+Shift+N) starts an empty session in the same project, with the same agent, linked to the open one. Each shows the link to the other.
+- **Order:** each project's sessions with the most recently used first. A folder project with no sessions in its list is not shown; the Playground always is.
+- **On startup,** "Restore the last session" opens the session that was opened last, unless it was archived or deleted. A folder opened from the terminal wins.
+- **Focus:** when a row leaves a list, the focus moves to the next row, else the previous one, else New session.
 
 ## 7. Visual design
 
@@ -615,6 +637,7 @@ Every row is measured by CI on the release build, and the ones that can fail the
 - **Nothing is collected:** no telemetry, no analytics, no crash uploads.
 - **Automatic network access:** only the update check to GitHub Releases, which exposes your IP address to GitHub. It can be turned off.
 - **Everything else is user-initiated**, such as opening a link.
+- **Sessions stay on this computer,** in the local data folder. They are never part of a diagnostics bundle.
 - **Logs never leave the machine.** "Export diagnostics" creates a local zip, and you decide whether to share it.
 - **Redaction:** logs strip the user folder path, tokens and email addresses.
 

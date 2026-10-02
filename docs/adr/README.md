@@ -23,7 +23,7 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0013](0013-logging-diagnostics-crash-handling.md) | Logging, diagnostics and crash handling | Accepted |
 | [0014](0014-internationalization-and-input.md) | Internationalization and input | Accepted |
 | [0015](0015-accessibility-bar.md) | Accessibility bar | Accepted |
-| [0016](0016-chat-placeholder-and-demo-agent.md) | Chat placeholder and Demo agent | Accepted |
+| [0016](0016-chat-placeholder-and-demo-agent.md) | Chat placeholder and Demo agent | Accepted; storage superseded by [0035](0035-saving-sessions.md) |
 | [0017](0017-agent-integration-direction.md) | Agent integration direction | Accepted |
 | [0018](0018-distribution-updates-signing.md) | Distribution, updates and code signing | Accepted |
 | [0019](0019-testing-and-quality-gates.md) | Testing and quality gates | Accepted |
@@ -42,3 +42,5 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0032](0032-the-redesign.md) | The redesign: a calm frame, and the session in the middle | Accepted |
 | [0033](0033-layout-controls-in-the-title-bar.md) | Layout controls in the title bar | Accepted |
 | [0034](0034-the-logo-and-the-window-menu.md) | The logo and the window menu, apart | Accepted |
+| [0035](0035-saving-sessions.md) | Saving sessions | Accepted |
+| [0036](0036-managing-sessions.md) | Managing sessions | Accepted |

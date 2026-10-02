@@ -18,6 +18,18 @@ _Avoid_: sandbox, demo project
 An ongoing exchange of turns between the user and one agent, inside one project.
 _Avoid_: chat, conversation, thread
 
+**Pinned session**:
+A session kept at the top of the sidebar, above the projects, until it is unpinned.
+_Avoid_: favorite, starred
+
+**Archived session**:
+A session put away: off the sidebar's lists and read-only until it is unarchived.
+_Avoid_: hidden, closed
+
+**Linked session**:
+A session started from another one, which it keeps a link back to.
+_Avoid_: fork, branch, child session, follow-up
+
 **Turn**:
 One message from the user together with the agent's reply to it, whether the reply finished, was stopped or failed.
 _Avoid_: exchange, round
