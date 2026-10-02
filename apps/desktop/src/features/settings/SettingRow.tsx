@@ -34,7 +34,9 @@ export function SettingRow({
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
       <div className="flex min-w-0 flex-[1_1_12rem] flex-col gap-0.5">
-        <div className="flex items-center gap-2">
+        {/* The line is as tall as the reset button even without it, so the button appearing after a
+            change pushes nothing down. It goes under the name when the column is too narrow for both. */}
+        <div className="flex min-h-6 flex-wrap items-center gap-x-2">
           <h2 id={`${id}-label`} className="text-sm font-medium">
             {label}
           </h2>

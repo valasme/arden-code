@@ -487,4 +487,44 @@ describe("The layout of a tab", () => {
     );
     expect(toggle.getBoundingClientRect().top).toBeLessThan(name.getBoundingClientRect().bottom);
   });
+
+  it("moves nothing when a change makes a setting's reset button appear", async () => {
+    startApp();
+    const user = userEvent.setup();
+    renderTab("appearance");
+    const ligatures = await screen.findByRole("switch", { name: "Code ligatures" });
+    const list = screen.getByRole("list", { name: "Appearance" });
+    const layout = () =>
+      [...list.querySelectorAll("h2, p, [role=radio], [role=switch], [role=slider]")].map(
+        (element) => {
+          const { x, y, width, height } = element.getBoundingClientRect();
+          return { x, y, width, height };
+        },
+      );
+    const before = layout();
+
+    await user.click(ligatures);
+
+    await screen.findByRole("button", { name: "Reset Code ligatures to its default" });
+    expect(layout()).toEqual(before);
+  });
+
+  it("keeps the options of a choice the same size, whichever is chosen", async () => {
+    startApp();
+    const user = userEvent.setup();
+    renderTab("appearance");
+    const theme = await screen.findByRole("radiogroup", { name: "Theme" });
+    const widths = () =>
+      within(theme)
+        .getAllByRole("radio")
+        .map((option) => option.getBoundingClientRect().width);
+    const before = widths();
+
+    await user.click(within(theme).getByRole("radio", { name: "Dark" }));
+
+    await waitFor(() => {
+      expect(within(theme).getByRole("radio", { name: "Dark" })).toBeChecked();
+    });
+    expect(widths()).toEqual(before);
+  });
 });

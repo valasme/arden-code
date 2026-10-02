@@ -25,11 +25,14 @@ function openPage(page: ProjectPage) {
   });
 }
 
-/** One line of the "about this build" list: what it is, and its value. */
+/**
+ * One line of the "about this build" list: what it is, and its value, which goes under it when the
+ * column is too narrow for both.
+ */
 function Fact({ label, value }: { label: string; value: string | undefined }) {
   return (
-    <div className="flex gap-2 py-1 text-sm">
-      <dt className="w-28 shrink-0 text-muted-foreground">{label}</dt>
+    <div className="flex flex-wrap gap-x-2 py-1 text-sm">
+      <dt className="w-28 max-w-full shrink-0 text-muted-foreground">{label}</dt>
       <dd className="min-w-0 break-words tabular-nums">{value ?? "…"}</dd>
     </div>
   );
