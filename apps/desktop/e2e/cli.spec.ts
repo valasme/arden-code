@@ -54,7 +54,7 @@ test.describe("the arden-code terminal command", () => {
     try {
       const sidebar = app.page.getByRole("complementary", { name: "Sidebar" });
       await expect(sidebar.getByRole("heading", { name: "my-project" })).toBeVisible();
-      await expect(app.page.getByRole("textbox", { name: "Message" })).toBeVisible();
+      await expect(app.page.getByRole("main", { name: "Session" })).toBeVisible();
       // The heading says where the folder is, in case two projects have the same name.
       await expect(sidebar.getByRole("heading", { name: "my-project" })).toHaveAttribute(
         "title",
@@ -79,7 +79,7 @@ test.describe("the arden-code terminal command", () => {
       await expect(sidebar.getByRole("heading", { name: "my-project" })).toBeVisible({
         timeout: 20_000,
       });
-      await expect(app.page.getByRole("textbox", { name: "Message" })).toBeVisible();
+      await expect(app.page.getByRole("main", { name: "Session" })).toBeVisible();
       await app.page.waitForTimeout(1000);
       expect(countAppProcesses()).toBe(before);
     } finally {

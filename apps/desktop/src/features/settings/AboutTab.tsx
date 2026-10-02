@@ -199,7 +199,7 @@ export function AboutTab() {
         <p className="mt-1 text-xs text-muted-foreground">{t("settings.about.privacy.detail")}</p>
         <Button
           variant="link"
-          className="px-0"
+          className="h-auto px-0 text-start whitespace-normal"
           onClick={() => {
             openPage("privacy");
           }}

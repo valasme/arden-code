@@ -203,6 +203,24 @@ describe("the Settings page", () => {
     await page.viewport(1280, 800);
   });
 
+  it.each(["appearance", "keyboard", "advanced", "about"])(
+    "fits the %s tab in the smallest window at double zoom, without scrolling sideways",
+    async (tab) => {
+      startApp({ settings: settingsWith({ appearance: { zoom: 200, followTextSize: false } }) });
+      await page.viewport(500, 560);
+      renderApp(`/settings/${tab}`);
+      const title = await screen.findByRole("heading", { level: 1 });
+      const scroller = title.closest("main");
+      if (!scroller) throw new Error("the settings page is not in a main region");
+
+      await waitFor(() => {
+        expect(root.style.getPropertyValue("--zoom")).toBe("2");
+      });
+      expect(scroller.scrollWidth).toBeLessThanOrEqual(scroller.clientWidth);
+      await page.viewport(1280, 800);
+    },
+  );
+
   it("moves between tabs", async () => {
     startApp();
     renderApp("/settings/general");

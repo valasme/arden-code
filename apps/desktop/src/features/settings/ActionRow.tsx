@@ -12,7 +12,7 @@ interface ActionRowProps {
 export function ActionRow({ id, label, description, button, onClick }: ActionRowProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-border px-4 py-3 last:border-b-0">
-      <div className="flex min-w-48 flex-1 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-[1_1_12rem] flex-col gap-0.5">
         <h3 id={`${id}-label`} className="text-sm font-medium">
           {label}
         </h3>

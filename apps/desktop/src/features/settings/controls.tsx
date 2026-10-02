@@ -88,7 +88,7 @@ export function RangeControl({
         aria-labelledby={`${id}-label`}
         aria-describedby={`${id}-description`}
         getValueText={format}
-        className="w-40"
+        className="w-40 min-w-16 shrink"
         min={min}
         max={max}
         step={step}

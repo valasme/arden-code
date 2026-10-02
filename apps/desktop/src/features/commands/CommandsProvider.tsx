@@ -1,16 +1,15 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useMemo } from "react";
 
 import { useChangeSetting, useSettings } from "@/features/settings/useSettings";
 import { nextZoom } from "@/features/settings/zoom";
 import { commands as ipc } from "@/ipc/bindings";
 import { defaultSettings } from "@/ipc/defaults.gen";
-import { projectsQuery } from "@/ipc/queries";
 import { reportFailure, showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
+import { useStartSession } from "@/features/sessions/useStartSession";
 import { moveToArea } from "./areas";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
 import { useLayoutStore } from "@/state/layout";
@@ -95,19 +94,10 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
   const { zoom } = appearance;
   const changed = keyboard.shortcuts;
   const { mutate: changeSetting } = useChangeSetting();
-  const queryClient = useQueryClient();
   // Stopping a reply is offered while one is running; the list of commands follows it.
   const replying = useRepliesStore((state) => state.busy);
 
-  const startSession = useCallback(async () => {
-    try {
-      const session = await ipc.createSession();
-      await queryClient.invalidateQueries({ queryKey: projectsQuery.queryKey });
-      await navigate({ to: "/session/$id", params: { id: session.id } });
-    } catch (error) {
-      showErrorToast(toAppError(error));
-    }
-  }, [navigate, queryClient]);
+  const startSession = useStartSession();
 
   const value = useMemo<Commands>(() => {
     const actions: Record<CommandId, { run: () => void; enabled?: () => boolean }> = {

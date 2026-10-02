@@ -33,7 +33,7 @@ export function SettingRow({
 
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
-      <div className="flex min-w-48 flex-1 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-[1_1_12rem] flex-col gap-0.5">
         <div className="flex items-center gap-2">
           <h2 id={`${id}-label`} className="text-sm font-medium">
             {label}

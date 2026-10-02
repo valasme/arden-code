@@ -170,8 +170,9 @@ export function KeyboardTab() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input
+          className="min-w-32 flex-1"
           type="search"
           aria-label={t("settings.keyboard.search.label")}
           placeholder={t("settings.keyboard.search.placeholder")}
@@ -194,151 +195,158 @@ export function KeyboardTab() {
       {visible.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("settings.keyboard.empty")}</p>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-muted-foreground">
-              <th scope="col" className="py-1 font-medium">
-                {t("settings.keyboard.command")}
-              </th>
-              <th scope="col" className="py-1 font-medium">
-                {t("settings.keyboard.shortcuts")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((command) => {
-              const isRecording = recording?.command === command.id;
-              return (
-                <tr key={command.id} className="border-t border-border align-top">
-                  <th scope="row" className="py-2 pr-4 text-left font-normal">
-                    {command.label}
-                  </th>
-                  <td className="py-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {command.shortcuts.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">
-                          {t("settings.keyboard.none")}
-                        </span>
-                      ) : null}
-                      {command.shortcuts.map((shortcut, slot) => {
-                        const here = { command: command.id, slot };
-                        const active = isRecording && recording.slot === slot;
-                        return (
-                          <span key={shortcut} className="flex items-center">
-                            <button
-                              type="button"
-                              id={idOf(here)}
-                              className={chipClass}
-                              aria-label={t("settings.keyboard.change", {
-                                shortcut: formatShortcut(shortcut),
-                                command: command.label,
-                              })}
-                              aria-pressed={active}
-                              onClick={() => {
-                                setNotice(undefined);
-                                setRecording(here);
-                              }}
-                            >
-                              {active ? t("settings.keyboard.pressKeys") : formatShortcut(shortcut)}
-                            </button>
-                            <button
-                              type="button"
-                              className="grid size-6 place-items-center hover:bg-muted"
-                              aria-label={t("settings.keyboard.remove", {
-                                shortcut: formatShortcut(shortcut),
-                                command: command.label,
-                              })}
-                              onClick={() => {
-                                void save(
-                                  command.id,
-                                  command.shortcuts.filter((_, index) => index !== slot),
-                                  idOf({ command: command.id, slot: "new" }),
-                                );
-                              }}
-                            >
-                              <XIcon aria-hidden className="size-3" />
-                            </button>
+        // A narrow window scrolls the table sideways, not the whole page.
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-start text-xs text-muted-foreground">
+                <th scope="col" className="py-1 font-medium">
+                  {t("settings.keyboard.command")}
+                </th>
+                <th scope="col" className="py-1 font-medium">
+                  {t("settings.keyboard.shortcuts")}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((command) => {
+                const isRecording = recording?.command === command.id;
+                return (
+                  <tr key={command.id} className="border-t border-border align-top">
+                    <th scope="row" className="py-2 pr-4 text-left font-normal">
+                      {command.label}
+                    </th>
+                    <td className="py-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {command.shortcuts.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">
+                            {t("settings.keyboard.none")}
                           </span>
-                        );
-                      })}
-                      {command.shortcuts.length < MAX_SHORTCUTS_PER_COMMAND ? (
-                        <button
-                          type="button"
-                          id={idOf({ command: command.id, slot: "new" })}
-                          className="grid size-6 place-items-center hover:bg-muted"
-                          aria-label={t("settings.keyboard.add", { command: command.label })}
-                          aria-pressed={isRecording && recording.slot === "new"}
-                          onClick={() => {
-                            setNotice(undefined);
-                            setRecording({ command: command.id, slot: "new" });
-                          }}
-                        >
-                          {isRecording && recording.slot === "new" ? (
-                            <span className="px-1 text-xs">{t("settings.keyboard.pressKeys")}</span>
-                          ) : (
-                            <PlusIcon aria-hidden className="size-3" />
-                          )}
-                        </button>
-                      ) : null}
-                      {command.modified ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={t("settings.keyboard.resetRow", { command: command.label })}
-                          onClick={() => {
-                            resetShortcuts.mutate(command.id);
-                          }}
-                        >
-                          {t("settings.reset")}
-                        </Button>
-                      ) : null}
-                    </div>
-                    {isRecording ? (
-                      <output className="mt-1 block text-xs text-muted-foreground">
-                        {notice?.kind === "problem" ? (
-                          <p>
-                            {t(`settings.keyboard.problems.${notice.problem}`, {
-                              shortcut: formatShortcut(notice.shortcut),
-                            })}
-                          </p>
                         ) : null}
-                        {notice?.kind === "conflict" ? (
-                          <div className="flex flex-wrap items-center gap-2">
+                        {command.shortcuts.map((shortcut, slot) => {
+                          const here = { command: command.id, slot };
+                          const active = isRecording && recording.slot === slot;
+                          return (
+                            <span key={shortcut} className="flex items-center">
+                              <button
+                                type="button"
+                                id={idOf(here)}
+                                className={chipClass}
+                                aria-label={t("settings.keyboard.change", {
+                                  shortcut: formatShortcut(shortcut),
+                                  command: command.label,
+                                })}
+                                aria-pressed={active}
+                                onClick={() => {
+                                  setNotice(undefined);
+                                  setRecording(here);
+                                }}
+                              >
+                                {active
+                                  ? t("settings.keyboard.pressKeys")
+                                  : formatShortcut(shortcut)}
+                              </button>
+                              <button
+                                type="button"
+                                className="grid size-6 place-items-center hover:bg-muted"
+                                aria-label={t("settings.keyboard.remove", {
+                                  shortcut: formatShortcut(shortcut),
+                                  command: command.label,
+                                })}
+                                onClick={() => {
+                                  void save(
+                                    command.id,
+                                    command.shortcuts.filter((_, index) => index !== slot),
+                                    idOf({ command: command.id, slot: "new" }),
+                                  );
+                                }}
+                              >
+                                <XIcon aria-hidden className="size-3" />
+                              </button>
+                            </span>
+                          );
+                        })}
+                        {command.shortcuts.length < MAX_SHORTCUTS_PER_COMMAND ? (
+                          <button
+                            type="button"
+                            id={idOf({ command: command.id, slot: "new" })}
+                            className="grid size-6 place-items-center hover:bg-muted"
+                            aria-label={t("settings.keyboard.add", { command: command.label })}
+                            aria-pressed={isRecording && recording.slot === "new"}
+                            onClick={() => {
+                              setNotice(undefined);
+                              setRecording({ command: command.id, slot: "new" });
+                            }}
+                          >
+                            {isRecording && recording.slot === "new" ? (
+                              <span className="px-1 text-xs">
+                                {t("settings.keyboard.pressKeys")}
+                              </span>
+                            ) : (
+                              <PlusIcon aria-hidden className="size-3" />
+                            )}
+                          </button>
+                        ) : null}
+                        {command.modified ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={t("settings.keyboard.resetRow", { command: command.label })}
+                            onClick={() => {
+                              resetShortcuts.mutate(command.id);
+                            }}
+                          >
+                            {t("settings.reset")}
+                          </Button>
+                        ) : null}
+                      </div>
+                      {isRecording ? (
+                        <output className="mt-1 block text-xs text-muted-foreground">
+                          {notice?.kind === "problem" ? (
                             <p>
-                              {t("settings.keyboard.conflict", {
+                              {t(`settings.keyboard.problems.${notice.problem}`, {
                                 shortcut: formatShortcut(notice.shortcut),
-                                command: named(notice.other),
                               })}
                             </p>
-                            <Button
-                              size="sm"
-                              onClick={() => {
-                                void replaceOther(notice);
-                              }}
-                            >
-                              {t("settings.keyboard.replace")}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                stopRecording(idOf(recording));
-                              }}
-                            >
-                              {t("settings.keyboard.cancel")}
-                            </Button>
-                          </div>
-                        ) : (
-                          <p>{t("settings.keyboard.recording")}</p>
-                        )}
-                      </output>
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                          ) : null}
+                          {notice?.kind === "conflict" ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p>
+                                {t("settings.keyboard.conflict", {
+                                  shortcut: formatShortcut(notice.shortcut),
+                                  command: named(notice.other),
+                                })}
+                              </p>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  void replaceOther(notice);
+                                }}
+                              >
+                                {t("settings.keyboard.replace")}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  stopRecording(idOf(recording));
+                                }}
+                              >
+                                {t("settings.keyboard.cancel")}
+                              </Button>
+                            </div>
+                          ) : (
+                            <p>{t("settings.keyboard.recording")}</p>
+                          )}
+                        </output>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

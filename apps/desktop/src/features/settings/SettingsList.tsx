@@ -12,7 +12,7 @@ function CodePreview() {
       <figcaption className="mb-2 text-xs text-muted-foreground">
         {t("settings.appearance.codePreview")}
       </figcaption>
-      <pre className="whitespace-pre-wrap">
+      <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">
         <code>{"const total = items.filter((item) => item.id !== 0 && item.ok).length;"}</code>
       </pre>
     </figure>

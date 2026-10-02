@@ -1,5 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { Mark } from "@/components/brand/Logo";
@@ -7,13 +5,10 @@ import { Kbd } from "@/components/ui/kbd";
 import { useShortcutsOf } from "@/features/commands/CommandsProvider";
 import type { CommandId } from "@/features/commands/registry";
 import { formatShortcut } from "@/features/commands/shortcuts";
-import { commands } from "@/ipc/bindings";
-import { projectsQuery } from "@/ipc/queries";
-import { showErrorToast } from "@/lib/errorToasts";
-import { toAppError } from "@/lib/errors";
 
 import { MessageBox } from "./MessageBox";
 import { useSendMessage } from "./useSendMessage";
+import { useStartSession } from "./useStartSession";
 
 function Hint({ command, label }: { command: CommandId; label: string }) {
   const [shortcut] = useShortcutsOf(command);
@@ -33,20 +28,12 @@ function Hint({ command, label }: { command: CommandId; label: string }) {
  */
 export function Welcome() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const startSession = useStartSession();
   const send = useSendMessage();
 
   const start = async (text: string) => {
-    let id: string;
-    try {
-      ({ id } = await commands.createSession());
-    } catch (error) {
-      showErrorToast(toAppError(error));
-      return false;
-    }
-    await queryClient.invalidateQueries({ queryKey: projectsQuery.queryKey });
-    await navigate({ to: "/session/$id", params: { id } });
+    const id = await startSession();
+    if (id === undefined) return false;
     await send(id, text);
     return true;
   };
