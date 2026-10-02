@@ -9,6 +9,11 @@
     "shortcut": "Shortcut",
     "title": "Keyboard shortcuts"
   },
+  "commandGroups": {
+    "goTo": "Go to",
+    "session": "Session",
+    "view": "View"
+  },
   "commands": {
     "focusNext": "Move to the next area",
     "focusPrevious": "Move to the previous area",
@@ -235,6 +240,11 @@
   "palette": {
     "description": "Search for a command and press Enter to run it.",
     "empty": "No command matches.",
+    "hints": {
+      "close": "to close",
+      "move": "to move",
+      "run": "to run"
+    },
     "placeholder": "Type a command",
     "title": "Command palette"
   },
@@ -544,8 +554,7 @@
     "menu": "Window menu",
     "minimize": "Minimize",
     "restore": "Restore",
-    "search": "Search or run a command",
-    "searchShortcut": "Ctrl+K"
+    "search": "Search or run a command"
   },
   "welcome": {
     "line": "Real agents are coming. Try the Demo agent.",

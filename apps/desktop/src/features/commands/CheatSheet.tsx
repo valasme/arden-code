@@ -7,12 +7,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Kbd } from "@/components/ui/kbd";
 import { useOverlayStore } from "@/state/overlays";
 
 import { useCommands } from "./CommandsProvider";
+import { commandGroups } from "./registry";
 import { formatShortcut } from "./shortcuts";
 
-/** Every shortcut and the command it runs (Ctrl+/). */
+/** Every shortcut and the command it runs (Ctrl+/), in the command palette's groups. */
 export function CheatSheet() {
   const { t } = useTranslation();
   const open = useOverlayStore((state) => state.cheatSheetOpen);
@@ -21,47 +23,47 @@ export function CheatSheet() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[36rem]">
         <DialogHeader>
           <DialogTitle>{t("cheatSheet.title")}</DialogTitle>
           <DialogDescription>{t("cheatSheet.description")}</DialogDescription>
         </DialogHeader>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-muted-foreground">
-              <th scope="col" className="py-1 font-medium">
-                {t("cheatSheet.command")}
-              </th>
-              <th scope="col" className="py-1 font-medium">
-                {t("cheatSheet.shortcut")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {commands.map((command) => (
-              <tr key={command.id} className="border-t border-border">
-                <th scope="row" className="py-1.5 pr-4 text-left font-normal">
-                  {t(command.labelKey)}
-                </th>
-                <td className="py-1.5">
-                  <span className="flex flex-wrap gap-2">
-                    {command.shortcuts.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">{t("cheatSheet.none")}</span>
-                    ) : null}
-                    {command.shortcuts.map((shortcut) => (
-                      <kbd
-                        key={shortcut}
-                        className="border border-border bg-muted px-1.5 py-0.5 font-sans text-xs"
-                      >
-                        {formatShortcut(shortcut)}
-                      </kbd>
-                    ))}
-                  </span>
-                </td>
+        {commandGroups.map((group) => (
+          <table key={group} className="w-full text-sm">
+            <caption className="pb-1 text-start text-2xs font-medium text-muted-foreground">
+              {t(`commandGroups.${group}`)}
+            </caption>
+            <thead className="sr-only">
+              <tr>
+                <th scope="col">{t("cheatSheet.command")}</th>
+                <th scope="col">{t("cheatSheet.shortcut")}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {commands
+                .filter((command) => command.group === group)
+                .map((command) => (
+                  <tr key={command.id} className="border-t border-border">
+                    <th scope="row" className="py-1.5 pe-4 text-start font-normal">
+                      {t(command.labelKey)}
+                    </th>
+                    <td className="py-1.5">
+                      <span className="flex flex-wrap justify-end gap-1.5">
+                        {command.shortcuts.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">
+                            {t("cheatSheet.none")}
+                          </span>
+                        ) : null}
+                        {command.shortcuts.map((shortcut) => (
+                          <Kbd key={shortcut}>{formatShortcut(shortcut)}</Kbd>
+                        ))}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        ))}
       </DialogContent>
     </Dialog>
   );

@@ -303,3 +303,16 @@ describe("The pointer", () => {
     );
   });
 });
+
+describe("The field that opens the command palette", () => {
+  it("is a filled strip with no border, with the palette's shortcut drawn as a key", () => {
+    startWindow();
+    render(<TitleBar {...navigation} />);
+    const field = screen.getByRole("button", { name: /Search or run a command/u });
+    const bar = screen.getByRole("banner");
+
+    expect(getComputedStyle(field).borderTopWidth).toBe("0px");
+    expect(getComputedStyle(field).backgroundColor).not.toBe(getComputedStyle(bar).backgroundColor);
+    expect(field.querySelector("kbd")).toHaveTextContent("Ctrl+K");
+  });
+});

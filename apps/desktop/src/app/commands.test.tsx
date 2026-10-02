@@ -103,6 +103,58 @@ describe("the command palette", () => {
     expect(dialog).toBeVisible();
   });
 
+  it("lists the commands in their groups, with their shortcuts drawn as keys", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+
+    await animationsDone(palette);
+
+    const session = within(palette).getByRole("group", { name: "Session" });
+    expect(within(session).getByRole("option", { name: /New session/ })).toBeVisible();
+    const goTo = within(palette).getByRole("group", { name: "Go to" });
+    expect(within(goTo).getByRole("option", { name: /Settings/ })).toBeVisible();
+    const view = within(palette).getByRole("group", { name: "View" });
+    const toggle = within(view).getByRole("option", { name: /Toggle sidebar/ });
+    expect(toggle.querySelector("kbd")).toHaveTextContent("Ctrl+B");
+  });
+
+  it("says along the bottom which keys move, run and close", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+
+    await animationsDone(palette);
+
+    expect(within(palette).getByText("to move")).toBeVisible();
+    expect(within(palette).getByText("to run")).toBeVisible();
+    expect(within(palette).getByText("to close")).toBeVisible();
+  });
+
+  it("is wide, and sits high on the screen", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+    await animationsDone(palette);
+
+    const box = palette.getBoundingClientRect();
+    // The test window is 1280 × 800: 40rem wide, a fifth of the way down.
+    expect(box.width).toBe(640);
+    expect(box.top).toBe(160);
+    expect(within(palette).getByRole("combobox").getBoundingClientRect().height).toBeGreaterThan(
+      40,
+    );
+  });
+
   it("lists every command with its shortcut", async () => {
     const user = userEvent.setup();
     renderApp();
@@ -271,6 +323,23 @@ describe("the default shortcuts", () => {
       }
     }
     await expectNoAccessibilityViolations(sheet);
+  });
+
+  it("list the shortcuts in the command palette's groups", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}/{/Control}");
+    const sheet = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
+
+    await animationsDone(sheet);
+
+    const view = within(sheet).getByRole("table", { name: "View" });
+    expect(within(view).getByRole("row", { name: /Toggle sidebar/ })).toHaveTextContent("Ctrl+B");
+    const session = within(sheet).getByRole("table", { name: "Session" });
+    expect(within(session).getByRole("row", { name: /New session/ })).toHaveTextContent("Ctrl+N");
+    expect(within(sheet).getByRole("table", { name: "Go to" })).toBeVisible();
   });
 });
 
