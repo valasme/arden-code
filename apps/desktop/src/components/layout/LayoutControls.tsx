@@ -22,7 +22,7 @@ interface LayoutToggleProps {
   /** The region's name. It stays the same; the pressed state says whether the region is shown. */
   label: string;
   shown: boolean;
-  /** The icon while the region is shown, filled, and while it is hidden, dashed. */
+  /** The region's panel icon while it is shown, and the same with a dashed divider while hidden. */
   icons: readonly [LucideIcon, LucideIcon];
 }
 

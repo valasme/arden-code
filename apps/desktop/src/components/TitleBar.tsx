@@ -106,7 +106,7 @@ export function TitleBar({
       data-area="titlebar"
       {...(native ? {} : { "data-tauri-drag-region": true })}
       onContextMenu={onContextMenu}
-      className="flex h-8 shrink-0 items-stretch gap-1 border-b border-border bg-background pl-1 text-foreground select-none"
+      className="@container flex h-8 shrink-0 items-stretch gap-1 border-b border-border bg-background pl-1 text-foreground select-none"
     >
       {native ? null : (
         <BarButton
@@ -155,7 +155,9 @@ export function TitleBar({
         ) : null}
       </button>
 
-      {controls}
+      {/* They step aside when the bar is too narrow for them, so the window buttons (3 × 46 px) stay
+          on screen in a small window at a high zoom. Their commands stay in the palette. */}
+      {controls ? <div className="hidden @min-[calc(20rem+138px)]:flex">{controls}</div> : null}
 
       {native ? null : (
         <div className="flex">

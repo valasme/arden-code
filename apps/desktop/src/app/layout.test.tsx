@@ -158,6 +158,38 @@ describe("the layout controls in the title bar", () => {
       expect(screen.queryByRole("contentinfo")).toBeNull();
     });
   });
+
+  describe("in the smallest window", () => {
+    beforeEach(async () => {
+      await page.viewport(500, 560);
+    });
+    afterEach(() => {
+      document.documentElement.removeAttribute("style");
+    });
+
+    it("leave the window buttons on screen at 200% zoom", async () => {
+      renderApp(["/"], 0, settingsWith({ appearance: { zoom: 200 } }));
+      await screen.findByRole("main");
+      await waitFor(() => {
+        expect(document.documentElement.style.getPropertyValue("--zoom")).toBe("2");
+      });
+
+      for (const name of ["Minimize", "Maximize", "Close"]) {
+        const button = screen.getByRole("button", { name });
+        expect(button.getBoundingClientRect().right, name).toBeLessThanOrEqual(innerWidth);
+      }
+    });
+
+    it("still show the layout controls at 100% zoom", async () => {
+      renderApp();
+      await screen.findByRole("main");
+
+      expect(screen.getByRole("button", { name: "Sidebar" })).toBeVisible();
+      expect(
+        screen.getByRole("button", { name: "Close" }).getBoundingClientRect().right,
+      ).toBeLessThanOrEqual(innerWidth);
+    });
+  });
 });
 
 describe("the routes", () => {
