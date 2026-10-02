@@ -17,20 +17,65 @@ async function openDesignSystem(page: Page, search = "") {
   ).toBeVisible();
 }
 
+/**
+ * What a screenshot of the window would miss, in CSS pixels: nothing, when every value is 0 or
+ * less.
+ */
+const missedByTheWindow = (page: Page) =>
+  page.evaluate(() => {
+    const region = document.querySelector("[data-area=session]");
+    const content = region?.querySelector("main");
+    const statusBar = document.querySelector("[data-area=statusbar]");
+    return {
+      scrolledAway: region ? region.scrollHeight - region.clientHeight : Number.NaN,
+      pageBelowTheWindow: (content?.getBoundingClientRect().bottom ?? Number.NaN) - innerHeight,
+      frameBelowTheWindow: (statusBar?.getBoundingClientRect().bottom ?? Number.NaN) - innerHeight,
+    };
+  });
+
+/**
+ * Opens the page in a window tall enough to show all of it, so a screenshot sees everything. The
+ * app's frame is as tall as the window and the page scrolls inside the session view, so it is the
+ * window that has to grow: the frame then lays out as it would in a tall window.
+ */
+async function showWholePage(page: Page, search = "") {
+  await openDesignSystem(page, search);
+  /* oxlint-disable no-await-in-loop -- each step measures the layout the one before it made */
+  for (let step = 0; step < 5; step += 1) {
+    const { scrolledAway } = await missedByTheWindow(page);
+    if (scrolledAway <= 0) return;
+    const { width, height } = page.viewportSize() ?? { width: 1100, height: 900 };
+    await page.setViewportSize({ width, height: height + Math.ceil(scrolledAway) });
+  }
+  /* oxlint-enable no-await-in-loop */
+}
+
+for (const search of ["", "?zoom=2"]) {
+  test(`a screenshot sees the whole page and the frame around it${search ? ` (${search})` : ""}`, async ({
+    page,
+  }) => {
+    await showWholePage(page, search);
+
+    const missed = await missedByTheWindow(page);
+    expect(Math.max(...Object.values(missed)), JSON.stringify(missed)).toBeLessThanOrEqual(0);
+  });
+}
+
 for (const { name, colorScheme, forcedColors } of themes) {
   test(`the design system page looks right in ${name}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme, forcedColors });
-    await openDesignSystem(page);
+    await showWholePage(page);
 
-    await expect(page).toHaveScreenshot(`${name}.png`, { fullPage: true });
+    // The window is the whole page now; the document itself never scrolls.
+    await expect(page).toHaveScreenshot(`${name}.png`);
   });
 }
 
 test("the design system page looks right at 200% zoom", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
-  await openDesignSystem(page, "?zoom=2");
+  await showWholePage(page, "?zoom=2");
 
-  await expect(page).toHaveScreenshot("zoom-200.png", { fullPage: true });
+  await expect(page).toHaveScreenshot("zoom-200.png");
 });
 
 test("the page follows the Windows theme live", async ({ page }) => {

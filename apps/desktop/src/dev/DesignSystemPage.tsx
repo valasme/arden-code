@@ -36,10 +36,17 @@ export function DesignSystemPage({
   onZoomChange,
 }: DesignSystemPageProps) {
   useEffect(() => applyTheme(theme), [theme]);
+  // The zoom the Zoom setting gives: every rem grows, as in the app. CSS zoom would also grow the
+  // window's own sizes, which the app never does, and push its frame out of the window. At 100% the
+  // page leaves the app's own zoom alone.
   useEffect(() => {
-    document.documentElement.style.zoom = String(zoom);
+    if (zoom === 1) return undefined;
+    const root = document.documentElement;
+    const before = root.style.getPropertyValue("--zoom");
+    root.style.setProperty("--zoom", String(zoom));
     return () => {
-      document.documentElement.style.zoom = "";
+      if (before) root.style.setProperty("--zoom", before);
+      else root.style.removeProperty("--zoom");
     };
   }, [zoom]);
 
