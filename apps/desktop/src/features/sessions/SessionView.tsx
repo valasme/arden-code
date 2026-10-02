@@ -33,7 +33,7 @@ export function SessionView({ id }: { id: string }) {
   const { run } = useCommands();
   const { data: session, error } = useQuery(sessionQuery(id));
   const { data: projects = [] } = useQuery(projectsQuery);
-  const send = useSendMessage(id);
+  const send = useSendMessage();
   const transcript = useRef<HTMLElement>(null);
   const stuck = useRef(true);
   /** Where the view was last held at the end. Only a scroll above it is the person leaving the end. */
@@ -201,7 +201,8 @@ export function SessionView({ id }: { id: string }) {
         onSend={(text) => {
           stuck.current = true;
           setAtEnd(true);
-          void send(text);
+          void send(id, text);
+          return true;
         }}
       />
     </div>

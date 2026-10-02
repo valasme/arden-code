@@ -170,7 +170,7 @@ describe("the Settings page", () => {
     startApp();
     const user = userEvent.setup();
     renderApp("/");
-    await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." });
+    await screen.findByRole("heading", { name: "What should the Demo agent work on?" });
     await user.click(screen.getByRole("link", { name: "Settings" }));
     await screen.findByRole("heading", { level: 1, name: "General" });
     await user.click(screen.getByRole("link", { name: "Appearance" }));
@@ -179,7 +179,7 @@ describe("the Settings page", () => {
     await user.click(screen.getByRole("link", { name: "Back" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." }),
+      await screen.findByRole("heading", { name: "What should the Demo agent work on?" }),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "New session" })).toBeVisible();
   });

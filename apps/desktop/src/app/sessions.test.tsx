@@ -151,15 +151,18 @@ const messageBox = () => screen.findByRole("textbox", { name: "Message" });
 const sidebar = () => screen.getByRole("complementary", { name: "Sidebar" });
 
 describe("With no session open", () => {
-  it("shows the welcome state: the logo, one line and three shortcuts", async () => {
+  it("shows the welcome state: the mark, a question, the Demo agent line, the message box and three shortcuts", async () => {
     startRust();
     renderApp();
 
     expect(
-      await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." }),
+      await screen.findByRole("heading", { level: 1, name: "What should the Demo agent work on?" }),
     ).toBeVisible();
     const main = screen.getByRole("main");
     expect(within(main).getByRole("img", { name: "Arden Code" })).toBeVisible();
+    expect(within(main).getByText("Real agents are coming. Try the Demo agent.")).toBeVisible();
+    expect(within(main).getByRole("textbox", { name: "Message" })).toHaveFocus();
+    expect(within(main).getByText("Demo agent · Playground")).toBeVisible();
     const hints = within(within(main).getByRole("list")).getAllByRole("listitem");
     expect(hints.map((hint) => hint.textContent)).toEqual([
       "Ctrl+KCommand palette",
@@ -180,13 +183,48 @@ describe("With no session open", () => {
   it("has no accessibility violations", async () => {
     startRust();
     const { container } = render(<App history={createMemoryHistory({ initialEntries: ["/"] })} />);
-    await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." });
+    await screen.findByRole("heading", { name: "What should the Demo agent work on?" });
 
     await expectNoAccessibilityViolations(container);
   });
 });
 
 describe("Starting a session", () => {
+  it("starts one from the welcome state, opens it and sends the first message", async () => {
+    const rust = startRust();
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("heading", { name: "What should the Demo agent work on?" });
+
+    await user.keyboard("Hello from the welcome state{Enter}");
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Hello from the welcome state" }),
+    ).toBeVisible();
+    expect(rust.calls.filter((call) => call.command === "create_session")).toHaveLength(1);
+    expect(rust.sent()[0]?.payload).toMatchObject({
+      sessionId: "session-1",
+      text: "Hello from the welcome state",
+    });
+    expect(
+      await screen.findByText("Hello from the welcome state", { selector: "p" }),
+    ).toBeVisible();
+  });
+
+  it("keeps the text in the welcome state when the session cannot be started", async () => {
+    startRust({ failCreate: true });
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("heading", { name: "What should the Demo agent work on?" });
+
+    await user.keyboard("Keep this{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByText("Something went wrong (ARD-AGT-001)")).toBeVisible();
+    });
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue("Keep this");
+  });
+
   it("starts a Demo agent session with Ctrl+N, lists it and lets you write in it at once", async () => {
     const rust = startRust();
     const user = userEvent.setup();
@@ -227,7 +265,10 @@ describe("Starting a session", () => {
     await waitFor(() => {
       expect(screen.getByText("Something went wrong (ARD-AGT-001)")).toBeVisible();
     });
-    expect(screen.queryByRole("textbox", { name: "Message" })).toBeNull();
+    // Still on the welcome state: no session was opened.
+    expect(
+      screen.getByRole("heading", { level: 1, name: "What should the Demo agent work on?" }),
+    ).toBeVisible();
   });
 
   it("says so when a session does not exist any more, and offers a new one", async () => {

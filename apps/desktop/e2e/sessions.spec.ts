@@ -32,7 +32,7 @@ test.describe("sessions in the real app", () => {
       await expect(
         app.page.getByRole("heading", {
           level: 1,
-          name: "Real agents are coming. Try the Demo agent.",
+          name: "What should the Demo agent work on?",
         }),
       ).toBeVisible();
 

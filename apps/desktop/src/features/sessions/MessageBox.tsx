@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 /** The key code some browsers report for a key that is part of an input method's composition. */
 const COMPOSING_KEY_CODE = 229;
@@ -13,8 +14,15 @@ interface MessageBoxProps {
   busy: boolean;
   /** Who the message goes to and where, such as "Demo agent · Playground". */
   context: string;
-  onSend: (text: string) => void;
+  /** Sends the message. Answering `false` (now or later) says it was not sent: the text comes back. */
+  onSend: (text: string) => boolean | Promise<boolean>;
   onStop: () => void;
+  /**
+   * Whether the box is an area of its own for F6 (ADR 0024). In the welcome state it is the page's
+   * content, so it belongs to the session view's area.
+   */
+  ownArea?: boolean;
+  className?: string;
 }
 
 /**
@@ -23,7 +31,14 @@ interface MessageBoxProps {
  * a line. Enter never sends while a character is still being composed (an accent key, an input
  * method for another script): that Enter confirms the character.
  */
-export function MessageBox({ busy, context, onSend, onStop }: MessageBoxProps) {
+export function MessageBox({
+  busy,
+  context,
+  onSend,
+  onStop,
+  ownArea = true,
+  className,
+}: MessageBoxProps) {
   const { t } = useTranslation();
   const [text, setText] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
@@ -36,8 +51,11 @@ export function MessageBox({ busy, context, onSend, onStop }: MessageBoxProps) {
 
   const send = () => {
     if (!canSend) return;
-    onSend(text.trim());
+    const message = text.trim();
     setText("");
+    void Promise.resolve(onSend(message)).then((sent) => {
+      if (!sent) setText(message);
+    });
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -48,7 +66,10 @@ export function MessageBox({ busy, context, onSend, onStop }: MessageBoxProps) {
   };
 
   return (
-    <div data-area="messagebox" className="shrink-0 px-6 pb-4">
+    <div
+      {...(ownArea ? { "data-area": "messagebox" } : {})}
+      className={cn("shrink-0 px-6 pb-4", className)}
+    >
       <div
         data-message-frame
         className="mx-auto flex max-w-[45rem] flex-col border border-input bg-background"

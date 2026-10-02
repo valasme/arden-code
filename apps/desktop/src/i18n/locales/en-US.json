@@ -565,6 +565,7 @@
     "line": "Real agents are coming. Try the Demo agent.",
     "newSession": "New session",
     "palette": "Command palette",
+    "question": "What should the Demo agent work on?",
     "settings": "Settings"
   }
 }

@@ -283,15 +283,11 @@ describe("the default shortcuts", () => {
   it("focus the message box with Ctrl+L, when there is one", async () => {
     const user = userEvent.setup();
     renderApp();
-    await screen.findByRole("main");
-    const box = document.createElement("textarea");
-    box.setAttribute("data-message-box", "");
-    document.body.append(box);
+    await startWithNoFocus();
 
     await user.keyboard("{Control>}l{/Control}");
 
-    expect(box).toHaveFocus();
-    box.remove();
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveFocus();
   });
 
   it("go back and forward with Alt+Left and Alt+Right", async () => {
@@ -301,7 +297,7 @@ describe("the default shortcuts", () => {
 
     await user.keyboard("{Alt>}{ArrowLeft}{/Alt}");
     expect(
-      await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." }),
+      await screen.findByRole("heading", { name: "What should the Demo agent work on?" }),
     ).toBeVisible();
 
     await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
@@ -542,11 +538,17 @@ describe("shortcuts a person changed", () => {
 const areaWithFocus = () =>
   document.activeElement?.closest("[data-area]")?.getAttribute("data-area") ?? "none";
 
+/** The welcome state puts the focus in its message box; these tests start with it nowhere. */
+async function startWithNoFocus() {
+  await screen.findByRole("textbox", { name: "Message" });
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+}
+
 describe("F6 and Shift+F6", () => {
   it("move the focus through the title bar, sidebar, session view and status bar, and around again", async () => {
     const user = userEvent.setup();
     renderApp();
-    await screen.findByRole("main");
+    await startWithNoFocus();
     expect(areaWithFocus()).toBe("none");
 
     const seen: string[] = [];
@@ -562,7 +564,7 @@ describe("F6 and Shift+F6", () => {
   it("go the other way with Shift", async () => {
     const user = userEvent.setup();
     renderApp();
-    await screen.findByRole("main");
+    await startWithNoFocus();
 
     await user.keyboard("{Shift>}{F6}{/Shift}");
     expect(areaWithFocus()).toBe("statusbar");
@@ -580,6 +582,7 @@ describe("F6 and Shift+F6", () => {
     await waitFor(() => {
       expect(screen.getByRole("complementary", { name: "Inspector" })).toBeVisible();
     });
+    await startWithNoFocus();
 
     const seen: string[] = [];
     for (let press = 0; press < 4; press += 1) {
@@ -593,12 +596,16 @@ describe("F6 and Shift+F6", () => {
 
   it("put the focus on an area that has nothing to press, so the keyboard can still start there", async () => {
     const user = userEvent.setup();
-    renderApp(["/"]);
-    await screen.findByRole("main");
+    useLayoutStore.setState({ inspectorOpen: true });
+    renderApp();
+    const inspector = await screen.findByRole("complementary", { name: "Inspector" });
+    await startWithNoFocus();
 
-    await user.keyboard("{F6}{F6}{F6}");
+    // Shift+F6 goes to the status bar, then to the inspector, which has no control in it.
+    await user.keyboard("{Shift>}{F6}{F6}{/Shift}");
 
-    expect(areaWithFocus()).toBe("session");
+    expect(areaWithFocus()).toBe("inspector");
+    expect(document.activeElement).toBe(inspector);
     expect(document.activeElement).toBeVisible();
   });
 });

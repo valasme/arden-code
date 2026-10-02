@@ -26,7 +26,7 @@ beforeEach(async () => {
 
 const width = (element: HTMLElement) => element.getBoundingClientRect().width;
 const openSessionView = () =>
-  screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." });
+  screen.findByRole("heading", { name: "What should the Demo agent work on?" });
 const openGeneralSettings = () => screen.findByRole("heading", { level: 1, name: "General" });
 
 /** Presses and releases a mouse button on the page, and returns the event so its handling can be checked. */

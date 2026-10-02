@@ -62,6 +62,12 @@ test.describe("context menus and area navigation in the real app", () => {
       appPage.evaluate(
         () => document.activeElement?.closest("[data-area]")?.getAttribute("data-area") ?? "none",
       );
+    // The welcome state puts the focus in its message box; start with it nowhere.
+    await expect(appPage.getByRole("textbox", { name: "Message" })).toBeFocused();
+    await appPage.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    expect(await area()).toBe("none");
 
     await appPage.keyboard.press("F6");
     expect(await area()).toBe("titlebar");
