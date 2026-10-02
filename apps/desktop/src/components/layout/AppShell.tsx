@@ -1,5 +1,5 @@
 import { Outlet, useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePanelRef } from "react-resizable-panels";
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -23,7 +23,7 @@ import { StatusBar } from "./StatusBar";
 
 /**
  * Makes a panel follow the store: it collapses or expands when `open` changes, and a drag that
- * collapses or reopens it reports back through `onOpenChange`.
+ * collapses or reopens it reports back through the panel's `onResize`.
  */
 function usePanelOpen(open: boolean, remembered: number) {
   const panel = usePanelRef();
@@ -45,7 +45,8 @@ function usePanelOpen(open: boolean, remembered: number) {
       }
       if (!open && !handle.isCollapsed()) handle.collapse();
     } catch {
-      // Not laid out yet; the panel starts in the right state from its default size.
+      // Not laid out yet. The panel starts at its default size from when the window opened, and its
+      // first size report brings the store in line with it.
     }
   }, [open, panel]);
 
@@ -76,6 +77,13 @@ export function AppShell() {
   const { appearance, layout, advanced } = useSettings();
   const sidebarPanel = usePanelOpen(sidebarOpen, layout.sidebarWidth);
   const inspectorPanel = usePanelOpen(inspectorOpen, layout.inspectorWidth);
+  // The panels' sizes when the window opens, kept from then on. A panel whose default size changes
+  // registers with its group again, and the group's first report of its size, from before the
+  // change, would undo the toggle that changed it.
+  const [defaultSizes] = useState(() => ({
+    sidebar: sidebarOpen ? `${startingWidths.sidebarWidth}px` : "0px",
+    inspector: inspectorOpen ? `${startingWidths.inspectorWidth}px` : "0px",
+  }));
   const { showStatusBar } = appearance;
 
   return (
@@ -94,7 +102,7 @@ export function AppShell() {
             <ResizablePanel
               id="sidebar"
               panelRef={sidebarPanel}
-              defaultSize={sidebarOpen ? `${startingWidths.sidebarWidth}px` : "0px"}
+              defaultSize={defaultSizes.sidebar}
               minSize="180px"
               maxSize="480px"
               collapsible
@@ -117,7 +125,7 @@ export function AppShell() {
             <ResizablePanel
               id="inspector"
               panelRef={inspectorPanel}
-              defaultSize={inspectorOpen ? `${startingWidths.inspectorWidth}px` : "0px"}
+              defaultSize={defaultSizes.inspector}
               minSize="240px"
               maxSize="640px"
               collapsible

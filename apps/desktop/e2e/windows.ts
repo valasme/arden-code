@@ -53,6 +53,8 @@ public static class W {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int x, int y, uint data, UIntPtr extra);
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
   [StructLayout(LayoutKind.Sequential)] public struct MINMAXINFO { public POINT Reserved, MaxSize, MaxPosition, MinTrackSize, MaxTrackSize; }
   [DllImport("user32.dll", EntryPoint = "SendMessage")] public static extern IntPtr SendMinMax(IntPtr h, uint message, IntPtr w, ref MINMAXINFO l);
@@ -74,6 +76,12 @@ public static class W {
 }
 "@
 function Main-Window($id) { [W]::Find($id, "Arden Code") }
+# Real input goes to whichever window is in front: brings the window forward, and says whether it is.
+function Bring-Forward($top) {
+  [W]::SetForegroundWindow($top) | Out-Null
+  Start-Sleep -Milliseconds 300
+  [W]::GetForegroundWindow() -eq $top
+}
 `;
 
 function powershell(script: string): string {
@@ -180,14 +188,39 @@ export function countAppProcesses(): number {
 export function pressKey(pid: number, virtualKey: number): boolean {
   const pressed = powershell(`
     $top = Main-Window ${pid}
-    [W]::SetForegroundWindow($top) | Out-Null
-    Start-Sleep -Milliseconds 300
-    if ([W]::GetForegroundWindow() -ne $top) { "no"; exit }
+    if (-not (Bring-Forward $top)) { "no"; exit }
     [W]::keybd_event(${virtualKey}, 0, 0, [UIntPtr]::Zero)
     [W]::keybd_event(${virtualKey}, 0, 2, [UIntPtr]::Zero)
     "yes"
   `);
   return pressed === "yes";
+}
+
+/**
+ * Clicks a point of the page the way a mouse does, through Windows and the web engine's own input
+ * handling. A click sent through the debugging port, or any click while a debugging client is
+ * attached to the page, reaches the page with other timing and can miss bugs that real clicks hit:
+ * a test that needs a real click detaches from the page first.
+ *
+ * The point is in the page's pixels: CSS pixels times the page's `devicePixelRatio`. As with
+ * `pressKey`, nothing is clicked unless the app's window really is in front. Returns whether the
+ * click was made.
+ */
+export function clickAt(pid: number, x: number, y: number): boolean {
+  const clicked = powershell(`
+    $top = Main-Window ${pid}
+    if (-not (Bring-Forward $top)) { "no"; exit }
+    $point = New-Object W+POINT
+    $point.X = ${Math.round(x)}; $point.Y = ${Math.round(y)}
+    [void][W]::ClientToScreen([W]::FindPage($top), [ref]$point)
+    [void][W]::SetCursorPos($point.X, $point.Y)
+    Start-Sleep -Milliseconds 100
+    # The left button, down and up.
+    [W]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
+    [W]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+    "yes"
+  `);
+  return clicked === "yes";
 }
 
 /** Virtual key codes of the keys the tests press. */
