@@ -244,6 +244,14 @@ describe("TitleBar with the title bar of Windows", () => {
     expect(screen.getByRole("banner")).not.toHaveAttribute("data-tauri-drag-region");
   });
 
+  it("keeps the layout controls it is given", async () => {
+    await page.viewport(1280, 800);
+    startWindow();
+    render(<TitleBar {...navigation} native controls={<button type="button">Sidebar</button>} />);
+
+    expect(screen.getByRole("button", { name: "Sidebar" })).toBeVisible();
+  });
+
   it("keeps back, forward and the search field", async () => {
     const onSearch = vi.fn<() => void>();
     const onBack = vi.fn<() => void>();

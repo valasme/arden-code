@@ -17,8 +17,9 @@ async function clickSideButton(page: Page, button: "back" | "forward") {
 
 /**
  * Clicks a control with a real mouse click, through Windows. Playwright lets go of the page for the
- * click: while it is attached, clicks reach the page with other timing, and the status bar's
- * toggles once worked in every test but never for a person. Returns the page, attached again.
+ * click: while it is attached, clicks reach the page with other timing, and the toggles for the
+ * sidebar and the inspector once worked in every test but never for a person. Returns the page,
+ * attached again.
  */
 async function clickForReal(app: RunningApp, page: Page, control: Locator): Promise<Page> {
   const box = await control.boundingBox();
@@ -60,36 +61,42 @@ test.describe("layout and navigation in the real app", () => {
     expect(scrollbar).toEqual({ width: 0, height: 0, overflow: "hidden" });
   });
 
-  test("shows the inspector and hides the sidebar with the status bar buttons", async ({
+  test("shows the inspector, hides the sidebar and hides the status bar with the title bar's toggles", async ({
     appPage,
   }) => {
     await expect(sessionView(appPage)).toBeVisible();
+    const toggle = (name: string) => appPage.getByRole("button", { name, exact: true });
 
-    await appPage.getByRole("button", { name: "Show inspector" }).click();
+    await toggle("Inspector").click();
     await expect(appPage.getByRole("complementary", { name: "Inspector" })).toBeVisible();
 
-    await appPage.getByRole("button", { name: "Hide sidebar" }).click();
+    await toggle("Sidebar").click();
     await expect(appPage.getByRole("complementary", { name: "Sidebar" })).toBeHidden();
+
+    await toggle("Status bar").click();
+    await expect(appPage.getByRole("contentinfo")).toBeHidden();
+    await toggle("Status bar").click();
+    await expect(appPage.getByRole("contentinfo")).toBeVisible();
   });
 
-  test("hides and shows the sidebar and the inspector with real clicks on the status bar buttons", async () => {
+  test("hides and shows the sidebar and the inspector with real clicks on the title bar's toggles", async () => {
     const app = await launchApp();
     try {
       let page = app.page;
       await expect(sessionView(page)).toBeVisible();
       const region = (name: string) => page.getByRole("complementary", { name });
-      const toggle = (name: string) => page.getByRole("button", { name });
+      const toggle = (name: string) => page.getByRole("button", { name, exact: true });
 
-      page = await clickForReal(app, page, toggle("Hide sidebar"));
+      page = await clickForReal(app, page, toggle("Sidebar"));
       await expect(region("Sidebar")).toBeHidden();
 
-      page = await clickForReal(app, page, toggle("Show sidebar"));
+      page = await clickForReal(app, page, toggle("Sidebar"));
       await expect(region("Sidebar")).toBeVisible();
 
-      page = await clickForReal(app, page, toggle("Show inspector"));
+      page = await clickForReal(app, page, toggle("Inspector"));
       await expect(region("Inspector")).toBeVisible();
 
-      page = await clickForReal(app, page, toggle("Hide inspector"));
+      page = await clickForReal(app, page, toggle("Inspector"));
       await expect(region("Inspector")).toBeHidden();
     } finally {
       app.kill();

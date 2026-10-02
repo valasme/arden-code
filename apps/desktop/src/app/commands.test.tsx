@@ -32,9 +32,16 @@ function renderApp(entries = ["/"], initialIndex = entries.length - 1) {
       if (command === "get_settings") return startingSettings;
       if (command === "change_setting") {
         const { change } = z
-          .object({ change: z.object({ appearanceZoom: z.number() }) })
+          .object({
+            change: z.union([
+              z.object({ appearanceZoom: z.number() }),
+              z.object({ appearanceShowStatusBar: z.boolean() }),
+            ]),
+          })
           .parse(payload);
-        return settingsWith({ appearance: { zoom: change.appearanceZoom } });
+        return "appearanceZoom" in change
+          ? settingsWith({ appearance: { zoom: change.appearanceZoom } })
+          : settingsWith({ appearance: { showStatusBar: change.appearanceShowStatusBar } });
       }
       if (command === "plugin:window|is_fullscreen") return false;
       return null;
@@ -394,7 +401,7 @@ describe("tooltips", () => {
     renderApp();
     await screen.findByRole("main");
 
-    await user.hover(screen.getByRole("button", { name: "Hide sidebar" }));
+    await user.hover(screen.getByRole("button", { name: "Sidebar" }));
 
     expect(await screen.findByRole("tooltip")).toHaveTextContent("Ctrl+B");
   });
@@ -469,6 +476,31 @@ describe("the zoom shortcuts", () => {
   });
 });
 
+describe("Toggle status bar", () => {
+  it("hides the status bar from the command palette, and brings it back", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("contentinfo");
+
+    await user.keyboard("{Control>}k{/Control}");
+    await user.keyboard("status bar");
+    const options = await screen.findAllByRole("option");
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent("Toggle status bar");
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(screen.queryByRole("contentinfo")).toBeNull();
+      expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+    });
+
+    await user.keyboard("{Control>}k{/Control}");
+    await user.keyboard("status bar");
+    expect(await screen.findByRole("option", { name: /Toggle status bar/ })).toBeVisible();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("contentinfo")).toBeVisible();
+  });
+});
+
 const custom = () =>
   settingsWith({
     keyboard: { shortcuts: { "palette.open": ["Ctrl+Shift+O"], "sidebar.toggle": [] } },
@@ -520,7 +552,7 @@ describe("shortcuts a person changed", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
 
-    await user.hover(await screen.findByRole("button", { name: "Hide sidebar" }));
+    await user.hover(await screen.findByRole("button", { name: "Sidebar" }));
     const tooltip = await screen.findByRole("tooltip");
     expect(tooltip).not.toHaveTextContent("Ctrl+B");
 

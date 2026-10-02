@@ -50,7 +50,7 @@ function RadioGroupButton({
     <RadioGroupPrimitive.Item
       data-slot="radio-group-button"
       className={cn(
-        "h-7 border border-input bg-background px-2.5 text-xs whitespace-nowrap not-first:border-s-0 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 data-checked:border-primary data-checked:bg-primary data-checked:font-medium data-checked:text-primary-foreground forced-colors:data-checked:border-[CanvasText]",
+        "h-7 border border-input bg-background px-2.5 text-xs whitespace-nowrap not-first:border-s-0 hover:not-data-checked:bg-muted disabled:cursor-not-allowed disabled:opacity-50 data-checked:border-primary data-checked:bg-primary data-checked:font-medium data-checked:text-primary-foreground forced-colors:data-checked:border-[CanvasText]",
         className,
       )}
       {...props}

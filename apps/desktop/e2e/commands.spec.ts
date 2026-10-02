@@ -86,7 +86,7 @@ test.describe("commands and shortcuts in the real app", () => {
   test("hovering a button shows its shortcut", async ({ appPage }) => {
     await expect(appPage.getByRole("main")).toBeVisible();
 
-    await appPage.getByRole("button", { name: "Hide sidebar" }).hover();
+    await appPage.getByRole("button", { name: "Sidebar", exact: true }).hover();
 
     await expect(appPage.getByRole("tooltip")).toContainText("Ctrl+B");
   });

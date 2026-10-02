@@ -1,5 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { userEvent as pointer } from "vitest/browser";
+
+import { contrastRatio, oklchToSrgb, parseColor } from "@/lib/contrast";
 
 import { ChoiceControl } from "./controls";
 
@@ -45,5 +48,39 @@ describe("ChoiceControl", () => {
     await user.click(screen.getByRole("radio", { name: "Dark" }));
 
     expect(chosen).toEqual(["dark"]);
+  });
+
+  describe.each(["light", "dark"])("in the %s theme", (theme) => {
+    beforeEach(() => {
+      document.documentElement.classList.add(theme);
+    });
+    afterEach(() => {
+      document.documentElement.classList.remove(theme);
+    });
+
+    it("keeps the chosen option's label readable under the pointer", async () => {
+      renderChoice();
+      const chosen = screen.getByRole("radio", { name: "Same as Windows" });
+
+      // The browser's own pointer, so that :hover applies.
+      await pointer.hover(chosen);
+
+      const { color, backgroundColor } = getComputedStyle(chosen);
+      const ratio = contrastRatio(
+        oklchToSrgb(parseColor(color)),
+        oklchToSrgb(parseColor(backgroundColor)),
+      );
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it("still answers the pointer on an option that is not chosen", async () => {
+      renderChoice();
+      const other = screen.getByRole("radio", { name: "Dark" });
+      const atRest = getComputedStyle(other).backgroundColor;
+
+      await pointer.hover(other);
+
+      expect(getComputedStyle(other).backgroundColor).not.toBe(atRest);
+    });
   });
 });

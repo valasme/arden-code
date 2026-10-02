@@ -126,6 +126,7 @@ describe("the groups", () => {
     "focus.previous": "goTo",
     "sidebar.toggle": "view",
     "inspector.toggle": "view",
+    "statusBar.toggle": "view",
     "window.fullScreen": "view",
     "zoom.in": "view",
     "zoom.out": "view",

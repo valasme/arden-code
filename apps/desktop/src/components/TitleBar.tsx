@@ -1,6 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { ArrowLeftIcon, ArrowRightIcon, SearchIcon } from "lucide-react";
-import { type ComponentProps, type MouseEvent, useEffect, useRef } from "react";
+import { type ComponentProps, type MouseEvent, type ReactNode, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { commands } from "@/ipc/bindings";
@@ -26,6 +26,8 @@ interface TitleBarProps {
   onSearch: () => void;
   /** Windows draws the title bar's frame, its window buttons and its menu, so the bar keeps only what is the app's. */
   native?: boolean;
+  /** Drawn before the window buttons: the layout controls (ADR 0033). */
+  controls?: ReactNode;
 }
 
 function showSystemMenu() {
@@ -36,7 +38,7 @@ function showSystemMenu() {
 }
 
 /** A button in the bar: 32 px high, with Windows-like hover and pressed states. */
-function BarButton({ className, ...props }: ComponentProps<"button">) {
+export function BarButton({ className, ...props }: ComponentProps<"button">) {
   return (
     <button
       type="button"
@@ -61,6 +63,7 @@ export function TitleBar({
   onForward,
   onSearch,
   native = false,
+  controls,
 }: TitleBarProps) {
   const { t } = useTranslation();
   const maximized = useWindowMaximized();
@@ -103,7 +106,7 @@ export function TitleBar({
       data-area="titlebar"
       {...(native ? {} : { "data-tauri-drag-region": true })}
       onContextMenu={onContextMenu}
-      className="flex h-8 shrink-0 items-stretch gap-1 border-b border-border bg-background pl-1 text-foreground select-none"
+      className="@container flex h-8 shrink-0 items-stretch gap-1 border-b border-border bg-background pl-1 text-foreground select-none"
     >
       {native ? null : (
         <BarButton
@@ -151,6 +154,10 @@ export function TitleBar({
           </Kbd>
         ) : null}
       </button>
+
+      {/* They step aside when the bar is too narrow for them, so the window buttons (3 × 46 px) stay
+          on screen in a small window at a high zoom. Their commands stay in the palette. */}
+      {controls ? <div className="hidden @min-[calc(20rem+138px)]:flex">{controls}</div> : null}
 
       {native ? null : (
         <div className="flex">

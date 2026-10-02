@@ -93,6 +93,16 @@ describe("The status bar and updates", () => {
   });
 });
 
+describe("The status bar and the layout", () => {
+  it("says only status: the toggles for the regions are in the title bar", async () => {
+    startApp({ state: "idle" });
+    renderBar();
+
+    await screen.findByText("Version 0.1.0");
+    expect(screen.queryByRole("button", { name: /sidebar|inspector/i })).toBeNull();
+  });
+});
+
 describe("The status bar and the open session", () => {
   afterEach(() => {
     useRepliesStore.setState(useRepliesStore.getInitialState());
