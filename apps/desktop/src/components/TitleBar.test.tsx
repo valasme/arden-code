@@ -286,3 +286,20 @@ describe("TitleBar with the title bar of Windows", () => {
     await expectNoAccessibilityViolations(container);
   });
 });
+
+describe("The pointer", () => {
+  it("shows on every button in the bar, the window buttons included, and not on a disabled one", () => {
+    startWindow();
+    render(<TitleBar {...navigation} canGoForward={false} />);
+
+    for (const name of ["Window menu", "Back", "Minimize", "Maximize", "Close"]) {
+      expect(getComputedStyle(screen.getByRole("button", { name })).cursor).toBe("pointer");
+    }
+    expect(getComputedStyle(screen.getByRole("button", { name: /Search/u })).cursor).toBe(
+      "pointer",
+    );
+    expect(getComputedStyle(screen.getByRole("button", { name: "Forward" })).cursor).not.toBe(
+      "pointer",
+    );
+  });
+});

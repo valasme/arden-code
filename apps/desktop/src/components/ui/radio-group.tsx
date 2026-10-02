@@ -38,4 +38,24 @@ function RadioGroupItem({
   );
 }
 
-export { RadioGroup, RadioGroupItem };
+/**
+ * One option of a choice drawn as a row of joined buttons (ADR 0032): still a radio, with its
+ * label inside it. The chosen one is filled.
+ */
+function RadioGroupButton({
+  className,
+  ...props
+}: React.ComponentProps<typeof RadioGroupPrimitive.Item>) {
+  return (
+    <RadioGroupPrimitive.Item
+      data-slot="radio-group-button"
+      className={cn(
+        "h-7 border border-input bg-background px-2.5 text-xs whitespace-nowrap not-first:border-s-0 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 data-checked:border-primary data-checked:bg-primary data-checked:font-medium data-checked:text-primary-foreground forced-colors:data-checked:border-[CanvasText]",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export { RadioGroup, RadioGroupButton, RadioGroupItem };

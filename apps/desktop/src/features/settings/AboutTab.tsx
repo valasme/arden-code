@@ -46,7 +46,7 @@ function OpenSourceLicenses() {
 
   return (
     <details className="border-b border-border py-4">
-      <summary className="cursor-default text-sm font-medium">
+      <summary className="text-sm font-medium">
         {t("settings.about.openSource.title", { count: licenses.length })}
       </summary>
       <p className="mt-2 text-xs text-muted-foreground">

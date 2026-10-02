@@ -56,6 +56,27 @@
   ::selection {
     background: var(--selection);
   }
+
+  /*
+   * Everything that can be pressed shows the pointer, the window buttons included (ADR 0032). A
+   * disabled control keeps the arrow.
+   */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="switch"]:not([data-disabled]),
+  [role="radio"]:not([data-disabled]),
+  [role="tab"],
+  [role="slider"],
+  [role="option"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([data-disabled]),
+  [role="menuitemcheckbox"]:not([data-disabled]),
+  [role="menuitemradio"]:not([data-disabled]),
+  a[href],
+  summary,
+  label[for],
+  select:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 /*

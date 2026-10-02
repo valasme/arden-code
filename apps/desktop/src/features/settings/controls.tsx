@@ -1,5 +1,4 @@
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { RadioGroup, RadioGroupButton } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 
@@ -15,7 +14,7 @@ interface ChoiceProps<Value extends string> extends Described {
   onChange: (value: Value) => void;
 }
 
-/** One choice out of a few, as radio buttons. */
+/** One choice out of a few, as a row of joined buttons that is one radio group. */
 export function ChoiceControl<Value extends string>({
   id,
   value,
@@ -26,6 +25,7 @@ export function ChoiceControl<Value extends string>({
     <RadioGroup
       aria-labelledby={`${id}-label`}
       aria-describedby={`${id}-description`}
+      className="flex w-auto flex-wrap gap-0"
       value={value}
       onValueChange={(next) => {
         const chosen = options.find((option) => option.value === next);
@@ -33,12 +33,9 @@ export function ChoiceControl<Value extends string>({
       }}
     >
       {options.map((option) => (
-        <div key={option.value} className="flex items-center gap-2">
-          <RadioGroupItem value={option.value} id={`${id}-${option.value}`} />
-          <Label htmlFor={`${id}-${option.value}`} className="text-sm font-normal">
-            {option.label}
-          </Label>
-        </div>
+        <RadioGroupButton key={option.value} value={option.value} id={`${id}-${option.value}`}>
+          {option.label}
+        </RadioGroupButton>
       ))}
     </RadioGroup>
   );
