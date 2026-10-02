@@ -90,7 +90,7 @@ test.describe("the title bar in the real app", () => {
       await expect.poll(() => getWindow(app.pid), { timeout: 15_000 }).toBeDefined();
 
       // Between the Forward button and the search field there is only bare bar.
-      await app.page.locator("header").dblclick({ position: { x: 200, y: 16 } });
+      await app.page.locator("[data-area=titlebar]").dblclick({ position: { x: 200, y: 16 } });
 
       await expect.poll(() => getWindow(app.pid)?.maximized).toBe(true);
     } finally {
