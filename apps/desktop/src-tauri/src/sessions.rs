@@ -13,6 +13,7 @@ use arden_agents::model::{AgentKind, Session, SessionList, SessionSummary, TurnE
 use arden_agents::playground::PLAYGROUND_ID;
 use arden_agents::store::{OpenProblem, SessionStore, StoreError};
 use arden_core::error::{AppError, ErrorCode};
+use arden_settings::settings::OnStartup;
 use tauri::State;
 use tauri::ipc::Channel;
 
@@ -125,6 +126,17 @@ pub fn get_session(id: String, sessions: State<'_, Sessions>) -> Result<Session,
     sessions.session(&id).map_err(app_error)
 }
 
+/// Remembers that the page opened a session, to open it again at the next start (ADR 0036).
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, or it cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn remember_open_session(id: String, sessions: State<'_, Sessions>) -> Result<(), AppError> {
+    sessions.remember_open(&id).map_err(app_error)
+}
+
 /// Stops the reply that is running in a session. The turn ends as stopped, and the reply's channel
 /// is told.
 ///
@@ -216,10 +228,28 @@ pub fn send_message(
     Ok(snapshot)
 }
 
-/// The session that was made for a folder the app was asked to open, until the page has asked
-/// for it. The page may not be there yet when the first launch is asked to open a folder.
+/// The session the page should open when it comes up, until it has asked for it: the session that
+/// was open last time, or the one made for a folder the app was asked to open. The page may not be
+/// there yet when the first launch is asked to open a folder.
 #[derive(Default)]
 pub struct PendingOpen(Mutex<Option<String>>);
+
+impl PendingOpen {
+    /// The session to open at start: the one that was open last time, when the person asked for it
+    /// to be restored. A folder opened from the terminal replaces it later.
+    pub fn at_start(on_startup: OnStartup, sessions: &SessionStore) -> Self {
+        let restored = match on_startup {
+            OnStartup::Restore => sessions.last_open(),
+            OnStartup::Fresh => None,
+        };
+        Self(Mutex::new(restored))
+    }
+
+    /// The session waiting for the page, taken: it is never handed over twice.
+    fn take(&self) -> Option<String> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).take()
+    }
+}
 
 /// Tells the page to show a session, such as the one made for a folder that was opened.
 #[derive(Debug, Clone, serde::Serialize, specta::Type, tauri_specta::Event)]
@@ -271,9 +301,40 @@ pub fn open_folder(app: &tauri::AppHandle, folder: &std::path::Path) {
 #[tauri::command]
 #[specta::specta]
 pub fn take_pending_open(pending: State<'_, PendingOpen>) -> Result<Option<String>, AppError> {
-    Ok(pending
-        .0
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .take())
+    Ok(pending.take())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use arden_agents::playground;
+
+    use super::*;
+
+    fn store_with_a_session_opened() -> (SessionStore, String) {
+        let store = SessionStore::new(vec![playground::describe(Path::new(r"C:\Playground"))]);
+        let session = store
+            .create_session(PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        store.remember_open(&session.id).expect("remembered");
+        (store, session.id)
+    }
+
+    #[test]
+    fn the_session_open_last_time_waits_for_the_page_when_it_is_to_be_restored() {
+        let (store, id) = store_with_a_session_opened();
+
+        let pending = PendingOpen::at_start(OnStartup::Restore, &store);
+
+        assert_eq!(pending.take(), Some(id));
+        assert_eq!(pending.take(), None, "it is handed over once");
+    }
+
+    #[test]
+    fn nothing_waits_for_the_page_when_the_person_starts_fresh() {
+        let (store, _) = store_with_a_session_opened();
+
+        assert_eq!(PendingOpen::at_start(OnStartup::Fresh, &store).take(), None);
+    }
 }

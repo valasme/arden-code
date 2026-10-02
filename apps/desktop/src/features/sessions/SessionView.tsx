@@ -6,8 +6,10 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
+import { commands } from "@/ipc/bindings";
 import { noSessions, sessionListQuery, sessionQuery } from "@/ipc/queries";
 import { toAppError } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 import { useRepliesStore } from "@/state/replies";
 
 import { MessageBox } from "./MessageBox";
@@ -70,8 +72,18 @@ export function SessionView({ id }: { id: string }) {
     if (count > 0) virtualizer.scrollToIndex(count - 1, { align: "end" });
   };
 
-  // A session opens at its end.
   const loaded = session !== undefined;
+
+  // The session opens again at the next start, when the person asked for that (ADR 0036).
+  useEffect(() => {
+    if (!loaded) return;
+    commands.rememberOpenSession(id).catch((failure: unknown) => {
+      const { code } = toAppError(failure);
+      logger.warn("sessions", "the open session could not be remembered", code);
+    });
+  }, [id, loaded]);
+
+  // A session opens at its end.
   useEffect(() => {
     if (loaded && count > 0) virtualizer.scrollToIndex(count - 1, { align: "end" });
     // Only when the session has arrived: after that the effect below follows the reply.

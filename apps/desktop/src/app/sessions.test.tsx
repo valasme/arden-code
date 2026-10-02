@@ -302,6 +302,24 @@ describe("Starting a session", () => {
     ).toBeVisible();
   });
 
+  it("tells Rust which session is open, so that it opens again at the next start", async () => {
+    const rust = startRust();
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}n{/Control}");
+    await messageBox();
+
+    await waitFor(() => {
+      expect(
+        rust.calls
+          .filter((call) => call.command === "remember_open_session")
+          .map((call) => call.payload),
+      ).toEqual([{ id: "session-1" }]);
+    });
+  });
+
   it("says so when a session does not exist any more, and offers a new one", async () => {
     startRust();
     renderApp("/session/session-99");

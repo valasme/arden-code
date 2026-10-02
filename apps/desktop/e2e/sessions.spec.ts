@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { Locator, Page } from "@playwright/test";
+import { z } from "zod";
 
 import { expect, launchApp, openDevPage, test } from "./fixtures";
 
@@ -119,6 +120,51 @@ test.describe("sessions kept between starts in the real app", () => {
         await expect(session.getByText(/shows how an unusual link asks first/)).toBeVisible();
       } finally {
         second.kill();
+      }
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("the session open last time opens again at the next start, unless the person starts fresh", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-restore-"));
+    const onStartup = () =>
+      z
+        .object({ general: z.object({ onStartup: z.string() }) })
+        .parse(JSON.parse(readFileSync(path.join(dataDir, "config", "settings.json"), "utf8")))
+        .general.onStartup;
+    try {
+      const first = await launchApp({ dataDir });
+      try {
+        await untilTheReplyEnds(await ask(first.page, "Open me again"));
+      } finally {
+        await first.close();
+      }
+
+      const second = await launchApp({ dataDir });
+      try {
+        await expect(
+          second.page.getByRole("heading", { level: 1, name: "Open me again" }),
+        ).toBeVisible();
+        await second.page.keyboard.press("Control+,");
+        await second.page.getByRole("radio", { name: "Start fresh" }).click();
+        await expect.poll(onStartup).toBe("fresh");
+      } finally {
+        await second.close();
+      }
+
+      const third = await launchApp({ dataDir });
+      try {
+        await expect(
+          third.page.getByRole("heading", {
+            level: 1,
+            name: "What should the Demo agent work on?",
+          }),
+        ).toBeVisible();
+        // The session is still there, only not opened.
+        await expect(third.page.getByRole("link", { name: "Open me again" })).toBeVisible();
+      } finally {
+        third.kill();
       }
     } finally {
       rmSync(dataDir, { recursive: true, force: true });

@@ -135,6 +135,8 @@ struct Inner {
     last_id: u64,
     /// The turns whose reply the person has asked to stop, until their driver has noticed.
     stopping: HashSet<String>,
+    /// The session that was opened last, to open again at the next start.
+    last_open: Option<String>,
     database: Database,
 }
 
@@ -200,7 +202,7 @@ impl SessionStore {
                 .save_project(project, position, 0)
                 .expect("a database in memory takes a project");
         }
-        Self::with(database, projects, Vec::new(), 0)
+        Self::with(database, projects, Vec::new(), 0, None)
     }
 
     fn with(
@@ -208,6 +210,7 @@ impl SessionStore {
         projects: Vec<Project>,
         sessions: Vec<Entry>,
         last_id: u64,
+        last_open: Option<String>,
     ) -> Self {
         Self {
             inner: Mutex::new(Inner {
@@ -215,6 +218,7 @@ impl SessionStore {
                 sessions,
                 last_id,
                 stopping: HashSet::new(),
+                last_open,
                 database,
             }),
         }
@@ -279,7 +283,13 @@ impl SessionStore {
                 used: saved.used,
             })
             .collect();
-        Ok(Self::with(database, projects, sessions, saved.last_id))
+        Ok(Self::with(
+            database,
+            projects,
+            sessions,
+            saved.last_id,
+            saved.last_open,
+        ))
     }
 
     // A panic while the lock is held cannot leave the sessions half changed in a way that matters
@@ -342,6 +352,34 @@ impl SessionStore {
             .map_err(not_saved)?;
         inner.projects.push(project.clone());
         Ok(project)
+    }
+
+    /// Remembers that a session was opened, so that it can be opened again at the next start.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotSaved`] when it cannot be written.
+    pub fn remember_open(&self, session_id: &str) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        find(&mut inner.sessions, session_id)?;
+        let last_id = inner.last_id;
+        inner
+            .database
+            .save_last_open(session_id, last_id)
+            .map_err(not_saved)?;
+        inner.last_open = Some(session_id.to_owned());
+        Ok(())
+    }
+
+    /// The session that was opened last, if it is still there.
+    #[must_use]
+    pub fn last_open(&self) -> Option<String> {
+        let inner = self.lock();
+        inner
+            .last_open
+            .clone()
+            .filter(|id| inner.sessions.iter().any(|entry| &entry.session.id == id))
     }
 
     /// Starts an empty session in a project.
@@ -1214,6 +1252,39 @@ mod tests {
                 .iter()
                 .all(|turn| turn.status == TurnStatus::Done)
         );
+    }
+
+    #[test]
+    fn the_session_opened_last_is_remembered_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let second = {
+            let store = store_in(&file);
+            assert_eq!(store.last_open(), None, "nothing was opened yet");
+            let first = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            let second = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            store.remember_open(&second.id).expect("remembered");
+            store.remember_open(&first.id).expect("remembered");
+            store.remember_open(&second.id).expect("remembered");
+            second.id
+        };
+
+        assert_eq!(store_in(&file).last_open(), Some(second));
+    }
+
+    #[test]
+    fn a_session_that_does_not_exist_is_not_remembered() {
+        let store = store();
+
+        assert_eq!(
+            store.remember_open("session-99"),
+            Err(StoreError::UnknownSession)
+        );
+        assert_eq!(store.last_open(), None);
     }
 
     #[test]

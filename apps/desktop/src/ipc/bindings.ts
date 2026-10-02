@@ -339,6 +339,14 @@ export const commands = {
 	details: string | null,
 } | null>("take_sessions_notice"),
 	/**
+	 *  Remembers that the page opened a session, to open it again at the next start (ADR 0036).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or it cannot be saved.
+	 */
+	rememberOpenSession: (id: string) => __TAURI_INVOKE<null>("remember_open_session", { id }),
+	/**
 	 *  Starts an empty Demo agent session in the Playground.
 	 * 
 	 *  # Errors

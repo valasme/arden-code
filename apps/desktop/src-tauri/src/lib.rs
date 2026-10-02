@@ -30,7 +30,7 @@ use arden_diagnostics::redact::Redactor;
 use arden_diagnostics::{crash, logging};
 use arden_process::supervisor::Supervisor;
 use arden_settings::service::SettingsService;
-use arden_settings::settings::{LogLevel, Settings};
+use arden_settings::settings::{LogLevel, OnStartup, Settings};
 use arden_windows::preferences;
 use specta_typescript::Typescript;
 use tauri::Manager;
@@ -77,6 +77,7 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         commands::restart_app,
         sessions::list_sessions,
         sessions::take_sessions_notice,
+        sessions::remember_open_session,
         sessions::create_session,
         sessions::get_session,
         sessions::send_message,
@@ -129,6 +130,7 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         commands::restart_app,
         sessions::list_sessions,
         sessions::take_sessions_notice,
+        sessions::remember_open_session,
         sessions::create_session,
         sessions::get_session,
         sessions::send_message,
@@ -286,8 +288,9 @@ fn create_main_window(
 }
 
 /// Makes the Playground folder on the first launch, and opens the sessions kept in the sessions
-/// file (ADR 0035), keeping what went wrong with it, if anything, for the page.
-fn manage_sessions(app: &tauri::App, paths: &AppPaths) {
+/// file (ADR 0035), keeping what went wrong with it, if anything, for the page. The session that
+/// was open last time waits for the page, when the person asked for it to be restored.
+fn manage_sessions(app: &tauri::App, paths: &AppPaths, on_startup: OnStartup) {
     let folder = paths.playground_dir();
     let playground = playground::ensure(&folder).unwrap_or_else(|error| {
         tracing::error!(%error, "could not create the Playground folder");
@@ -295,6 +298,7 @@ fn manage_sessions(app: &tauri::App, paths: &AppPaths) {
     });
     let opened = SessionStore::open(&paths.sessions_file(), &playground);
     app.manage(sessions::SessionsNotice::after(opened.problem.as_ref()));
+    app.manage(sessions::PendingOpen::at_start(on_startup, &opened.store));
     let store: sessions::Sessions = Arc::new(opened.store);
     app.manage(store);
 }
@@ -477,8 +481,7 @@ pub fn run() {
             window::prepare_main_window(app, &paths, &started_with)?;
             app.manage(snap_layouts::add_overlay(app));
             app.manage(settings);
-            manage_sessions(app, &paths);
-            app.manage(sessions::PendingOpen::default());
+            manage_sessions(app, &paths, started_with.general.on_startup);
             manage_programs(app, &paths);
             app.manage(updates::Updates::default());
             app.manage(paths);

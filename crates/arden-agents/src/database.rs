@@ -93,6 +93,8 @@ pub struct Saved {
     pub sessions: Vec<SavedSession>,
     /// The last number given to an id, so the next one is new.
     pub last_id: u64,
+    /// The session that was opened last, if any.
+    pub last_open: Option<String>,
 }
 
 /// The name serde gives a value, such as `demo` for `AgentKind::Demo`.
@@ -301,11 +303,13 @@ impl Database {
             .meta("last_id")?
             .and_then(|value| value.parse().ok())
             .unwrap_or_default();
+        let last_open = self.meta("last_open")?;
 
         Ok(Saved {
             projects,
             sessions,
             last_id,
+            last_open,
         })
     }
 
@@ -365,6 +369,22 @@ impl Database {
         )?;
         transaction.commit()?;
         Ok(())
+    }
+
+    /// Remembers the session that was opened last.
+    ///
+    /// # Errors
+    ///
+    /// When the file cannot be written.
+    pub fn save_last_open(&mut self, session_id: &str, last_id: u64) -> Result<(), DatabaseError> {
+        self.write(last_id, |transaction| {
+            transaction.execute(
+                "INSERT INTO meta (key, value) VALUES ('last_open', ?1)
+                 ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                [session_id],
+            )?;
+            Ok(())
+        })
     }
 
     /// Writes a project that was opened, at its place in the list.
