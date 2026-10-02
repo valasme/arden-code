@@ -224,7 +224,7 @@ The sidebar lists sessions grouped by project. The foundation ships one built-in
 ### 6.1 Window and layout
 
 ```text
-┌ Title bar: logo menu · back/forward · search / command palette · ◧ ◨ ⬓ ··· ─ □ ✕ ┐
+┌ Title bar: logo · menu · back/forward · search / command palette · ◧ ◨ ⬓   ─ □ ✕ ┐
 ├ Sidebar ─────────┬ Main ─────────────────────────────────┬ Inspector (hidden) ─┤
 │ New session ^N   │      ┌ reading column, 45rem ┐        │ later: diffs,       │
 │ PROJECT          │      │ turns                 │        │ files, terminal     │
@@ -244,8 +244,8 @@ The sidebar lists sessions grouped by project. The foundation ships one built-in
 ### 6.2 Title bar and Snap Layouts
 
 - **Custom title bar:**
-  - drag area; double-click to maximize
-  - Alt+Space opens the system menu
+  - drag area, the logo included; double-click to maximize
+  - the logo is only the logo; the Window menu button beside it opens the system menu, as Alt+Space and a right click on the drag area do ([ADR 0034](adr/0034-the-logo-and-the-window-menu.md))
   - window buttons with accessible names
   - hover and pressed states that match Windows (Close turns red)
   - the layout controls before the window buttons, kept with the title bar of Windows too
