@@ -23,7 +23,7 @@ import { StatusBar } from "./StatusBar";
 
 /**
  * Makes a panel follow the store: it collapses or expands when `open` changes, and a drag that
- * collapses or reopens it reports back through `onOpenChange`.
+ * collapses or reopens it reports back through the panel's `onResize`.
  */
 function usePanelOpen(open: boolean, remembered: number) {
   const panel = usePanelRef();
@@ -45,7 +45,8 @@ function usePanelOpen(open: boolean, remembered: number) {
       }
       if (!open && !handle.isCollapsed()) handle.collapse();
     } catch {
-      // Not laid out yet; the panel starts in the right state from its default size.
+      // Not laid out yet. The panel starts at its default size from when the window opened, and its
+      // first size report brings the store in line with it.
     }
   }, [open, panel]);
 

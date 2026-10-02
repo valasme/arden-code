@@ -637,7 +637,7 @@ Every row is measured by CI on the release build, and the ones that can fail the
 | TypeScript unit | Vitest 5 (Node) |
 | Components | Vitest browser mode on Chromium (the same engine family as WebView2) + Testing Library + axe |
 | UI flows with a mocked backend | The same Vitest browser mode, with the calls to Rust answered by `mockIPC` |
-| End to end (the real app) | Playwright attached to the app's WebView2 over CDP (debug builds only) |
+| End to end (the real app) | Playwright attached to the app's WebView2 over CDP (debug builds only). Input that must take the real path goes through Windows instead: key presses for the web engine's own shortcuts, and clicks, with Playwright detached, where timing matters (clicks while CDP is attached hid a bug that real clicks hit) |
 | Visual regression | Playwright screenshots of the design system page in light, dark, high contrast and 200% zoom |
 | Contracts | Bindings drift check; hard-coded-text lint; brand outputs up to date |
 

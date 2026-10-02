@@ -76,6 +76,12 @@ public static class W {
 }
 "@
 function Main-Window($id) { [W]::Find($id, "Arden Code") }
+# Real input goes to whichever window is in front: brings the window forward, and says whether it is.
+function Bring-Forward($top) {
+  [W]::SetForegroundWindow($top) | Out-Null
+  Start-Sleep -Milliseconds 300
+  [W]::GetForegroundWindow() -eq $top
+}
 `;
 
 function powershell(script: string): string {
@@ -182,9 +188,7 @@ export function countAppProcesses(): number {
 export function pressKey(pid: number, virtualKey: number): boolean {
   const pressed = powershell(`
     $top = Main-Window ${pid}
-    [W]::SetForegroundWindow($top) | Out-Null
-    Start-Sleep -Milliseconds 300
-    if ([W]::GetForegroundWindow() -ne $top) { "no"; exit }
+    if (-not (Bring-Forward $top)) { "no"; exit }
     [W]::keybd_event(${virtualKey}, 0, 0, [UIntPtr]::Zero)
     [W]::keybd_event(${virtualKey}, 0, 2, [UIntPtr]::Zero)
     "yes"
@@ -205,9 +209,7 @@ export function pressKey(pid: number, virtualKey: number): boolean {
 export function clickAt(pid: number, x: number, y: number): boolean {
   const clicked = powershell(`
     $top = Main-Window ${pid}
-    [W]::SetForegroundWindow($top) | Out-Null
-    Start-Sleep -Milliseconds 300
-    if ([W]::GetForegroundWindow() -ne $top) { "no"; exit }
+    if (-not (Bring-Forward $top)) { "no"; exit }
     $point = New-Object W+POINT
     $point.X = ${Math.round(x)}; $point.Y = ${Math.round(y)}
     [void][W]::ClientToScreen([W]::FindPage($top), [ref]$point)
