@@ -286,3 +286,33 @@ describe("TitleBar with the title bar of Windows", () => {
     await expectNoAccessibilityViolations(container);
   });
 });
+
+describe("The pointer", () => {
+  it("shows on every button in the bar, the window buttons included, and not on a disabled one", () => {
+    startWindow();
+    render(<TitleBar {...navigation} canGoForward={false} />);
+
+    for (const name of ["Window menu", "Back", "Minimize", "Maximize", "Close"]) {
+      expect(getComputedStyle(screen.getByRole("button", { name })).cursor).toBe("pointer");
+    }
+    expect(getComputedStyle(screen.getByRole("button", { name: /Search/u })).cursor).toBe(
+      "pointer",
+    );
+    expect(getComputedStyle(screen.getByRole("button", { name: "Forward" })).cursor).not.toBe(
+      "pointer",
+    );
+  });
+});
+
+describe("The field that opens the command palette", () => {
+  it("is a filled strip with no border, with the palette's shortcut drawn as a key", () => {
+    startWindow();
+    render(<TitleBar {...navigation} />);
+    const field = screen.getByRole("button", { name: /Search or run a command/u });
+    const bar = screen.getByRole("banner");
+
+    expect(getComputedStyle(field).borderTopWidth).toBe("0px");
+    expect(getComputedStyle(field).backgroundColor).not.toBe(getComputedStyle(bar).backgroundColor);
+    expect(field.querySelector("kbd")).toHaveTextContent("Ctrl+K");
+  });
+});

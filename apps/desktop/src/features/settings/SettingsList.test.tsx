@@ -469,3 +469,22 @@ describe("The settings tabs", () => {
     await expectNoAccessibilityViolations(container);
   });
 });
+
+describe("The layout of a tab", () => {
+  it("draws each setting as one row of a bordered list, its control at the end of the row", async () => {
+    startApp();
+    renderTab("appearance");
+    const toggle = await screen.findByRole("switch", { name: "Show status bar" });
+    const list = screen.getByRole("list", { name: "Appearance" });
+    const row = toggle.closest("li");
+    if (!row) throw new Error("the setting is not a row of the list");
+
+    expect(getComputedStyle(list).borderTopWidth).toBe("1px");
+    // The switch sits at the end of its row, beside the name rather than under it.
+    const name = within(row).getByRole("heading", { name: "Show status bar" });
+    expect(row.getBoundingClientRect().right - toggle.getBoundingClientRect().right).toBeLessThan(
+      24,
+    );
+    expect(toggle.getBoundingClientRect().top).toBeLessThan(name.getBoundingClientRect().bottom);
+  });
+});

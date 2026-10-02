@@ -14,7 +14,7 @@ function AgentRow({ agent }: { agent: Detection }) {
   return (
     <section
       aria-labelledby={`agent-${agent.cli}`}
-      className="flex flex-col gap-2 border-b border-border py-4 last:border-b-0"
+      className="flex flex-col gap-2 border-b border-border px-4 py-3 last:border-b-0"
     >
       <div className="flex items-center justify-between gap-4">
         <h3 id={`agent-${agent.cli}`} className="text-sm font-medium">
@@ -65,7 +65,7 @@ export function AgentsTab() {
 
   return (
     <div>
-      <p className="mb-2 text-xs text-muted-foreground">{t("settings.agents.description")}</p>
+      <p className="mb-4 text-sm text-muted-foreground">{t("settings.agents.description")}</p>
       {error ? (
         <p className="py-2 text-sm">
           {t(`errors.${toAppError(error).code}.what`)} ({toAppError(error).code})
@@ -76,10 +76,14 @@ export function AgentsTab() {
           {t("settings.agents.looking")}
         </output>
       ) : null}
-      {data?.map((agent) => (
-        <AgentRow key={agent.cli} agent={agent} />
-      ))}
-      <div className="pt-2">
+      {data ? (
+        <div className="border border-border">
+          {data.map((agent) => (
+            <AgentRow key={agent.cli} agent={agent} />
+          ))}
+        </div>
+      ) : null}
+      <div className="pt-4">
         <Button
           variant="outline"
           disabled={isFetching}

@@ -103,6 +103,58 @@ describe("the command palette", () => {
     expect(dialog).toBeVisible();
   });
 
+  it("lists the commands in their groups, with their shortcuts drawn as keys", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+
+    await animationsDone(palette);
+
+    const session = within(palette).getByRole("group", { name: "Session" });
+    expect(within(session).getByRole("option", { name: /New session/ })).toBeVisible();
+    const goTo = within(palette).getByRole("group", { name: "Go to" });
+    expect(within(goTo).getByRole("option", { name: /Settings/ })).toBeVisible();
+    const view = within(palette).getByRole("group", { name: "View" });
+    const toggle = within(view).getByRole("option", { name: /Toggle sidebar/ });
+    expect(toggle.querySelector("kbd")).toHaveTextContent("Ctrl+B");
+  });
+
+  it("says along the bottom which keys move, run and close", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+
+    await animationsDone(palette);
+
+    expect(within(palette).getByText("to move")).toBeVisible();
+    expect(within(palette).getByText("to run")).toBeVisible();
+    expect(within(palette).getByText("to close")).toBeVisible();
+  });
+
+  it("is wide, and sits high on the screen", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+    await animationsDone(palette);
+
+    const box = palette.getBoundingClientRect();
+    // The test window is 1280 × 800: 40rem wide, a fifth of the way down.
+    expect(box.width).toBe(640);
+    expect(box.top).toBe(160);
+    expect(within(palette).getByRole("combobox").getBoundingClientRect().height).toBeGreaterThan(
+      40,
+    );
+  });
+
   it("lists every command with its shortcut", async () => {
     const user = userEvent.setup();
     renderApp();
@@ -231,15 +283,11 @@ describe("the default shortcuts", () => {
   it("focus the message box with Ctrl+L, when there is one", async () => {
     const user = userEvent.setup();
     renderApp();
-    await screen.findByRole("main");
-    const box = document.createElement("textarea");
-    box.setAttribute("data-message-box", "");
-    document.body.append(box);
+    await startWithNoFocus();
 
     await user.keyboard("{Control>}l{/Control}");
 
-    expect(box).toHaveFocus();
-    box.remove();
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveFocus();
   });
 
   it("go back and forward with Alt+Left and Alt+Right", async () => {
@@ -249,7 +297,7 @@ describe("the default shortcuts", () => {
 
     await user.keyboard("{Alt>}{ArrowLeft}{/Alt}");
     expect(
-      await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." }),
+      await screen.findByRole("heading", { name: "What should the Demo agent work on?" }),
     ).toBeVisible();
 
     await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
@@ -271,6 +319,23 @@ describe("the default shortcuts", () => {
       }
     }
     await expectNoAccessibilityViolations(sheet);
+  });
+
+  it("list the shortcuts in the command palette's groups", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}/{/Control}");
+    const sheet = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
+
+    await animationsDone(sheet);
+
+    const view = within(sheet).getByRole("table", { name: "View" });
+    expect(within(view).getByRole("row", { name: /Toggle sidebar/ })).toHaveTextContent("Ctrl+B");
+    const session = within(sheet).getByRole("table", { name: "Session" });
+    expect(within(session).getByRole("row", { name: /New session/ })).toHaveTextContent("Ctrl+N");
+    expect(within(sheet).getByRole("table", { name: "Go to" })).toBeVisible();
   });
 });
 
@@ -473,11 +538,17 @@ describe("shortcuts a person changed", () => {
 const areaWithFocus = () =>
   document.activeElement?.closest("[data-area]")?.getAttribute("data-area") ?? "none";
 
+/** The welcome state puts the focus in its message box; these tests start with it nowhere. */
+async function startWithNoFocus() {
+  await screen.findByRole("textbox", { name: "Message" });
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+}
+
 describe("F6 and Shift+F6", () => {
   it("move the focus through the title bar, sidebar, session view and status bar, and around again", async () => {
     const user = userEvent.setup();
     renderApp();
-    await screen.findByRole("main");
+    await startWithNoFocus();
     expect(areaWithFocus()).toBe("none");
 
     const seen: string[] = [];
@@ -493,7 +564,7 @@ describe("F6 and Shift+F6", () => {
   it("go the other way with Shift", async () => {
     const user = userEvent.setup();
     renderApp();
-    await screen.findByRole("main");
+    await startWithNoFocus();
 
     await user.keyboard("{Shift>}{F6}{/Shift}");
     expect(areaWithFocus()).toBe("statusbar");
@@ -511,6 +582,7 @@ describe("F6 and Shift+F6", () => {
     await waitFor(() => {
       expect(screen.getByRole("complementary", { name: "Inspector" })).toBeVisible();
     });
+    await startWithNoFocus();
 
     const seen: string[] = [];
     for (let press = 0; press < 4; press += 1) {
@@ -524,12 +596,16 @@ describe("F6 and Shift+F6", () => {
 
   it("put the focus on an area that has nothing to press, so the keyboard can still start there", async () => {
     const user = userEvent.setup();
-    renderApp(["/"]);
-    await screen.findByRole("main");
+    useLayoutStore.setState({ inspectorOpen: true });
+    renderApp();
+    const inspector = await screen.findByRole("complementary", { name: "Inspector" });
+    await startWithNoFocus();
 
-    await user.keyboard("{F6}{F6}{F6}");
+    // Shift+F6 goes to the status bar, then to the inspector, which has no control in it.
+    await user.keyboard("{Shift>}{F6}{F6}{/Shift}");
 
-    expect(areaWithFocus()).toBe("session");
+    expect(areaWithFocus()).toBe("inspector");
+    expect(document.activeElement).toBe(inspector);
     expect(document.activeElement).toBeVisible();
   });
 });

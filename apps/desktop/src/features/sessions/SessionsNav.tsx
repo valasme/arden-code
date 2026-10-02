@@ -3,7 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { SquarePenIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { Button } from "@/components/ui/button";
+import { ShortcutHint } from "@/components/layout/ShortcutHint";
+import { sidebarRow } from "@/components/layout/sidebarRow";
 import { CommandTooltip } from "@/features/commands/CommandTooltip";
 import { useCommands } from "@/features/commands/CommandsProvider";
 import { projectsQuery } from "@/ipc/queries";
@@ -17,41 +18,36 @@ export function SessionsNav() {
   return (
     <>
       <CommandTooltip command="session.new">
-        <Button
-          variant="outline"
-          className="justify-start"
+        <button
+          type="button"
+          className={sidebarRow}
           onClick={() => {
             run("session.new");
           }}
         >
-          <SquarePenIcon aria-hidden className="size-4" strokeWidth={1.5} />
+          <SquarePenIcon aria-hidden className="size-4 text-muted-foreground" strokeWidth={1.5} />
           {t("sessions.new")}
-        </Button>
+          <ShortcutHint command="session.new" />
+        </button>
       </CommandTooltip>
-      <h2 className="px-2 pt-2 text-xs font-medium text-muted-foreground">
-        {t("sidebar.projects")}
-      </h2>
+      <h2 className="sr-only">{t("sidebar.projects")}</h2>
       {projects.map(({ project, sessions }) => (
-        <section key={project.id} aria-labelledby={`project-${project.id}`}>
+        <section key={project.id} aria-labelledby={`project-${project.id}`} className="pt-3">
           <h3
             id={`project-${project.id}`}
             title={project.kind === "playground" ? undefined : project.path}
-            className="truncate px-2 pb-1 text-xs font-medium"
+            className="truncate px-2 pb-1 text-2xs font-medium text-muted-foreground"
           >
             {project.kind === "playground" ? t("sessions.playground") : project.name}
           </h3>
           {sessions.length === 0 ? (
-            <p className="px-2 text-xs text-muted-foreground">{t("sidebar.noSessions")}</p>
+            <p className="px-2 py-1 text-xs text-muted-foreground">{t("sidebar.noSessions")}</p>
           ) : (
-            <ul>
+            <ul className="flex flex-col gap-px">
               {sessions.map((session) => (
                 <li key={session.id}>
-                  <Link
-                    to="/session/$id"
-                    params={{ id: session.id }}
-                    className="block truncate px-2 py-1 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&.active]:bg-sidebar-accent [&.active]:font-medium forced-colors:[&.active]:underline"
-                  >
-                    {session.title ?? t("sessions.untitled")}
+                  <Link to="/session/$id" params={{ id: session.id }} className={sidebarRow}>
+                    <span className="truncate">{session.title ?? t("sessions.untitled")}</span>
                   </Link>
                 </li>
               ))}

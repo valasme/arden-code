@@ -151,7 +151,7 @@ export function MarkdownText({ text, streaming }: { text: string; streaming: boo
         translations={translations}
         skipHtml
         linkSafety={{ enabled: false }}
-        className="markdown text-sm"
+        className="markdown py-1 text-base"
       >
         {text}
       </Streamdown>

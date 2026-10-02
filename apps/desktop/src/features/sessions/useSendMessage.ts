@@ -14,11 +14,11 @@ import { applyTurnEvent, hasTurn } from "./turnEvents";
  * session as it is when the reply starts, and then sends the reply through a channel; events that
  * arrive before that answer wait for it.
  */
-export function useSendMessage(sessionId: string) {
+export function useSendMessage() {
   const queryClient = useQueryClient();
 
   return useCallback(
-    async (text: string) => {
+    async (sessionId: string, text: string) => {
       const key = sessionQuery(sessionId).queryKey;
       const waiting: TurnEvent[] = [];
       const apply = (event: TurnEvent) => {
@@ -44,6 +44,6 @@ export function useSendMessage(sessionId: string) {
         showErrorToast(toAppError(error));
       }
     },
-    [queryClient, sessionId],
+    [queryClient],
   );
 }

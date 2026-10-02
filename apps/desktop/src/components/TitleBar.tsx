@@ -9,7 +9,10 @@ import { useSnapLayouts } from "@/lib/snapLayouts";
 import { cn } from "@/lib/utils";
 import { useWindowMaximized, windowControls } from "@/lib/useWindowControls";
 
+import { Kbd } from "@/components/ui/kbd";
 import { CommandTooltip } from "@/features/commands/CommandTooltip";
+import { useShortcutsOf } from "@/features/commands/CommandsProvider";
+import { formatShortcut } from "@/features/commands/shortcuts";
 
 import { Mark } from "./brand/Logo";
 import { CloseGlyph, MaximizeGlyph, MinimizeGlyph, RestoreGlyph } from "./WindowIcons";
@@ -63,6 +66,7 @@ export function TitleBar({
   const maximized = useWindowMaximized();
   const maximizeButton = useRef<HTMLButtonElement>(null);
   const maximizeLook = useSnapLayouts(maximizeButton, !native);
+  const [paletteShortcut] = useShortcutsOf("palette.open");
 
   // Alt+Space opens the system menu, as in every Windows app. With the title bar of Windows,
   // Windows does it.
@@ -133,14 +137,19 @@ export function TitleBar({
         </BarButton>
       </CommandTooltip>
 
+      {/* A quiet strip, not a form field: it opens the command palette (ADR 0032). */}
       <button
         type="button"
         onClick={onSearch}
-        className="mx-auto my-1 flex min-w-0 max-w-md flex-1 items-center gap-2 border border-input bg-background px-2 text-xs text-muted-foreground hover:bg-muted"
+        className="mx-auto my-1 flex max-w-md min-w-0 flex-1 items-center gap-2 bg-muted px-2.5 text-xs text-muted-foreground hover:bg-border hover:text-foreground forced-colors:border forced-colors:border-[ButtonBorder]"
       >
-        <SearchIcon aria-hidden className="size-4 shrink-0" strokeWidth={1.5} />
+        <SearchIcon aria-hidden className="size-3.5 shrink-0" strokeWidth={1.5} />
         <span className="truncate">{t("titleBar.search")}</span>
-        <kbd className="ml-auto shrink-0 font-sans text-2xs">{t("titleBar.searchShortcut")}</kbd>
+        {paletteShortcut ? (
+          <Kbd className="ms-auto h-4 border-0 bg-transparent px-0 text-muted-foreground">
+            {formatShortcut(paletteShortcut)}
+          </Kbd>
+        ) : null}
       </button>
 
       {native ? null : (

@@ -226,15 +226,16 @@ The sidebar lists sessions grouped by project. The foundation ships one built-in
 ```text
 ┌ Title bar: logo menu · back/forward · search / command palette ··········· ─ □ ✕ ┐
 ├ Sidebar ─────────┬ Main ─────────────────────────────────┬ Inspector (hidden) ─┤
-│ New session      │ Session view (or Settings)            │ later: diffs,       │
-│ Projects         │                                       │ files, terminal     │
-│  └ Sessions      │                                       │                     │
-│ Settings         │ Message box                           │                     │
+│ New session ^N   │      ┌ reading column, 45rem ┐        │ later: diffs,       │
+│ PROJECT          │      │ turns                 │        │ files, terminal     │
+│  sessions        │      │                       │        │                     │
+│ Settings    ^,   │      └ message box ──────────┘        │                     │
 ├──────────────────┴───────────────────────────────────────┴─────────────────────┤
-└ Status bar: agent status · update status · notices                               ┘
+└ Status bar: what the agent is doing · update status · version                    ┘
 ```
 
 - **Panes:** the sidebar and the inspector can be collapsed and resized. Their sizes are remembered.
+- **The look** ([ADR 0032](adr/0032-the-redesign.md)): a quiet frame in the spirit of Linear, the session view in the spirit of Claude Desktop. New session is the sidebar's first row and Settings its last, each with its shortcut; each project is a small label over its sessions. Every enabled control shows the pointer cursor, the window buttons included.
 - **No white flash:** the window starts hidden, with its background already in the current theme. It appears after the first frame is drawn.
 - **Window memory:** size, position, monitor and maximized state are restored. A position that would now be off-screen is corrected.
 - **Smallest size:** 500 × 560 px. Windows asks for 500 px or less, or the window does not fit the zones of Snap Layouts; the sidebar and the session view at their smallest fit in it.
@@ -255,6 +256,8 @@ The sidebar lists sessions grouped by project. The foundation ships one built-in
 ### 6.3 Settings
 
 Settings is a full page at `/settings/<tab>`, with search across every setting. Changes apply instantly, with inline validation, and each setting can be reset on its own.
+
+On a settings page the sidebar shows Back, the settings search and the tabs instead of the projects, so there is one sidebar; Back returns to the last page outside Settings. The page scrolls by itself, and the tabs stay put. Each tab is a centered column under its title, with every setting as one row of a list: name and description, then the control at the end of the row. A choice of a few options is a row of joined buttons, and on or off is a square switch.
 
 | Tab | Settings and actions (default in brackets) |
 |---|---|
@@ -280,7 +283,9 @@ There is no language picker until a second language exists.
 
 ### 6.4 Keyboard and commands
 
-A single **command registry** drives the command palette, menus, tooltips, the cheat sheet and the Keyboard settings tab. Each entry has an id, a translated label, an icon, a default shortcut, a rule for when it applies, and a handler.
+A single **command registry** drives the command palette, menus, tooltips, the cheat sheet and the Keyboard settings tab. Each entry has an id, a translated label, an icon, a group (Session, Go to or View), a default shortcut, a rule for when it applies, and a handler.
+
+The command palette is a wide panel high on the screen: a large search line, the commands in their groups with their shortcuts drawn as keys, and the keys that drive it written along the bottom.
 
 | Action | Default |
 |---|---|
@@ -306,7 +311,9 @@ A single **command registry** drives the command palette, menus, tooltips, the c
 
 ### 6.5 Session view placeholder and the Demo agent
 
+- **Layout:** the turns sit in a centered reading column, at most 45rem wide. The person's message is a filled block at the end of the line; the reply follows under the agent's name with no box. Tool calls, file changes and thinking are quiet lines along a rule, and turns are separated by space.
 - **Message box:**
+  - A bordered block, at least two lines tall, naming the agent and the project under the text, with Send. While a reply runs, Send becomes Stop.
   - Enter sends; Shift+Enter adds a line.
   - Enter never sends while a character is still being composed (accent keys, input methods for other scripts).
   - Spellcheck is on.
@@ -319,14 +326,15 @@ A single **command registry** drives the command palette, menus, tooltips, the c
   - 10,000 messages still scroll at 60 fps.
   - Screen-reader announcements are polite and throttled.
   - Error and empty states look right.
-- **Components:** shadcn's chat components (MessageScroller, Message, Bubble, Marker, Attachment), styled with shadcn/typeset.
+- **Components:** our own, on TanStack Virtual (ADR 0027), with Streamdown for the reply's markdown.
 
 ### 6.6 First launch
 
 There is no setup wizard. The session view shows the welcome state:
-- the logo
+- the mark and a question: "What should the Demo agent work on?"
 - one line: "Real agents are coming. Try the Demo agent."
-- three shortcut hints: Ctrl+K, Ctrl+N and Ctrl+,
+- the message box: sending from it starts a Demo agent session in the Playground and sends the message
+- three shortcut hints under it: Ctrl+K, Ctrl+N and Ctrl+,
 
 The theme follows Windows.
 
@@ -465,7 +473,8 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
 ### 7.4 Focus, motion and density
 
 - **Focus:** shown for keyboard focus only (`:focus-visible`), as a 1px `--ring` outline with a 1px offset. No glow, no animation. Mouse clicks never show a ring.
-- **Motion:** short fades and slides (120–160 ms), for overlays only. All motion stops when Windows "Animation effects" is off or Reduce motion is on.
+- **Motion:** short fades and slides (120–160 ms), for overlays only. All motion stops when Windows "Animation effects" is off or Reduce motion is on. Nothing behind an overlay is blurred; its scrim is a flat tint.
+- **Cursor:** every enabled button, link and control shows the pointer.
 - **Density:** the Lyra style, tuned toward compact. The minimum pointer target is 24×24 px.
 
 ### 7.5 Icons

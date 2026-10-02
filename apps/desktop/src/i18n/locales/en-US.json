@@ -9,6 +9,11 @@
     "shortcut": "Shortcut",
     "title": "Keyboard shortcuts"
   },
+  "commandGroups": {
+    "goTo": "Go to",
+    "session": "Session",
+    "view": "View"
+  },
   "commands": {
     "focusNext": "Move to the next area",
     "focusPrevious": "Move to the previous area",
@@ -235,6 +240,11 @@
   "palette": {
     "description": "Search for a command and press Enter to run it.",
     "empty": "No command matches.",
+    "hints": {
+      "close": "to close",
+      "move": "to move",
+      "run": "to run"
+    },
     "placeholder": "Type a command",
     "title": "Command palette"
   },
@@ -248,13 +258,16 @@
       "failed": "Reply failed.",
       "stopped": "Reply stopped."
     },
+    "context": "{{agent}} · {{project}}",
     "demoAgent": "Demo agent",
     "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
     "jumpToLatest": "Jump to latest",
     "messageBox": {
       "label": "Message",
       "placeholder": "Message the Demo agent",
-      "send": "Send"
+      "send": "Send",
+      "stop": "Stop the reply",
+      "stopShort": "Stop"
     },
     "messages": "Messages",
     "new": "New session",
@@ -439,6 +452,7 @@
         "value": "{{value}}%"
       }
     },
+    "back": "Back",
     "general": {
       "checkForUpdates": {
         "description": "Look for a new version in the background. Nothing installs without you.",
@@ -530,6 +544,7 @@
   "statusBar": {
     "hideInspector": "Hide inspector",
     "hideSidebar": "Hide sidebar",
+    "replying": "{{agent}}: replying",
     "showInspector": "Show inspector",
     "showSidebar": "Show sidebar",
     "updateDownloading": "Downloading an update…",
@@ -544,13 +559,13 @@
     "menu": "Window menu",
     "minimize": "Minimize",
     "restore": "Restore",
-    "search": "Search or run a command",
-    "searchShortcut": "Ctrl+K"
+    "search": "Search or run a command"
   },
   "welcome": {
     "line": "Real agents are coming. Try the Demo agent.",
     "newSession": "New session",
     "palette": "Command palette",
+    "question": "What should the Demo agent work on?",
     "settings": "Settings"
   }
 }

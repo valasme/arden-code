@@ -10,6 +10,8 @@ import { expect, launchApp, openDevPage, test } from "./fixtures";
 async function ask(page: Page, message: string) {
   await expect(page.getByRole("main")).toBeVisible();
   await page.keyboard.press("Control+N");
+  // The welcome state has a message box too: wait for the new session's own.
+  await expect(page.getByRole("main", { name: "Session" })).toBeVisible();
   const box = page.getByRole("textbox", { name: "Message" });
   await expect(box).toBeFocused();
   await box.fill(message);
@@ -32,7 +34,7 @@ test.describe("sessions in the real app", () => {
       await expect(
         app.page.getByRole("heading", {
           level: 1,
-          name: "Real agents are coming. Try the Demo agent.",
+          name: "What should the Demo agent work on?",
         }),
       ).toBeVisible();
 
@@ -73,6 +75,7 @@ test.describe("sessions in the real app", () => {
     try {
       await expect(app.page.getByRole("main")).toBeVisible();
       await app.page.getByRole("button", { name: "New session" }).click();
+      await expect(app.page.getByRole("main", { name: "Session" })).toBeVisible();
       const box = app.page.getByRole("textbox", { name: "Message" });
       await expect(box).toBeFocused();
 

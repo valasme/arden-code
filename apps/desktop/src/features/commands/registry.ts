@@ -37,6 +37,11 @@ export type CommandId =
   | "focus.next"
   | "focus.previous";
 
+/** The groups the command palette and the cheat sheet list commands in, in this order. */
+export const commandGroups = ["session", "goTo", "view"] as const;
+
+export type CommandGroup = (typeof commandGroups)[number];
+
 export interface CommandDefinition {
   id: CommandId;
   /** The key of the command's name in the language file. */
@@ -58,6 +63,8 @@ export interface CommandDefinition {
     | "commands.focusNext"
     | "commands.focusPrevious";
   icon: LucideIcon;
+  /** Where the command is listed in the command palette and the cheat sheet. */
+  group: CommandGroup;
   /**
    * Default shortcuts, the first being the one shown. They never use Ctrl+Alt with a letter (AltGr
    * types characters on many layouts), the Windows key, or a key Windows reserves; a test checks it.
@@ -72,76 +79,112 @@ export interface CommandDefinition {
 export const commandDefinitions = [
   {
     id: "palette.open",
+    group: "goTo",
     labelKey: "commands.paletteOpen",
     icon: CommandIcon,
     shortcuts: ["Ctrl+K", "Ctrl+Shift+P"],
   },
   {
     id: "session.new",
+    group: "session",
     labelKey: "commands.sessionNew",
     icon: SquarePenIcon,
     shortcuts: ["Ctrl+N"],
   },
   {
     id: "reply.stop",
+    group: "session",
     labelKey: "commands.replyStop",
     icon: SquareIcon,
     shortcuts: ["Escape"],
   },
   {
     id: "settings.open",
+    group: "goTo",
     labelKey: "commands.settingsOpen",
     icon: SettingsIcon,
     shortcuts: ["Ctrl+,"],
   },
   {
     id: "sidebar.toggle",
+    group: "view",
     labelKey: "commands.sidebarToggle",
     icon: PanelLeftIcon,
     shortcuts: ["Ctrl+B"],
   },
   {
     id: "inspector.toggle",
+    group: "view",
     labelKey: "commands.inspectorToggle",
     icon: PanelRightIcon,
     shortcuts: ["Ctrl+J"],
   },
   {
     id: "messageBox.focus",
+    group: "session",
     labelKey: "commands.messageBoxFocus",
     icon: TextCursorInputIcon,
     shortcuts: ["Ctrl+L"],
   },
   {
     id: "window.fullScreen",
+    group: "view",
     labelKey: "commands.windowFullScreen",
     icon: MaximizeIcon,
     shortcuts: ["F11"],
   },
   {
     id: "shortcuts.show",
+    group: "goTo",
     labelKey: "commands.shortcutsShow",
     icon: KeyboardIcon,
     shortcuts: ["Ctrl+/"],
   },
   {
     id: "navigate.back",
+    group: "goTo",
     labelKey: "commands.navigateBack",
     icon: ArrowLeftIcon,
     shortcuts: ["Alt+ArrowLeft"],
   },
   {
     id: "navigate.forward",
+    group: "goTo",
     labelKey: "commands.navigateForward",
     icon: ArrowRightIcon,
     shortcuts: ["Alt+ArrowRight"],
   },
-  { id: "zoom.in", labelKey: "commands.zoomIn", icon: ZoomInIcon, shortcuts: ["Ctrl+="] },
-  { id: "zoom.out", labelKey: "commands.zoomOut", icon: ZoomOutIcon, shortcuts: ["Ctrl+-"] },
-  { id: "zoom.reset", labelKey: "commands.zoomReset", icon: RotateCcwIcon, shortcuts: ["Ctrl+0"] },
-  { id: "focus.next", labelKey: "commands.focusNext", icon: ChevronsRightIcon, shortcuts: ["F6"] },
+  {
+    id: "zoom.in",
+    group: "view",
+    labelKey: "commands.zoomIn",
+    icon: ZoomInIcon,
+    shortcuts: ["Ctrl+="],
+  },
+  {
+    id: "zoom.out",
+    group: "view",
+    labelKey: "commands.zoomOut",
+    icon: ZoomOutIcon,
+    shortcuts: ["Ctrl+-"],
+  },
+  {
+    id: "zoom.reset",
+    group: "view",
+    labelKey: "commands.zoomReset",
+    icon: RotateCcwIcon,
+    shortcuts: ["Ctrl+0"],
+  },
+  {
+    id: "focus.next",
+    group: "goTo",
+    labelKey: "commands.focusNext",
+    icon: ChevronsRightIcon,
+    shortcuts: ["F6"],
+  },
   {
     id: "focus.previous",
+    group: "goTo",
     labelKey: "commands.focusPrevious",
     icon: ChevronsLeftIcon,
     shortcuts: ["Shift+F6"],

@@ -29,7 +29,7 @@ describe("App", () => {
     renderApp();
 
     expect(
-      await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." }),
+      await screen.findByRole("heading", { name: "What should the Demo agent work on?" }),
     ).toBeVisible();
   });
 
@@ -46,7 +46,7 @@ describe("App", () => {
     mockAppInfo();
 
     const { container } = renderApp();
-    await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." });
+    await screen.findByRole("heading", { name: "What should the Demo agent work on?" });
 
     await expectNoAccessibilityViolations(container);
   });
@@ -64,7 +64,7 @@ describe("App", () => {
 
     await user.click(back);
     expect(
-      await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." }),
+      await screen.findByRole("heading", { name: "What should the Demo agent work on?" }),
     ).toBeVisible();
     expect(back).toBeDisabled();
     expect(forward).toBeEnabled();

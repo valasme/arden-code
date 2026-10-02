@@ -56,6 +56,27 @@
   ::selection {
     background: var(--selection);
   }
+
+  /*
+   * Everything that can be pressed shows the pointer, the window buttons included (ADR 0032). A
+   * disabled control keeps the arrow.
+   */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="switch"]:not([data-disabled]),
+  [role="radio"]:not([data-disabled]),
+  [role="tab"],
+  [role="slider"],
+  [role="option"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([data-disabled]),
+  [role="menuitemcheckbox"]:not([data-disabled]),
+  [role="menuitemradio"]:not([data-disabled]),
+  a[href],
+  summary,
+  label[for],
+  select:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 /*
@@ -96,4 +117,22 @@
   transition-duration: 0.01ms !important;
   transition-delay: 0s !important;
   scroll-behavior: auto !important;
+}
+
+/*
+ * The message box shows its focus on the block around it, which holds the text and its buttons,
+ * rather than as a second outline inside that block.
+ */
+[data-message-box]:focus-visible {
+  outline: none;
+}
+
+[data-message-frame]:has([data-message-box]:focus-visible) {
+  outline: 1px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* The command palette's search line is the panel's whole purpose; its caret shows where the focus is. */
+[data-slot="command-input"]:focus-visible {
+  outline: none;
 }

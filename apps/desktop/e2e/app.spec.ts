@@ -14,7 +14,7 @@ function visibleWindowTitle(): string {
 test("the real app shows the welcome state", async ({ appPage }) => {
   await expect(appPage).toHaveTitle("Arden Code");
   await expect(appPage.getByRole("heading", { level: 1 })).toHaveText(
-    "Real agents are coming. Try the Demo agent.",
+    "What should the Demo agent work on?",
   );
 });
 

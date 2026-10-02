@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { isTauri } from "@tauri-apps/api/core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { commands } from "@/ipc/bindings";
 import { appInfoQuery } from "@/ipc/queries";
@@ -37,7 +38,6 @@ export function ErrorScreen({ error, onReload = reloadWindow }: ErrorScreenProps
   const { t, i18n } = useTranslation();
   const appError = toAppError(error);
   const { data: info } = useQuery(appInfoQuery);
-  const headingRef = useRef<HTMLHeadingElement>(null);
   const [copied, setCopied] = useState(false);
 
   // Say so in the log, once per error, so the code on the screen can be found there.
@@ -49,11 +49,6 @@ export function ErrorScreen({ error, onReload = reloadWindow }: ErrorScreenProps
     );
     // The error object is a new value on every render, so its code and details are its identity.
   }, [appError.code, appError.details, appError.messageKey]);
-
-  // Keyboard and screen reader users land on the error, not on whatever was focused before.
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
 
   /** The words for this code, or the generic ones when the UI has none for it. */
   const words = (part: "what" | "why" | "action") =>
@@ -67,10 +62,9 @@ export function ErrorScreen({ error, onReload = reloadWindow }: ErrorScreenProps
   };
 
   return (
-    <main className="flex max-w-xl flex-col gap-4 p-6">
-      <h1 ref={headingRef} tabIndex={-1} className="text-xl font-semibold outline-none">
-        {t("errorScreen.title")}
-      </h1>
+    <main className="mx-auto flex w-full max-w-[40rem] flex-col gap-4 px-6 pt-8 pb-12">
+      {/* Keyboard and screen reader users land on the error, not on whatever was focused before. */}
+      <PageHeader title={t("errorScreen.title")} focusOnOpen />
       <p className="text-sm">
         <span className="text-muted-foreground">{t("errorScreen.code")}: </span>
         <code className="text-sm">{appError.code}</code>

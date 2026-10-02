@@ -76,69 +76,81 @@ export function AdvancedTab({ onViewLogs }: { onViewLogs: () => void }) {
   return (
     <div>
       <SettingsList tab="advanced" />
-      <h2 className="mt-4 text-sm font-medium">{t("settings.advanced.diagnostics.title")}</h2>
-      <ActionRow
-        id="view-logs"
-        label={t("settings.advanced.logs.view.label")}
-        description={t("settings.advanced.logs.view.description")}
-        button={t("settings.advanced.logs.view.button")}
-        onClick={onViewLogs}
-      />
-      <ActionRow
-        id="open-logs-folder"
-        label={t("settings.advanced.logs.folder.label")}
-        description={t("settings.advanced.logs.folder.description")}
-        button={t("settings.advanced.logs.folder.button")}
-        onClick={openLogsFolder}
-      />
-      <ActionRow
-        id="export-diagnostics"
-        label={t("settings.advanced.diagnostics.label")}
-        description={t("settings.advanced.diagnostics.description")}
-        button={t("settings.advanced.diagnostics.button")}
-        onClick={exportDiagnostics}
-      />
-      <h2 className="mt-4 text-sm font-medium">{t("settings.advanced.files")}</h2>
-      <ActionRow
-        id="open-settings-file"
-        label={t("settings.advanced.openFile.label")}
-        description={t("settings.advanced.openFile.description")}
-        button={t("settings.advanced.openFile.button")}
-        onClick={openSettingsFile}
-      />
-      <ActionRow
-        id="export-settings"
-        label={t("settings.advanced.export.label")}
-        description={t("settings.advanced.export.description")}
-        button={t("settings.advanced.export.button")}
-        onClick={exportSettings}
-      />
-      <ActionRow
-        id="import-settings"
-        label={t("settings.advanced.import.label")}
-        description={t("settings.advanced.import.description")}
-        button={t("settings.advanced.import.button")}
-        onClick={importSettings}
-      />
-      <h2 className="mt-4 text-sm font-medium">{t("settings.advanced.reset.title")}</h2>
-      <ActionRow
-        id="reset-settings"
-        label={t("settings.advanced.reset.label")}
-        description={t("settings.advanced.reset.description")}
-        button={t("settings.advanced.reset.button")}
-        onClick={() => {
-          setConfirming("settings");
-        }}
-      />
-      <ActionRow
-        id="reset-app"
-        label={t("settings.advanced.resetApp.label")}
-        description={t("settings.advanced.resetApp.description")}
-        button={t("settings.advanced.resetApp.button")}
-        onClick={() => {
-          setConfirming("app");
-        }}
-      />
+      <h2 className="mt-8 mb-2 text-xs font-medium text-muted-foreground">
+        {t("settings.advanced.diagnostics.title")}
+      </h2>
+      <div className="border border-border">
+        <ActionRow
+          id="view-logs"
+          label={t("settings.advanced.logs.view.label")}
+          description={t("settings.advanced.logs.view.description")}
+          button={t("settings.advanced.logs.view.button")}
+          onClick={onViewLogs}
+        />
+        <ActionRow
+          id="open-logs-folder"
+          label={t("settings.advanced.logs.folder.label")}
+          description={t("settings.advanced.logs.folder.description")}
+          button={t("settings.advanced.logs.folder.button")}
+          onClick={openLogsFolder}
+        />
+        <ActionRow
+          id="export-diagnostics"
+          label={t("settings.advanced.diagnostics.label")}
+          description={t("settings.advanced.diagnostics.description")}
+          button={t("settings.advanced.diagnostics.button")}
+          onClick={exportDiagnostics}
+        />
+      </div>
+      <h2 className="mt-8 mb-2 text-xs font-medium text-muted-foreground">
+        {t("settings.advanced.files")}
+      </h2>
+      <div className="border border-border">
+        <ActionRow
+          id="open-settings-file"
+          label={t("settings.advanced.openFile.label")}
+          description={t("settings.advanced.openFile.description")}
+          button={t("settings.advanced.openFile.button")}
+          onClick={openSettingsFile}
+        />
+        <ActionRow
+          id="export-settings"
+          label={t("settings.advanced.export.label")}
+          description={t("settings.advanced.export.description")}
+          button={t("settings.advanced.export.button")}
+          onClick={exportSettings}
+        />
+        <ActionRow
+          id="import-settings"
+          label={t("settings.advanced.import.label")}
+          description={t("settings.advanced.import.description")}
+          button={t("settings.advanced.import.button")}
+          onClick={importSettings}
+        />
+      </div>
+      <h2 className="mt-8 mb-2 text-xs font-medium text-muted-foreground">
+        {t("settings.advanced.reset.title")}
+      </h2>
+      <div className="border border-border">
+        <ActionRow
+          id="reset-settings"
+          label={t("settings.advanced.reset.label")}
+          description={t("settings.advanced.reset.description")}
+          button={t("settings.advanced.reset.button")}
+          onClick={() => {
+            setConfirming("settings");
+          }}
+        />
+        <ActionRow
+          id="reset-app"
+          label={t("settings.advanced.resetApp.label")}
+          description={t("settings.advanced.resetApp.description")}
+          button={t("settings.advanced.resetApp.button")}
+          onClick={() => {
+            setConfirming("app");
+          }}
+        />
+      </div>
 
       <ConfirmDialog
         open={confirming === "settings"}

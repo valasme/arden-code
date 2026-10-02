@@ -27,6 +27,19 @@ describe("the design system page", () => {
     },
   );
 
+  it("shows every control in every state: switches on, off and disabled, a choice, a slider and keys", () => {
+    render(
+      <DesignSystemPage theme="light" zoom={1} onThemeChange={() => {}} onZoomChange={() => {}} />,
+    );
+
+    expect(screen.getByRole("switch", { name: "On" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "Off" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "Disabled" })).toBeDisabled();
+    expect(screen.getByRole("radiogroup", { name: "A choice" })).toBeVisible();
+    expect(screen.getByRole("slider")).toBeVisible();
+    expect(screen.getByText("Ctrl+K", { selector: "kbd" })).toBeVisible();
+  });
+
   it("applies the requested theme to the page", () => {
     render(
       <DesignSystemPage theme="dark" zoom={1} onThemeChange={() => {}} onZoomChange={() => {}} />,

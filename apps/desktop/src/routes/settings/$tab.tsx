@@ -1,6 +1,7 @@
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
+import { PageHeader } from "@/components/PageHeader";
 import { AgentsTab } from "@/features/agents/AgentsTab";
 import { NotificationsTab } from "@/features/notifications/NotificationsTab";
 import { AboutTab } from "@/features/settings/AboutTab";
@@ -58,9 +59,9 @@ function SettingsTabPage() {
   if (!isSettingsTab(tab)) return null;
 
   return (
-    <main className="max-w-xl p-6">
-      <h1 className="mb-2 text-xl font-semibold">{t(`settings.tabs.${tab}`)}</h1>
+    <>
+      <PageHeader title={t(`settings.tabs.${tab}`)} />
       <TabContent tab={tab} />
-    </main>
+    </>
   );
 }

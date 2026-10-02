@@ -39,3 +39,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0029](0029-notifications.md) | Notifications | Accepted |
 | [0030](0030-updates.md) | Updates | Accepted |
 | [0031](0031-restarts-and-reset.md) | Starting the app again, and resetting it | Accepted |
+| [0032](0032-the-redesign.md) | The redesign: a calm frame, and the session in the middle | Accepted |

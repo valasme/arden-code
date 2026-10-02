@@ -110,3 +110,37 @@ describe("every command", () => {
     }
   });
 });
+
+describe("the groups", () => {
+  /** Where each command belongs in the command palette and the cheat sheet (ADR 0032). */
+  const grouped: Record<string, string> = {
+    "session.new": "session",
+    "reply.stop": "session",
+    "messageBox.focus": "session",
+    "palette.open": "goTo",
+    "settings.open": "goTo",
+    "shortcuts.show": "goTo",
+    "navigate.back": "goTo",
+    "navigate.forward": "goTo",
+    "focus.next": "goTo",
+    "focus.previous": "goTo",
+    "sidebar.toggle": "view",
+    "inspector.toggle": "view",
+    "window.fullScreen": "view",
+    "zoom.in": "view",
+    "zoom.out": "view",
+    "zoom.reset": "view",
+  };
+
+  it("puts every command in its group", () => {
+    expect(
+      Object.fromEntries(commandDefinitions.map((command) => [command.id, command.group])),
+    ).toEqual(grouped);
+  });
+
+  it("names every group in the language file", () => {
+    for (const group of new Set(Object.values(grouped))) {
+      expect(resources["en-US"].translation.commandGroups, group).toHaveProperty(group);
+    }
+  });
+});

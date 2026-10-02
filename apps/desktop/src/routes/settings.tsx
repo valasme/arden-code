@@ -1,47 +1,26 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
 
-import { Input } from "@/components/ui/input";
 import { SettingsSearchResults } from "@/features/settings/SettingsSearchResults";
-import { SettingsTabs } from "@/features/settings/SettingsTabs";
+import { useSettingsPageStore } from "@/state/settingsPage";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsLayout,
 });
 
 /**
- * The Settings page: the tabs on the left, and on the right a search box above the open tab. While
- * something is typed, the results from every tab take the place of the tab.
+ * The Settings page: a centered column that scrolls by itself, so the tabs in the sidebar stay
+ * still. While something is typed in the sidebar's search, the results from every tab take the
+ * place of the tab.
  */
 function SettingsLayout() {
-  const { t } = useTranslation();
-  const [query, setQuery] = useState("");
+  const query = useSettingsPageStore((state) => state.query);
   const searching = query.trim() !== "";
 
   return (
-    <div className="flex min-h-full">
-      <SettingsTabs />
-      <div className="min-w-0 flex-1">
-        <div className="max-w-xl px-6 pt-6">
-          <Input
-            type="search"
-            aria-label={t("settings.search.label")}
-            placeholder={t("settings.search.placeholder")}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-            }}
-          />
-        </div>
-        {searching ? (
-          <main className="max-w-xl p-6">
-            <SettingsSearchResults query={query} />
-          </main>
-        ) : (
-          <Outlet />
-        )}
+    <main className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-[40rem] px-6 pt-8 pb-12">
+        {searching ? <SettingsSearchResults query={query} /> : <Outlet />}
       </div>
-    </div>
+    </main>
   );
 }
