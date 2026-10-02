@@ -16,7 +16,10 @@ interface SettingRowProps {
 
 const controls = '[role="radio"][aria-checked="true"], [role="switch"], [role="slider"], input';
 
-/** One setting: its name, what it does, its control, and a way to put it back to its default. */
+/**
+ * One setting: its name, what it does, its control at the end of the row (under the text when the
+ * row is narrow), and a way to put it back to its default.
+ */
 export function SettingRow({
   id,
   label,
@@ -29,34 +32,37 @@ export function SettingRow({
   const control = useRef<HTMLDivElement>(null);
 
   return (
-    <div className="flex flex-col gap-2 border-b border-border py-4 last:border-b-0">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-0.5">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
+      <div className="flex min-w-48 flex-1 flex-col gap-0.5">
+        <div className="flex items-center gap-2">
           <h2 id={`${id}-label`} className="text-sm font-medium">
             {label}
           </h2>
-          <p id={`${id}-description`} className="text-xs text-muted-foreground">
-            {description}
-          </p>
+          {modified ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-muted-foreground"
+              aria-label={t("settings.reset", { name: label })}
+              onClick={() => {
+                // The button disappears once the setting is back to its default, so focus moves to
+                // the control instead of being lost.
+                void onReset().then(() => {
+                  control.current?.querySelector<HTMLElement>(controls)?.focus();
+                });
+              }}
+            >
+              {t("settings.resetButton")}
+            </Button>
+          ) : null}
         </div>
-        {modified ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label={t("settings.reset", { name: label })}
-            onClick={() => {
-              // The button disappears once the setting is back to its default, so focus moves to
-              // the control instead of being lost.
-              void onReset().then(() => {
-                control.current?.querySelector<HTMLElement>(controls)?.focus();
-              });
-            }}
-          >
-            {t("settings.resetButton")}
-          </Button>
-        ) : null}
+        <p id={`${id}-description`} className="text-xs text-muted-foreground">
+          {description}
+        </p>
       </div>
-      <div ref={control}>{children}</div>
+      <div ref={control} className="flex max-w-full flex-col items-end gap-2">
+        {children}
+      </div>
     </div>
   );
 }

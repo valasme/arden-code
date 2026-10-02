@@ -4,6 +4,7 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
+import { page } from "vitest/browser";
 
 import type { AppError, Settings, SystemPreferences } from "@/ipc/bindings";
 import { settingsWith } from "@/test/settings";
@@ -151,6 +152,55 @@ describe("the Settings page", () => {
       "page",
     );
     expect(screen.getByRole("link", { name: "General" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("shows the tabs in the sidebar, in place of the projects, so there is one sidebar", async () => {
+    startApp();
+    renderApp("/settings/general");
+    await screen.findByRole("heading", { level: 1, name: "General" });
+    const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
+
+    expect(within(sidebar).getByRole("navigation", { name: "Settings sections" })).toBeVisible();
+    expect(within(sidebar).getByRole("searchbox", { name: "Search settings" })).toBeVisible();
+    expect(within(sidebar).queryByRole("button", { name: "New session" })).toBeNull();
+    expect(screen.getAllByRole("navigation", { name: "Settings sections" })).toHaveLength(1);
+  });
+
+  it("goes back to the last page outside Settings, past every tab that was opened", async () => {
+    startApp();
+    const user = userEvent.setup();
+    renderApp("/");
+    await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." });
+    await user.click(screen.getByRole("link", { name: "Settings" }));
+    await screen.findByRole("heading", { level: 1, name: "General" });
+    await user.click(screen.getByRole("link", { name: "Appearance" }));
+    await screen.findByRole("heading", { level: 1, name: "Appearance" });
+
+    await user.click(screen.getByRole("link", { name: "Back" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Real agents are coming. Try the Demo agent." }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "New session" })).toBeVisible();
+  });
+
+  it("scrolls the settings by themselves, and the tabs stay where they are", async () => {
+    startApp();
+    await page.viewport(1280, 400);
+    renderApp("/settings/appearance");
+    const title = await screen.findByRole("heading", { level: 1, name: "Appearance" });
+    const tab = screen.getByRole("link", { name: "Keyboard" });
+    const before = tab.getBoundingClientRect().top;
+    const scroller = title.closest("main");
+    if (!scroller) throw new Error("the settings page is not in a main region");
+
+    scroller.scrollTop = 200;
+
+    await waitFor(() => {
+      expect(scroller.scrollTop).toBeGreaterThan(0);
+    });
+    expect(tab.getBoundingClientRect().top).toBe(before);
+    await page.viewport(1280, 800);
   });
 
   it("moves between tabs", async () => {

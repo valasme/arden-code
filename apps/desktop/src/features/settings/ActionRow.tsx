@@ -11,8 +11,8 @@ interface ActionRowProps {
 /** Something to do rather than something to set: a name, what it does, and its button. */
 export function ActionRow({ id, label, description, button, onClick }: ActionRowProps) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-border py-4 last:border-b-0">
-      <div className="flex flex-col gap-0.5">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-border px-4 py-3 last:border-b-0">
+      <div className="flex min-w-48 flex-1 flex-col gap-0.5">
         <h3 id={`${id}-label`} className="text-sm font-medium">
           {label}
         </h3>

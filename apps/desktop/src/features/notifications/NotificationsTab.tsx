@@ -27,13 +27,15 @@ export function NotificationsTab() {
   return (
     <div>
       <SettingsList tab="notifications" />
-      <ActionRow
-        id="test-notification"
-        label={t("settings.notifications.test.label")}
-        description={t("settings.notifications.test.description")}
-        button={t("settings.notifications.test.button")}
-        onClick={sendTest}
-      />
+      <div className="mt-4 border border-border">
+        <ActionRow
+          id="test-notification"
+          label={t("settings.notifications.test.label")}
+          description={t("settings.notifications.test.description")}
+          button={t("settings.notifications.test.button")}
+          onClick={sendTest}
+        />
+      </div>
     </div>
   );
 }

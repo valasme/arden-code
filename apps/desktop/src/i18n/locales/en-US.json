@@ -449,6 +449,7 @@
         "value": "{{value}}%"
       }
     },
+    "back": "Back",
     "general": {
       "checkForUpdates": {
         "description": "Look for a new version in the background. Nothing installs without you.",

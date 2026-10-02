@@ -1,4 +1,4 @@
-import { Outlet } from "@tanstack/react-router";
+import { Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { usePanelRef } from "react-resizable-panels";
 
@@ -14,6 +14,7 @@ import { useRememberedLayout } from "@/features/settings/useRememberedLayout";
 import { useSettings } from "@/features/settings/useSettings";
 import { useOverlayStore } from "@/state/overlays";
 import { useLayoutStore } from "@/state/layout";
+import { isSettingsPage, useSettingsPageStore } from "@/state/settingsPage";
 
 import { TitleBar } from "../TitleBar";
 import { Inspector } from "./Inspector";
@@ -51,8 +52,18 @@ function usePanelOpen(open: boolean, remembered: number) {
   return panel;
 }
 
+/** Remembers the last page outside Settings, where Back in the settings sidebar returns to. */
+function useReturnFromSettings() {
+  const location = useRouterState({ select: (state) => state.location });
+  const setReturnTo = useSettingsPageStore((state) => state.setReturnTo);
+  useEffect(() => {
+    if (!isSettingsPage(location.pathname)) setReturnTo(location.href);
+  }, [location, setReturnTo]);
+}
+
 /** The frame around every page: title bar, sidebar, page, inspector and status bar. */
 export function AppShell() {
+  useReturnFromSettings();
   const navigation = useNavigationHistory();
   useMouseNavigation(navigation);
   const openPalette = useOverlayStore((state) => state.setPaletteOpen);

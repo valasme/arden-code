@@ -58,9 +58,9 @@ function SettingsTabPage() {
   if (!isSettingsTab(tab)) return null;
 
   return (
-    <main className="max-w-xl p-6">
-      <h1 className="mb-2 text-xl font-semibold">{t(`settings.tabs.${tab}`)}</h1>
+    <>
+      <h1 className="mb-6 text-xl font-semibold">{t(`settings.tabs.${tab}`)}</h1>
       <TabContent tab={tab} />
-    </main>
+    </>
   );
 }
