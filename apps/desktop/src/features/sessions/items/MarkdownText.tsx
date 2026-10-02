@@ -51,7 +51,9 @@ function SafeLink({ href, children }: ComponentProps<"a">) {
         href={href}
         rel="noreferrer noopener"
         title={href}
-        className="text-primary underline underline-offset-2"
+        // In a contrast theme --primary is a fill color (ButtonFace), the color of the background.
+        // A link takes the theme's own link color instead.
+        className="text-primary underline underline-offset-2 forced-colors:text-[LinkText]"
         onClick={(event) => {
           event.preventDefault();
           if (kind === "open") open(false);
