@@ -59,6 +59,7 @@ jobs:
           if ($env:REAL_KEY) {
             "TAURI_SIGNING_PRIVATE_KEY<<KEY_END`n$env:REAL_KEY`nKEY_END" >> $env:GITHUB_ENV
             "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$env:REAL_KEY_PASSWORD" >> $env:GITHUB_ENV
+            "SIGNED_WITH_REAL_KEY=true" >> $env:GITHUB_ENV
             "Signing with the real update key."
           } else {
             $key = Join-Path $env:RUNNER_TEMP "trial.key"
@@ -95,7 +96,13 @@ jobs:
           $version = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           if (-not $version) { $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value }
           $url = "https://github.com/${{ github.repository }}/releases/download/v$version/" + [uri]::EscapeDataString("${{ steps.files.outputs.name }}")
-          node scripts/latest-json.ts --version $version --url $url --signature-file "${{ steps.files.outputs.signature }}" --notes "Trial release" > latest.json
+          # Signed with the real key, the signature must be one the app trusts, as in a release.
+          $check = @()
+          if ($env:SIGNED_WITH_REAL_KEY) {
+            $check = @("--trusted-key", (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).plugins.updater.pubkey)
+          }
+          node scripts/latest-json.ts --version $version --url $url --signature-file "${{ steps.files.outputs.signature }}" --notes "Trial release" @check > latest.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-Content latest.json
 
       - name: Keep the results for a few days

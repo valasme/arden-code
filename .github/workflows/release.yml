@@ -86,7 +86,10 @@ jobs:
         run: |
           $version = "${{ github.ref_name }}".TrimStart("v")
           $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/" + [uri]::EscapeDataString("${{ steps.files.outputs.name }}")
-          node scripts/latest-json.ts --version $version --url $url --signature-file "${{ steps.files.outputs.signature }}" > latest.json
+          # Refuses a signature the app would refuse: one made with any key but the one it trusts.
+          $trustedKey = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).plugins.updater.pubkey
+          node scripts/latest-json.ts --version $version --url $url --signature-file "${{ steps.files.outputs.signature }}" --trusted-key $trustedKey > latest.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Attest where the installer came from
         uses: actions/attest-build-provenance@v3

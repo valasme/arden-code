@@ -39,6 +39,8 @@ secret, and says so as a warning.
 
    Then run **Release trial** from the Actions tab: its "Choose the update signing key" step says
    "Signing with the real update key". If it warns that the secret is not set, the secret is empty.
+   Signed with the real key, the trial and the release both check that the signature was made with the
+   key the app trusts (`plugins.updater.pubkey` in `tauri.conf.json`), and fail if it was not.
 3. **Switch releases on** when the trial is green: add the repository variable `RELEASES_ENABLED` with
    the value `true`. From then on, release-please keeps a release pull request open. Merging it tags
    the version and the release workflow uploads the installer, its signature and `latest.json`.
