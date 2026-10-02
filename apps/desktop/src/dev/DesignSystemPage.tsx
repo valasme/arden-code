@@ -3,6 +3,10 @@ import { useEffect } from "react";
 
 import { Logo, Mark, Wordmark } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
+import { RadioGroup, RadioGroupButton } from "@/components/ui/radio-group";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { applyTheme, type ThemeMode } from "@/lib/theme";
 
 import { SessionItemsSample } from "./SessionItemsSample";
@@ -166,6 +170,35 @@ export function DesignSystemPage({
             defaultValue="Control borders are 3:1"
           />
         </label>
+        <div className="flex flex-wrap items-center gap-6 text-sm">
+          <span className="flex items-center gap-2">
+            <Switch id="ds-switch-on" defaultChecked />
+            <label htmlFor="ds-switch-on">On</label>
+          </span>
+          <span className="flex items-center gap-2">
+            <Switch id="ds-switch-off" />
+            <label htmlFor="ds-switch-off">Off</label>
+          </span>
+          <span className="flex items-center gap-2">
+            <Switch id="ds-switch-disabled" disabled />
+            <label htmlFor="ds-switch-disabled">Disabled</label>
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-6">
+          <RadioGroup aria-label="A choice" defaultValue="system" className="flex w-auto gap-0">
+            <RadioGroupButton value="system">Same as Windows</RadioGroupButton>
+            <RadioGroupButton value="light">Light</RadioGroupButton>
+            <RadioGroupButton value="dark">Dark</RadioGroupButton>
+          </RadioGroup>
+          <span className="flex w-64 items-center gap-3 text-xs">
+            <span id="ds-slider">Zoom</span>
+            <Slider aria-labelledby="ds-slider" min={80} max={200} defaultValue={[100]} />
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Kbd>Ctrl+K</Kbd>
+            <Kbd>Esc</Kbd>
+          </span>
+        </div>
       </section>
 
       <section aria-labelledby="ds-icons" className="flex flex-col gap-4">

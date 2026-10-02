@@ -88,7 +88,7 @@ export function RangeControl({
         aria-labelledby={`${id}-label`}
         aria-describedby={`${id}-description`}
         getValueText={format}
-        className="max-w-64"
+        className="w-40"
         min={min}
         max={max}
         step={step}
@@ -101,7 +101,7 @@ export function RangeControl({
         }}
       />
       {/* The slider announces its value itself; this is for people who can see it. */}
-      <span aria-hidden className="w-12 text-xs tabular-nums">
+      <span aria-hidden className="w-12 text-end text-xs whitespace-nowrap tabular-nums">
         {format(value)}
       </span>
     </div>

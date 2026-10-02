@@ -131,3 +131,8 @@
   outline: 1px solid var(--ring);
   outline-offset: 1px;
 }
+
+/* The command palette's search line is the panel's whole purpose; its caret shows where the focus is. */
+[data-slot="command-input"]:focus-visible {
+  outline: none;
+}
