@@ -45,14 +45,6 @@
     font-size: var(--code-font-size, 0.8125rem);
   }
 
-  /* Toasts look like the app's other floating surfaces. */
-  .toaster {
-    --normal-bg: var(--popover);
-    --normal-text: var(--popover-foreground);
-    --normal-border: var(--border);
-    --border-radius: var(--radius);
-  }
-
   ::selection {
     background: var(--selection);
   }
@@ -85,6 +77,28 @@
  * outline-none and ring-1.
  */
 *:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+/*
+ * Toasts (components/Toaster.tsx) are Sonner's, drawn with the app's parts. Sonner's own rules are
+ * outside any layer too, so these outweigh them with :root. A toast moves for 160ms, not Sonner's
+ * 200ms to 500ms (plan section 7.4), swiped away included; the reduced motion rule below still
+ * wins. Keyboard focus on a toast shows the app's outline, not Sonner's glow.
+ */
+:root [data-sonner-toaster],
+:root [data-sonner-toast],
+:root [data-sonner-toast] > * {
+  transition-duration: 160ms !important;
+}
+
+:root [data-sonner-toast] {
+  animation-duration: 160ms !important;
+}
+
+:root [data-sonner-toast]:focus-visible {
   outline: 1px solid var(--ring);
   outline-offset: 1px;
   box-shadow: none;

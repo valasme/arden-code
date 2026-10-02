@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, type RouterHistory } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/Toaster";
 import { CrashRecovery } from "@/features/diagnostics/CrashRecovery";
 import { WebEngineNotice } from "@/features/diagnostics/WebEngineNotice";
 import { SettingsSync } from "@/features/settings/SettingsSync";

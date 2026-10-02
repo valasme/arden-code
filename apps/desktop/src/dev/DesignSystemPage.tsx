@@ -1,5 +1,6 @@
 import { CopyIcon, FolderIcon, SearchIcon, SettingsIcon, TerminalIcon } from "lucide-react";
 import { useEffect } from "react";
+import { toast } from "sonner";
 
 import { Logo, Mark, Wordmark } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,33 @@ export const zoomChoices = [1, 1.5, 2] as const;
 export type Zoom = (typeof zoomChoices)[number];
 
 const icons = [FolderIcon, SearchIcon, SettingsIcon, TerminalIcon, CopyIcon];
+
+const shownUntilClosed = { duration: Number.POSITIVE_INFINITY };
+const copyDetails = { label: "Copy details", onClick: () => {} };
+
+/** One toast of each kind, written as the app writes them. */
+const toastSamples = [
+  { kind: "Success", show: () => toast.success("Settings exported", shownUntilClosed) },
+  { kind: "Info", show: () => toast.info("Arden Code is up to date", shownUntilClosed) },
+  {
+    kind: "Warning",
+    show: () =>
+      toast.warning("Notice (ARD-SET-002)", {
+        ...shownUntilClosed,
+        description: "The settings file could not be read, so the defaults are in use.",
+        action: copyDetails,
+      }),
+  },
+  {
+    kind: "Error",
+    show: () =>
+      toast.error("Something went wrong (ARD-APP-001)", {
+        ...shownUntilClosed,
+        description: "Something unexpected happened.",
+        action: copyDetails,
+      }),
+  },
+] as const;
 
 interface DesignSystemPageProps {
   theme: ThemeMode;
@@ -205,6 +233,22 @@ export function DesignSystemPage({
             <Kbd>Ctrl+K</Kbd>
             <Kbd>Esc</Kbd>
           </span>
+        </div>
+      </section>
+
+      <section aria-labelledby="ds-toasts" className="flex flex-col gap-4">
+        <h2 id="ds-toasts" className="text-lg font-semibold">
+          Toasts
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Each kind of toast, at the bottom right of the window. They stay until closed.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {toastSamples.map(({ kind, show }) => (
+            <Button key={kind} variant="outline" onClick={show}>
+              {kind}
+            </Button>
+          ))}
         </div>
       </section>
 

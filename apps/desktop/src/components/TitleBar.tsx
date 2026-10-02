@@ -1,5 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { ArrowLeftIcon, ArrowRightIcon, SearchIcon } from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, MenuIcon, SearchIcon } from "lucide-react";
 import { type ComponentProps, type MouseEvent, type ReactNode, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -52,9 +52,9 @@ export function BarButton({ className, ...props }: ComponentProps<"button">) {
 }
 
 /**
- * The window's title bar, drawn by the app: logo menu, back and forward, the search field that opens
- * the command palette, and the window buttons. Empty space drags the window, and a double click on
- * it maximizes or restores it, both handled by Tauri's drag region.
+ * The window's title bar, drawn by the app: the logo, the window menu, back and forward, the search
+ * field that opens the command palette, and the window buttons. Empty space and the logo drag the
+ * window, and a double click on them maximizes or restores it, both handled by Tauri's drag region.
  */
 export function TitleBar({
   canGoBack,
@@ -109,14 +109,20 @@ export function TitleBar({
       className="@container flex h-8 shrink-0 items-stretch gap-1 border-b border-border bg-background pl-1 text-foreground select-none"
     >
       {native ? null : (
-        <BarButton
-          aria-label={t("titleBar.menu")}
-          aria-haspopup="menu"
-          className="w-8"
-          onClick={showSystemMenu}
-        >
-          <Mark decorative className="size-4" />
-        </BarButton>
+        <>
+          {/* Only the logo (ADR 0034): a press on it lands on the bar, as on its empty space. */}
+          <div className="pointer-events-none grid w-8 shrink-0 place-items-center">
+            <Mark className="size-4" />
+          </div>
+          <BarButton
+            aria-label={t("titleBar.menu")}
+            aria-haspopup="menu"
+            className="w-8"
+            onClick={showSystemMenu}
+          >
+            <MenuIcon aria-hidden className="size-5" strokeWidth={1.5} />
+          </BarButton>
+        </>
       )}
 
       <CommandTooltip command="navigate.back">

@@ -1,5 +1,3 @@
-import { useSyncExternalStore } from "react";
-
 export type ThemeMode = "system" | "light" | "dark";
 export type ResolvedTheme = "light" | "dark";
 
@@ -33,20 +31,4 @@ export function applyTheme(mode: ThemeMode = "system"): () => void {
   return () => {
     system.removeEventListener("change", onChange);
   };
-}
-
-function subscribeToDocumentTheme(onChange: () => void) {
-  const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-  return () => {
-    observer.disconnect();
-  };
-}
-
-const readDocumentTheme = (): ResolvedTheme =>
-  document.documentElement.classList.contains("dark") ? "dark" : "light";
-
-/** The theme currently on the page, for parts of the UI that need it as a value, such as toasts. */
-export function useDocumentTheme(): ResolvedTheme {
-  return useSyncExternalStore(subscribeToDocumentTheme, readDocumentTheme);
 }

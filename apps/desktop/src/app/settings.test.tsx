@@ -203,6 +203,18 @@ describe("the Settings page", () => {
     await page.viewport(1280, 800);
   });
 
+  it("keeps the room of the scrollbar on a tab too short to scroll, so the column stays put", async () => {
+    startApp();
+    renderApp("/settings/notifications");
+    const title = await screen.findByRole("heading", { level: 1, name: "Notifications" });
+    const scroller = title.closest("main");
+    if (!scroller) throw new Error("the settings page is not in a main region");
+
+    // The test browser hides its scrollbars, so the room kept for one is checked instead of measured.
+    expect(scroller.scrollHeight).toBe(scroller.clientHeight);
+    expect(getComputedStyle(scroller).scrollbarGutter).toBe("stable");
+  });
+
   it.each(["appearance", "keyboard", "advanced", "about"])(
     "fits the %s tab in the smallest window at double zoom, without scrolling sideways",
     async (tab) => {

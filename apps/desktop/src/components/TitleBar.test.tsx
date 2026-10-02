@@ -117,7 +117,34 @@ describe("TitleBar", () => {
     }
   });
 
-  it("opens the system menu from the logo, from Alt+Space and from a right click on the bar", async () => {
+  it("draws the logo as the app's logo, not a button, and drags the window by it", () => {
+    startWindow();
+    render(<TitleBar {...navigation} />);
+    const logo = screen.getByRole("img", { name: "Arden Code" });
+    const { left, top, width, height } = logo.getBoundingClientRect();
+
+    expect(logo.closest("button")).toBeNull();
+    // A press on the logo lands on the bar itself, which Tauri drags the window by.
+    expect(document.elementFromPoint(left + width / 2, top + height / 2)).toBe(
+      screen.getByRole("banner"),
+    );
+  });
+
+  it("puts the window menu on a button of its own, beside the logo", () => {
+    startWindow();
+    render(<TitleBar {...navigation} />);
+    const logo = screen.getByRole("img", { name: "Arden Code" });
+    const menu = screen.getByRole("button", { name: "Window menu" });
+
+    expect(menu).toHaveAttribute("aria-haspopup", "menu");
+    expect(menu.contains(logo)).toBe(false);
+    expect(logo.compareDocumentPosition(menu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(menu.getBoundingClientRect().left).toBeGreaterThanOrEqual(
+      logo.getBoundingClientRect().right,
+    );
+  });
+
+  it("opens the system menu from its button, from Alt+Space and from a right click on the bar", async () => {
     const window = startWindow();
     const user = userEvent.setup();
     const { container } = render(<TitleBar {...navigation} />);
@@ -234,13 +261,14 @@ describe("TitleBar", () => {
 });
 
 describe("TitleBar with the title bar of Windows", () => {
-  it("leaves the window buttons, the logo menu and the drag area to Windows", () => {
+  it("leaves the window buttons, the logo, the window menu and the drag area to Windows", () => {
     startWindow();
     render(<TitleBar {...navigation} native />);
 
     for (const name of ["Minimize", "Maximize", "Close", "Window menu"]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
+    expect(screen.queryByRole("img", { name: "Arden Code" })).toBeNull();
     expect(screen.getByRole("banner")).not.toHaveAttribute("data-tauri-drag-region");
   });
 

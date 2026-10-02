@@ -41,3 +41,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0031](0031-restarts-and-reset.md) | Starting the app again, and resetting it | Accepted |
 | [0032](0032-the-redesign.md) | The redesign: a calm frame, and the session in the middle | Accepted |
 | [0033](0033-layout-controls-in-the-title-bar.md) | Layout controls in the title bar | Accepted |
+| [0034](0034-the-logo-and-the-window-menu.md) | The logo and the window menu, apart | Accepted |
