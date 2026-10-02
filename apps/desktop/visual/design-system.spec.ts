@@ -33,6 +33,21 @@ const missedByTheWindow = (page: Page) =>
     };
   });
 
+/**
+ * Waits until the browser has drawn the window twice. A code block in a reply has Streamdown's
+ * content-visibility: auto: off screen it has a stand-in height, and it takes its real one only in
+ * a frame after it comes into view, so a measurement taken at once can miss it.
+ */
+const drawn = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(resolve);
+        });
+      }),
+  );
+
 /** The theme's system colors, read from a sample drawn in each in turn. */
 const systemColors = (page: Page) =>
   page.evaluate(() => {
@@ -55,6 +70,7 @@ async function showWholePage(page: Page, search = "") {
   await openDesignSystem(page, search);
   /* oxlint-disable no-await-in-loop -- each step measures the layout the one before it made */
   for (let step = 0; step < 5; step += 1) {
+    await drawn(page);
     const { scrolledAway } = await missedByTheWindow(page);
     if (scrolledAway <= 0) break;
     const { width, height } = page.viewportSize() ?? { width: 1100, height: 900 };
@@ -62,6 +78,7 @@ async function showWholePage(page: Page, search = "") {
   }
   /* oxlint-enable no-await-in-loop */
   // A screenshot that would miss part of the page fails here, not by passing quietly.
+  await drawn(page);
   const missed = await missedByTheWindow(page);
   expect(Math.max(...Object.values(missed)), JSON.stringify(missed)).toBeLessThanOrEqual(0);
 }
