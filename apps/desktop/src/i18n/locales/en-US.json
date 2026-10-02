@@ -258,13 +258,16 @@
       "failed": "Reply failed.",
       "stopped": "Reply stopped."
     },
+    "context": "{{agent}} · {{project}}",
     "demoAgent": "Demo agent",
     "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
     "jumpToLatest": "Jump to latest",
     "messageBox": {
       "label": "Message",
       "placeholder": "Message the Demo agent",
-      "send": "Send"
+      "send": "Send",
+      "stop": "Stop the reply",
+      "stopShort": "Stop"
     },
     "messages": "Messages",
     "new": "New session",

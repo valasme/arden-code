@@ -118,3 +118,16 @@
   transition-delay: 0s !important;
   scroll-behavior: auto !important;
 }
+
+/*
+ * The message box shows its focus on the block around it, which holds the text and its buttons,
+ * rather than as a second outline inside that block.
+ */
+[data-message-box]:focus-visible {
+  outline: none;
+}
+
+[data-message-frame]:has([data-message-box]:focus-visible) {
+  outline: 1px solid var(--ring);
+  outline-offset: 1px;
+}

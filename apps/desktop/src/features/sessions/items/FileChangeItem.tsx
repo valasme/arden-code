@@ -2,6 +2,9 @@ import { FileMinusIcon, FilePenIcon, FilePlusIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { FileChangeKind } from "@/ipc/bindings";
+import { cn } from "@/lib/utils";
+
+import { itemLine } from "./itemLine";
 
 const icons = { created: FilePlusIcon, modified: FilePenIcon, deleted: FileMinusIcon } as const;
 
@@ -18,11 +21,11 @@ export function FileChangeItem({ path, change, added, removed }: FileChangeItemP
   const Icon = icons[change];
 
   return (
-    <div className="my-2 flex items-center gap-2 border border-border px-3 py-2 text-xs">
+    <div data-item="fileChange" className={cn(itemLine, "flex min-h-8 items-center gap-2")}>
       <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.5} />
       <span className="text-muted-foreground">{t(`items.file.${change}`)}</span>
       <code className="min-w-0 flex-1 truncate">{path}</code>
-      <span className="shrink-0 tabular-nums">
+      <span className="shrink-0 tabular-nums text-muted-foreground">
         <span aria-hidden>
           +{added} −{removed}
         </span>

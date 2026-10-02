@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
-import { sessionQuery } from "@/ipc/queries";
+import { projectsQuery, sessionQuery } from "@/ipc/queries";
 import { toAppError } from "@/lib/errors";
 import { useRepliesStore } from "@/state/replies";
 
@@ -32,9 +32,12 @@ export function SessionView({ id }: { id: string }) {
   const { t } = useTranslation();
   const { run } = useCommands();
   const { data: session, error } = useQuery(sessionQuery(id));
+  const { data: projects = [] } = useQuery(projectsQuery);
   const send = useSendMessage(id);
   const transcript = useRef<HTMLElement>(null);
   const stuck = useRef(true);
+  /** Where the view was last held at the end. Only a scroll above it is the person leaving the end. */
+  const heldAt = useRef(0);
   const [atEnd, setAtEnd] = useState(true);
 
   const turns = session?.turns ?? [];
@@ -82,6 +85,7 @@ export function SessionView({ id }: { id: string }) {
     const element = transcript.current;
     if (!element || !stuck.current || count === 0) return;
     element.scrollTop = element.scrollHeight;
+    heldAt.current = element.scrollTop;
     // The size is not read here: a message that grows is the reason to run.
     // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [count, total]);
@@ -105,13 +109,22 @@ export function SessionView({ id }: { id: string }) {
   }
   if (!session) return null;
 
+  const project = projects.find((listing) => listing.project.id === session.projectId)?.project;
+  const context = t("sessions.context", {
+    agent: t("sessions.demoAgent"),
+    project:
+      project === undefined || project.kind === "playground"
+        ? t("sessions.playground")
+        : project.name,
+  });
+
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-baseline gap-3 border-b border-border px-6 py-3">
+      <header className="flex h-10 shrink-0 items-center gap-3 border-b border-border px-5">
         <h1 className="min-w-0 truncate text-sm font-semibold">
           {session.title ?? t("sessions.untitled")}
         </h1>
-        <span className="shrink-0 border border-border px-1.5 text-2xs text-muted-foreground">
+        <span className="shrink-0 border border-border px-1.5 text-2xs leading-4 text-muted-foreground">
           {t("sessions.demoAgent")}
         </span>
       </header>
@@ -127,17 +140,24 @@ export function SessionView({ id }: { id: string }) {
           onScroll={(event) => {
             const element = event.currentTarget;
             const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
-            stuck.current = distance < STICK_DISTANCE;
+            // A reply can grow between the view moving to the end and the browser reporting that
+            // scroll, so the end may already be far away by then. The person has left the end only
+            // when the view moved up, away from where it was held.
+            const movedUp = element.scrollTop < heldAt.current - STICK_DISTANCE;
+            stuck.current = distance < STICK_DISTANCE || (stuck.current && !movedUp);
+            if (stuck.current) heldAt.current = Math.max(heldAt.current, element.scrollTop);
             setAtEnd(stuck.current);
           }}
         >
           {count === 0 ? (
-            <p className="py-6 text-sm text-muted-foreground">{t("sessions.empty")}</p>
+            <p className="mx-auto max-w-[45rem] py-6 text-sm text-muted-foreground">
+              {t("sessions.empty")}
+            </p>
           ) : (
             <div
               role="feed"
               aria-label={t("sessions.messages")}
-              className="relative w-full"
+              className="relative mx-auto w-full max-w-[45rem]"
               style={{ height: total }}
             >
               {virtualizer.getVirtualItems().map((row) => {
@@ -174,6 +194,10 @@ export function SessionView({ id }: { id: string }) {
       <ReplyAnnouncer turn={lastTurn} />
       <MessageBox
         busy={busy}
+        context={context}
+        onStop={() => {
+          run("reply.stop");
+        }}
         onSend={(text) => {
           stuck.current = true;
           setAtEnd(true);
