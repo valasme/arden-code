@@ -46,11 +46,11 @@ async function iconColor(message: string) {
   return getComputedStyle(icon).color;
 }
 
-/** The longest transition of an element, in milliseconds. */
-function longestTransition(element: Element) {
+/** The longest of a list of CSS durations, such as an element's transitions, in milliseconds. */
+function longest(durations: string) {
   return Math.max(
-    ...getComputedStyle(element)
-      .transitionDuration.split(",")
+    ...durations
+      .split(",")
       .map((duration) => Number.parseFloat(duration) * (duration.trim().endsWith("ms") ? 1 : 1000)),
   );
 }
@@ -137,10 +137,15 @@ describe("Toaster", () => {
     toast.success("Sent a test notification");
 
     const item = await shown("Sent a test notification");
-    expect(longestTransition(item)).toBeGreaterThan(0);
-    expect(longestTransition(item)).toBeLessThanOrEqual(160);
+    const style = getComputedStyle(item);
+    expect(longest(style.transitionDuration)).toBeGreaterThan(0);
+    expect(longest(style.transitionDuration)).toBeLessThanOrEqual(160);
+    // Swiped away, as Sonner marks a toast that is dragged off.
+    item.dataset["swipeOut"] = "true";
+    expect(longest(style.animationDuration)).toBeLessThanOrEqual(160);
     root.dataset["motion"] = "reduce";
-    expect(longestTransition(item)).toBeLessThan(1);
+    expect(longest(style.transitionDuration)).toBeLessThan(1);
+    expect(longest(style.animationDuration)).toBeLessThan(1);
   });
 
   it("names its region in the app's words, with the shortcut that reaches it", async () => {

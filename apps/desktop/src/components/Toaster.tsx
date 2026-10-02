@@ -46,7 +46,7 @@ export function Toaster(props: ToasterProps) {
         warning: <TriangleAlertIcon aria-hidden className="size-4" strokeWidth={1.5} />,
         error: <OctagonXIcon aria-hidden className="size-4" strokeWidth={1.5} />,
         loading: <Loader2Icon aria-hidden className="size-4 animate-spin" strokeWidth={1.5} />,
-        close: <XIcon aria-hidden className="size-3.5" strokeWidth={1.5} />,
+        close: <XIcon aria-hidden className="size-4" strokeWidth={1.5} />,
       }}
       toastOptions={{
         unstyled: true,
@@ -62,10 +62,6 @@ export function Toaster(props: ToasterProps) {
           actionButton: cn(
             buttonVariants({ variant: "outline", size: "xs" }),
             "col-start-2 row-start-2 mt-2 justify-self-start",
-          ),
-          cancelButton: cn(
-            buttonVariants({ variant: "ghost", size: "xs" }),
-            "col-start-2 row-start-2 mt-2 justify-self-end",
           ),
           closeButton:
             "col-start-3 row-start-1 -me-1.5 -mt-0.5 ms-2 grid size-6 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground",
