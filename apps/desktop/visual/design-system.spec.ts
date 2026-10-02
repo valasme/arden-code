@@ -33,6 +33,19 @@ const missedByTheWindow = (page: Page) =>
     };
   });
 
+/** The theme's system colors, read from a sample drawn in each in turn. */
+const systemColors = (page: Page) =>
+  page.evaluate(() => {
+    const sample = document.createElement("span");
+    document.body.append(sample);
+    sample.style.color = "Canvas";
+    const canvas = getComputedStyle(sample).color;
+    sample.style.color = "LinkText";
+    const linkText = getComputedStyle(sample).color;
+    sample.remove();
+    return { canvas, linkText };
+  });
+
 /**
  * Opens the page in a window tall enough to show all of it, so a screenshot sees everything. The
  * app's frame is as tall as the window and the page scrolls inside the session view, so it is the
@@ -43,22 +56,14 @@ async function showWholePage(page: Page, search = "") {
   /* oxlint-disable no-await-in-loop -- each step measures the layout the one before it made */
   for (let step = 0; step < 5; step += 1) {
     const { scrolledAway } = await missedByTheWindow(page);
-    if (scrolledAway <= 0) return;
+    if (scrolledAway <= 0) break;
     const { width, height } = page.viewportSize() ?? { width: 1100, height: 900 };
     await page.setViewportSize({ width, height: height + Math.ceil(scrolledAway) });
   }
   /* oxlint-enable no-await-in-loop */
-}
-
-for (const search of ["", "?zoom=2"]) {
-  test(`a screenshot sees the whole page and the frame around it${search ? ` (${search})` : ""}`, async ({
-    page,
-  }) => {
-    await showWholePage(page, search);
-
-    const missed = await missedByTheWindow(page);
-    expect(Math.max(...Object.values(missed)), JSON.stringify(missed)).toBeLessThanOrEqual(0);
-  });
+  // A screenshot that would miss part of the page fails here, not by passing quietly.
+  const missed = await missedByTheWindow(page);
+  expect(Math.max(...Object.values(missed)), JSON.stringify(missed)).toBeLessThanOrEqual(0);
 }
 
 for (const { name, colorScheme, forcedColors } of themes) {
@@ -146,7 +151,7 @@ test("in a high contrast theme, borders and the focus outline stay visible", asy
       outlineColor: style.outlineColor,
     };
   });
-  const canvas = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const { canvas } = await systemColors(page);
 
   expect(look.borderStyle).toBe("solid");
   expect(look.borderWidth).toBe("1px");
@@ -162,18 +167,9 @@ test("in a high contrast theme, a link in an agent's reply has the theme's link 
   await openDesignSystem(page);
 
   const link = page.getByRole("link", { name: "link", exact: true });
-  const colors = await link.evaluate((element) => {
-    // What the theme's system colors are, read from a sample drawn in each in turn.
-    const sample = document.createElement("span");
-    document.body.append(sample);
-    sample.style.color = "LinkText";
-    const linkText = getComputedStyle(sample).color;
-    sample.style.color = "Canvas";
-    const canvas = getComputedStyle(sample).color;
-    sample.remove();
-    return { link: getComputedStyle(element).color, linkText, canvas };
-  });
+  const { canvas, linkText } = await systemColors(page);
+  const color = await link.evaluate((element) => getComputedStyle(element).color);
 
-  expect(colors.link, JSON.stringify(colors)).toBe(colors.linkText);
-  expect(colors.link).not.toBe(colors.canvas);
+  expect(color).toBe(linkText);
+  expect(color).not.toBe(canvas);
 });
