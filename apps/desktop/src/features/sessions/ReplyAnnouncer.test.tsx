@@ -37,14 +37,16 @@ async function wait(milliseconds: number) {
 
 describe("Announcing a reply to screen readers", () => {
   it("is a polite live region that says nothing until there is something to say", () => {
-    render(<ReplyAnnouncer turn={undefined} />);
+    render(<ReplyAnnouncer agent="claude" turn={undefined} />);
 
     expect(region()).toHaveAttribute("aria-live", "polite");
     expect(region()).toHaveTextContent("");
   });
 
   it("says the complete sentences of a streaming reply, once every few seconds and no more often", async () => {
-    const { rerender } = render(<ReplyAnnouncer turn={turnWith("First sentence. Second")} />);
+    const { rerender } = render(
+      <ReplyAnnouncer agent="claude" turn={turnWith("First sentence. Second")} />,
+    );
 
     await wait(ANNOUNCE_INTERVAL_MS - 100);
     expect(region()).toHaveTextContent("");
@@ -53,7 +55,9 @@ describe("Announcing a reply to screen readers", () => {
     expect(region()).toHaveTextContent("First sentence.");
 
     // Words that arrive in between are held until the next time.
-    rerender(<ReplyAnnouncer turn={turnWith("First sentence. Second one. Third one.")} />);
+    rerender(
+      <ReplyAnnouncer agent="claude" turn={turnWith("First sentence. Second one. Third one.")} />,
+    );
     await wait(ANNOUNCE_INTERVAL_MS / 2);
     expect(region()).toHaveTextContent("First sentence.");
 
@@ -63,22 +67,24 @@ describe("Announcing a reply to screen readers", () => {
   });
 
   it("never reads the thinking, and does not repeat what it has already said", async () => {
-    const { rerender } = render(<ReplyAnnouncer turn={turnWith("One thing.")} />);
+    const { rerender } = render(<ReplyAnnouncer agent="claude" turn={turnWith("One thing.")} />);
     await wait(ANNOUNCE_INTERVAL_MS + 100);
     expect(region()).toHaveTextContent("One thing.");
     expect(region()).not.toHaveTextContent("Secret reasoning");
 
-    rerender(<ReplyAnnouncer turn={turnWith("One thing. And half of another")} />);
+    rerender(<ReplyAnnouncer agent="claude" turn={turnWith("One thing. And half of another")} />);
     await wait(ANNOUNCE_INTERVAL_MS * 2);
 
     expect(region()).toHaveTextContent("One thing.");
   });
 
   it("says the rest when the reply is over, and that it is over", async () => {
-    const { rerender } = render(<ReplyAnnouncer turn={turnWith("First. The last words")} />);
+    const { rerender } = render(
+      <ReplyAnnouncer agent="claude" turn={turnWith("First. The last words")} />,
+    );
     await wait(ANNOUNCE_INTERVAL_MS + 100);
 
-    rerender(<ReplyAnnouncer turn={turnWith("First. The last words", "done")} />);
+    rerender(<ReplyAnnouncer agent="claude" turn={turnWith("First. The last words", "done")} />);
     await wait(10);
 
     expect(region()).toHaveTextContent("The last words Reply finished.");
@@ -88,17 +94,39 @@ describe("Announcing a reply to screen readers", () => {
     ["failed", "Reply failed."],
     ["stopped", "Reply stopped."],
   ] as const)("says when the reply %s", async (status, words) => {
-    const { rerender } = render(<ReplyAnnouncer turn={turnWith("Some text.")} />);
+    const { rerender } = render(<ReplyAnnouncer agent="claude" turn={turnWith("Some text.")} />);
     await wait(ANNOUNCE_INTERVAL_MS + 100);
 
-    rerender(<ReplyAnnouncer turn={turnWith("Some text.", status)} />);
+    rerender(<ReplyAnnouncer agent="claude" turn={turnWith("Some text.", status)} />);
     await wait(10);
 
     expect(region()).toHaveTextContent(words);
   });
 
+  it("says an approval request at once, without waiting for the next time", async () => {
+    const asking: Turn = {
+      ...turnWith(""),
+      items: [
+        {
+          type: "approval",
+          id: "turn-1-approval-1",
+          toolCallId: null,
+          action: "runCommand",
+          subject: "npm test",
+          detail: null,
+          rule: null,
+          state: "waiting",
+        },
+      ],
+    };
+    render(<ReplyAnnouncer agent="claude" turn={asking} />);
+    await wait(10);
+
+    expect(region()).toHaveTextContent("Claude wants to run a command: npm test");
+  });
+
   it("says nothing about a session that was opened with its replies already over", async () => {
-    render(<ReplyAnnouncer turn={turnWith("Old reply.", "done")} />);
+    render(<ReplyAnnouncer agent="claude" turn={turnWith("Old reply.", "done")} />);
 
     await wait(ANNOUNCE_INTERVAL_MS * 3);
 

@@ -143,6 +143,11 @@
       "what": "The agent and the project of this session cannot change any more.",
       "why": "A session keeps the agent and the project of its first message."
     },
+    "ARD-AGT-015": {
+      "action": "Nothing to do: the reply already went on without this answer.",
+      "what": "That request no longer waits for an answer.",
+      "why": "The reply stopped, or Claude Code stopped asking, before the answer arrived."
+    },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
       "what": "Something unexpected went wrong inside Arden Code.",
@@ -245,6 +250,26 @@
     "title": "Inspector"
   },
   "items": {
+    "approval": {
+      "allow": "Allow",
+      "alwaysAllow": "Always allow",
+      "answered": {
+        "allowed": "You allowed",
+        "alwaysAllowed": "You always allowed",
+        "cancelled": "No answer was needed",
+        "denied": "You denied"
+      },
+      "asks": {
+        "createFile": "{{agent}} wants to create a file",
+        "editFile": "{{agent}} wants to edit a file",
+        "openPage": "{{agent}} wants to open a web page",
+        "runCommand": "{{agent}} wants to run a command",
+        "searchWeb": "{{agent}} wants to search the web",
+        "useTool": "{{agent}} wants to use a tool"
+      },
+      "deny": "Deny",
+      "rule": "Always allow also allows {{rule}} from now on, without asking."
+    },
     "error": {
       "label": "Error:"
     },
@@ -675,7 +700,8 @@
     "replying": "{{agent}}: replying",
     "updateDownloading": "Downloading an update…",
     "updateReady": "Update ready: restart",
-    "version": "Version {{version}}"
+    "version": "Version {{version}}",
+    "waiting": "{{agent}}: waiting for your answer"
   },
   "titleBar": {
     "back": "Back",

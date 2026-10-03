@@ -13,6 +13,8 @@ import type {
   TurnEvent,
 } from "@/ipc/bindings";
 
+import { applyTurnEvent } from "@/features/sessions/turnEvents";
+
 import { settingsWith } from "./settings";
 
 /** The Playground, as Rust describes it. */
@@ -103,6 +105,8 @@ export function startSessionsRust({
   let made = sessions.length;
   let notice = sessionsNotice;
   let channel: Channel<TurnEvent> | undefined;
+  /** The session the reply streams into. */
+  let replying: string | undefined;
 
   const find = (id: string) => {
     const found = sessions.find((session) => session.id === id);
@@ -238,6 +242,25 @@ export function startSessionsRust({
           for (const other of sessions) if (other.linkedFrom === id) other.linkedFrom = null;
           return null;
         }
+        case "answer_approval": {
+          const { sessionId, itemId } = z
+            .object({
+              sessionId: z.string(),
+              itemId: z.string(),
+              answer: z.enum(["allow", "alwaysAllow", "deny"]),
+            })
+            .parse(payload);
+          const waits = find(sessionId).turns.some(
+            (turn) =>
+              turn.status === "running" &&
+              turn.items.some(
+                (item) =>
+                  item.type === "approval" && item.id === itemId && item.state === "waiting",
+              ),
+          );
+          if (!waits) throw failure("ARD-AGT-015");
+          return null;
+        }
         case "send_message": {
           const { sessionId, text, onEvent } = z
             .object({
@@ -249,6 +272,7 @@ export function startSessionsRust({
           const session = find(sessionId);
           if (session.archivedAt !== null) throw failure("ARD-AGT-005");
           channel = onEvent;
+          replying = sessionId;
           session.title ??= text;
           session.turns.push({
             id: `turn-${session.turns.length + 1}`,
@@ -277,7 +301,10 @@ export function startSessionsRust({
     stops: () => calls.filter((call) => call.command === "stop_reply"),
     /** Streams an event of the reply, as Rust would through the channel. */
     emit(event: TurnEvent) {
-      if (!channel) throw new Error("no message was sent yet");
+      if (!channel || replying === undefined) throw new Error("no message was sent yet");
+      // Rust keeps the turn as it streams, so what the page asks for later agrees with it.
+      const session = sessions.find((candidate) => candidate.id === replying);
+      if (session) Object.assign(session, applyTurnEvent(session, event));
       channel.onmessage(event);
     },
   };

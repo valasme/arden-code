@@ -13,12 +13,13 @@ use std::time::{Duration, Instant};
 
 use arden_core::error::ErrorCode;
 
+use super::approval;
 use super::launch::{Connection, Conversation, LaunchError, Launcher, Start};
 use super::locate::MINIMUM_VERSION;
 use super::protocol::{self, Frame, Request};
 use super::reply::Reply;
-use crate::driver::{AgentDriver, Control, Flow, ReplyRequest};
-use crate::model::{Item, TurnEvent};
+use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
+use crate::model::{ApprovalState, Item, TurnEvent};
 
 /// How long a new Claude Code has to answer `initialize`: it may be starting MCP servers.
 const HANDSHAKE_PATIENCE: Duration = Duration::from_secs(60);
@@ -26,9 +27,22 @@ const HANDSHAKE_PATIENCE: Duration = Duration::from_secs(60);
 const DRAIN_PATIENCE: Duration = Duration::from_secs(30);
 /// How long a Claude Code whose input was closed has to end before it is ended.
 const ENDING_PATIENCE: Duration = Duration::from_millis(500);
-/// What Claude is told when it asks for permission, until approval requests can be answered.
-const NO_APPROVALS_YET: &str =
-    "Arden Code cannot answer approval requests yet, so this was not allowed.";
+/// What Claude is told when it asks the person a question, until questions can be answered.
+const NO_QUESTIONS_YET: &str =
+    "Arden Code cannot show questions yet, so the person did not answer.";
+/// What Claude is told when the person denies a request.
+const DENIED: &str = "The person denied this.";
+/// What Claude is told about a request that waited when the person stopped the reply.
+const STOPPED: &str = "The person stopped the reply.";
+
+/// An approval request that waits for the person's answer.
+struct Pending {
+    request_id: String,
+    item: Item,
+    input: serde_json::Value,
+    /// The rule Claude Code suggested, to hand back when the person always allows.
+    rule: Option<serde_json::Value>,
+}
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -285,6 +299,31 @@ impl ClaudeDriver {
     }
 }
 
+/// Hands the person's answer to a request back to Claude Code, and says what became of it. A
+/// denial stops the turn: its result is still to come.
+fn hand_back(live: &Live, answered: &Pending, answer: Answer) -> ApprovalState {
+    match answer {
+        Answer::Deny => {
+            let _ = live.write(&protocol::deny(&answered.request_id, DENIED, true));
+            live.owed.fetch_add(1, Ordering::AcqRel);
+            ApprovalState::Denied
+        }
+        Answer::AlwaysAllow if answered.rule.is_some() => {
+            let rules: Vec<serde_json::Value> = answered.rule.iter().cloned().collect();
+            let _ = live.write(&protocol::allow(
+                &answered.request_id,
+                &answered.input,
+                &rules,
+            ));
+            ApprovalState::AlwaysAllowed
+        }
+        Answer::Allow | Answer::AlwaysAllow => {
+            let _ = live.write(&protocol::allow(&answered.request_id, &answered.input, &[]));
+            ApprovalState::Allowed
+        }
+    }
+}
+
 /// Ends a reply that could not reach Claude, with what to do.
 fn fail(turn_id: &str, problem: &Problem, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
     let _ = emit(TurnEvent::ItemAdded {
@@ -298,6 +337,174 @@ fn fail(turn_id: &str, problem: &Problem, emit: &mut dyn FnMut(TurnEvent) -> Flo
     let _ = emit(TurnEvent::Failed {
         turn_id: turn_id.to_owned(),
     });
+}
+
+/// One reply as it happens: the frames Claude Code sends, the requests that wait for the person,
+/// and the person's answers and stop.
+struct Answering<'a> {
+    driver: &'a ClaudeDriver,
+    live: &'a Live,
+    turn_id: &'a str,
+    folder: &'a Path,
+    reply: Reply,
+    pending: Vec<Pending>,
+}
+
+/// Whether a reply goes on after something it heard.
+#[derive(PartialEq, Eq)]
+enum Next {
+    Continue,
+    Over,
+    /// Claude Code ended in the middle of the reply.
+    Ended,
+}
+
+impl Answering<'_> {
+    fn added(&self, item: Item) -> TurnEvent {
+        TurnEvent::ItemAdded {
+            turn_id: self.turn_id.to_owned(),
+            item,
+        }
+    }
+
+    /// Hands an event to the session; when the session wants the reply stopped, it stops.
+    fn show(&mut self, event: TurnEvent, emit: &mut dyn FnMut(TurnEvent) -> Flow) -> Next {
+        if emit(event) == Flow::Stop {
+            self.stop();
+            return Next::Over;
+        }
+        Next::Continue
+    }
+
+    /// Stops the reply: each request that waits is answered no, then Claude Code is interrupted.
+    fn stop(&mut self) {
+        self.deny_waiting();
+        self.driver.interrupt(self.live);
+    }
+
+    /// Answers no to each request that still waits, as the reply is over.
+    fn deny_waiting(&mut self) {
+        for waiting in self.pending.drain(..) {
+            let _ = self
+                .live
+                .write(&protocol::deny(&waiting.request_id, STOPPED, false));
+        }
+    }
+
+    /// Claude Code asks for permission: the request waits for the person.
+    fn on_permission(
+        &mut self,
+        id: String,
+        permission: protocol::Permission,
+        emit: &mut dyn FnMut(TurnEvent) -> Flow,
+    ) -> Next {
+        if permission.tool == "AskUserQuestion" {
+            let _ = self
+                .live
+                .write(&protocol::deny(&id, NO_QUESTIONS_YET, false));
+            return Next::Continue;
+        }
+        let item = approval::item(self.turn_id, &id, &permission, self.folder);
+        self.pending.push(Pending {
+            request_id: id,
+            item: item.clone(),
+            input: permission.input,
+            rule: approval::rule_of(&permission.suggestions).map(|(_, rule)| rule),
+        });
+        let event = self.added(item);
+        self.show(event, emit)
+    }
+
+    /// Claude Code no longer needs an answer to a request.
+    fn on_cancel(&mut self, id: &str, emit: &mut dyn FnMut(TurnEvent) -> Flow) -> Next {
+        let Some(at) = self
+            .pending
+            .iter()
+            .position(|waiting| waiting.request_id == id)
+        else {
+            return Next::Continue;
+        };
+        let given_up = self.pending.remove(at);
+        let event = self.added(approval::with_state(
+            &given_up.item,
+            ApprovalState::Cancelled,
+        ));
+        self.show(event, emit)
+    }
+
+    /// The person answers a request. Denying it stops the reply.
+    fn on_answer(
+        &mut self,
+        item_id: &str,
+        answer: Answer,
+        emit: &mut dyn FnMut(TurnEvent) -> Flow,
+    ) -> Next {
+        let Some(at) = self
+            .pending
+            .iter()
+            .position(|waiting| waiting.item.id() == item_id)
+        else {
+            return Next::Continue;
+        };
+        let answered = self.pending.remove(at);
+        let state = hand_back(self.live, &answered, answer);
+        let event = self.added(approval::with_state(&answered.item, state));
+        if state != ApprovalState::Denied {
+            return self.show(event, emit);
+        }
+        self.deny_waiting();
+        let _ = emit(event);
+        let _ = emit(TurnEvent::Stopped {
+            turn_id: self.turn_id.to_owned(),
+        });
+        Next::Over
+    }
+
+    /// A frame of the reply.
+    fn on_frame(&mut self, frame: &Frame, emit: &mut dyn FnMut(TurnEvent) -> Flow) -> Next {
+        for event in self.reply.on(frame) {
+            if self.show(event, emit) == Next::Over {
+                return Next::Over;
+            }
+        }
+        if self.reply.ended() {
+            Next::Over
+        } else {
+            Next::Continue
+        }
+    }
+
+    /// What the reply does with something it heard.
+    fn on(&mut self, event: Event, emit: &mut dyn FnMut(TurnEvent) -> Flow) -> Next {
+        match event {
+            Event::Frame(Frame::Request {
+                id,
+                request: Request::CanUseTool(permission),
+            }) => self.on_permission(id, permission, emit),
+            Event::Frame(Frame::Request {
+                id,
+                request: Request::Other(subtype),
+            }) => {
+                let _ = self.live.write(&protocol::refuse(
+                    &id,
+                    &format!("Arden Code does not serve {subtype}"),
+                ));
+                Next::Continue
+            }
+            Event::Frame(Frame::Cancel { id }) => self.on_cancel(&id, emit),
+            Event::Frame(frame) => self.on_frame(&frame, emit),
+            Event::Control { turn, control } if turn == self.turn_id => match control {
+                Control::Answer { item_id, answer } => self.on_answer(&item_id, answer, emit),
+                Control::Stop => {
+                    self.stop();
+                    Next::Over
+                }
+            },
+            // The person's doing in a turn that is over.
+            Event::Control { .. } => Next::Continue,
+            Event::Ended => Next::Ended,
+        }
+    }
 }
 
 impl AgentDriver for ClaudeDriver {
@@ -337,40 +544,23 @@ impl AgentDriver for ClaudeDriver {
             );
             return;
         }
-        let mut reply = Reply::new(turn_id, request.folder);
+        let mut turn = Answering {
+            driver: self,
+            live: &live,
+            turn_id,
+            folder: request.folder,
+            reply: Reply::new(turn_id, request.folder),
+            pending: Vec::new(),
+        };
         let events = lock(&live.events);
         loop {
             let Ok(event) = events.recv() else {
                 return;
             };
-            match event {
-                Event::Frame(Frame::Request {
-                    id,
-                    request: Request::CanUseTool(_),
-                }) => {
-                    let _ = live.write(&protocol::deny(&id, NO_APPROVALS_YET, false));
-                }
-                Event::Frame(Frame::Request {
-                    id,
-                    request: Request::Other(subtype),
-                }) => {
-                    let _ = live.write(&protocol::refuse(
-                        &id,
-                        &format!("Arden Code does not serve {subtype}"),
-                    ));
-                }
-                Event::Frame(frame) => {
-                    for event in reply.on(&frame) {
-                        if emit(event) == Flow::Stop {
-                            self.interrupt(&live);
-                            return;
-                        }
-                    }
-                    if reply.ended() {
-                        return;
-                    }
-                }
-                Event::Ended => {
+            match turn.on(event, emit) {
+                Next::Continue => {}
+                Next::Over => return,
+                Next::Ended => {
                     drop(events);
                     self.forget(session_id);
                     fail(
@@ -380,15 +570,6 @@ impl AgentDriver for ClaudeDriver {
                     );
                     return;
                 }
-                Event::Control {
-                    turn,
-                    control: Control::Stop,
-                } if turn == turn_id => {
-                    self.interrupt(&live);
-                    return;
-                }
-                // The person's doing in a turn that is over.
-                Event::Control { .. } => {}
             }
         }
     }

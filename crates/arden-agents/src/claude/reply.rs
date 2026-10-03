@@ -19,7 +19,7 @@ const OUTPUT_LINES: usize = 20;
 const OUTPUT_LENGTH: usize = 2000;
 
 /// Text cut to `limit` characters, with an ellipsis when it was longer.
-fn cut(text: &str, limit: usize) -> String {
+pub(super) fn cut(text: &str, limit: usize) -> String {
     let mut characters = text.chars();
     let mut kept: String = characters.by_ref().take(limit).collect();
     if characters.next().is_some() {
@@ -29,7 +29,7 @@ fn cut(text: &str, limit: usize) -> String {
 }
 
 /// A path as the person thinks of it: relative to the project when it is inside it.
-fn relative(path: &str, folder: &Path) -> String {
+pub(super) fn relative(path: &str, folder: &Path) -> String {
     let base = folder.display().to_string();
     let base = base.trim_end_matches(['\\', '/']);
     match path.get(..base.len()) {

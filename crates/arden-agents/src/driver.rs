@@ -3,6 +3,9 @@
 use std::path::Path;
 use std::sync::mpsc::Receiver;
 
+use serde::{Deserialize, Serialize};
+use specta::Type;
+
 use crate::model::TurnEvent;
 
 /// Whether the driver should carry on after an event, or stop because nobody is listening.
@@ -12,12 +15,25 @@ pub enum Flow {
     Stop,
 }
 
+/// The person's answer to an approval request (ADR 0039).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum Answer {
+    Allow,
+    /// Allow, and remember the rule the agent suggested.
+    AlwaysAllow,
+    /// Refuse, and stop the reply.
+    Deny,
+}
+
 /// Something the person does while a reply runs. The driver hears it at once, even while it waits
 /// for its agent, as a real agent does during a long tool.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Control {
     /// The person stopped the reply.
     Stop,
+    /// The person answered the approval request that is the item with this id.
+    Answer { item_id: String, answer: Answer },
 }
 
 /// A message for an agent to answer, and the way the driver hears the person while it answers.

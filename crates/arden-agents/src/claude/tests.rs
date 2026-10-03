@@ -10,7 +10,10 @@ use serde_json::{Value, json};
 use super::driver::ClaudeDriver;
 use super::launch::{Conversation, LaunchError};
 use super::script::{Scripted, Step, handshake};
-use crate::model::{AgentKind, Item, ToolStatus, Turn, TurnEvent, TurnStatus};
+use crate::driver::Answer;
+use crate::model::{
+    AgentKind, ApprovalAction, ApprovalState, Item, ToolStatus, Turn, TurnEvent, TurnStatus,
+};
 use crate::playground;
 use crate::store::SessionStore;
 
@@ -271,22 +274,289 @@ fn claude_codes_own_error_fails_the_reply_with_its_words() {
 }
 
 #[test]
-fn until_approvals_arrive_claude_is_told_no_and_carries_on() {
+fn until_questions_arrive_a_question_from_claude_is_answered_no() {
+    let mut script = handshake();
+    script.extend([
+        message("Plan it"),
+        Step::Play(json!({
+            "type": "control_request",
+            "request_id": "r1",
+            "request": { "subtype": "can_use_tool", "tool_name": "AskUserQuestion", "input": { "questions": [] }, "tool_use_id": "toolu_1" }
+        })),
+        Step::Expect(json!({ "type": "control_response", "response": { "subtype": "success", "request_id": "r1", "response": { "behavior": "deny" } } })),
+        success("I will decide myself."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "Plan it");
+
+    scripted.assert_followed();
+    assert_eq!(turn(&store, &session, 0).status, TurnStatus::Done);
+}
+
+/// The rule Claude Code suggests for `npm test`.
+fn npm_test_rule() -> Value {
+    json!({ "type": "addRules", "rules": [{ "toolName": "Bash", "ruleContent": "npm test:*" }], "behavior": "allow", "destination": "localSettings" })
+}
+
+/// Claude asks to run the tests, with a rule to remember: the start of a script.
+fn asks_to_run_the_tests() -> Vec<Step> {
     let mut script = handshake();
     script.extend([
         message("Run the tests"),
         assistant(
             "msg_1",
-            &json!([{ "type": "tool_use", "id": "toolu_1", "name": "Bash", "input": { "command": "npm test" } }]),
+            &json!([{ "type": "tool_use", "id": "toolu_1", "name": "Bash", "input": { "command": "npm test", "description": "Run the tests" } }]),
         ),
         Step::Play(json!({
             "type": "control_request",
             "request_id": "r1",
-            "request": { "subtype": "can_use_tool", "tool_name": "Bash", "input": { "command": "npm test" }, "tool_use_id": "toolu_1" }
+            "request": {
+                "subtype": "can_use_tool",
+                "tool_name": "Bash",
+                "input": { "command": "npm test", "description": "Run the tests" },
+                "tool_use_id": "toolu_1",
+                "permission_suggestions": [npm_test_rule()]
+            }
         })),
-        Step::Expect(json!({ "type": "control_response", "response": { "subtype": "success", "request_id": "r1", "response": { "behavior": "deny" } } })),
-        tool_result("toolu_1", "This was not allowed.", true),
-        success("I could not run them."),
+    ]);
+    script
+}
+
+/// Waits until the session's first turn shows an approval request that waits, and answers its id.
+fn until_waiting(store: &SessionStore, session: &str) -> String {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let waiting = store
+            .session(session)
+            .expect("the session")
+            .turns
+            .first()
+            .and_then(|first| {
+                first.items.iter().find_map(|item| match item {
+                    Item::Approval {
+                        id,
+                        state: ApprovalState::Waiting,
+                        ..
+                    } => Some(id.clone()),
+                    _ => None,
+                })
+            });
+        if let Some(id) = waiting {
+            return id;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "no approval request came"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+/// Sends a message in another thread, answers the approval request it brings with `answer`, and
+/// waits for the reply to end.
+fn answer_while_replying(
+    store: &Arc<SessionStore>,
+    driver: &Arc<ClaudeDriver>,
+    session: &str,
+    prompt: &str,
+    answer: Option<Answer>,
+) {
+    let replying = {
+        let (store, driver, session, prompt) = (
+            Arc::clone(store),
+            Arc::clone(driver),
+            session.to_owned(),
+            prompt.to_owned(),
+        );
+        std::thread::spawn(move || send(&store, &driver, &session, &prompt))
+    };
+    let waiting = until_waiting(store, session);
+    match answer {
+        Some(answer) => store.answer(session, &waiting, answer).expect("answered"),
+        None => store.stop_turn(session).expect("stopped"),
+    }
+    replying.join().expect("the reply ends");
+}
+
+fn approval_of(turn: &Turn) -> Item {
+    turn.items
+        .iter()
+        .find(|item| matches!(item, Item::Approval { .. }))
+        .cloned()
+        .expect("an approval request")
+}
+
+#[test]
+fn an_approval_request_shows_under_its_tool_call_and_allow_lets_the_tool_run() {
+    let mut script = asks_to_run_the_tests();
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "request_id": "r1", "response": { "behavior": "allow", "updatedInput": { "command": "npm test", "description": "Run the tests" } } }
+        })),
+        tool_result("toolu_1", "12 passed", false),
+        success("The tests passed."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+
+    answer_while_replying(
+        &store,
+        &driver,
+        &session,
+        "Run the tests",
+        Some(Answer::Allow),
+    );
+
+    scripted.assert_followed();
+    let turn = turn(&store, &session, 0);
+    assert_eq!(turn.status, TurnStatus::Done);
+    assert_eq!(
+        approval_of(&turn),
+        Item::Approval {
+            id: format!("{}-approval-r1", turn.id),
+            tool_call_id: Some(format!("{}-toolu_1", turn.id)),
+            action: ApprovalAction::RunCommand,
+            subject: "npm test".into(),
+            detail: Some("Run the tests".into()),
+            rule: Some("Bash(npm test:*)".into()),
+            state: ApprovalState::Allowed,
+        }
+    );
+    let allowed = scripted.written.lock().expect("written")[2].clone();
+    assert!(
+        allowed["response"]["response"]
+            .get("updatedPermissions")
+            .is_none(),
+        "allowing once remembers nothing: {allowed}"
+    );
+    assert!(matches!(
+        &turn.items[0],
+        Item::ToolCall {
+            status: ToolStatus::Done,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn always_allow_hands_back_the_rule_claude_code_suggested() {
+    let mut script = asks_to_run_the_tests();
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "request_id": "r1", "response": { "behavior": "allow", "updatedPermissions": [npm_test_rule()] } }
+        })),
+        tool_result("toolu_1", "12 passed", false),
+        success("The tests passed."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+
+    answer_while_replying(
+        &store,
+        &driver,
+        &session,
+        "Run the tests",
+        Some(Answer::AlwaysAllow),
+    );
+
+    scripted.assert_followed();
+    assert!(matches!(
+        approval_of(&turn(&store, &session, 0)),
+        Item::Approval {
+            state: ApprovalState::AlwaysAllowed,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn deny_refuses_and_stops_the_reply_and_the_next_message_is_answered() {
+    let mut script = asks_to_run_the_tests();
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "request_id": "r1", "response": { "behavior": "deny", "interrupt": true } }
+        })),
+        tool_result("toolu_1", "The person denied this.", true),
+        Step::Play(json!({ "type": "result", "subtype": "error_during_execution", "is_error": true, "result": "" })),
+        message("Do something else"),
+        success("Done."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+
+    answer_while_replying(
+        &store,
+        &driver,
+        &session,
+        "Run the tests",
+        Some(Answer::Deny),
+    );
+    send(&store, &driver, &session, "Do something else");
+
+    scripted.assert_followed();
+    let denied = turn(&store, &session, 0);
+    assert_eq!(denied.status, TurnStatus::Stopped);
+    assert!(matches!(
+        approval_of(&denied),
+        Item::Approval {
+            state: ApprovalState::Denied,
+            ..
+        }
+    ));
+    assert!(
+        !denied
+            .items
+            .iter()
+            .any(|item| matches!(item, Item::Error { .. })),
+        "a denial is not an error: {:#?}",
+        denied.items
+    );
+    assert_eq!(turn(&store, &session, 1).status, TurnStatus::Done);
+}
+
+#[test]
+fn stopping_while_claude_waits_answers_no_and_interrupts() {
+    let mut script = asks_to_run_the_tests();
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "request_id": "r1", "response": { "behavior": "deny" } }
+        })),
+        Step::Expect(json!({ "type": "control_request", "request": { "subtype": "interrupt" } })),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+
+    answer_while_replying(&store, &driver, &session, "Run the tests", None);
+
+    scripted.assert_followed();
+    let stopped = turn(&store, &session, 0);
+    assert_eq!(stopped.status, TurnStatus::Stopped);
+    assert!(matches!(
+        approval_of(&stopped),
+        Item::Approval {
+            state: ApprovalState::Cancelled,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn a_request_claude_code_gives_up_on_is_cancelled() {
+    let mut script = asks_to_run_the_tests();
+    script.extend([
+        Step::Play(json!({ "type": "control_cancel_request", "request_id": "r1" })),
+        success("Never mind."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
     let store = store();
@@ -298,12 +568,91 @@ fn until_approvals_arrive_claude_is_told_no_and_carries_on() {
     let turn = turn(&store, &session, 0);
     assert_eq!(turn.status, TurnStatus::Done);
     assert!(matches!(
-        &turn.items[0],
-        Item::ToolCall {
-            status: ToolStatus::Failed,
+        approval_of(&turn),
+        Item::Approval {
+            state: ApprovalState::Cancelled,
             ..
         }
     ));
+}
+
+/// What an approval request for `tool` with `input` says, in a project at `folder`.
+fn described(folder: &Path, tool: &str, input: &Value) -> Item {
+    let mut script = handshake();
+    script.extend([
+        message("Change it"),
+        Step::Play(json!({
+            "type": "control_request",
+            "request_id": "r1",
+            "request": { "subtype": "can_use_tool", "tool_name": tool, "input": input, "tool_use_id": "toolu_1" }
+        })),
+        Step::Play(json!({ "type": "control_cancel_request", "request_id": "r1" })),
+        success("Never mind."),
+    ]);
+    let (_scripted, driver) = claude(vec![Ok(script)]);
+    let store = SessionStore::new(vec![playground::describe(folder)]);
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "Change it");
+    approval_of(&turn(&store, &session, 0))
+}
+
+#[test]
+fn an_approval_request_says_what_claude_wants_to_do_with_a_file() {
+    let project = tempfile::tempdir().expect("a folder");
+    std::fs::write(project.path().join("notes.txt"), "old").expect("a file");
+    let at = |name: &str| project.path().join(name).display().to_string();
+
+    let edit = described(
+        project.path(),
+        "Edit",
+        &json!({ "file_path": at("lib.rs"), "old_string": "let a = 1;\nlet b = 2;", "new_string": "let a = 1;\nlet b = 3;" }),
+    );
+    let created = described(
+        project.path(),
+        "Write",
+        &json!({ "file_path": at("new.txt"), "content": "hello" }),
+    );
+    let replaced = described(
+        project.path(),
+        "Write",
+        &json!({ "file_path": at("notes.txt"), "content": "new" }),
+    );
+    let fetched = described(
+        project.path(),
+        "WebFetch",
+        &json!({ "url": "https://example.com/a", "prompt": "Summarize" }),
+    );
+
+    assert!(
+        matches!(
+            edit,
+            Item::Approval { action: ApprovalAction::EditFile, ref subject, detail: Some(ref detail), .. }
+                if subject == "lib.rs" && detail == "- let a = 1;\n- let b = 2;\n+ let a = 1;\n+ let b = 3;"
+        ),
+        "{edit:#?}"
+    );
+    assert!(
+        matches!(
+            created,
+            Item::Approval { action: ApprovalAction::CreateFile, ref subject, detail: Some(ref detail), .. }
+                if subject == "new.txt" && detail == "hello"
+        ),
+        "{created:#?}"
+    );
+    assert!(
+        matches!(
+            replaced,
+            Item::Approval { action: ApprovalAction::EditFile, ref subject, .. } if subject == "notes.txt"
+        ),
+        "{replaced:#?}"
+    );
+    assert!(
+        matches!(
+            fetched,
+            Item::Approval { action: ApprovalAction::OpenPage, ref subject, .. } if subject == "https://example.com/a"
+        ),
+        "{fetched:#?}"
+    );
 }
 
 #[test]

@@ -1,5 +1,6 @@
-import type { Item } from "@/ipc/bindings";
+import type { AgentKind, Item } from "@/ipc/bindings";
 
+import { ApprovalItem, type AnswerHandler } from "./ApprovalItem";
 import { ErrorItem } from "./ErrorItem";
 import { FileChangeItem } from "./FileChangeItem";
 import { MarkdownText } from "./MarkdownText";
@@ -7,8 +8,18 @@ import { StatusItem } from "./StatusItem";
 import { ThinkingItem } from "./ThinkingItem";
 import { ToolCallItem } from "./ToolCallItem";
 
-/** One part of an agent's reply, drawn as what it is. `streaming` says it may still grow. */
-export function ItemView({ item, streaming }: { item: Item; streaming: boolean }) {
+interface ItemViewProps {
+  item: Item;
+  /** Whether the item may still grow. */
+  streaming: boolean;
+  /** The agent that replied. */
+  agent: AgentKind;
+  /** Hands the person's answer to an approval request back to the agent. */
+  onAnswer: AnswerHandler;
+}
+
+/** One part of an agent's reply, drawn as what it is. */
+export function ItemView({ item, streaming, agent, onAnswer }: ItemViewProps) {
   switch (item.type) {
     case "text":
       return <MarkdownText text={item.text} streaming={streaming} />;
@@ -34,6 +45,19 @@ export function ItemView({ item, streaming }: { item: Item; streaming: boolean }
       );
     case "error":
       return <ErrorItem message={item.message} code={item.code ?? null} />;
+    case "approval":
+      return (
+        <ApprovalItem
+          id={item.id}
+          agent={agent}
+          action={item.action}
+          subject={item.subject}
+          detail={item.detail}
+          rule={item.rule}
+          state={item.state}
+          onAnswer={onAnswer}
+        />
+      );
   }
   return <StatusItem kind={item.kind} />;
 }

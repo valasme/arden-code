@@ -81,6 +81,26 @@ const items: readonly Item[] = [
   },
   { type: "error", id: "error", message: "The agent could not finish: the file is read-only." },
   { type: "status", id: "stopped", kind: "stopped" },
+  {
+    type: "approval",
+    id: "approval-waiting",
+    toolCallId: null,
+    action: "runCommand",
+    subject: "npm test",
+    detail: "Run the tests",
+    rule: "Bash(npm test:*)",
+    state: "waiting",
+  },
+  {
+    type: "approval",
+    id: "approval-allowed",
+    toolCallId: null,
+    action: "editFile",
+    subject: "src/main.ts",
+    detail: null,
+    rule: null,
+    state: "allowed",
+  },
 ];
 
 /** Every kind of item in a reply, for the design system page. */
@@ -88,7 +108,13 @@ export function SessionItemsSample() {
   return (
     <div className="max-w-2xl border border-border p-4">
       {items.map((item) => (
-        <ItemView key={item.id} item={item} streaming={false} />
+        <ItemView
+          key={item.id}
+          item={item}
+          streaming={false}
+          agent="claude"
+          onAnswer={() => undefined}
+        />
       ))}
     </div>
   );

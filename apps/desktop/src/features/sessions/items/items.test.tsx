@@ -4,12 +4,27 @@ import userEvent from "@testing-library/user-event";
 import type { Item } from "@/ipc/bindings";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 
+import type { AnswerHandler } from "./ApprovalItem";
 import { ItemView } from "./ItemView";
 
 import "@/styles/global.css";
 
-function renderItem(item: Item, streaming = false) {
-  return render(<ItemView item={item} streaming={streaming} />);
+function renderItem(item: Item, streaming = false, onAnswer = vi.fn<AnswerHandler>()) {
+  return render(<ItemView item={item} streaming={streaming} agent="claude" onAnswer={onAnswer} />);
+}
+
+function approval(overrides: Partial<Extract<Item, { type: "approval" }>> = {}): Item {
+  return {
+    type: "approval",
+    id: "turn-1-approval-7",
+    toolCallId: "turn-1-toolu_1",
+    action: "runCommand",
+    subject: "npm test",
+    detail: "Run the tests",
+    rule: null,
+    state: "waiting",
+    ...overrides,
+  };
 }
 
 describe("Tool calls", () => {
@@ -112,6 +127,69 @@ describe("Errors and status markers", () => {
   });
 });
 
+describe("Approval requests", () => {
+  it("say what the agent wants to do, with the details to decide by", () => {
+    renderItem(approval());
+
+    const card = screen.getByRole("group", { name: "Claude wants to run a command" });
+    expect(within(card).getByText("npm test")).toBeVisible();
+    expect(within(card).getByText("Run the tests")).toBeVisible();
+    expect(within(card).getByRole("button", { name: "Allow" })).toBeVisible();
+    expect(within(card).getByRole("button", { name: "Deny" })).toBeVisible();
+    expect(
+      within(card).queryByRole("button", { name: "Always allow" }),
+      "no rule was suggested",
+    ).toBeNull();
+  });
+
+  it.each([
+    ["editFile", "Claude wants to edit a file"],
+    ["createFile", "Claude wants to create a file"],
+    ["openPage", "Claude wants to open a web page"],
+    ["searchWeb", "Claude wants to search the web"],
+    ["useTool", "Claude wants to use a tool"],
+  ] as const)("name %s in Arden Code's words", (action, heading) => {
+    renderItem(approval({ action }));
+
+    expect(screen.getByRole("group", { name: heading })).toBeVisible();
+  });
+
+  it("offer Always allow, with the rule it remembers, when the agent suggests one", () => {
+    renderItem(approval({ rule: "Bash(npm test:*)" }));
+
+    expect(screen.getByRole("button", { name: "Always allow" })).toBeVisible();
+    expect(screen.getByText(/Bash\(npm test:\*\)/u)).toBeVisible();
+  });
+
+  it.each([
+    ["Allow", "allow"],
+    ["Always allow", "alwaysAllow"],
+    ["Deny", "deny"],
+  ] as const)("hand %s back", async (button, answer) => {
+    const user = userEvent.setup();
+    const onAnswer = vi.fn<AnswerHandler>();
+    renderItem(approval({ rule: "Bash(npm test:*)" }), true, onAnswer);
+
+    await user.click(screen.getByRole("button", { name: button }));
+
+    expect(onAnswer).toHaveBeenCalledWith("turn-1-approval-7", answer);
+  });
+
+  it.each([
+    ["allowed", "You allowed"],
+    ["alwaysAllowed", "You always allowed"],
+    ["denied", "You denied"],
+    ["cancelled", "No answer was needed"],
+  ] as const)("fold to a quiet line once %s", (state, line) => {
+    renderItem(approval({ state }));
+
+    expect(screen.getByText(line)).toBeVisible();
+    expect(screen.getByText("npm test")).toBeVisible();
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.queryByText("Run the tests"), "the details fold away").toBeNull();
+  });
+});
+
 describe("Every kind of item", () => {
   it("has no accessibility violations", async () => {
     const items: Item[] = [
@@ -136,11 +214,25 @@ describe("Every kind of item", () => {
       { type: "fileChange", id: "5", path: "a.txt", change: "deleted", added: 0, removed: 4 },
       { type: "error", id: "6", message: "It broke." },
       { type: "status", id: "7", kind: "stopped" },
+      approval({
+        id: "8",
+        action: "editFile",
+        subject: "src/a.ts",
+        detail: "- a\n+ b",
+        rule: "Edit",
+      }),
+      approval({ id: "9", state: "allowed" }),
     ];
     const { container } = render(
       <div>
         {items.map((item) => (
-          <ItemView key={item.id} item={item} streaming={false} />
+          <ItemView
+            key={item.id}
+            item={item}
+            streaming={false}
+            agent="claude"
+            onAnswer={vi.fn<AnswerHandler>()}
+          />
         ))}
       </div>,
     );

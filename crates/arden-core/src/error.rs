@@ -92,6 +92,9 @@ pub enum ErrorCode {
     /// A session's agent or project was to change after its first message.
     #[serde(rename = "ARD-AGT-014")]
     SessionNotEmpty,
+    /// An approval request was answered when it no longer waited for an answer.
+    #[serde(rename = "ARD-AGT-015")]
+    RequestNotWaiting,
     /// Programs cannot be started and supervised on this computer.
     #[serde(rename = "ARD-PROC-001")]
     ProcessSupervisor,
@@ -138,6 +141,7 @@ impl ErrorCode {
             Self::ClaudeNpmWrapper => "ARD-AGT-012",
             Self::ClaudeCouldNotAnswer => "ARD-AGT-013",
             Self::SessionNotEmpty => "ARD-AGT-014",
+            Self::RequestNotWaiting => "ARD-AGT-015",
             Self::ProcessSupervisor => "ARD-PROC-001",
             Self::UpdateInstall => "ARD-UPD-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",

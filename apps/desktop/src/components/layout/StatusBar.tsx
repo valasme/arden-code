@@ -18,6 +18,7 @@ export function StatusBar() {
   const { data: update } = useQuery(updateStatusQuery);
   const replying = useRepliesStore((state) => state.busy);
   const agent = useRepliesStore((state) => state.agent);
+  const waiting = useRepliesStore((state) => state.waiting);
 
   return (
     <footer
@@ -28,7 +29,9 @@ export function StatusBar() {
         <span className="ms-2 flex min-w-0 items-center gap-2">
           <span aria-hidden className="size-1.5 shrink-0 bg-foreground" />
           <span className="truncate">
-            {t("statusBar.replying", { agent: t(`agents.${agent}.name`) })}
+            {t(waiting ? "statusBar.waiting" : "statusBar.replying", {
+              agent: t(`agents.${agent}.name`),
+            })}
           </span>
         </span>
       ) : null}

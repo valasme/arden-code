@@ -429,6 +429,14 @@ export const commands = {
 	 */
 	stopReply: (sessionId: string) => __TAURI_INVOKE<null>("stop_reply", { sessionId }),
 	/**
+	 *  Answers an approval request that waits in a session's running turn (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or no such request waits for an answer.
+	 */
+	answerApproval: (sessionId: string, itemId: string, answer: Answer) => __TAURI_INVOKE<null>("answer_approval", { sessionId, itemId, answer }),
+	/**
 	 *  The session the page should show because a folder was opened before the page was ready. Asking
 	 *  takes it: it is never returned twice.
 	 * 
@@ -541,6 +549,13 @@ export type AgentKind =
 /**  Claude, through the person's own Claude Code (ADR 0038). */
 "claude";
 
+/**  The person's answer to an approval request (ADR 0039). */
+export type Answer = "allow" | 
+/**  Allow, and remember the rule the agent suggested. */
+"alwaysAllow" | 
+/**  Refuse, and stop the reply. */
+"deny";
+
 /**
  *  The error every command returns: a code, the translation key of its message, and details for
  *  the logs and for "Copy details".
@@ -580,6 +595,22 @@ export type Appearance = {
 	/**  Show the bar along the bottom of the window. */
 	showStatusBar: boolean,
 };
+
+/**  What an agent asks permission to do, in Arden Code's words (ADR 0039). */
+export type ApprovalAction = "runCommand" | "editFile" | "createFile" | "openPage" | "searchWeb" | 
+/**  Any other tool, such as one of an MCP server. */
+"useTool";
+
+/**  Where an approval request stands. */
+export type ApprovalState = 
+/**  The agent waits for the person's answer. */
+"waiting" | "allowed" | 
+/**  Allowed, with the rule the agent suggested, so it is not asked again. */
+"alwaysAllowed" | 
+/**  Refused; the reply stopped with it. */
+"denied" | 
+/**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
+"cancelled";
 
 /**  What a check found, for the person who asked for it. */
 export type CheckResult = 
@@ -679,6 +710,8 @@ export type ErrorCode =
 "ARD-AGT-013" | 
 /**  A session's agent or project was to change after its first message. */
 "ARD-AGT-014" | 
+/**  An approval request was answered when it no longer waited for an answer. */
+"ARD-AGT-015" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -732,7 +765,17 @@ message: string;
  */
 code?: ErrorCode | null } | 
 /**  A marker between the parts of a reply. */
-{ type: "status"; id: string; kind: StatusKind };
+{ type: "status"; id: string; kind: StatusKind } | 
+/**  The agent asks the person to allow or deny an action (ADR 0039). */
+{ type: "approval"; id: string; 
+/**  The tool call it is about, when it has one. */
+toolCallId: string | null; action: ApprovalAction; 
+/**  The command, the file, the address or the tool, in a line. */
+subject: string; 
+/**  More to decide by: a command's description, the change to a file, a tool's input. */
+detail: string | null; 
+/**  The rule the agent suggests remembering, in a line. Always allow is offered with it. */
+rule: string | null; state: ApprovalState };
 
 /**  The shortcuts a person changed. A command that is not here has its default shortcuts. */
 export type Keyboard = {

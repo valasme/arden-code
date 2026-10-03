@@ -10,10 +10,10 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::database::{Database, DatabaseError, Order};
-use crate::driver::{AgentDriver, Control, Flow, ReplyRequest};
+use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
 use crate::model::{
-    AgentKind, Item, Project, ProjectKind, ProjectListing, Session, SessionList, SessionSummary,
-    Turn, TurnEvent, TurnStatus,
+    AgentKind, ApprovalState, Item, Project, ProjectKind, ProjectListing, Session, SessionList,
+    SessionSummary, Turn, TurnEvent, TurnStatus,
 };
 
 /// How many characters of the first message become the session's title.
@@ -35,6 +35,8 @@ pub enum StoreError {
     Archived,
     /// The session has had a message, so its agent and project cannot change (ADR 0039).
     NotEmpty,
+    /// The approval request that was answered no longer waits for an answer.
+    NotWaiting,
     /// The change could not be written to the file, so it was not made. Says why, for the logs.
     NotSaved(String),
     /// What the file holds could not be read. Says why, for the logs.
@@ -919,6 +921,44 @@ impl SessionStore {
         Ok(())
     }
 
+    /// Answers an approval request of the reply that is running in a session: its driver hears
+    /// it at once (ADR 0039).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotWaiting`] when no running reply waits for an answer to that item.
+    pub fn answer(
+        &self,
+        session_id: &str,
+        item_id: &str,
+        answer: Answer,
+    ) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let waiting = find(&mut inner.sessions, session_id)?
+            .session
+            .turns
+            .iter()
+            .filter(|turn| turn.status == TurnStatus::Running)
+            .find(|turn| {
+                turn.items.iter().any(|item| {
+                    matches!(
+                        item,
+                        Item::Approval { id, state: ApprovalState::Waiting, .. } if id == item_id
+                    )
+                })
+            })
+            .map(|turn| turn.id.clone())
+            .ok_or(StoreError::NotWaiting)?;
+        let driver = inner.controls.get(&waiting).ok_or(StoreError::NotWaiting)?;
+        driver
+            .send(Control::Answer {
+                item_id: item_id.to_owned(),
+                answer,
+            })
+            .map_err(|_| StoreError::NotWaiting)
+    }
+
     fn is_stopping(&self, turn_id: &str) -> bool {
         self.lock().stopping.contains(turn_id)
     }
@@ -973,7 +1013,11 @@ impl SessionStore {
             if saved.is_ok() {
                 saved = applied;
             }
-            ended = matches!(event, TurnEvent::Finished { .. } | TurnEvent::Failed { .. });
+            // A driver ends a reply as stopped itself when the person's answer stopped it.
+            ended = matches!(
+                event,
+                TurnEvent::Finished { .. } | TurnEvent::Failed { .. } | TurnEvent::Stopped { .. }
+            );
             if on_event(&event) {
                 Flow::Continue
             } else {
@@ -1400,6 +1444,121 @@ mod tests {
             store.agent_for_new_session(playground::PLAYGROUND_ID),
             Some(AgentKind::Claude),
             "the project's own latest session"
+        );
+    }
+
+    /// A driver whose agent asks permission, waits for the person's answer, and ends the reply as
+    /// stopped when it is denied, as Claude's does.
+    struct Asking {
+        heard: std::sync::Mutex<Vec<Control>>,
+    }
+
+    impl AgentDriver for Asking {
+        fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+            let turn_id = request.turn_id.to_owned();
+            let _ = emit(TurnEvent::ItemAdded {
+                turn_id: turn_id.clone(),
+                item: Item::Approval {
+                    id: "ask".into(),
+                    tool_call_id: None,
+                    action: crate::model::ApprovalAction::RunCommand,
+                    subject: "npm test".into(),
+                    detail: None,
+                    rule: None,
+                    state: crate::model::ApprovalState::Waiting,
+                },
+            });
+            let Ok(control) = request
+                .controls
+                .recv_timeout(std::time::Duration::from_secs(10))
+            else {
+                return;
+            };
+            self.heard
+                .lock()
+                .expect("what it heard")
+                .push(control.clone());
+            let _ = emit(match control {
+                Control::Answer {
+                    answer: crate::driver::Answer::Deny,
+                    ..
+                } => TurnEvent::Stopped { turn_id },
+                _ => TurnEvent::Finished { turn_id },
+            });
+        }
+    }
+
+    /// Runs a reply with the `Asking` driver until it waits, and answers what it heard.
+    fn answered_with(
+        answer: crate::driver::Answer,
+    ) -> (Vec<Control>, Result<(), StoreError>, Turn) {
+        let store = std::sync::Arc::new(store());
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        let turn = store.start_turn(&session.id, "test it").expect("a turn");
+        let driver = std::sync::Arc::new(Asking {
+            heard: std::sync::Mutex::new(Vec::new()),
+        });
+        let replying = {
+            let (store, driver, id) = (store.clone(), driver.clone(), session.id.clone());
+            std::thread::spawn(move || {
+                store
+                    .stream_reply(driver.as_ref(), &id, &turn, |_| true)
+                    .expect("saved");
+            })
+        };
+        while store.session(&session.id).expect("the session").turns[0]
+            .items
+            .is_empty()
+        {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        let answered = store.answer(&session.id, "ask", answer);
+        replying.join().expect("the reply ends");
+
+        let heard = driver.heard.lock().expect("what it heard").clone();
+        let turn = store.session(&session.id).expect("the session").turns[0].clone();
+        (heard, answered, turn)
+    }
+
+    #[test]
+    fn an_answer_reaches_the_driver_whose_agent_waits_for_it() {
+        let (heard, answered, turn) = answered_with(crate::driver::Answer::Allow);
+
+        assert_eq!(answered, Ok(()));
+        assert_eq!(
+            heard,
+            vec![Control::Answer {
+                item_id: "ask".into(),
+                answer: crate::driver::Answer::Allow
+            }]
+        );
+        assert_eq!(turn.status, TurnStatus::Done);
+    }
+
+    #[test]
+    fn a_denial_that_stops_the_reply_ends_the_turn_as_stopped() {
+        let (_heard, _answered, turn) = answered_with(crate::driver::Answer::Deny);
+
+        assert_eq!(turn.status, TurnStatus::Stopped);
+    }
+
+    #[test]
+    fn an_answer_to_a_request_that_does_not_wait_is_refused() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+
+        assert_eq!(
+            store.answer(&session.id, "ask", crate::driver::Answer::Allow),
+            Err(StoreError::NotWaiting)
+        );
+        assert_eq!(
+            store.answer("session-99", "ask", crate::driver::Answer::Allow),
+            Err(StoreError::UnknownSession)
         );
     }
 

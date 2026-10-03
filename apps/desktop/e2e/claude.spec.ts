@@ -88,4 +88,49 @@ test.describe("Claude in the real app", () => {
       claude.remove();
     }
   });
+
+  test("Claude asks before it runs a command, and goes on once allowed", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+      await say(page, "Run the tests");
+
+      const card = session.getByRole("group", { name: "Claude wants to run a command" });
+      await expect(card).toBeVisible({ timeout: 30_000 });
+      await expect(card.getByText("npm test", { exact: true })).toBeVisible();
+      await expect(page.getByText("Claude: waiting for your answer")).toBeVisible();
+      await card.getByRole("button", { name: "Allow", exact: true }).click();
+
+      await expect(session.getByText("The tests passed.")).toBeVisible({ timeout: 30_000 });
+      await expect(session.getByText("You allowed")).toBeVisible();
+      await expect(session.getByText("Claude is replying…")).toBeHidden();
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
+
+  test("denying a request stops the reply, and Claude answers the next message", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+      await say(page, "Run the tests");
+      const card = session.getByRole("group", { name: "Claude wants to run a command" });
+      await expect(card).toBeVisible({ timeout: 30_000 });
+
+      await card.getByRole("button", { name: "Deny" }).click();
+
+      await expect(session.getByText("You denied")).toBeVisible();
+      await expect(session.getByText("Claude is replying…")).toBeHidden();
+      await say(page, "Hello again");
+      await expect(session.getByText("You said: Hello again")).toBeVisible({ timeout: 30_000 });
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
 });

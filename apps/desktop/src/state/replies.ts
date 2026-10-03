@@ -9,7 +9,9 @@ interface RepliesState {
   busy: boolean;
   /** The open session's agent. */
   agent: AgentKind;
-  set: (sessionId: string | undefined, busy: boolean, agent?: AgentKind) => void;
+  /** Whether the agent waits for the person to answer an approval request. */
+  waiting: boolean;
+  set: (sessionId: string | undefined, busy: boolean, agent?: AgentKind, waiting?: boolean) => void;
 }
 
 /** What the open session is doing, for the commands that act on it, such as stopping a reply. */
@@ -17,7 +19,8 @@ export const useRepliesStore = create<RepliesState>((set) => ({
   sessionId: undefined,
   busy: false,
   agent: "demo",
-  set: (sessionId, busy, agent = "demo") => {
-    set({ sessionId, busy, agent });
+  waiting: false,
+  set: (sessionId, busy, agent = "demo", waiting = false) => {
+    set({ sessionId, busy, agent, waiting });
   },
 }));

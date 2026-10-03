@@ -4,13 +4,22 @@ import { useTranslation } from "react-i18next";
 import { useFormatters } from "@/features/settings/useFormatters";
 import type { AgentKind, Turn } from "@/ipc/bindings";
 
+import type { AnswerHandler } from "./items/ApprovalItem";
 import { ItemView } from "./items/ItemView";
 
 /**
  * One message and the reply to it (ADR 0032): the person's message is a filled block at the end of
  * the line, and the reply follows under the agent's name, with no box around it.
  */
-export const TurnView = memo(function TurnView({ turn, agent }: { turn: Turn; agent: AgentKind }) {
+export const TurnView = memo(function TurnView({
+  turn,
+  agent,
+  onAnswer,
+}: {
+  turn: Turn;
+  agent: AgentKind;
+  onAnswer: AnswerHandler;
+}) {
   const { t } = useTranslation();
   const formatters = useFormatters();
   const time = new Date(turn.startedAt);
@@ -31,7 +40,13 @@ export const TurnView = memo(function TurnView({ turn, agent }: { turn: Turn; ag
           {t(`agents.${agent}.name`)}
         </h3>
         {turn.items.map((item) => (
-          <ItemView key={item.id} item={item} streaming={turn.status === "running"} />
+          <ItemView
+            key={item.id}
+            item={item}
+            streaming={turn.status === "running"}
+            agent={agent}
+            onAnswer={onAnswer}
+          />
         ))}
         {turn.status === "running" ? (
           <output className="mt-2 block text-xs text-muted-foreground">

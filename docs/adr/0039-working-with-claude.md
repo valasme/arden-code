@@ -37,7 +37,7 @@ when it asks, and know whether Claude is ready. The councils weighed each choice
   - It is announced politely and at once, the status bar says Claude is waiting, and a notification is sent when the
     window is not focused. The focus does not jump: the card is the last stop before the message box.
   - Once answered, it folds to a quiet line ("You allowed …"). Stop, archiving and deleting answer it with a denial.
-    One still waiting when Arden Code closes ends as cancelled with its turn.
+    One still waiting when Arden Code closes is lost with its turn: a reply is saved only once it ends.
 - **Questions** (Claude asking the person to choose) are items too: each question with its options, as radio buttons
   or check boxes, an Other field, and Send answers. Stop cancels a waiting question.
 - **What a reply shows.** Text and thinking stream. Tool calls end with their results. File changes come from Claude

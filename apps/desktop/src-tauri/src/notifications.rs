@@ -1,7 +1,9 @@
 //! Windows notifications, and the one rule that governs them: with notifications off, nothing is
 //! shown. Every notification goes through [`send`], so no future feature can forget the rule.
 
-use tauri::AppHandle;
+use arden_core::error::ErrorCode;
+use arden_settings::service::SettingsService;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
 
 /// Somewhere a notification can be shown.
@@ -25,6 +27,33 @@ pub fn send(enabled: bool, sink: &dyn Sink, title: &str, body: &str) -> Result<b
     }
     sink.show(title, body)?;
     Ok(true)
+}
+
+/// Shows a notification when the person is not looking at Arden Code, as the settings allow
+/// (ADR 0039): an agent that waits for them says so. What went wrong is logged, never shown.
+pub fn notify_when_away(app: &AppHandle, title: &str, body: &str) {
+    let looking = app
+        .get_webview_window("main")
+        .and_then(|window| window.is_focused().ok())
+        .unwrap_or(false);
+    if looking {
+        return;
+    }
+    let enabled = app.state::<SettingsService>().get().notifications.desktop;
+    #[cfg(debug_assertions)]
+    let shown = match std::env::var_os(FILE_VARIABLE) {
+        Some(file) => send(enabled, &File(file.into()), title, body),
+        None => send(enabled, &Windows(app), title, body),
+    };
+    #[cfg(not(debug_assertions))]
+    let shown = send(enabled, &Windows(app), title, body);
+    if let Err(reason) = shown {
+        tracing::warn!(
+            code = ErrorCode::NotificationNotShown.as_str(),
+            %reason,
+            "a notification could not be shown"
+        );
+    }
 }
 
 /// Windows notifications, with the name and icon of the installed app.

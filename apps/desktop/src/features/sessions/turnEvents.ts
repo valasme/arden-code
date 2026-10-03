@@ -12,12 +12,19 @@ function withDelta(item: Item, itemId: string, text: string): Item {
     : item;
 }
 
-/** The turn after the person stopped its reply: a tool that was running stopped with it, and a marker says so. */
+/**
+ * The turn after the person stopped its reply: a tool that was running stopped with it, an approval
+ * request that still waited needs no answer any more, and a marker says so.
+ */
 function stopped(turn: Turn): Turn {
   const marker = `${turn.id}-stopped`;
-  const items: Item[] = turn.items.map((item) =>
-    item.type === "toolCall" && item.status === "running" ? { ...item, status: "stopped" } : item,
-  );
+  const items: Item[] = turn.items.map((item) => {
+    if (item.type === "toolCall" && item.status === "running")
+      return { ...item, status: "stopped" };
+    if (item.type === "approval" && item.state === "waiting")
+      return { ...item, state: "cancelled" };
+    return item;
+  });
   if (!items.some((item) => item.id === marker)) {
     items.push({ type: "status", id: marker, kind: "stopped" });
   }

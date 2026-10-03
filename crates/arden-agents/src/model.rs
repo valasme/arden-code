@@ -67,6 +67,34 @@ pub enum StatusKind {
     Stopped,
 }
 
+/// What an agent asks permission to do, in Arden Code's words (ADR 0039).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ApprovalAction {
+    RunCommand,
+    EditFile,
+    CreateFile,
+    OpenPage,
+    SearchWeb,
+    /// Any other tool, such as one of an MCP server.
+    UseTool,
+}
+
+/// Where an approval request stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ApprovalState {
+    /// The agent waits for the person's answer.
+    Waiting,
+    Allowed,
+    /// Allowed, with the rule the agent suggested, so it is not asked again.
+    AlwaysAllowed,
+    /// Refused; the reply stopped with it.
+    Denied,
+    /// No answer is needed any more: the reply stopped, or the agent gave up on asking.
+    Cancelled,
+}
+
 /// One part of an agent's reply.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -114,6 +142,21 @@ pub enum Item {
     /// A marker between the parts of a reply.
     #[serde(rename_all = "camelCase")]
     Status { id: String, kind: StatusKind },
+    /// The agent asks the person to allow or deny an action (ADR 0039).
+    #[serde(rename_all = "camelCase")]
+    Approval {
+        id: String,
+        /// The tool call it is about, when it has one.
+        tool_call_id: Option<String>,
+        action: ApprovalAction,
+        /// The command, the file, the address or the tool, in a line.
+        subject: String,
+        /// More to decide by: a command's description, the change to a file, a tool's input.
+        detail: Option<String>,
+        /// The rule the agent suggests remembering, in a line. Always allow is offered with it.
+        rule: Option<String>,
+        state: ApprovalState,
+    },
 }
 
 impl Item {
@@ -125,7 +168,8 @@ impl Item {
             | Self::ToolCall { id, .. }
             | Self::FileChange { id, .. }
             | Self::Error { id, .. }
-            | Self::Status { id, .. } => id,
+            | Self::Status { id, .. }
+            | Self::Approval { id, .. } => id,
         }
     }
 }
@@ -157,15 +201,19 @@ pub struct Turn {
 }
 
 impl Turn {
-    /// Ends the turn as stopped by the person: a tool that was still running stopped with it, and
-    /// a marker records it.
+    /// Ends the turn as stopped by the person: a tool that was still running stopped with it, an
+    /// approval request that still waited needs no answer any more, and a marker records it.
     fn stop(&mut self) {
         self.status = TurnStatus::Stopped;
         for item in &mut self.items {
-            if let Item::ToolCall { status, .. } = item
-                && *status == ToolStatus::Running
-            {
-                *status = ToolStatus::Stopped;
+            match item {
+                Item::ToolCall { status, .. } if *status == ToolStatus::Running => {
+                    *status = ToolStatus::Stopped;
+                }
+                Item::Approval { state, .. } if *state == ApprovalState::Waiting => {
+                    *state = ApprovalState::Cancelled;
+                }
+                _ => {}
             }
         }
         let marker = format!("{}-stopped", self.id);

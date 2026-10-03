@@ -7,10 +7,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
 use arden_agents::demo::DemoDriver;
-use arden_agents::driver::AgentDriver;
-#[cfg(debug_assertions)]
-use arden_agents::model::Item;
-use arden_agents::model::{AgentKind, Session, SessionList, SessionSummary, TurnEvent};
+use arden_agents::driver::{AgentDriver, Answer};
+use arden_agents::model::{
+    AgentKind, ApprovalAction, ApprovalState, Item, Session, SessionList, SessionSummary, TurnEvent,
+};
 use arden_agents::playground::PLAYGROUND_ID;
 use arden_agents::store::{OpenProblem, SessionStore, StoreError};
 use arden_core::error::{AppError, ErrorCode};
@@ -31,6 +31,7 @@ fn app_error(error: StoreError) -> AppError {
         StoreError::InvalidName => AppError::new(ErrorCode::SessionNameInvalid),
         StoreError::Archived => AppError::new(ErrorCode::SessionArchived),
         StoreError::NotEmpty => AppError::new(ErrorCode::SessionNotEmpty),
+        StoreError::NotWaiting => AppError::new(ErrorCode::RequestNotWaiting),
         StoreError::NotSaved(reason) => {
             AppError::new(ErrorCode::SessionsNotSaved).with_details(reason)
         }
@@ -281,6 +282,54 @@ pub fn stop_reply(session_id: String, sessions: State<'_, Sessions>) -> Result<(
     sessions.stop_turn(&session_id).map_err(app_error)
 }
 
+/// Answers an approval request that waits in a session's running turn (ADR 0039).
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, or no such request waits for an answer.
+#[tauri::command]
+#[specta::specta]
+pub fn answer_approval(
+    session_id: String,
+    item_id: String,
+    answer: Answer,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions
+        .answer(&session_id, &item_id, answer)
+        .map_err(app_error)
+}
+
+/// What a notification says when an agent waits for the person's answer, if the event is a
+/// request that starts waiting.
+fn waiting_notice(agent: AgentKind, event: &TurnEvent) -> Option<String> {
+    let TurnEvent::ItemAdded {
+        item:
+            Item::Approval {
+                state: ApprovalState::Waiting,
+                action,
+                ..
+            },
+        ..
+    } = event
+    else {
+        return None;
+    };
+    let name = match agent {
+        AgentKind::Claude => "Claude",
+        AgentKind::Demo => "The Demo agent",
+    };
+    let what = match action {
+        ApprovalAction::RunCommand => "run a command",
+        ApprovalAction::EditFile => "edit a file",
+        ApprovalAction::CreateFile => "create a file",
+        ApprovalAction::OpenPage => "open a web page",
+        ApprovalAction::SearchWeb => "search the web",
+        ApprovalAction::UseTool => "use a tool",
+    };
+    Some(format!("{name} asks to {what}."))
+}
+
 /// Makes a session with `count` finished turns, to test long conversations. Debug builds only.
 ///
 /// # Errors
@@ -355,6 +404,9 @@ pub fn send_message(
             AgentKind::Claude => claude.as_ref(),
         };
         let saved = store.stream_reply(driver, &session_id, &running, |event| {
+            if let Some(body) = waiting_notice(agent, event) {
+                crate::notifications::notify_when_away(&app, arden_core::APP_NAME, &body);
+            }
             on_event.send(event.clone()).is_ok()
         });
         if let Err(error) = saved {
@@ -477,6 +529,43 @@ mod tests {
 
         assert_eq!(pending.take(), Some(id));
         assert_eq!(pending.take(), None, "it is handed over once");
+    }
+
+    fn approval(state: ApprovalState) -> TurnEvent {
+        TurnEvent::ItemAdded {
+            turn_id: "t".to_owned(),
+            item: Item::Approval {
+                id: "t-approval-1".to_owned(),
+                tool_call_id: None,
+                action: ApprovalAction::RunCommand,
+                subject: "npm test".to_owned(),
+                detail: None,
+                rule: None,
+                state,
+            },
+        }
+    }
+
+    #[test]
+    fn a_request_that_starts_waiting_is_worth_a_notification() {
+        assert_eq!(
+            waiting_notice(AgentKind::Claude, &approval(ApprovalState::Waiting)).as_deref(),
+            Some("Claude asks to run a command.")
+        );
+        assert_eq!(
+            waiting_notice(AgentKind::Claude, &approval(ApprovalState::Allowed)),
+            None,
+            "an answered request needs no one"
+        );
+        assert_eq!(
+            waiting_notice(
+                AgentKind::Claude,
+                &TurnEvent::Finished {
+                    turn_id: "t".to_owned()
+                }
+            ),
+            None
+        );
     }
 
     #[test]

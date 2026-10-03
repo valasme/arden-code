@@ -1,12 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDownIcon, EllipsisIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
-import { type AgentKind, commands } from "@/ipc/bindings";
+import { type AgentKind, type Answer, commands } from "@/ipc/bindings";
 import { noSessions, sessionListQuery, sessionQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
@@ -53,6 +53,9 @@ export function SessionView({ id }: { id: string }) {
   const lastTurn = turns.at(-1);
   const busy = turns.some((turn) => turn.status === "running");
   const agent = session?.agent ?? "demo";
+  const waiting =
+    lastTurn?.status === "running" &&
+    lastTurn.items.some((item) => item.type === "approval" && item.state === "waiting");
 
   // The virtualizer's functions cannot be memoized, so the compiler leaves this component alone.
   // oxlint-disable-next-line react/incompatible-library
@@ -67,11 +70,21 @@ export function SessionView({ id }: { id: string }) {
   // The commands that act on the open session, such as stopping its reply, need to know about it.
   const setReplies = useRepliesStore((state) => state.set);
   useEffect(() => {
-    setReplies(id, busy, agent);
+    setReplies(id, busy, agent, waiting);
     return () => {
       setReplies(undefined, false);
     };
-  }, [id, busy, agent, setReplies]);
+  }, [id, busy, agent, waiting, setReplies]);
+
+  // The same function for every render, so the turns that did not change are not drawn again.
+  const answer = useCallback(
+    (itemId: string, given: Answer) => {
+      commands.answerApproval(id, itemId, given).catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      });
+    },
+    [id],
+  );
 
   const scrollToEnd = () => {
     stuck.current = true;
@@ -227,7 +240,7 @@ export function SessionView({ id }: { id: string }) {
                     className="absolute top-0 left-0 w-full"
                     style={{ transform: `translateY(${row.start}px)` }}
                   >
-                    <TurnView turn={turn} agent={agent} />
+                    <TurnView turn={turn} agent={agent} onAnswer={answer} />
                   </article>
                 );
               })}
@@ -245,7 +258,7 @@ export function SessionView({ id }: { id: string }) {
           </Button>
         )}
       </div>
-      <ReplyAnnouncer turn={lastTurn} />
+      <ReplyAnnouncer turn={lastTurn} agent={agent} />
       {session.archivedAt === null ? (
         <MessageBox
           agent={agent}

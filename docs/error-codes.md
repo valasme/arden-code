@@ -40,6 +40,7 @@ do), and add a row here. Never reuse or renumber a code.
 | `ARD-AGT-012` | Claude Code was installed with npm in a way Arden Code cannot start safely | Sending a message to Claude |
 | `ARD-AGT-013` | Claude could not answer, for a reason Claude Code gave | A reply from Claude |
 | `ARD-AGT-014` | A session's agent or project was to change after its first message | The agent or project menu of a session |
+| `ARD-AGT-015` | An approval request was answered when it no longer waited | Answering an approval request |
 | `ARD-PROC-001` | Programs cannot be started and supervised on this computer | Settings → Agents; starting an agent |
 | `ARD-UPD-001` | The update could not be installed | Choosing "Update ready: restart" |
 | `ARD-WIN-001` | Windows' window menu could not be opened | The title bar's Window menu button and Alt+Space |

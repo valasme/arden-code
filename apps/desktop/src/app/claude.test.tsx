@@ -99,6 +99,72 @@ describe("Choosing the agent of a session (ADR 0039)", () => {
   });
 });
 
+describe("Approval requests (ADR 0039)", () => {
+  const request = {
+    type: "approval",
+    id: "turn-1-approval-1",
+    toolCallId: null,
+    action: "runCommand",
+    subject: "npm test",
+    detail: "Run the tests",
+    rule: "Bash(npm test:*)",
+    state: "waiting",
+  } as const;
+
+  it("asks before Claude acts, says Claude waits, and hands the answer back", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({
+      sessions: [sessionNamed("session-1", null, "playground", "claude")],
+    });
+    renderApp("/session/session-1");
+    await user.type(
+      await screen.findByRole("textbox", { name: "Message" }),
+      "Run the tests{Enter}",
+    );
+    await screen.findByText("Claude is replying…");
+
+    rust.emit({ type: "itemAdded", turnId: "turn-1", item: request });
+
+    const card = await screen.findByRole("group", { name: "Claude wants to run a command" });
+    expect(within(card).getByText("npm test")).toBeVisible();
+    const statusBar = screen.getByRole("contentinfo");
+    expect(within(statusBar).getByText("Claude: waiting for your answer")).toBeVisible();
+    // The focus stays where the person put it: the card is reached with Tab when they want it.
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveFocus();
+
+    await user.click(within(card).getByRole("button", { name: "Always allow" }));
+
+    expect(rust.callsTo("answer_approval")).toEqual([
+      { sessionId: "session-1", itemId: "turn-1-approval-1", answer: "alwaysAllow" },
+    ]);
+    rust.emit({
+      type: "itemAdded",
+      turnId: "turn-1",
+      item: { ...request, state: "alwaysAllowed" },
+    });
+    expect(await screen.findByText("You always allowed")).toBeVisible();
+    expect(screen.queryByRole("group", { name: "Claude wants to run a command" })).toBeNull();
+    expect(within(statusBar).getByText("Claude: replying")).toBeVisible();
+  });
+
+  it("has no accessibility violations with a request waiting", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({
+      sessions: [sessionNamed("session-1", null, "playground", "claude")],
+    });
+    renderApp("/session/session-1");
+    await user.type(
+      await screen.findByRole("textbox", { name: "Message" }),
+      "Run the tests{Enter}",
+    );
+    await screen.findByText("Claude is replying…");
+    rust.emit({ type: "itemAdded", turnId: "turn-1", item: request });
+    await screen.findByRole("group", { name: "Claude wants to run a command" });
+
+    await expectNoAccessibilityViolations(document.body);
+  });
+});
+
 describe("The welcome state (ADR 0039)", () => {
   it("asks what the agent a new session takes should work on, and starts the session with it", async () => {
     const user = userEvent.setup();

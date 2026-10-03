@@ -257,6 +257,7 @@ mod tests {
                 Item::ToolCall { .. } => "tool",
                 Item::FileChange { .. } => "file",
                 Item::Error { .. } => "error",
+                Item::Approval { .. } => "approval",
                 Item::Status { .. } => "status",
             })
             .collect()
