@@ -7,6 +7,7 @@ import {
   ChevronsLeftIcon,
   ChevronsRightIcon,
   KeyboardIcon,
+  LinkIcon,
   MaximizeIcon,
   PanelBottomIcon,
   PanelLeftIcon,
@@ -29,6 +30,7 @@ import {
 export type CommandId =
   | "palette.open"
   | "session.new"
+  | "session.newLinked"
   | "reply.stop"
   | "session.rename"
   | "session.pin"
@@ -63,6 +65,7 @@ export interface CommandDefinition {
   labelKey:
     | "commands.paletteOpen"
     | "commands.sessionNew"
+    | "commands.sessionNewLinked"
     | "commands.replyStop"
     | "commands.sessionRename"
     | "commands.sessionPin"
@@ -113,6 +116,13 @@ export const commandDefinitions = [
     labelKey: "commands.sessionNew",
     icon: SquarePenIcon,
     shortcuts: ["Ctrl+N"],
+  },
+  {
+    id: "session.newLinked",
+    group: "session",
+    labelKey: "commands.sessionNewLinked",
+    icon: LinkIcon,
+    shortcuts: ["Ctrl+Shift+N"],
   },
   {
     id: "reply.stop",

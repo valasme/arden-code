@@ -11,6 +11,7 @@ const session: Session = {
   updatedAt: "2026-09-30T14:05:10Z",
   pinned: false,
   archivedAt: null,
+  linkedFrom: null,
   turns: [
     {
       id: "turn-2",

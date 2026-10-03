@@ -15,15 +15,22 @@ import { useSessionDialogsStore } from "@/state/sessionDialogs";
 import { findSession } from "./sessionList";
 
 /** What can be done to a session from its menu (ADR 0036). */
-export type SessionAction = "rename" | "pin" | "unpin" | "archive" | "unarchive" | "delete";
+export type SessionAction =
+  | "link"
+  | "rename"
+  | "pin"
+  | "unpin"
+  | "archive"
+  | "unarchive"
+  | "delete";
 
 /**
  * The actions that apply to a session now, in the order its menu lists them. An archived session
- * can only be unarchived or deleted.
+ * can only start a linked session, be unarchived or be deleted.
  */
 export function actionsFor(session: SessionSummary): SessionAction[] {
-  if (session.archivedAt !== null) return ["unarchive", "delete"];
-  return ["rename", session.pinned ? "unpin" : "pin", "archive", "delete"];
+  if (session.archivedAt !== null) return ["link", "unarchive", "delete"];
+  return ["link", "rename", session.pinned ? "unpin" : "pin", "archive", "delete"];
 }
 
 /** The session whose row in the sidebar comes after this one's, or else before it. */
@@ -72,6 +79,7 @@ export function useSessionActions(): (
 ) => void {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const rename = useSessionDialogsStore((state) => state.rename);
   const askToDelete = useSessionDialogsStore((state) => state.askToDelete);
   const focusRow = useRowFocusStore((state) => state.focusRow);
@@ -80,6 +88,13 @@ export function useSessionActions(): (
     (action, sessionId, fromRow = false) => {
       const failed = (error: unknown) => {
         showErrorToast(toAppError(error));
+      };
+
+      // A new, empty session that keeps a link back to this one, opened ready to be written in.
+      const startLinked = async () => {
+        const linked = await commands.createLinkedSession(sessionId);
+        await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
+        await navigate({ to: "/session/$id", params: { id: linked.id } });
       };
 
       const setPinned = async (pinned: boolean) => {
@@ -109,6 +124,10 @@ export function useSessionActions(): (
       };
 
       switch (action) {
+        case "link": {
+          startLinked().catch(failed);
+          break;
+        }
         case "rename": {
           rename(sessionId);
           break;
@@ -129,7 +148,7 @@ export function useSessionActions(): (
         }
       }
     },
-    [t, queryClient, rename, askToDelete, focusRow],
+    [t, queryClient, navigate, rename, askToDelete, focusRow],
   );
 }
 

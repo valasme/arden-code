@@ -229,6 +229,8 @@ pub struct Session {
     pub pinned: bool,
     /// When it was archived, in UTC, while it is (ADR 0036). An archived session is read-only.
     pub archived_at: Option<String>,
+    /// The session it was started from, while that one exists: a linked session (ADR 0036).
+    pub linked_from: Option<String>,
     pub turns: Vec<Turn>,
 }
 
@@ -244,6 +246,7 @@ pub struct SessionSummary {
     pub updated_at: String,
     pub pinned: bool,
     pub archived_at: Option<String>,
+    pub linked_from: Option<String>,
 }
 
 /// A project and its sessions, the most recently used first.

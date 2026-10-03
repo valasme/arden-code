@@ -207,6 +207,45 @@ test.describe("sessions kept between starts in the real app", () => {
       rmSync(dataDir, { recursive: true, force: true });
     }
   });
+
+  test("Ctrl+Shift+N starts a linked session, and the links lead both ways, also after a restart", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-link-"));
+    try {
+      const first = await launchApp({ dataDir });
+      try {
+        await untilTheReplyEnds(await ask(first.page, "The first part"));
+
+        await first.page.keyboard.press("Control+Shift+N");
+
+        const links = first.page.getByRole("navigation", { name: "Linked sessions" });
+        await expect(links).toHaveText(/Linked from\s*The first part/u);
+        await expect(first.page.getByRole("textbox", { name: "Message" })).toBeFocused();
+        await first.page.getByRole("textbox", { name: "Message" }).fill("The second part");
+        await first.page.getByRole("textbox", { name: "Message" }).press("Enter");
+        await expect(
+          first.page.getByRole("heading", { level: 1, name: "The second part" }),
+        ).toBeVisible();
+      } finally {
+        await first.close();
+      }
+
+      const second = await launchApp({ dataDir });
+      try {
+        // The linked session was the last one open.
+        const links = second.page.getByRole("navigation", { name: "Linked sessions" });
+        await links.getByRole("link", { name: "The first part" }).click();
+
+        await expect(
+          second.page.getByRole("heading", { level: 1, name: "The first part" }),
+        ).toBeVisible();
+        await expect(links).toHaveText(/Linked to\s*The second part/u);
+      } finally {
+        second.kill();
+      }
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
 });
 
 test.describe("rich replies in the real app", () => {

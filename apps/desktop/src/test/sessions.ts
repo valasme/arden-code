@@ -47,6 +47,7 @@ export function sessionNamed(
     updatedAt: "2026-09-30T14:05:09Z",
     pinned: false,
     archivedAt: null,
+    linkedFrom: null,
     turns: [],
   };
 }
@@ -148,6 +149,17 @@ export function startSessionsRust({
           sessions.push(session);
           return summaryOf(session);
         }
+        case "create_linked_session": {
+          const { fromId } = z.object({ fromId: z.string() }).parse(payload);
+          const original = find(fromId);
+          made += 1;
+          const session = {
+            ...sessionNamed(`session-${made}`, null, original.projectId),
+            linkedFrom: fromId,
+          };
+          sessions.push(session);
+          return summaryOf(session);
+        }
         case "get_session": {
           // A copy, as the one that crosses the IPC boundary is.
           return structuredClone(find(withId.parse(payload).id));
@@ -194,6 +206,7 @@ export function startSessionsRust({
           sessions.splice(sessions.indexOf(find(id)), 1);
           if (pins.includes(id)) pins.splice(pins.indexOf(id), 1);
           if (archives.includes(id)) archives.splice(archives.indexOf(id), 1);
+          for (const other of sessions) if (other.linkedFrom === id) other.linkedFrom = null;
           return null;
         }
         case "send_message": {

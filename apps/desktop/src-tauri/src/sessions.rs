@@ -117,6 +117,24 @@ pub fn create_session(sessions: State<'_, Sessions>) -> Result<SessionSummary, A
     Ok(session)
 }
 
+/// Starts an empty session linked to another one, in its project and with its agent (ADR 0036).
+///
+/// # Errors
+///
+/// Returns an error when there is no session to start from, or the new one cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn create_linked_session(
+    from_id: String,
+    sessions: State<'_, Sessions>,
+) -> Result<SessionSummary, AppError> {
+    let session = sessions
+        .create_linked_session(&from_id)
+        .map_err(app_error)?;
+    tracing::info!(session = %session.id, from = %from_id, "linked session created");
+    Ok(session)
+}
+
 /// A session with all of its turns.
 ///
 /// # Errors

@@ -102,6 +102,7 @@ impl Entry {
             updated_at: session.updated_at.clone(),
             pinned: session.pinned,
             archived_at: session.archived_at.clone(),
+            linked_from: session.linked_from.clone(),
             turns: Vec::new(),
         }
     }
@@ -117,6 +118,7 @@ impl Entry {
             updated_at: session.updated_at.clone(),
             pinned: session.pinned,
             archived_at: session.archived_at.clone(),
+            linked_from: session.linked_from.clone(),
         }
     }
 
@@ -159,6 +161,45 @@ impl Inner {
 
     fn next_id(&mut self, kind: &str) -> String {
         format!("{kind}-{}", self.next_number())
+    }
+
+    /// Starts an empty session in a project, linked to the session it was started from, if any.
+    fn create_session(
+        &mut self,
+        project_id: &str,
+        agent: AgentKind,
+        linked_from: Option<String>,
+    ) -> Result<SessionSummary, StoreError> {
+        if !self.projects.iter().any(|project| project.id == project_id) {
+            return Err(StoreError::UnknownProject);
+        }
+        let now = now_utc();
+        let entry = Entry {
+            session: Session {
+                id: self.next_id("session"),
+                project_id: project_id.to_owned(),
+                agent,
+                title: None,
+                created_at: now.clone(),
+                updated_at: now,
+                pinned: false,
+                archived_at: None,
+                linked_from,
+                turns: Vec::new(),
+            },
+            loaded: true,
+            order: Order {
+                used: self.next_number(),
+                pinned: None,
+                archived: None,
+            },
+        };
+        self.database
+            .save_session(&entry.session, entry.order, self.last_id)
+            .map_err(not_saved)?;
+        let summary = entry.summary();
+        self.sessions.push(entry);
+        Ok(summary)
     }
 }
 
@@ -566,6 +607,12 @@ impl SessionStore {
                 inner.stopping.insert(turn.id.clone());
             }
         }
+        // The file drops the links to it by itself; the sessions in memory follow.
+        for other in &mut inner.sessions {
+            if other.session.linked_from.as_deref() == Some(session_id) {
+                other.session.linked_from = None;
+            }
+        }
         if forget {
             inner.last_open = None;
         }
@@ -583,42 +630,21 @@ impl SessionStore {
         project_id: &str,
         agent: AgentKind,
     ) -> Result<SessionSummary, StoreError> {
+        self.lock().create_session(project_id, agent, None)
+    }
+
+    /// Starts an empty session linked to another one (ADR 0036): in the same project, with the same
+    /// agent, keeping a link back to it. Nothing is copied. An archived session can start one too.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no session to start from, and
+    /// [`StoreError::NotSaved`] when the new session cannot be written.
+    pub fn create_linked_session(&self, from: &str) -> Result<SessionSummary, StoreError> {
         let mut inner = self.lock();
-        if !inner
-            .projects
-            .iter()
-            .any(|project| project.id == project_id)
-        {
-            return Err(StoreError::UnknownProject);
-        }
-        let now = now_utc();
-        let entry = Entry {
-            session: Session {
-                id: inner.next_id("session"),
-                project_id: project_id.to_owned(),
-                agent,
-                title: None,
-                created_at: now.clone(),
-                updated_at: now,
-                pinned: false,
-                archived_at: None,
-                turns: Vec::new(),
-            },
-            loaded: true,
-            order: Order {
-                used: inner.next_number(),
-                pinned: None,
-                archived: None,
-            },
-        };
-        let last_id = inner.last_id;
-        inner
-            .database
-            .save_session(&entry.session, entry.order, last_id)
-            .map_err(not_saved)?;
-        let summary = entry.summary();
-        inner.sessions.push(entry);
-        Ok(summary)
+        let original = find(&mut inner.sessions, from)?;
+        let (project_id, agent) = (original.session.project_id.clone(), original.session.agent);
+        inner.create_session(&project_id, agent, Some(from.to_owned()))
     }
 
     /// A session with all of its turns.
@@ -1895,6 +1921,113 @@ mod tests {
         store.set_archived(&session.id, true).expect("archived");
 
         assert_eq!(store.last_open(), None);
+    }
+
+    #[test]
+    fn a_linked_session_starts_empty_in_the_same_project_with_the_same_agent_and_links_back() {
+        let store = store();
+        let project = store
+            .open_folder(Path::new(r"C:\Work\my-app"))
+            .expect("a project");
+        let original = store
+            .create_session(&project.id, AgentKind::Demo)
+            .expect("a session");
+        store
+            .start_turn(&original.id, "The first part")
+            .expect("a turn");
+
+        let linked = store
+            .create_linked_session(&original.id)
+            .expect("a linked session");
+
+        assert_ne!(linked.id, original.id);
+        assert_eq!(linked.project_id, project.id);
+        assert_eq!(linked.agent, AgentKind::Demo);
+        assert_eq!(linked.linked_from.as_deref(), Some(original.id.as_str()));
+        assert_eq!(linked.title, None);
+        let session = store.session(&linked.id).expect("the session");
+        assert!(session.turns.is_empty(), "nothing is copied");
+        assert_eq!(session.linked_from.as_deref(), Some(original.id.as_str()));
+        assert_eq!(
+            store.list().projects[1].sessions[0].id,
+            linked.id,
+            "the newest is listed first"
+        );
+        assert_eq!(
+            store.create_linked_session("session-99"),
+            Err(StoreError::UnknownSession)
+        );
+    }
+
+    #[test]
+    fn links_are_kept_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let (original, linked) = {
+            let store = store_in(&file);
+            let original = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            let linked = store
+                .create_linked_session(&original.id)
+                .expect("a linked session");
+            (original.id, linked.id)
+        };
+
+        let store = store_in(&file);
+
+        assert_eq!(
+            store.session(&linked).expect("the session").linked_from,
+            Some(original)
+        );
+    }
+
+    #[test]
+    fn deleting_the_session_a_link_points_to_drops_the_link() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let linked = {
+            let store = store_in(&file);
+            let original = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            let linked = store
+                .create_linked_session(&original.id)
+                .expect("a linked session");
+
+            store.delete(&original.id).expect("deleted");
+
+            assert_eq!(
+                store.session(&linked.id).expect("the session").linked_from,
+                None
+            );
+            assert_eq!(store.list().projects[0].sessions[0].linked_from, None);
+            linked.id
+        };
+
+        assert_eq!(
+            store_in(&file)
+                .session(&linked)
+                .expect("the session")
+                .linked_from,
+            None
+        );
+    }
+
+    #[test]
+    fn an_archived_session_can_start_a_linked_session() {
+        let store = store();
+        let original = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        store.set_archived(&original.id, true).expect("archived");
+
+        let linked = store
+            .create_linked_session(&original.id)
+            .expect("a linked session");
+
+        assert_eq!(linked.linked_from.as_deref(), Some(original.id.as_str()));
+        assert!(store.start_turn(&linked.id, "Carry on").is_ok());
     }
 
     #[test]

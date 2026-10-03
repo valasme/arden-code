@@ -389,6 +389,14 @@ export const commands = {
 	 */
 	createSession: () => __TAURI_INVOKE<SessionSummary>("create_session"),
 	/**
+	 *  Starts an empty session linked to another one, in its project and with its agent (ADR 0036).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no session to start from, or the new one cannot be saved.
+	 */
+	createLinkedSession: (fromId: string) => __TAURI_INVOKE<SessionSummary>("create_linked_session", { fromId }),
+	/**
 	 *  A session with all of its turns.
 	 * 
 	 *  # Errors
@@ -799,6 +807,8 @@ export type Session = {
 	pinned: boolean,
 	/**  When it was archived, in UTC, while it is (ADR 0036). An archived session is read-only. */
 	archivedAt: string | null,
+	/**  The session it was started from, while that one exists: a linked session (ADR 0036). */
+	linkedFrom: string | null,
 	turns: Turn[],
 };
 
@@ -830,6 +840,7 @@ export type SessionSummary = {
 	updatedAt: string,
 	pinned: boolean,
 	archivedAt: string | null,
+	linkedFrom: string | null,
 };
 
 /**  One change to one setting. The UI sends these, so each setting keeps its own type. */

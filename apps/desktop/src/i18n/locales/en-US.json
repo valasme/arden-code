@@ -27,6 +27,7 @@
     "sessionArchive": "Archive session",
     "sessionDelete": "Delete session",
     "sessionNew": "New session",
+    "sessionNewLinked": "New linked session",
     "sessionPin": "Pin session",
     "sessionRename": "Rename session",
     "sessionUnarchive": "Unarchive session",
@@ -286,6 +287,7 @@
     "actions": {
       "archive": "Archive",
       "delete": "Delete…",
+      "link": "New linked session",
       "pin": "Pin",
       "rename": "Rename…",
       "unarchive": "Unarchive",
@@ -316,6 +318,11 @@
     "demoAgent": "Demo agent",
     "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
     "jumpToLatest": "Jump to latest",
+    "links": {
+      "from": "Linked from",
+      "label": "Linked sessions",
+      "to": "Linked to"
+    },
     "menu": {
       "label": "Actions for {{title}}",
       "open": "Session actions"

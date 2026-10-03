@@ -21,6 +21,7 @@ import { actionsFor, type SessionAction, useSessionActions } from "./useSessionA
 
 /** Each action's words in the menu, and the command that does the same for the open session. */
 const items = {
+  link: { labelKey: "sessions.actions.link", command: "session.newLinked" },
   rename: { labelKey: "sessions.actions.rename", command: "session.rename" },
   pin: { labelKey: "sessions.actions.pin", command: "session.pin" },
   unpin: { labelKey: "sessions.actions.unpin", command: "session.unpin" },

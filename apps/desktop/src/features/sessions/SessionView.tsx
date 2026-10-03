@@ -15,6 +15,7 @@ import { useRepliesStore } from "@/state/replies";
 import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
+import { SessionLinks } from "./SessionLinks";
 import { SessionMenu } from "./SessionMenu";
 import { TurnView } from "./TurnView";
 import { useSendMessage } from "./useSendMessage";
@@ -154,6 +155,7 @@ export function SessionView({ id }: { id: string }) {
           </Button>
         </SessionMenu>
       </header>
+      <SessionLinks session={session} />
       <div className="relative min-h-0 flex-1">
         <main
           ref={transcript}

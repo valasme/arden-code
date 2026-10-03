@@ -38,7 +38,8 @@ CREATE TABLE sessions (
     used INTEGER NOT NULL,
     pinned INTEGER,
     archived INTEGER,
-    archived_at TEXT
+    archived_at TEXT,
+    linked_from TEXT REFERENCES sessions (id) ON DELETE SET NULL
 ) STRICT;
 
 CREATE TABLE turns (
@@ -155,11 +156,11 @@ fn put_session(
 ) -> rusqlite::Result<()> {
     transaction.execute(
         "INSERT INTO sessions (id, project_id, agent, title, created_at, updated_at, used, pinned,
-             archived, archived_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             archived, archived_at, linked_from)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
          ON CONFLICT (id) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at,
              used = excluded.used, pinned = excluded.pinned, archived = excluded.archived,
-             archived_at = excluded.archived_at",
+             archived_at = excluded.archived_at, linked_from = excluded.linked_from",
         params![
             session.id,
             session.project_id,
@@ -171,6 +172,7 @@ fn put_session(
             order.pinned.map(stored),
             order.archived.map(stored),
             session.archived_at,
+            session.linked_from,
         ],
     )?;
     Ok(())
@@ -300,7 +302,7 @@ impl Database {
 
         let mut statement = self.connection.prepare(
             "SELECT id, project_id, agent, title, created_at, updated_at, used, pinned, archived,
-                archived_at
+                archived_at, linked_from
              FROM sessions ORDER BY rowid",
         )?;
         let sessions = statement
@@ -321,6 +323,7 @@ impl Database {
                         updated_at: row.get(5)?,
                         pinned: order.pinned.is_some(),
                         archived_at: row.get(9)?,
+                        linked_from: row.get(10)?,
                         turns: Vec::new(),
                     },
                     order,
@@ -417,7 +420,7 @@ impl Database {
     }
 
     /// Deletes a session and its turns, and forgets it as the session opened last when
-    /// `forget_last_open` says it was. What they held is overwritten in the file (`secure_delete`),
+    /// `forget_last_open` says it was. Sessions linked from it lose their link. What they held is overwritten in the file (`secure_delete`),
     /// and the log of changes is folded into the file and emptied, so no earlier copy of it stays.
     ///
     /// # Errors

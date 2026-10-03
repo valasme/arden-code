@@ -115,6 +115,7 @@ describe("the groups", () => {
   /** Where each command belongs in the command palette and the cheat sheet (ADR 0032). */
   const grouped: Record<string, string> = {
     "session.new": "session",
+    "session.newLinked": "session",
     "reply.stop": "session",
     "session.rename": "session",
     "session.pin": "session",

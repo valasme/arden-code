@@ -140,6 +140,7 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
         },
         enabled: () => replying,
       },
+      "session.newLinked": sessionCommand("link"),
       "session.rename": sessionCommand("rename"),
       "session.pin": sessionCommand("pin"),
       "session.unpin": sessionCommand("unpin"),

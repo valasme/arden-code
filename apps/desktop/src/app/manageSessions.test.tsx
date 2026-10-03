@@ -112,7 +112,7 @@ describe("A session's menu", () => {
     await user.keyboard("{Shift>}{F10}{/Shift}");
     // Opened from the keyboard, the menu starts on its first item, as a menu of Windows does.
     await waitFor(() => {
-      expect(screen.getByRole("menuitem", { name: /Rename/ })).toHaveFocus();
+      expect(screen.getByRole("menuitem", { name: /New linked session/ })).toHaveFocus();
     });
     await user.keyboard("{Escape}");
     await noMenu();
@@ -277,8 +277,10 @@ describe("Pinning a session", () => {
     row("Write the docs").focus();
 
     await user.keyboard("{Shift>}{F10}{/Shift}");
-    await focusGoesTo(await shownItem(/Rename/));
-    await user.keyboard("{ArrowDown}{Enter}");
+    await focusGoesTo(await shownItem(/New linked session/));
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    await focusGoesTo(screen.getByRole("menuitem", { name: /^Pin/ }));
+    await user.keyboard("{Enter}");
 
     await waitFor(() => {
       expect(listedUnder("Pinned")).toEqual(["Write the docs"]);
@@ -522,13 +524,13 @@ describe("Archiving a session", () => {
     expect(screen.queryByText("This session is archived.")).toBeNull();
   });
 
-  it("offers only Unarchive and Delete in an archived session's menu", async () => {
+  it("offers only New linked session, Unarchive and Delete in an archived session's menu", async () => {
     const { user } = await archivedSessions("/session/session-1");
 
     await user.click(await screen.findByRole("button", { name: "Session actions" }));
 
     await shownItem(/Unarchive/);
-    expect(menuItems()).toEqual(["Unarchive", "Delete…"]);
+    expect(menuItems()).toEqual(["New linked session", "Unarchive", "Delete…"]);
   });
 
   it("moves the focus to the next row when it is archived from its row", async () => {
@@ -647,6 +649,93 @@ describe("The archived sessions page", () => {
 
     await user.click(screen.getByRole("link", { name: "Old work" }));
     await screen.findByText("This session is archived.");
+    await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+/** The links of the open session to the sessions it is linked with, as their lines read. */
+function linkLines(): string[] {
+  const links = screen.queryByRole("navigation", { name: "Linked sessions" });
+  if (!links) return [];
+  return [...links.querySelectorAll("p")].map((line) => line.textContent ?? "");
+}
+
+describe("Linked sessions", () => {
+  it("starts one from the menu and opens it, and each session shows the link to the other", async () => {
+    const { rust, user } = await twoSessions();
+
+    await user.click(await screen.findByRole("button", { name: "Session actions" }));
+    await user.click(await shownItem(/New linked session/));
+
+    expect(await screen.findByRole("heading", { level: 1, name: "New session" })).toBeVisible();
+    expect(rust.callsTo("create_linked_session")).toEqual([{ fromId: "session-1" }]);
+    expect(linkLines()).toEqual(["Linked from Fix the build"]);
+    await focusGoesTo(screen.getByRole("textbox", { name: "Message" }));
+
+    await user.click(
+      within(screen.getByRole("navigation", { name: "Linked sessions" })).getByRole("link", {
+        name: "Fix the build",
+      }),
+    );
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Fix the build" })).toBeVisible();
+    expect(linkLines()).toEqual(["Linked to New session"]);
+  });
+
+  it("starts one from the open session with Ctrl+Shift+N, and from the command palette", async () => {
+    const { rust, user } = await twoSessions();
+
+    await user.keyboard("{Control>}{Shift>}n{/Shift}{/Control}");
+    await waitFor(() => {
+      expect(linkLines()).toEqual(["Linked from Fix the build"]);
+    });
+
+    await openPalette(user);
+    await user.click(screen.getByRole("option", { name: /New linked session/ }));
+    await waitFor(() => {
+      expect(rust.callsTo("create_linked_session")).toEqual([
+        { fromId: "session-1" },
+        { fromId: "session-3" },
+      ]);
+    });
+    await waitFor(() => {
+      expect(linkLines()).toEqual(["Linked from New session"]);
+    });
+  });
+
+  it("starts one from an archived session, which is how old work carries on", async () => {
+    const { rust, user } = await archivedSessions("/session/session-1");
+
+    await user.click(await screen.findByRole("button", { name: "Session actions" }));
+    await user.click(await shownItem(/New linked session/));
+
+    expect(await screen.findByRole("textbox", { name: "Message" })).toBeVisible();
+    expect(rust.callsTo("create_linked_session")).toEqual([{ fromId: "session-1" }]);
+    expect(linkLines()).toEqual(["Linked from Old work"]);
+  });
+
+  it("drops the link when the session it points to is deleted", async () => {
+    const { user } = await twoSessions();
+    await user.keyboard("{Control>}{Shift>}n{/Shift}{/Control}");
+    await waitFor(() => {
+      expect(linkLines()).toEqual(["Linked from Fix the build"]);
+    });
+
+    await deleteFromTheMenu(user, "Fix the build");
+    await user.click(await screen.findByRole("button", { name: "Delete session" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("navigation", { name: "Linked sessions" })).toBeNull();
+    });
+  });
+
+  it("has no accessibility violations with the links shown", async () => {
+    const { user } = await twoSessions();
+    await user.keyboard("{Control>}{Shift>}n{/Shift}{/Control}");
+    await waitFor(() => {
+      expect(linkLines()).toEqual(["Linked from Fix the build"]);
+    });
+
     await expectNoAccessibilityViolations(document.body);
   });
 });
