@@ -42,7 +42,7 @@ const messageBox = () => screen.findByRole("textbox", { name: "Message" });
 const sidebar = () => screen.getByRole("complementary", { name: "Sidebar" });
 
 describe("With no session open", () => {
-  it("shows the welcome state: the mark, a question, the Demo agent line, the message box and three shortcuts", async () => {
+  it("shows the welcome state: the mark, a question naming the agent, the message box and three shortcuts", async () => {
     startSessionsRust();
     renderApp();
 
@@ -51,7 +51,6 @@ describe("With no session open", () => {
     ).toBeVisible();
     const main = screen.getByRole("main");
     expect(within(main).getByRole("img", { name: "Arden Code" })).toBeVisible();
-    expect(within(main).getByText("Real agents are coming. Try the Demo agent.")).toBeVisible();
     expect(within(main).getByRole("textbox", { name: "Message" })).toHaveFocus();
     expect(within(main).getByText("Demo agent · Playground")).toBeVisible();
     const hints = within(within(main).getByRole("list")).getAllByRole("listitem");

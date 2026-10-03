@@ -33,7 +33,7 @@ export function ItemView({ item, streaming }: { item: Item; streaming: boolean }
         />
       );
     case "error":
-      return <ErrorItem message={item.message} />;
+      return <ErrorItem message={item.message} code={item.code ?? null} />;
   }
   return <StatusItem kind={item.kind} />;
 }

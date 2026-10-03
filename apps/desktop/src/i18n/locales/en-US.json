@@ -1,4 +1,20 @@
 {
+  "agents": {
+    "claude": {
+      "empty": "Write a message to start. Claude works in this project's folder, with your own Claude Code.",
+      "name": "Claude",
+      "placeholder": "Message Claude",
+      "question": "What should Claude work on?",
+      "replying": "Claude is replying…"
+    },
+    "demo": {
+      "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
+      "name": "Demo agent",
+      "placeholder": "Message the Demo agent",
+      "question": "What should the Demo agent work on?",
+      "replying": "The Demo agent is replying…"
+    }
+  },
   "brand": {
     "name": "Arden Code"
   },
@@ -86,6 +102,46 @@
       "action": "Write a name of 1 to 100 characters, then save it again.",
       "what": "That name cannot be used.",
       "why": "A session's name needs 1 to 100 characters, not counting spaces at either end."
+    },
+    "ARD-AGT-007": {
+      "action": "Install Claude Code (Settings → Agents shows how), then send your message again.",
+      "what": "Claude Code is not installed.",
+      "why": "Claude works through Claude Code, Anthropic's own program, and Arden Code could not find claude on this computer."
+    },
+    "ARD-AGT-008": {
+      "action": "Open a terminal and run claude update, then send your message again.",
+      "what": "Claude Code needs an update.",
+      "why": "Arden Code needs Claude Code 2.1.223 or later, and an older version is installed."
+    },
+    "ARD-AGT-009": {
+      "action": "Open a terminal, run claude, sign in with /login, then send your message again.",
+      "what": "Claude Code is not signed in.",
+      "why": "Claude Code signs in on its own, with your Claude account or your API key. Arden Code never signs in for you."
+    },
+    "ARD-AGT-010": {
+      "action": "Send your message again. If it keeps happening, check that claude runs in a terminal, and look at its log in Settings → Advanced → Open logs.",
+      "what": "Claude Code stopped unexpectedly.",
+      "why": "The program could not be started, or it ended before it finished the reply."
+    },
+    "ARD-AGT-011": {
+      "action": "Update Arden Code and Claude Code (claude update), then send your message again.",
+      "what": "Arden Code could not talk to Claude Code.",
+      "why": "Claude Code did not answer the way Arden Code expects. It may be a version Arden Code does not know yet."
+    },
+    "ARD-AGT-012": {
+      "action": "Install Claude Code with its native installer (Settings → Agents shows how), then send your message again.",
+      "what": "Arden Code cannot start this installation of Claude Code safely.",
+      "why": "Only npm's claude.cmd was found, and Windows would read a message passed to it as commands."
+    },
+    "ARD-AGT-013": {
+      "action": "Read Claude Code's reason, then send your message again when it is solved.",
+      "what": "Claude could not answer.",
+      "why": "Claude Code reported a problem, such as a usage limit, an overloaded service or a billing issue. Its own words are under this message."
+    },
+    "ARD-AGT-014": {
+      "action": "Start a new session to work with another agent or in another project.",
+      "what": "The agent and the project of this session cannot change any more.",
+      "why": "A session keeps the agent and the project of its first message."
     },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
@@ -293,6 +349,9 @@
       "unarchive": "Unarchive",
       "unpin": "Unpin"
     },
+    "agentMenu": {
+      "label": "Agent: {{agent}}"
+    },
     "announce": {
       "done": "Reply finished.",
       "failed": "Reply failed.",
@@ -315,8 +374,6 @@
       "title": "Delete this session?"
     },
     "deleted": "Session deleted",
-    "demoAgent": "Demo agent",
-    "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
     "jumpToLatest": "Jump to latest",
     "links": {
       "from": "Linked from",
@@ -329,7 +386,6 @@
     },
     "messageBox": {
       "label": "Message",
-      "placeholder": "Message the Demo agent",
       "send": "Send",
       "stop": "Stop the reply",
       "stopShort": "Stop"
@@ -345,7 +401,6 @@
       "title": "Rename session",
       "tooLong": "A name can have at most {{limit}} characters."
     },
-    "replying": "The Demo agent is replying…",
     "stopped": "The reply stopped.",
     "transcript": "Session",
     "untitled": "New session",
@@ -636,10 +691,8 @@
     "statusBar": "Status bar"
   },
   "welcome": {
-    "line": "Real agents are coming. Try the Demo agent.",
     "newSession": "New session",
     "palette": "Command palette",
-    "question": "What should the Demo agent work on?",
     "settings": "Settings"
   }
 }

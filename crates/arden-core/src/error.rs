@@ -68,6 +68,30 @@ pub enum ErrorCode {
     /// A name given to a session is empty or too long.
     #[serde(rename = "ARD-AGT-006")]
     SessionNameInvalid,
+    /// Claude Code (`claude`) was not found, so Claude cannot start.
+    #[serde(rename = "ARD-AGT-007")]
+    ClaudeNotInstalled,
+    /// The installed Claude Code is older than the minimum version.
+    #[serde(rename = "ARD-AGT-008")]
+    ClaudeTooOld,
+    /// Claude Code is not signed in.
+    #[serde(rename = "ARD-AGT-009")]
+    ClaudeSignedOut,
+    /// Claude Code could not start, or stopped in the middle of a reply.
+    #[serde(rename = "ARD-AGT-010")]
+    ClaudeStopped,
+    /// Claude Code answered in a way Arden Code does not understand.
+    #[serde(rename = "ARD-AGT-011")]
+    ClaudeNotUnderstood,
+    /// Only npm's claude.cmd was found, with no Claude Code program beside it.
+    #[serde(rename = "ARD-AGT-012")]
+    ClaudeNpmWrapper,
+    /// Claude could not answer, for a reason Claude Code gave.
+    #[serde(rename = "ARD-AGT-013")]
+    ClaudeCouldNotAnswer,
+    /// A session's agent or project was to change after its first message.
+    #[serde(rename = "ARD-AGT-014")]
+    SessionNotEmpty,
     /// Programs cannot be started and supervised on this computer.
     #[serde(rename = "ARD-PROC-001")]
     ProcessSupervisor,
@@ -106,6 +130,14 @@ impl ErrorCode {
             Self::SessionsUnreadable => "ARD-AGT-004",
             Self::SessionArchived => "ARD-AGT-005",
             Self::SessionNameInvalid => "ARD-AGT-006",
+            Self::ClaudeNotInstalled => "ARD-AGT-007",
+            Self::ClaudeTooOld => "ARD-AGT-008",
+            Self::ClaudeSignedOut => "ARD-AGT-009",
+            Self::ClaudeStopped => "ARD-AGT-010",
+            Self::ClaudeNotUnderstood => "ARD-AGT-011",
+            Self::ClaudeNpmWrapper => "ARD-AGT-012",
+            Self::ClaudeCouldNotAnswer => "ARD-AGT-013",
+            Self::SessionNotEmpty => "ARD-AGT-014",
             Self::ProcessSupervisor => "ARD-PROC-001",
             Self::UpdateInstall => "ARD-UPD-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",

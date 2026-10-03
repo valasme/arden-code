@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDownIcon, EllipsisIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -6,12 +6,14 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
-import { commands } from "@/ipc/bindings";
+import { type AgentKind, commands } from "@/ipc/bindings";
 import { noSessions, sessionListQuery, sessionQuery } from "@/ipc/queries";
+import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { useRepliesStore } from "@/state/replies";
 
+import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
@@ -38,6 +40,7 @@ export function SessionView({ id }: { id: string }) {
   const { run } = useCommands();
   const { data: session, error } = useQuery(sessionQuery(id));
   const { data: list = noSessions } = useQuery(sessionListQuery);
+  const queryClient = useQueryClient();
   const send = useSendMessage();
   const transcript = useRef<HTMLElement>(null);
   const stuck = useRef(true);
@@ -49,6 +52,7 @@ export function SessionView({ id }: { id: string }) {
   const count = turns.length;
   const lastTurn = turns.at(-1);
   const busy = turns.some((turn) => turn.status === "running");
+  const agent = session?.agent ?? "demo";
 
   // The virtualizer's functions cannot be memoized, so the compiler leaves this component alone.
   // oxlint-disable-next-line react/incompatible-library
@@ -63,11 +67,11 @@ export function SessionView({ id }: { id: string }) {
   // The commands that act on the open session, such as stopping its reply, need to know about it.
   const setReplies = useRepliesStore((state) => state.set);
   useEffect(() => {
-    setReplies(id, busy);
+    setReplies(id, busy, agent);
     return () => {
       setReplies(undefined, false);
     };
-  }, [id, busy, setReplies]);
+  }, [id, busy, agent, setReplies]);
 
   const scrollToEnd = () => {
     stuck.current = true;
@@ -127,13 +131,35 @@ export function SessionView({ id }: { id: string }) {
   const project = list.projects.find(
     (listing) => listing.project.id === session.projectId,
   )?.project;
-  const context = t("sessions.context", {
-    agent: t("sessions.demoAgent"),
-    project:
-      project === undefined || project.kind === "playground"
-        ? t("sessions.playground")
-        : project.name,
-  });
+  const projectName =
+    project === undefined || project.kind === "playground"
+      ? t("sessions.playground")
+      : project.name;
+  const agentName = t(`agents.${agent}.name`);
+  // While the session has had no message, its agent can still change (ADR 0039).
+  const chooseAgent = (chosen: AgentKind) => {
+    commands
+      .setSessionAgent(id, chosen)
+      .then(async () => {
+        await queryClient.invalidateQueries({ queryKey: sessionQuery(id).queryKey });
+        await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
+      })
+      .catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      });
+  };
+  const context =
+    count === 0 && session.archivedAt === null ? (
+      <>
+        <AgentMenu agent={agent} onChoose={chooseAgent} />
+        <span aria-hidden className="px-1">
+          ·
+        </span>
+        <span className="truncate">{projectName}</span>
+      </>
+    ) : (
+      t("sessions.context", { agent: agentName, project: projectName })
+    );
 
   return (
     <div className="flex h-full flex-col">
@@ -142,7 +168,7 @@ export function SessionView({ id }: { id: string }) {
           {session.title ?? t("sessions.untitled")}
         </h1>
         <span className="shrink-0 border border-border px-1.5 text-2xs leading-4 text-muted-foreground">
-          {t("sessions.demoAgent")}
+          {agentName}
         </span>
         <SessionMenu sessionId={id}>
           <Button
@@ -179,7 +205,7 @@ export function SessionView({ id }: { id: string }) {
         >
           {count === 0 ? (
             <p className="mx-auto max-w-[45rem] py-6 text-sm text-muted-foreground">
-              {t("sessions.empty")}
+              {t(`agents.${agent}.empty`)}
             </p>
           ) : (
             <div
@@ -201,7 +227,7 @@ export function SessionView({ id }: { id: string }) {
                     className="absolute top-0 left-0 w-full"
                     style={{ transform: `translateY(${row.start}px)` }}
                   >
-                    <TurnView turn={turn} />
+                    <TurnView turn={turn} agent={agent} />
                   </article>
                 );
               })}
@@ -222,6 +248,7 @@ export function SessionView({ id }: { id: string }) {
       <ReplyAnnouncer turn={lastTurn} />
       {session.archivedAt === null ? (
         <MessageBox
+          agent={agent}
           busy={busy}
           context={context}
           onStop={() => {

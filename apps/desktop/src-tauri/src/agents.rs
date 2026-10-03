@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+use arden_agents::claude::driver::ClaudeDriver;
+use arden_agents::claude::launch::{Connection, LaunchError, Launcher, ProgramLauncher, Start};
 use arden_agents::detect::{self, Detection};
 use arden_core::error::{AppError, ErrorCode};
 use arden_process::supervisor::Supervisor;
@@ -15,6 +17,33 @@ impl Programs {
         self.0
             .clone()
             .ok_or_else(|| AppError::new(ErrorCode::ProcessSupervisor))
+    }
+}
+
+/// The Claude driver (ADR 0038), shared by every reply, so that each session keeps its Claude
+/// Code between turns.
+pub struct Claude(pub Arc<ClaudeDriver>);
+
+impl Claude {
+    /// The driver that starts the person's own `claude` under the supervisor, or one that says why
+    /// it cannot, when Windows did not let the supervisor be made.
+    pub fn with(supervisor: Option<&Arc<Supervisor>>) -> Self {
+        let launcher: Arc<dyn Launcher> = match supervisor {
+            Some(supervisor) => Arc::new(ProgramLauncher::new(Arc::clone(supervisor))),
+            None => Arc::new(Unsupervised),
+        };
+        Self(Arc::new(ClaudeDriver::new(launcher)))
+    }
+}
+
+/// Starts nothing: programs cannot be supervised on this computer (`ARD-PROC-001`).
+struct Unsupervised;
+
+impl Launcher for Unsupervised {
+    fn launch(&self, _start: &Start) -> Result<Connection, LaunchError> {
+        Err(LaunchError::Failed(
+            "Arden Code cannot start programs on this computer (ARD-PROC-001)".into(),
+        ))
     }
 }
 

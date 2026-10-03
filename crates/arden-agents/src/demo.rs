@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use crate::driver::{AgentDriver, Flow};
+use crate::driver::{AgentDriver, Flow, ReplyRequest};
 use crate::model::{FileChangeKind, Item, StatusKind, ToolStatus, TurnEvent};
 
 /// How long the Demo agent waits between two words, so a person can watch it stream.
@@ -177,7 +177,8 @@ fn run(run: &mut Run<'_>, prompt: &str) -> Flow {
 }
 
 impl AgentDriver for DemoDriver {
-    fn reply(&self, turn_id: &str, prompt: &str, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+    fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+        let (turn_id, prompt) = (request.turn_id, request.prompt);
         let mut script = Run {
             driver: self,
             turn_id,
@@ -190,6 +191,7 @@ impl AgentDriver for DemoDriver {
             let added = script.add(Item::Error {
                 id: format!("{turn_id}-error"),
                 message: "You asked for an error, so the Demo agent ended with one.".to_owned(),
+                code: None,
             });
             if added == Flow::Stop {
                 return;
@@ -210,9 +212,21 @@ mod tests {
     use super::*;
     use crate::model::{Turn, TurnStatus};
 
+    /// A request for the Demo agent, as the store makes one.
+    fn request(prompt: &str) -> ReplyRequest<'_> {
+        let (_person, controls) = std::sync::mpsc::channel();
+        ReplyRequest {
+            session_id: "session-1",
+            turn_id: "turn-1",
+            prompt,
+            folder: std::path::Path::new(r"C:Playground"),
+            controls,
+        }
+    }
+
     fn events_of(prompt: &str) -> Vec<TurnEvent> {
         let mut events = Vec::new();
-        DemoDriver::instant().reply("turn-1", prompt, &mut |event| {
+        DemoDriver::instant().reply(request(prompt), &mut |event| {
             events.push(event);
             Flow::Continue
         });
@@ -340,7 +354,7 @@ mod tests {
         for stop_at in [1, 2, 5, 40] {
             let mut seen = 0;
             let mut last = None;
-            DemoDriver::instant().reply("turn-1", "hi", &mut |event| {
+            DemoDriver::instant().reply(request("hi"), &mut |event| {
                 seen += 1;
                 last = Some(event);
                 if seen == stop_at {

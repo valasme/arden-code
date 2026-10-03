@@ -1,0 +1,340 @@
+//! The Claude driver (ADR 0038): one Claude Code per session, kept between turns, spoken to over
+//! its input and output.
+
+use std::collections::HashMap;
+use std::io::{self, BufRead, BufReader, Write};
+use std::path::Path;
+use std::process::Child;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::thread;
+use std::time::{Duration, Instant};
+
+use arden_core::error::ErrorCode;
+
+use super::launch::{Connection, Conversation, LaunchError, Launcher, Start};
+use super::locate::MINIMUM_VERSION;
+use super::protocol::{self, Frame, Request};
+use super::reply::Reply;
+use crate::driver::{AgentDriver, Control, Flow, ReplyRequest};
+use crate::model::{Item, TurnEvent};
+
+/// How long a new Claude Code has to answer `initialize`: it may be starting MCP servers.
+const HANDSHAKE_PATIENCE: Duration = Duration::from_secs(60);
+/// How long a Claude Code whose input was closed has to end before it is ended.
+const ENDING_PATIENCE: Duration = Duration::from_millis(500);
+/// What Claude is told when it asks for permission, until approval requests can be answered.
+const NO_APPROVALS_YET: &str =
+    "Arden Code cannot answer approval requests yet, so this was not allowed.";
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Something the reply hears: a frame from Claude Code, its end, or the person.
+enum Event {
+    Frame(Frame),
+    Ended,
+    Control(Control),
+}
+
+/// What a frame is, for the log: never what it holds.
+fn kind_of(frame: &Frame) -> &'static str {
+    match frame {
+        Frame::Init { .. } => "init",
+        Frame::Stream { .. } => "stream",
+        Frame::Assistant { .. } => "assistant",
+        Frame::ToolResults { .. } => "tool results",
+        Frame::Result { .. } => "result",
+        Frame::Request { .. } => "request",
+        Frame::Response { .. } => "response",
+        Frame::Cancel { .. } => "cancel",
+        Frame::Other => "other",
+    }
+}
+
+/// One running Claude Code, for one session.
+struct Live {
+    input: Mutex<Box<dyn Write + Send>>,
+    events: Mutex<Receiver<Event>>,
+    sender: Sender<Event>,
+    process: Mutex<Option<Child>>,
+}
+
+impl Live {
+    /// Starts reading what Claude Code writes, on a thread of its own.
+    fn begin(connection: Connection, session_id: &str) -> Self {
+        let (sender, events) = mpsc::channel();
+        let reader = sender.clone();
+        let session = session_id.to_owned();
+        let output = connection.output;
+        thread::spawn(move || {
+            for line in BufReader::new(output).lines() {
+                let Ok(line) = line else { break };
+                match protocol::parse(&line) {
+                    Some(frame) => {
+                        tracing::debug!(%session, frame = kind_of(&frame), "a frame from Claude Code");
+                        if reader.send(Event::Frame(frame)).is_err() {
+                            return;
+                        }
+                    }
+                    None if line.trim().is_empty() => {}
+                    None => {
+                        tracing::debug!(%session, "a line from Claude Code that is not a frame");
+                    }
+                }
+            }
+            let _ = reader.send(Event::Ended);
+        });
+        Self {
+            input: Mutex::new(connection.input),
+            events: Mutex::new(events),
+            sender,
+            process: Mutex::new(connection.process),
+        }
+    }
+
+    fn write(&self, frame: &str) -> io::Result<()> {
+        let mut input = lock(&self.input);
+        input.write_all(frame.as_bytes())?;
+        input.write_all(b"\n")?;
+        input.flush()
+    }
+}
+
+impl Drop for Live {
+    /// Closes Claude Code's input, which ends it, and ends it if it has not ended soon after.
+    fn drop(&mut self) {
+        *lock(&self.input) = Box::new(io::sink());
+        if let Some(mut child) = lock(&self.process).take() {
+            let deadline = Instant::now() + ENDING_PATIENCE;
+            while Instant::now() < deadline {
+                if let Ok(Some(_)) = child.try_wait() {
+                    return;
+                }
+                thread::sleep(Duration::from_millis(20));
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+/// Why a reply could not reach Claude.
+enum Problem {
+    Launch(LaunchError),
+    Stopped(String),
+    NotUnderstood(String),
+}
+
+impl Problem {
+    fn code(&self) -> ErrorCode {
+        match self {
+            Self::Launch(LaunchError::NotInstalled) => ErrorCode::ClaudeNotInstalled,
+            Self::Launch(LaunchError::TooOld(_)) => ErrorCode::ClaudeTooOld,
+            Self::Launch(LaunchError::NpmWrapperOnly) => ErrorCode::ClaudeNpmWrapper,
+            Self::Launch(LaunchError::Failed(_)) | Self::Stopped(_) => ErrorCode::ClaudeStopped,
+            Self::NotUnderstood(_) => ErrorCode::ClaudeNotUnderstood,
+        }
+    }
+
+    /// Details for the logs and for Copy details.
+    fn details(&self) -> String {
+        match self {
+            Self::Launch(LaunchError::NotInstalled) => "claude was not found on PATH".into(),
+            Self::Launch(LaunchError::TooOld(version)) => {
+                format!("Claude Code {version} is installed; {MINIMUM_VERSION} or later is needed")
+            }
+            Self::Launch(LaunchError::NpmWrapperOnly) => {
+                "only npm's claude.cmd was found, with no program beside it".into()
+            }
+            Self::Launch(LaunchError::Failed(why))
+            | Self::Stopped(why)
+            | Self::NotUnderstood(why) => why.clone(),
+        }
+    }
+}
+
+/// Answers messages through the person's own Claude Code, one per session.
+pub struct ClaudeDriver {
+    launcher: Arc<dyn Launcher>,
+    live: Mutex<HashMap<String, Arc<Live>>>,
+    requests: AtomicU64,
+}
+
+impl ClaudeDriver {
+    #[must_use]
+    pub fn new(launcher: Arc<dyn Launcher>) -> Self {
+        Self {
+            launcher,
+            live: Mutex::new(HashMap::new()),
+            requests: AtomicU64::new(0),
+        }
+    }
+
+    /// A new id for a request of Arden Code's.
+    fn next_request(&self) -> String {
+        format!(
+            "arden-{}",
+            self.requests.fetch_add(1, Ordering::Relaxed) + 1
+        )
+    }
+
+    /// The Claude Code of a session, started and greeted when it is not running.
+    fn live(&self, session_id: &str, folder: &Path) -> Result<Arc<Live>, Problem> {
+        if let Some(live) = lock(&self.live).get(session_id) {
+            return Ok(Arc::clone(live));
+        }
+        let start = Start {
+            folder: folder.to_path_buf(),
+            conversation: Conversation::New(uuid::Uuid::new_v4().to_string()),
+        };
+        let connection = self.launcher.launch(&start).map_err(Problem::Launch)?;
+        let live = Arc::new(Live::begin(connection, session_id));
+        let id = self.next_request();
+        live.write(&protocol::initialize(&id)).map_err(|error| {
+            Problem::Stopped(format!("Claude Code could not be written to: {error}"))
+        })?;
+        let deadline = Instant::now() + HANDSHAKE_PATIENCE;
+        {
+            let events = lock(&live.events);
+            loop {
+                match events.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                    Ok(Event::Frame(Frame::Response {
+                        id: answered,
+                        error,
+                    })) if answered == id => {
+                        if let Some(error) = error {
+                            return Err(Problem::NotUnderstood(format!(
+                                "Claude Code refused to start the conversation: {error}"
+                            )));
+                        }
+                        break;
+                    }
+                    Ok(Event::Ended) | Err(RecvTimeoutError::Disconnected) => {
+                        return Err(Problem::Stopped(
+                            "Claude Code ended before the conversation started".into(),
+                        ));
+                    }
+                    Err(RecvTimeoutError::Timeout) => {
+                        return Err(Problem::NotUnderstood(
+                            "Claude Code did not answer when the conversation started".into(),
+                        ));
+                    }
+                    Ok(_) => {}
+                }
+            }
+        }
+        lock(&self.live).insert(session_id.to_owned(), Arc::clone(&live));
+        Ok(live)
+    }
+
+    /// Forgets the Claude Code of a session, which ends it.
+    fn forget(&self, session_id: &str) {
+        lock(&self.live).remove(session_id);
+    }
+
+    fn interrupt(&self, live: &Live) {
+        let _ = live.write(&protocol::interrupt(&self.next_request()));
+    }
+}
+
+/// Ends a reply that could not reach Claude, with what to do.
+fn fail(turn_id: &str, problem: &Problem, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+    let _ = emit(TurnEvent::ItemAdded {
+        turn_id: turn_id.to_owned(),
+        item: Item::Error {
+            id: format!("{turn_id}-error"),
+            message: problem.details(),
+            code: Some(problem.code()),
+        },
+    });
+    let _ = emit(TurnEvent::Failed {
+        turn_id: turn_id.to_owned(),
+    });
+}
+
+impl AgentDriver for ClaudeDriver {
+    fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+        let (session_id, turn_id) = (request.session_id, request.turn_id);
+        let live = match self.live(session_id, request.folder) {
+            Ok(live) => live,
+            Err(problem) => {
+                tracing::warn!(session = %session_id, details = %problem.details(), "Claude could not be reached");
+                fail(turn_id, &problem, emit);
+                return;
+            }
+        };
+        if matches!(request.controls.try_recv(), Ok(Control::Stop)) {
+            return;
+        }
+        let forward = live.sender.clone();
+        let controls = request.controls;
+        thread::spawn(move || {
+            while let Ok(control) = controls.recv() {
+                if forward.send(Event::Control(control)).is_err() {
+                    break;
+                }
+            }
+        });
+        if let Err(error) = live.write(&protocol::user_message(request.prompt)) {
+            self.forget(session_id);
+            fail(
+                turn_id,
+                &Problem::Stopped(format!("Claude Code could not be written to: {error}")),
+                emit,
+            );
+            return;
+        }
+        let mut reply = Reply::new(turn_id, request.folder);
+        let events = lock(&live.events);
+        loop {
+            let Ok(event) = events.recv() else {
+                return;
+            };
+            match event {
+                Event::Frame(Frame::Request {
+                    id,
+                    request: Request::CanUseTool(_),
+                }) => {
+                    let _ = live.write(&protocol::deny(&id, NO_APPROVALS_YET, false));
+                }
+                Event::Frame(Frame::Request {
+                    id,
+                    request: Request::Other(subtype),
+                }) => {
+                    let _ = live.write(&protocol::refuse(
+                        &id,
+                        &format!("Arden Code does not serve {subtype}"),
+                    ));
+                }
+                Event::Frame(frame) => {
+                    for event in reply.on(&frame) {
+                        if emit(event) == Flow::Stop {
+                            self.interrupt(&live);
+                            return;
+                        }
+                    }
+                    if reply.ended() {
+                        return;
+                    }
+                }
+                Event::Ended => {
+                    drop(events);
+                    self.forget(session_id);
+                    fail(
+                        turn_id,
+                        &Problem::Stopped("Claude Code ended before the reply did".into()),
+                        emit,
+                    );
+                    return;
+                }
+                Event::Control(Control::Stop) => {
+                    self.interrupt(&live);
+                    return;
+                }
+            }
+        }
+    }
+}

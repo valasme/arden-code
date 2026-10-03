@@ -88,6 +88,8 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::send_message,
         sessions::stop_reply,
         sessions::take_pending_open,
+        sessions::set_session_agent,
+        sessions::agent_for_new_session,
         agents::detect_agents,
         sessions::debug_fill_session,
         agents::debug_spawn_sleeper,
@@ -146,6 +148,8 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::send_message,
         sessions::stop_reply,
         sessions::take_pending_open,
+        sessions::set_session_agent,
+        sessions::agent_for_new_session,
         agents::detect_agents,
     ]
 }
@@ -323,6 +327,7 @@ fn manage_programs(app: &tauri::App, paths: &AppPaths) {
             None
         }
     };
+    app.manage(agents::Claude::with(supervisor.as_ref()));
     app.manage(agents::Programs(supervisor));
 }
 
