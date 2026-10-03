@@ -62,6 +62,9 @@ pub enum ErrorCode {
     /// The saved sessions could not be read, so Arden Code started without them.
     #[serde(rename = "ARD-AGT-004")]
     SessionsUnreadable,
+    /// A name given to a session is empty or too long.
+    #[serde(rename = "ARD-AGT-006")]
+    SessionNameInvalid,
     /// Programs cannot be started and supervised on this computer.
     #[serde(rename = "ARD-PROC-001")]
     ProcessSupervisor,
@@ -98,6 +101,7 @@ impl ErrorCode {
             Self::TurnRunning => "ARD-AGT-002",
             Self::SessionsNotSaved => "ARD-AGT-003",
             Self::SessionsUnreadable => "ARD-AGT-004",
+            Self::SessionNameInvalid => "ARD-AGT-006",
             Self::ProcessSupervisor => "ARD-PROC-001",
             Self::UpdateInstall => "ARD-UPD-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",

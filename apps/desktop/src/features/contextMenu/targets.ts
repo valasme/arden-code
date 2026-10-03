@@ -2,12 +2,17 @@
 export type MenuTarget =
   | { kind: "field"; element: HTMLInputElement | HTMLTextAreaElement }
   | { kind: "editable"; element: HTMLElement }
-  | { kind: "selection"; element: HTMLElement };
+  | { kind: "selection"; element: HTMLElement }
+  /** A session's row in the sidebar, whose menu is the session's own (ADR 0036). */
+  | { kind: "session"; element: HTMLElement; sessionId: string };
 
 /** Input types that hold text a person can select and edit. */
 const textInputTypes = new Set(["text", "search", "url", "tel", "email", "password", "number", ""]);
 
-/** The text field, editable area or selected text that a menu on `node` would be about, if any. */
+/**
+ * The text field, editable area, session or selected text that a menu on `node` would be about, if
+ * any.
+ */
 export function menuTargetOf(node: EventTarget | null): MenuTarget | undefined {
   const element = node instanceof Element ? node : null;
   if (!element) return undefined;
@@ -19,6 +24,9 @@ export function menuTargetOf(node: EventTarget | null): MenuTarget | undefined {
   }
   const editable = element.closest<HTMLElement>('[contenteditable]:not([contenteditable="false"])');
   if (editable) return { kind: "editable", element: editable };
+  const row = element.closest<HTMLElement>("[data-session-id]");
+  const sessionId = row?.dataset["sessionId"];
+  if (row && sessionId) return { kind: "session", element: row, sessionId };
   if (selectedText() !== "" && element instanceof HTMLElement) {
     return { kind: "selection", element };
   }

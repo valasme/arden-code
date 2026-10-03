@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDownIcon } from "lucide-react";
+import { ArrowDownIcon, EllipsisIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -14,6 +14,7 @@ import { useRepliesStore } from "@/state/replies";
 
 import { MessageBox } from "./MessageBox";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
+import { SessionMenu } from "./SessionMenu";
 import { TurnView } from "./TurnView";
 import { useSendMessage } from "./useSendMessage";
 
@@ -141,6 +142,16 @@ export function SessionView({ id }: { id: string }) {
         <span className="shrink-0 border border-border px-1.5 text-2xs leading-4 text-muted-foreground">
           {t("sessions.demoAgent")}
         </span>
+        <SessionMenu sessionId={id}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="ms-auto"
+            aria-label={t("sessions.menu.open")}
+          >
+            <EllipsisIcon aria-hidden className="size-4" strokeWidth={1.5} />
+          </Button>
+        </SessionMenu>
       </header>
       <div className="relative min-h-0 flex-1">
         <main

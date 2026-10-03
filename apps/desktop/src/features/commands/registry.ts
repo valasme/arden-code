@@ -9,6 +9,7 @@ import {
   PanelBottomIcon,
   PanelLeftIcon,
   PanelRightIcon,
+  PencilIcon,
   RotateCcwIcon,
   SettingsIcon,
   SquareIcon,
@@ -24,6 +25,7 @@ export type CommandId =
   | "palette.open"
   | "session.new"
   | "reply.stop"
+  | "session.rename"
   | "settings.open"
   | "sidebar.toggle"
   | "inspector.toggle"
@@ -51,6 +53,7 @@ export interface CommandDefinition {
     | "commands.paletteOpen"
     | "commands.sessionNew"
     | "commands.replyStop"
+    | "commands.sessionRename"
     | "commands.settingsOpen"
     | "commands.sidebarToggle"
     | "commands.inspectorToggle"
@@ -100,6 +103,13 @@ export const commandDefinitions = [
     labelKey: "commands.replyStop",
     icon: SquareIcon,
     shortcuts: ["Escape"],
+  },
+  {
+    id: "session.rename",
+    group: "session",
+    labelKey: "commands.sessionRename",
+    icon: PencilIcon,
+    shortcuts: ["F2"],
   },
   {
     id: "settings.open",

@@ -30,6 +30,7 @@ do), and add a row here. Never reuse or renumber a code.
 | `ARD-AGT-002` | A message was sent while the agent was still answering the last one | Sending a message |
 | `ARD-AGT-003` | The sessions could not be saved, so they last only until Arden Code closes | Starting the app; anything that changes a session |
 | `ARD-AGT-004` | The saved sessions could not be read, so Arden Code started without them | Starting the app; opening a session |
+| `ARD-AGT-006` | A name given to a session is empty or too long | Renaming a session |
 | `ARD-PROC-001` | Programs cannot be started and supervised on this computer | Settings → Agents; starting an agent |
 | `ARD-UPD-001` | The update could not be installed | Choosing "Update ready: restart" |
 | `ARD-WIN-001` | Windows' window menu could not be opened | The title bar's Window menu button and Alt+Space |

@@ -24,6 +24,7 @@
     "paletteOpen": "Command palette",
     "replyStop": "Stop the reply",
     "sessionNew": "New session",
+    "sessionRename": "Rename session",
     "settingsOpen": "Settings",
     "shortcutsShow": "Keyboard shortcuts",
     "sidebarToggle": "Toggle sidebar",
@@ -68,6 +69,11 @@
       "action": "The old file was kept next to the new one as sessions.invalid-<date>.db, in Arden Code's local data folder.",
       "what": "Your saved sessions could not be read, so Arden Code started without them.",
       "why": "The sessions file was damaged, or it was made by a newer version of Arden Code."
+    },
+    "ARD-AGT-006": {
+      "action": "Write a name of 1 to 100 characters, then save it again.",
+      "what": "That name cannot be used.",
+      "why": "A session's name needs 1 to 100 characters, not counting spaces at either end."
     },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
@@ -266,6 +272,9 @@
     "sidebar": "Sidebar"
   },
   "sessions": {
+    "actions": {
+      "rename": "Rename…"
+    },
     "announce": {
       "done": "Reply finished.",
       "failed": "Reply failed.",
@@ -275,6 +284,10 @@
     "demoAgent": "Demo agent",
     "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
     "jumpToLatest": "Jump to latest",
+    "menu": {
+      "label": "Actions for {{title}}",
+      "open": "Session actions"
+    },
     "messageBox": {
       "label": "Message",
       "placeholder": "Message the Demo agent",
@@ -285,6 +298,13 @@
     "messages": "Messages",
     "new": "New session",
     "playground": "Playground",
+    "rename": {
+      "description": "The name shows in the sidebar and at the top of the session.",
+      "failed": "{{what}} ({{code}})",
+      "label": "Name",
+      "save": "Save",
+      "title": "Rename session"
+    },
     "replying": "The Demo agent is replying…",
     "stopped": "The reply stopped.",
     "transcript": "Session",

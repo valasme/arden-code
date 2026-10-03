@@ -4,6 +4,7 @@ import { usePanelRef } from "react-resizable-panels";
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
+import { RenameSessionDialog } from "@/features/sessions/RenameSessionDialog";
 import { SessionsSync } from "@/features/sessions/SessionsSync";
 import { CheatSheet } from "@/features/commands/CheatSheet";
 import { ContextMenuHost } from "@/features/contextMenu/ContextMenuHost";
@@ -145,6 +146,7 @@ export function AppShell() {
         {showStatusBar ? <StatusBar /> : null}
         <CommandPalette />
         <CheatSheet />
+        <RenameSessionDialog />
         <ContextMenuHost />
         <SessionsSync />
       </div>

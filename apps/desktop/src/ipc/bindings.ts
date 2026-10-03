@@ -347,6 +347,15 @@ export const commands = {
 	 */
 	rememberOpenSession: (id: string) => __TAURI_INVOKE<null>("remember_open_session", { id }),
 	/**
+	 *  Gives a session a name (ADR 0036).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when the name is empty or too long, there is no such session, or the name
+	 *  cannot be saved.
+	 */
+	renameSession: (id: string, name: string) => __TAURI_INVOKE<null>("rename_session", { id, name }),
+	/**
 	 *  Starts an empty Demo agent session in the Playground.
 	 * 
 	 *  # Errors
@@ -592,6 +601,8 @@ export type ErrorCode =
 "ARD-AGT-003" | 
 /**  The saved sessions could not be read, so Arden Code started without them. */
 "ARD-AGT-004" | 
+/**  A name given to a session is empty or too long. */
+"ARD-AGT-006" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */

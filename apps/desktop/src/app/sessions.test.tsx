@@ -1,137 +1,18 @@
 import { createMemoryHistory } from "@tanstack/react-router";
-import type { Channel } from "@tauri-apps/api/core";
-import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
-import { z } from "zod";
 
-import type { AppError, Item, ProjectListing, Session, TurnEvent } from "@/ipc/bindings";
+import type { Item, TurnEvent } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
-import { settingsWith } from "@/test/settings";
+import { startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
 
 import "@/styles/global.css";
-
-const playground = {
-  id: "playground",
-  kind: "playground",
-  name: "Playground",
-  path: String.raw`C:\Users\Ada\AppData\Local\io.github.valasme.arden\playground`,
-} as const;
-
-/** Rust as a test double: the sessions in memory, and a way to stream a reply by hand. */
-function startRust({
-  emitBeforeAnswering = [],
-  failCreate = false,
-  regionalFormat = "windows",
-  sessionsNotice = null,
-}: {
-  regionalFormat?: "windows" | "english";
-  /** Events sent before the answer to send_message, as a fast reply can. */
-  emitBeforeAnswering?: TurnEvent[];
-  failCreate?: boolean;
-  /** What went wrong with the sessions file when Rust started. */
-  sessionsNotice?: AppError | null;
-} = {}) {
-  Object.assign(globalThis, { isTauri: true });
-  mockWindows("main");
-  const sessions: Session[] = [];
-  const calls: { command: string; payload: unknown }[] = [];
-  let channel: Channel<TurnEvent> | undefined;
-
-  mockIPC(
-    (command, payload) => {
-      calls.push({ command, payload });
-      if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
-      if (command === "get_settings") return settingsWith({ general: { regionalFormat } });
-      if (command === "list_sessions") {
-        const listing: ProjectListing = {
-          project: playground,
-          sessions: sessions.toReversed().map(({ turns: _turns, ...summary }) => summary),
-        };
-        return { projects: [listing] };
-      }
-      if (command === "take_sessions_notice") {
-        const notice = sessionsNotice;
-        sessionsNotice = null;
-        return notice;
-      }
-      if (command === "create_session") {
-        if (failCreate) {
-          throw JSON.stringify({
-            code: "ARD-AGT-001",
-            messageKey: "errors.ARD-AGT-001",
-            details: null,
-          });
-        }
-        const session: Session = {
-          id: `session-${sessions.length + 1}`,
-          projectId: "playground",
-          agent: "demo",
-          title: null,
-          createdAt: "2026-09-30T14:05:09Z",
-          updatedAt: "2026-09-30T14:05:09Z",
-          turns: [],
-        };
-        sessions.push(session);
-        return structuredClone(session);
-      }
-      if (command === "get_session") {
-        const { id } = z.object({ id: z.string() }).parse(payload);
-        const found = sessions.find((session) => session.id === id);
-        if (!found) {
-          throw JSON.stringify({
-            code: "ARD-AGT-001",
-            messageKey: "errors.ARD-AGT-001",
-            details: null,
-          });
-        }
-        // A copy, as the one that crosses the IPC boundary is.
-        return structuredClone(found);
-      }
-      if (command === "send_message") {
-        const { sessionId, text, onEvent } = z
-          .object({
-            sessionId: z.string(),
-            text: z.string(),
-            onEvent: z.custom<Channel<TurnEvent>>(),
-          })
-          .parse(payload);
-        const session = sessions.find((found) => found.id === sessionId);
-        if (!session) throw new Error("no such session");
-        channel = onEvent;
-        session.title ??= text;
-        session.turns.push({
-          id: `turn-${session.turns.length + 1}`,
-          prompt: text,
-          startedAt: "2026-09-30T14:05:10Z",
-          status: "running",
-          items: [],
-        });
-        const answer = structuredClone(session);
-        for (const event of emitBeforeAnswering) onEvent.onmessage(event);
-        return answer;
-      }
-      return null;
-    },
-    { shouldMockEvents: true },
-  );
-  return {
-    calls,
-    sent: () => calls.filter((call) => call.command === "send_message"),
-    stops: () => calls.filter((call) => call.command === "stop_reply"),
-    /** Streams an event of the reply, as Rust would through the channel. */
-    emit(event: TurnEvent) {
-      if (!channel) throw new Error("no message was sent yet");
-      channel.onmessage(event);
-    },
-  };
-}
 
 function renderApp(entry = "/") {
   render(<App history={createMemoryHistory({ initialEntries: [entry] })} />);
@@ -161,7 +42,7 @@ const sidebar = () => screen.getByRole("complementary", { name: "Sidebar" });
 
 describe("With no session open", () => {
   it("shows the welcome state: the mark, a question, the Demo agent line, the message box and three shortcuts", async () => {
-    startRust();
+    startSessionsRust();
     renderApp();
 
     expect(
@@ -181,7 +62,7 @@ describe("With no session open", () => {
   });
 
   it("lists the Playground in the sidebar, with no sessions yet", async () => {
-    startRust();
+    startSessionsRust();
     renderApp();
 
     const playgroundName = await screen.findByRole("heading", { name: "Playground" });
@@ -190,7 +71,7 @@ describe("With no session open", () => {
   });
 
   it("says so when the saved sessions could not be read, with the code", async () => {
-    startRust({
+    startSessionsRust({
       sessionsNotice: {
         code: "ARD-AGT-004",
         messageKey: "errors.ARD-AGT-004",
@@ -212,7 +93,7 @@ describe("With no session open", () => {
   });
 
   it("has no accessibility violations", async () => {
-    startRust();
+    startSessionsRust();
     const { container } = render(<App history={createMemoryHistory({ initialEntries: ["/"] })} />);
     await screen.findByRole("heading", { name: "What should the Demo agent work on?" });
 
@@ -222,7 +103,7 @@ describe("With no session open", () => {
 
 describe("Starting a session", () => {
   it("starts one from the welcome state, opens it and sends the first message", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const user = userEvent.setup();
     renderApp();
     await screen.findByRole("heading", { name: "What should the Demo agent work on?" });
@@ -243,7 +124,7 @@ describe("Starting a session", () => {
   });
 
   it("keeps the text in the welcome state when the session cannot be started", async () => {
-    startRust({ failCreate: true });
+    startSessionsRust({ failCreate: true });
     const user = userEvent.setup();
     renderApp();
     await screen.findByRole("heading", { name: "What should the Demo agent work on?" });
@@ -257,7 +138,7 @@ describe("Starting a session", () => {
   });
 
   it("starts a Demo agent session with Ctrl+N, lists it and lets you write in it at once", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const user = userEvent.setup();
     renderApp();
     await screen.findByRole("main");
@@ -274,7 +155,7 @@ describe("Starting a session", () => {
   });
 
   it("starts one from the button in the sidebar too", async () => {
-    startRust();
+    startSessionsRust();
     const user = userEvent.setup();
     renderApp();
     await screen.findByRole("main");
@@ -285,7 +166,7 @@ describe("Starting a session", () => {
   });
 
   it("shows the error code when a session cannot be started", async () => {
-    startRust({ failCreate: true });
+    startSessionsRust({ failCreate: true });
     const user = userEvent.setup();
     renderApp();
     await screen.findByRole("main");
@@ -303,7 +184,7 @@ describe("Starting a session", () => {
   });
 
   it("tells Rust which session is open, so that it opens again at the next start", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const user = userEvent.setup();
     renderApp();
     await screen.findByRole("main");
@@ -321,7 +202,7 @@ describe("Starting a session", () => {
   });
 
   it("says so when a session does not exist any more, and offers a new one", async () => {
-    startRust();
+    startSessionsRust();
     renderApp("/session/session-99");
 
     const message = await screen.findByText("That session does not exist any more.");
@@ -332,7 +213,7 @@ describe("Starting a session", () => {
   });
 });
 
-async function openSession(rust: ReturnType<typeof startRust>) {
+async function openSession(rust: ReturnType<typeof startSessionsRust>) {
   const user = userEvent.setup();
   renderApp();
   await screen.findByRole("main");
@@ -343,7 +224,7 @@ async function openSession(rust: ReturnType<typeof startRust>) {
 
 describe("Sending a message", () => {
   it("sends on Enter, streams the reply into the view and names the session after the message", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
 
     await user.keyboard("Hello there{Enter}");
@@ -372,7 +253,7 @@ describe("Sending a message", () => {
   });
 
   it("does not lose the start of a reply that arrives before Rust has answered", async () => {
-    const rust = startRust({ emitBeforeAnswering: [delta("Quick "), delta("reply.")] });
+    const rust = startSessionsRust({ emitBeforeAnswering: [delta("Quick "), delta("reply.")] });
     const { user } = await openSession(rust);
 
     await user.keyboard("Hi{Enter}");
@@ -381,7 +262,7 @@ describe("Sending a message", () => {
   });
 
   it("adds a line on Shift+Enter and sends nothing", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
 
     await user.keyboard("first{Shift>}{Enter}{/Shift}second");
@@ -391,7 +272,7 @@ describe("Sending a message", () => {
   });
 
   it("does not send on the Enter that confirms a composed character", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
     const box = await messageBox();
     await user.type(box, "こんにちは");
@@ -404,7 +285,7 @@ describe("Sending a message", () => {
   });
 
   it("sends nothing for an empty message, and nothing while the last reply is still coming", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
     await user.keyboard("{Enter}");
     expect(rust.sent()).toHaveLength(0);
@@ -429,7 +310,7 @@ describe("Sending a message", () => {
   });
 
   it("shows every kind of item as the reply streams in", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
     await user.keyboard("show me everything{Enter}");
     await screen.findByText("The Demo agent is replying…");
@@ -484,7 +365,7 @@ describe("Sending a message", () => {
   });
 
   it("marks a reply that stopped", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
     await user.keyboard("hello{Enter}");
     await screen.findByText("The Demo agent is replying…");
@@ -495,7 +376,7 @@ describe("Sending a message", () => {
   });
 
   it("stops the reply with Esc, and the turn says it was stopped", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
     await user.keyboard("hello{Enter}");
     await screen.findByText("The Demo agent is replying…");
@@ -519,7 +400,7 @@ describe("Sending a message", () => {
   });
 
   it("leaves Esc alone when no reply is running", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
     const box = await messageBox();
     const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
@@ -533,7 +414,7 @@ describe("Sending a message", () => {
   });
 
   it("uses Esc to close a dialog first, and does not stop the reply behind it", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
     await user.keyboard("hello{Enter}");
     await screen.findByText("The Demo agent is replying…");
@@ -553,7 +434,7 @@ describe("Sending a message", () => {
   });
 
   it("offers Stop the reply in the command palette only while a reply is running", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
     await user.keyboard("{Control>}k{/Control}");
     await screen.findByRole("dialog", { name: "Command palette" });
@@ -575,7 +456,7 @@ describe("Sending a message", () => {
   });
 
   it("stops the reply from the message box: Send becomes Stop while a reply runs", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
     await user.keyboard("hello{Enter}");
     await screen.findByText("The Demo agent is replying…");
@@ -591,7 +472,7 @@ describe("Sending a message", () => {
   });
 
   it("stores the time in UTC and shows it in local time", async () => {
-    const rust = startRust({ regionalFormat: "english" });
+    const rust = startSessionsRust({ regionalFormat: "english" });
     const { user } = await openSession(rust);
     await user.keyboard("hello{Enter}");
 
@@ -609,7 +490,7 @@ describe("Sending a message", () => {
   });
 
   it("has no accessibility violations with a conversation open", async () => {
-    const rust = startRust();
+    const rust = startSessionsRust();
     const { user } = await openSession(rust);
     await user.keyboard("hello{Enter}");
     await screen.findByText("The Demo agent is replying…");
@@ -622,7 +503,7 @@ describe("Sending a message", () => {
 
 /** A session with one finished turn: a tool call, then text. */
 async function sessionWithEverything() {
-  const rust = startRust();
+  const rust = startSessionsRust();
   const { user } = await openSession(rust);
   await user.keyboard("show me everything{Enter}");
   await screen.findByText("The Demo agent is replying…");

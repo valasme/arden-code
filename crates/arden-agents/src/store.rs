@@ -18,6 +18,9 @@ use crate::model::{
 /// How many characters of the first message become the session's title.
 const TITLE_LENGTH: usize = 60;
 
+/// The most characters a name given to a session can have.
+pub const NAME_LENGTH: usize = 100;
+
 /// Why the store could not do what it was asked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StoreError {
@@ -25,6 +28,8 @@ pub enum StoreError {
     UnknownSession,
     /// The session's agent is still replying to the last message.
     TurnRunning,
+    /// A name for a session is empty, or longer than [`NAME_LENGTH`].
+    InvalidName,
     /// The change could not be written to the file, so it was not made. Says why, for the logs.
     NotSaved(String),
     /// What the file holds could not be read. Says why, for the logs.
@@ -380,6 +385,34 @@ impl SessionStore {
             .last_open
             .clone()
             .filter(|id| inner.sessions.iter().any(|entry| &entry.session.id == id))
+    }
+
+    /// Gives a session a name, trimmed of spaces at either end. A session that has a name keeps it
+    /// when its first message is sent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::InvalidName`] when the name is empty or longer than [`NAME_LENGTH`],
+    /// [`StoreError::UnknownSession`] when there is no such session, and [`StoreError::NotSaved`]
+    /// when the name cannot be written.
+    pub fn rename(&self, session_id: &str, name: &str) -> Result<(), StoreError> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > NAME_LENGTH {
+            return Err(StoreError::InvalidName);
+        }
+        let mut inner = self.lock();
+        let last_id = inner.last_id;
+        let Inner {
+            sessions, database, ..
+        } = &mut *inner;
+        let entry = find(sessions, session_id)?;
+        let mut header = entry.header();
+        header.title = Some(name.to_owned());
+        database
+            .save_session(&header, entry.used, last_id)
+            .map_err(not_saved)?;
+        entry.session.title = header.title;
+        Ok(())
     }
 
     /// Starts an empty session in a project.
@@ -1285,6 +1318,78 @@ mod tests {
             Err(StoreError::UnknownSession)
         );
         assert_eq!(store.last_open(), None);
+    }
+
+    #[test]
+    fn a_renamed_session_keeps_its_name_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            store
+                .rename(&session.id, "  The build fix  ")
+                .expect("renamed");
+            session.id
+        };
+
+        let store = store_in(&file);
+
+        assert_eq!(
+            store.list().projects[0].sessions[0].title.as_deref(),
+            Some("The build fix"),
+            "the name is trimmed"
+        );
+        assert_eq!(
+            store.session(&id).expect("the session").title.as_deref(),
+            Some("The build fix")
+        );
+    }
+
+    #[test]
+    fn a_renamed_session_keeps_its_name_when_its_first_message_is_sent() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        store.rename(&session.id, "Chosen name").expect("renamed");
+
+        store
+            .start_turn(&session.id, "The first message")
+            .expect("a turn");
+
+        assert_eq!(
+            store
+                .session(&session.id)
+                .expect("the session")
+                .title
+                .as_deref(),
+            Some("Chosen name")
+        );
+    }
+
+    #[test]
+    fn a_name_needs_1_to_100_characters_after_trimming() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+
+        assert_eq!(
+            store.rename(&session.id, "   "),
+            Err(StoreError::InvalidName)
+        );
+        assert_eq!(
+            store.rename(&session.id, &"é".repeat(101)),
+            Err(StoreError::InvalidName)
+        );
+        assert_eq!(store.rename(&session.id, &"é".repeat(100)), Ok(()));
+        assert_eq!(
+            store.rename("session-99", "A name"),
+            Err(StoreError::UnknownSession)
+        );
     }
 
     #[test]

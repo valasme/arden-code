@@ -116,6 +116,7 @@ describe("the groups", () => {
   const grouped: Record<string, string> = {
     "session.new": "session",
     "reply.stop": "session",
+    "session.rename": "session",
     "messageBox.focus": "session",
     "palette.open": "goTo",
     "settings.open": "goTo",

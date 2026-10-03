@@ -9,11 +9,13 @@ import { commands as ipc } from "@/ipc/bindings";
 import { defaultSettings } from "@/ipc/defaults.gen";
 import { reportFailure, showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
+import { focusedSessionId } from "@/features/sessions/sessionList";
 import { useStartSession } from "@/features/sessions/useStartSession";
 import { moveToArea } from "./areas";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
 import { useLayoutStore } from "@/state/layout";
 import { useRepliesStore } from "@/state/replies";
+import { useSessionDialogsStore } from "@/state/sessionDialogs";
 import { useOverlayStore } from "@/state/overlays";
 
 import {
@@ -96,10 +98,15 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
   const { mutate: changeSetting } = useChangeSetting();
   // Stopping a reply is offered while one is running; the list of commands follows it.
   const replying = useRepliesStore((state) => state.busy);
+  const openSession = useRepliesStore((state) => state.sessionId);
+  const renameSession = useSessionDialogsStore((state) => state.rename);
 
   const startSession = useStartSession();
 
   const value = useMemo<Commands>(() => {
+    // A command for a session acts on the one whose row has the focus, as a key does in File
+    // Explorer, and otherwise on the open session (ADR 0036).
+    const sessionToActOn = () => focusedSessionId() ?? openSession;
     const actions: Record<CommandId, { run: () => void; enabled?: () => boolean }> = {
       "palette.open": { run: () => setPaletteOpen(true) },
       "session.new": { run: () => void startSession() },
@@ -113,6 +120,13 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
           }
         },
         enabled: () => replying,
+      },
+      "session.rename": {
+        run: () => {
+          const id = sessionToActOn();
+          if (id !== undefined) renameSession(id);
+        },
+        enabled: () => sessionToActOn() !== undefined,
       },
       "settings.open": {
         run: () => void navigate({ to: "/settings/$tab", params: { tab: "general" } }),
@@ -173,6 +187,8 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
     changeSetting,
     changed,
     replying,
+    openSession,
+    renameSession,
   ]);
 
   useEffect(() => {

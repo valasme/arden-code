@@ -27,6 +27,7 @@ fn app_error(error: StoreError) -> AppError {
             AppError::new(ErrorCode::SessionNotFound)
         }
         StoreError::TurnRunning => AppError::new(ErrorCode::TurnRunning),
+        StoreError::InvalidName => AppError::new(ErrorCode::SessionNameInvalid),
         StoreError::NotSaved(reason) => {
             AppError::new(ErrorCode::SessionsNotSaved).with_details(reason)
         }
@@ -135,6 +136,22 @@ pub fn get_session(id: String, sessions: State<'_, Sessions>) -> Result<Session,
 #[specta::specta]
 pub fn remember_open_session(id: String, sessions: State<'_, Sessions>) -> Result<(), AppError> {
     sessions.remember_open(&id).map_err(app_error)
+}
+
+/// Gives a session a name (ADR 0036).
+///
+/// # Errors
+///
+/// Returns an error when the name is empty or too long, there is no such session, or the name
+/// cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn rename_session(
+    id: String,
+    name: String,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions.rename(&id, &name).map_err(app_error)
 }
 
 /// Stops the reply that is running in a session. The turn ends as stopped, and the reply's channel

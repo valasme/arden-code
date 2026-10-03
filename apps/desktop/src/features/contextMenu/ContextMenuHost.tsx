@@ -7,6 +7,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SessionMenuItems } from "@/features/sessions/SessionMenu";
+import { type SessionAction, useSessionActions } from "@/features/sessions/useSessionActions";
 import { useSettings } from "@/features/settings/useSettings";
 import { logger } from "@/lib/logger";
 
@@ -65,8 +67,8 @@ const isInsideMenu = (target: EventTarget | null) =>
 
 /**
  * The app's own context menus, opened with a right click, Shift+F10 or the Menu key: cut, copy,
- * paste and select all in text fields, and copy for selected text. Draws the menu; put it once in
- * the window.
+ * paste and select all in text fields, copy for selected text, and a session's own menu on its row
+ * in the sidebar (ADR 0036). Draws the menu; put it once in the window.
  *
  * In a release build the browser's own menu never shows: where this has nothing to offer, the
  * right click does nothing.
@@ -77,6 +79,9 @@ export function ContextMenuHost() {
   const returnFocusTo = useRef<HTMLElement | null>(null);
   // What the person chose, run once the menu has closed and the text has its focus back.
   const chosen = useRef<Action | undefined>(undefined);
+  // The same for a session's menu: a dialog it opens gives the focus back to the row.
+  const chosenForSession = useRef<SessionAction | undefined>(undefined);
+  const runSessionAction = useSessionActions();
   const content = useRef<HTMLDivElement>(null);
   // In developer mode the browser's own menu (with Inspect) stays available.
   const { developerMode } = useSettings().advanced;
@@ -160,10 +165,16 @@ export function ContextMenuHost() {
       <DropdownMenuContent
         ref={content}
         align="start"
+        className={menu.target.kind === "session" ? "w-auto min-w-48" : undefined}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           // The text is edited where the person was, not in the menu.
           returnFocusTo.current?.focus();
+          const forSession = chosenForSession.current;
+          chosenForSession.current = undefined;
+          if (forSession && menu.target.kind === "session") {
+            runSessionAction(forSession, menu.target.sessionId);
+          }
           const action = chosen.current;
           chosen.current = undefined;
           if (!action) return;
@@ -172,43 +183,53 @@ export function ContextMenuHost() {
           });
         }}
       >
-        {menu.target.kind !== "selection" ? (
-          <DropdownMenuItem
-            disabled={!state.cut}
-            onSelect={() => {
-              choose("cut");
+        {menu.target.kind === "session" ? (
+          <SessionMenuItems
+            onChoose={(action) => {
+              chosenForSession.current = action;
             }}
-          >
-            {t("contextMenu.cut")}
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem
-          disabled={!state.copy}
-          onSelect={() => {
-            choose("copy");
-          }}
-        >
-          {t("contextMenu.copy")}
-        </DropdownMenuItem>
-        {menu.target.kind !== "selection" ? (
+          />
+        ) : (
           <>
+            {menu.target.kind !== "selection" ? (
+              <DropdownMenuItem
+                disabled={!state.cut}
+                onSelect={() => {
+                  choose("cut");
+                }}
+              >
+                {t("contextMenu.cut")}
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem
-              disabled={!state.paste}
+              disabled={!state.copy}
               onSelect={() => {
-                choose("paste");
+                choose("copy");
               }}
             >
-              {t("contextMenu.paste")}
+              {t("contextMenu.copy")}
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => {
-                choose("selectAll");
-              }}
-            >
-              {t("contextMenu.selectAll")}
-            </DropdownMenuItem>
+            {menu.target.kind !== "selection" ? (
+              <>
+                <DropdownMenuItem
+                  disabled={!state.paste}
+                  onSelect={() => {
+                    choose("paste");
+                  }}
+                >
+                  {t("contextMenu.paste")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    choose("selectAll");
+                  }}
+                >
+                  {t("contextMenu.selectAll")}
+                </DropdownMenuItem>
+              </>
+            ) : null}
           </>
-        ) : null}
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
