@@ -437,6 +437,14 @@ export const commands = {
 	 */
 	answerApproval: (sessionId: string, itemId: string, answer: Answer) => __TAURI_INVOKE<null>("answer_approval", { sessionId, itemId, answer }),
 	/**
+	 *  Hands the person's answers to questions that wait in a session's running turn (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or no such questions wait for answers.
+	 */
+	answerQuestions: (sessionId: string, itemId: string, answers: QuestionAnswer[]) => __TAURI_INVOKE<null>("answer_questions", { sessionId, itemId, answers }),
+	/**
 	 *  The session the page should show because a folder was opened before the page was ready. Asking
 	 *  takes it: it is never returned twice.
 	 * 
@@ -775,7 +783,13 @@ subject: string;
 /**  More to decide by: a command's description, the change to a file, a tool's input. */
 detail: string | null; 
 /**  The rule the agent suggests remembering, in a line. Always allow is offered with it. */
-rule: string | null; state: ApprovalState };
+rule: string | null; state: ApprovalState } | 
+/**  The agent asks the person to choose (ADR 0039). */
+{ type: "questions"; id: string; 
+/**  The tool call that asks them, when it has one. */
+toolCallId: string | null; questions: Question[]; 
+/**  The person's answers, once given. */
+answers: QuestionAnswer[]; state: QuestionState };
 
 /**  The shortcuts a person changed. A command that is not here has its default shortcuts. */
 export type Keyboard = {
@@ -869,6 +883,37 @@ export type ProjectPage =
 "releases" | 
 /**  The privacy statement. */
 "privacy";
+
+/**  Something the agent asks the person to choose (ADR 0039). */
+export type Question = {
+	/**  A word or two that names the question, such as "Library". */
+	header: string,
+	question: string,
+	options: QuestionOption[],
+	/**  Whether several options may be chosen. */
+	multiSelect: boolean,
+};
+
+/**  The person's answer to one question: the options chosen, or words of their own. */
+export type QuestionAnswer = {
+	/**  The question's text, which the answer goes back to the agent under. */
+	question: string,
+	answer: string,
+};
+
+/**  One choice a question offers. */
+export type QuestionOption = {
+	label: string,
+	/**  What choosing it means, when the agent said. */
+	description: string | null,
+};
+
+/**  Where the agent's questions stand. */
+export type QuestionState = 
+/**  The agent waits for the person's answers. */
+"waiting" | "answered" | 
+/**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
+"cancelled";
 
 /**  Whether animations play. */
 export type ReduceMotion = 

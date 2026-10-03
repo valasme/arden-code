@@ -261,6 +261,25 @@ export function startSessionsRust({
           if (!waits) throw failure("ARD-AGT-015");
           return null;
         }
+        case "answer_questions": {
+          const { sessionId, itemId } = z
+            .object({
+              sessionId: z.string(),
+              itemId: z.string(),
+              answers: z.array(z.object({ question: z.string(), answer: z.string() })),
+            })
+            .parse(payload);
+          const waits = find(sessionId).turns.some(
+            (turn) =>
+              turn.status === "running" &&
+              turn.items.some(
+                (item) =>
+                  item.type === "questions" && item.id === itemId && item.state === "waiting",
+              ),
+          );
+          if (!waits) throw failure("ARD-AGT-015");
+          return null;
+        }
         case "send_message": {
           const { sessionId, text, onEvent } = z
             .object({

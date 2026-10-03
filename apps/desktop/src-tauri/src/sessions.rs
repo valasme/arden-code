@@ -9,7 +9,8 @@ use std::thread;
 use arden_agents::demo::DemoDriver;
 use arden_agents::driver::{AgentDriver, Answer};
 use arden_agents::model::{
-    AgentKind, ApprovalAction, ApprovalState, Item, Session, SessionList, SessionSummary, TurnEvent,
+    AgentKind, ApprovalAction, ApprovalState, Item, QuestionAnswer, QuestionState, Session,
+    SessionList, SessionSummary, TurnEvent,
 };
 use arden_agents::playground::PLAYGROUND_ID;
 use arden_agents::store::{OpenProblem, SessionStore, StoreError};
@@ -300,24 +301,45 @@ pub fn answer_approval(
         .map_err(app_error)
 }
 
+/// Hands the person's answers to questions that wait in a session's running turn (ADR 0039).
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, or no such questions wait for answers.
+#[tauri::command]
+#[specta::specta]
+pub fn answer_questions(
+    session_id: String,
+    item_id: String,
+    answers: Vec<QuestionAnswer>,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions
+        .answer_questions(&session_id, &item_id, answers)
+        .map_err(app_error)
+}
+
 /// What a notification says when an agent waits for the person's answer, if the event is a
-/// request that starts waiting.
+/// request or questions that start waiting.
 fn waiting_notice(agent: AgentKind, event: &TurnEvent) -> Option<String> {
-    let TurnEvent::ItemAdded {
-        item:
-            Item::Approval {
-                state: ApprovalState::Waiting,
-                action,
-                ..
-            },
-        ..
-    } = event
-    else {
+    let TurnEvent::ItemAdded { item, .. } = event else {
         return None;
     };
     let name = match agent {
         AgentKind::Claude => "Claude",
         AgentKind::Demo => "The Demo agent",
+    };
+    let action = match item {
+        Item::Approval {
+            state: ApprovalState::Waiting,
+            action,
+            ..
+        } => action,
+        Item::Questions {
+            state: QuestionState::Waiting,
+            ..
+        } => return Some(format!("{name} asks you a question.")),
+        _ => return None,
     };
     let what = match action {
         ApprovalAction::RunCommand => "run a command",
@@ -544,6 +566,25 @@ mod tests {
                 state,
             },
         }
+    }
+
+    #[test]
+    fn questions_that_start_waiting_are_worth_a_notification() {
+        let asking = TurnEvent::ItemAdded {
+            turn_id: "t".to_owned(),
+            item: Item::Questions {
+                id: "t-questions-1".to_owned(),
+                tool_call_id: None,
+                questions: Vec::new(),
+                answers: Vec::new(),
+                state: QuestionState::Waiting,
+            },
+        };
+
+        assert_eq!(
+            waiting_notice(AgentKind::Claude, &asking).as_deref(),
+            Some("Claude asks you a question.")
+        );
     }
 
     #[test]

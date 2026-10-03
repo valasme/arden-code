@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
-import { type AgentKind, type Answer, commands } from "@/ipc/bindings";
+import { type AgentKind, type Answer, commands, type QuestionAnswer } from "@/ipc/bindings";
 import { noSessions, sessionListQuery, sessionQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
@@ -55,7 +55,9 @@ export function SessionView({ id }: { id: string }) {
   const agent = session?.agent ?? "demo";
   const waiting =
     lastTurn?.status === "running" &&
-    lastTurn.items.some((item) => item.type === "approval" && item.state === "waiting");
+    lastTurn.items.some(
+      (item) => (item.type === "approval" || item.type === "questions") && item.state === "waiting",
+    );
 
   // The virtualizer's functions cannot be memoized, so the compiler leaves this component alone.
   // oxlint-disable-next-line react/incompatible-library
@@ -80,6 +82,14 @@ export function SessionView({ id }: { id: string }) {
   const answer = useCallback(
     (itemId: string, given: Answer) => {
       commands.answerApproval(id, itemId, given).catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      });
+    },
+    [id],
+  );
+  const answerQuestions = useCallback(
+    (itemId: string, given: QuestionAnswer[]) => {
+      commands.answerQuestions(id, itemId, given).catch((failure: unknown) => {
         showErrorToast(toAppError(failure));
       });
     },
@@ -240,7 +250,12 @@ export function SessionView({ id }: { id: string }) {
                     className="absolute top-0 left-0 w-full"
                     style={{ transform: `translateY(${row.start}px)` }}
                   >
-                    <TurnView turn={turn} agent={agent} onAnswer={answer} />
+                    <TurnView
+                      turn={turn}
+                      agent={agent}
+                      onAnswer={answer}
+                      onAnswerQuestions={answerQuestions}
+                    />
                   </article>
                 );
               })}

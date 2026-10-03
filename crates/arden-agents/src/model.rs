@@ -95,6 +95,47 @@ pub enum ApprovalState {
     Cancelled,
 }
 
+/// One choice a question offers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionOption {
+    pub label: String,
+    /// What choosing it means, when the agent said.
+    pub description: Option<String>,
+}
+
+/// Something the agent asks the person to choose (ADR 0039).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Question {
+    /// A word or two that names the question, such as "Library".
+    pub header: String,
+    pub question: String,
+    pub options: Vec<QuestionOption>,
+    /// Whether several options may be chosen.
+    pub multi_select: bool,
+}
+
+/// The person's answer to one question: the options chosen, or words of their own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionAnswer {
+    /// The question's text, which the answer goes back to the agent under.
+    pub question: String,
+    pub answer: String,
+}
+
+/// Where the agent's questions stand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum QuestionState {
+    /// The agent waits for the person's answers.
+    Waiting,
+    Answered,
+    /// No answer is needed any more: the reply stopped, or the agent gave up on asking.
+    Cancelled,
+}
+
 /// One part of an agent's reply.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -157,6 +198,17 @@ pub enum Item {
         rule: Option<String>,
         state: ApprovalState,
     },
+    /// The agent asks the person to choose (ADR 0039).
+    #[serde(rename_all = "camelCase")]
+    Questions {
+        id: String,
+        /// The tool call that asks them, when it has one.
+        tool_call_id: Option<String>,
+        questions: Vec<Question>,
+        /// The person's answers, once given.
+        answers: Vec<QuestionAnswer>,
+        state: QuestionState,
+    },
 }
 
 impl Item {
@@ -169,7 +221,8 @@ impl Item {
             | Self::FileChange { id, .. }
             | Self::Error { id, .. }
             | Self::Status { id, .. }
-            | Self::Approval { id, .. } => id,
+            | Self::Approval { id, .. }
+            | Self::Questions { id, .. } => id,
         }
     }
 }
@@ -202,7 +255,8 @@ pub struct Turn {
 
 impl Turn {
     /// Ends the turn as stopped by the person: a tool that was still running stopped with it, an
-    /// approval request that still waited needs no answer any more, and a marker records it.
+    /// approval request or questions that still waited need no answer any more, and a marker
+    /// records it.
     fn stop(&mut self) {
         self.status = TurnStatus::Stopped;
         for item in &mut self.items {
@@ -212,6 +266,9 @@ impl Turn {
                 }
                 Item::Approval { state, .. } if *state == ApprovalState::Waiting => {
                     *state = ApprovalState::Cancelled;
+                }
+                Item::Questions { state, .. } if *state == QuestionState::Waiting => {
+                    *state = QuestionState::Cancelled;
                 }
                 _ => {}
             }

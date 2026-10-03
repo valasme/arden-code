@@ -17,9 +17,10 @@ use super::approval;
 use super::launch::{Connection, Conversation, LaunchError, Launcher, Start};
 use super::locate::MINIMUM_VERSION;
 use super::protocol::{self, Frame, Request};
+use super::question;
 use super::reply::Reply;
 use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
-use crate::model::{ApprovalState, Item, TurnEvent};
+use crate::model::{ApprovalState, Item, QuestionAnswer, QuestionState, TurnEvent};
 
 /// How long a new Claude Code has to answer `initialize`: it may be starting MCP servers.
 const HANDSHAKE_PATIENCE: Duration = Duration::from_secs(60);
@@ -27,9 +28,9 @@ const HANDSHAKE_PATIENCE: Duration = Duration::from_secs(60);
 const DRAIN_PATIENCE: Duration = Duration::from_secs(30);
 /// How long a Claude Code whose input was closed has to end before it is ended.
 const ENDING_PATIENCE: Duration = Duration::from_millis(500);
-/// What Claude is told when it asks the person a question, until questions can be answered.
-const NO_QUESTIONS_YET: &str =
-    "Arden Code cannot show questions yet, so the person did not answer.";
+/// What Claude is told when its questions cannot be read, so they cannot be shown.
+const UNREADABLE_QUESTIONS: &str =
+    "Arden Code could not read these questions, so the person did not see them.";
 /// What Claude is told when the person denies a request.
 const DENIED: &str = "The person denied this.";
 /// What Claude is told about a request that waited when the person stopped the reply.
@@ -398,18 +399,25 @@ impl Answering<'_> {
         permission: protocol::Permission,
         emit: &mut dyn FnMut(TurnEvent) -> Flow,
     ) -> Next {
-        if permission.tool == "AskUserQuestion" {
-            let _ = self
-                .live
-                .write(&protocol::deny(&id, NO_QUESTIONS_YET, false));
-            return Next::Continue;
-        }
-        let item = approval::item(self.turn_id, &id, &permission, self.folder);
+        let (item, rule) = if permission.tool == question::TOOL {
+            let Some(item) = question::item(self.turn_id, &id, &permission) else {
+                let _ = self
+                    .live
+                    .write(&protocol::deny(&id, UNREADABLE_QUESTIONS, false));
+                return Next::Continue;
+            };
+            (item, None)
+        } else {
+            (
+                approval::item(self.turn_id, &id, &permission, self.folder),
+                approval::rule_of(&permission.suggestions).map(|(_, rule)| rule),
+            )
+        };
         self.pending.push(Pending {
             request_id: id,
             item: item.clone(),
             input: permission.input,
-            rule: approval::rule_of(&permission.suggestions).map(|(_, rule)| rule),
+            rule,
         });
         let event = self.added(item);
         self.show(event, emit)
@@ -425,9 +433,38 @@ impl Answering<'_> {
             return Next::Continue;
         };
         let given_up = self.pending.remove(at);
-        let event = self.added(approval::with_state(
-            &given_up.item,
-            ApprovalState::Cancelled,
+        let item = match given_up.item {
+            Item::Questions { .. } => {
+                question::with_answers(&given_up.item, Vec::new(), QuestionState::Cancelled)
+            }
+            _ => approval::with_state(&given_up.item, ApprovalState::Cancelled),
+        };
+        let event = self.added(item);
+        self.show(event, emit)
+    }
+
+    /// The person answers questions: they go back to Claude Code, keyed by each question's text.
+    fn on_answers(
+        &mut self,
+        item_id: &str,
+        answers: &[QuestionAnswer],
+        emit: &mut dyn FnMut(TurnEvent) -> Flow,
+    ) -> Next {
+        let Some(at) = self.pending.iter().position(|waiting| {
+            waiting.item.id() == item_id && matches!(waiting.item, Item::Questions { .. })
+        }) else {
+            return Next::Continue;
+        };
+        let answered = self.pending.remove(at);
+        let answers = question::to_asked(&answered.item, answers);
+        let input = question::answered_input(&answered.input, &answers);
+        let _ = self
+            .live
+            .write(&protocol::allow(&answered.request_id, &input, &[]));
+        let event = self.added(question::with_answers(
+            &answered.item,
+            answers,
+            QuestionState::Answered,
         ));
         self.show(event, emit)
     }
@@ -439,11 +476,9 @@ impl Answering<'_> {
         answer: Answer,
         emit: &mut dyn FnMut(TurnEvent) -> Flow,
     ) -> Next {
-        let Some(at) = self
-            .pending
-            .iter()
-            .position(|waiting| waiting.item.id() == item_id)
-        else {
+        let Some(at) = self.pending.iter().position(|waiting| {
+            waiting.item.id() == item_id && matches!(waiting.item, Item::Approval { .. })
+        }) else {
             return Next::Continue;
         };
         let answered = self.pending.remove(at);
@@ -495,6 +530,7 @@ impl Answering<'_> {
             Event::Frame(frame) => self.on_frame(&frame, emit),
             Event::Control { turn, control } if turn == self.turn_id => match control {
                 Control::Answer { item_id, answer } => self.on_answer(&item_id, answer, emit),
+                Control::Answers { item_id, answers } => self.on_answers(&item_id, &answers, emit),
                 Control::Stop => {
                     self.stop();
                     Next::Over

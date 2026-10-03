@@ -243,6 +243,8 @@ impl Conversation {
             std::process::exit(3);
         } else if asked.contains("slow") {
             self.slowly();
+        } else if asked.contains("ask me") {
+            self.ask_questions();
         } else if asked.contains("run the tests") {
             self.run_tests();
         } else if asked.contains("read the readme") {
@@ -327,5 +329,43 @@ impl Conversation {
         };
         self.say(said);
         self.result(said, false);
+    }
+
+    /// Asks which library to use, and says what the person chose.
+    fn ask_questions(&mut self) {
+        let input = json!({ "questions": [{
+            "question": "Which library should the app use?",
+            "header": "Library",
+            "options": [
+                { "label": "React", "description": "The one the app already uses" },
+                { "label": "Vue", "description": "A lighter choice" }
+            ],
+            "multiSelect": false
+        }] });
+        self.messages += 1;
+        let message = format!("msg_{}", self.messages);
+        self.assistant(
+            &message,
+            &json!([{ "type": "tool_use", "id": "toolu_q1", "name": "AskUserQuestion", "input": input }]),
+        );
+        let Some(answer) = self.ask("q1", "AskUserQuestion", &input, &json!([])) else {
+            send(
+                &json!({ "type": "result", "subtype": "error_during_execution", "is_error": true, "result": "", "session_id": self.session }),
+            );
+            return;
+        };
+        let chosen = answer["updatedInput"]["answers"]["Which library should the app use?"]
+            .as_str()
+            .unwrap_or("nothing")
+            .to_owned();
+        send(&json!({
+            "type": "user",
+            "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "toolu_q1", "content": format!("The person chose {chosen}."), "is_error": false }] },
+            "parent_tool_use_id": null,
+            "session_id": self.session
+        }));
+        let said = format!("You chose {chosen}.");
+        self.say(&said);
+        self.result(&said, false);
     }
 }

@@ -10,6 +10,7 @@ use arden_core::error::ErrorCode;
 use serde_json::Value;
 
 use super::protocol::{Block, Frame, StreamEvent, ToolResult};
+use super::question;
 use crate::model::{Item, ToolStatus, TurnEvent};
 
 /// The most characters of a tool's input shown on its line.
@@ -190,6 +191,7 @@ impl Reply {
                         id: id.clone(),
                         text: text.clone(),
                     },
+                    Block::ToolUse { name, .. } if name == question::TOOL => return Vec::new(),
                     Block::ToolUse {
                         id: tool_use_id,
                         name,
@@ -256,6 +258,7 @@ impl Reply {
                     id,
                     text: text.clone(),
                 },
+                Block::ToolUse { name, .. } if name == question::TOOL => continue,
                 Block::ToolUse {
                     id: tool_use_id,
                     name,

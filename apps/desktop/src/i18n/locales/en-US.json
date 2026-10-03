@@ -279,6 +279,13 @@
       "lines": "{{added}} lines added, {{removed}} lines removed",
       "modified": "Changed"
     },
+    "questions": {
+      "asks": "{{agent}} asks you",
+      "cancelled": "No answer was needed",
+      "other": "Other",
+      "own": "Your own answer to: {{question}}",
+      "send": "Send answers"
+    },
     "status": {
       "started": "The agent started working",
       "stopped": "You stopped the reply"

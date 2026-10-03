@@ -47,15 +47,22 @@ export function ReplyAnnouncer({ turn, agent }: { turn: Turn | undefined; agent:
     };
   }, [running, turnId]);
 
-  // A request that starts waiting is said at once: the agent can do nothing until it is answered.
+  // A request or questions that start waiting are said at once: the agent can do nothing until
+  // they are answered.
   const request = turn?.items.findLast(
-    (item) => item.type === "approval" && item.state === "waiting",
+    (item) => (item.type === "approval" || item.type === "questions") && item.state === "waiting",
   );
   const requestId = request?.id;
   useEffect(() => {
-    if (request?.type !== "approval") return;
-    const asks = t(`items.approval.asks.${request.action}`, { agent: t(`agents.${agent}.name`) });
-    setMessage(`${asks}: ${request.subject}`);
+    const name = t(`agents.${agent}.name`);
+    if (request?.type === "approval") {
+      const asks = t(`items.approval.asks.${request.action}`, { agent: name });
+      setMessage(`${asks}: ${request.subject}`);
+    }
+    if (request?.type === "questions") {
+      const asked = request.questions.map((question) => question.question).join(" ");
+      setMessage(`${t("items.questions.asks", { agent: name })}: ${asked}`);
+    }
     // Said once, when the request arrives.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [requestId]);

@@ -12,8 +12,8 @@ use time::format_description::well_known::Rfc3339;
 use crate::database::{Database, DatabaseError, Order};
 use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
 use crate::model::{
-    AgentKind, ApprovalState, Item, Project, ProjectKind, ProjectListing, Session, SessionList,
-    SessionSummary, Turn, TurnEvent, TurnStatus,
+    AgentKind, ApprovalState, Item, Project, ProjectKind, ProjectListing, QuestionAnswer,
+    QuestionState, Session, SessionList, SessionSummary, Turn, TurnEvent, TurnStatus,
 };
 
 /// How many characters of the first message become the session's title.
@@ -934,6 +934,65 @@ impl SessionStore {
         item_id: &str,
         answer: Answer,
     ) -> Result<(), StoreError> {
+        self.hand_to_driver(
+            session_id,
+            item_id,
+            |item| {
+                matches!(
+                    item,
+                    Item::Approval {
+                        state: ApprovalState::Waiting,
+                        ..
+                    }
+                )
+            },
+            Control::Answer {
+                item_id: item_id.to_owned(),
+                answer,
+            },
+        )
+    }
+
+    /// Hands the person's answers to the questions that are `item_id` to the reply that waits for
+    /// them (ADR 0039).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotWaiting`] when no running reply waits for answers to that item.
+    pub fn answer_questions(
+        &self,
+        session_id: &str,
+        item_id: &str,
+        answers: Vec<QuestionAnswer>,
+    ) -> Result<(), StoreError> {
+        self.hand_to_driver(
+            session_id,
+            item_id,
+            |item| {
+                matches!(
+                    item,
+                    Item::Questions {
+                        state: QuestionState::Waiting,
+                        ..
+                    }
+                )
+            },
+            Control::Answers {
+                item_id: item_id.to_owned(),
+                answers,
+            },
+        )
+    }
+
+    /// Hands something the person did to the running reply whose item `item_id` still waits.
+    fn hand_to_driver(
+        &self,
+        session_id: &str,
+        item_id: &str,
+        waits: fn(&Item) -> bool,
+        control: Control,
+    ) -> Result<(), StoreError> {
         let mut inner = self.lock();
         let waiting = find(&mut inner.sessions, session_id)?
             .session
@@ -941,22 +1000,14 @@ impl SessionStore {
             .iter()
             .filter(|turn| turn.status == TurnStatus::Running)
             .find(|turn| {
-                turn.items.iter().any(|item| {
-                    matches!(
-                        item,
-                        Item::Approval { id, state: ApprovalState::Waiting, .. } if id == item_id
-                    )
-                })
+                turn.items
+                    .iter()
+                    .any(|item| item.id() == item_id && waits(item))
             })
             .map(|turn| turn.id.clone())
             .ok_or(StoreError::NotWaiting)?;
         let driver = inner.controls.get(&waiting).ok_or(StoreError::NotWaiting)?;
-        driver
-            .send(Control::Answer {
-                item_id: item_id.to_owned(),
-                answer,
-            })
-            .map_err(|_| StoreError::NotWaiting)
+        driver.send(control).map_err(|_| StoreError::NotWaiting)
     }
 
     fn is_stopping(&self, turn_id: &str) -> bool {

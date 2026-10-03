@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
 
-import type { Session } from "@/ipc/bindings";
+import type { Item, Session } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
@@ -162,6 +162,59 @@ describe("Approval requests (ADR 0039)", () => {
     await screen.findByRole("group", { name: "Claude wants to run a command" });
 
     await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+describe("Claude's questions (ADR 0039)", () => {
+  it("shows Claude's questions, says Claude waits, and sends the answers", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({
+      sessions: [sessionNamed("session-1", null, "playground", "claude")],
+    });
+    renderApp("/session/session-1");
+    await user.type(await screen.findByRole("textbox", { name: "Message" }), "Set it up{Enter}");
+    await screen.findByText("Claude is replying…");
+    const asking: Extract<Item, { type: "questions" }> = {
+      type: "questions",
+      id: "turn-1-questions-1",
+      toolCallId: null,
+      questions: [
+        {
+          header: "Library",
+          question: "Which library should the app use?",
+          options: [
+            { label: "React", description: null },
+            { label: "Vue", description: null },
+          ],
+          multiSelect: false,
+        },
+      ],
+      answers: [],
+      state: "waiting",
+    };
+
+    rust.emit({ type: "itemAdded", turnId: "turn-1", item: asking });
+
+    const card = await screen.findByRole("form", { name: "Claude asks you" });
+    const statusBar = screen.getByRole("contentinfo");
+    expect(within(statusBar).getByText("Claude: waiting for your answer")).toBeVisible();
+    await user.click(within(card).getByRole("radio", { name: "Vue" }));
+    await user.click(within(card).getByRole("button", { name: "Send answers" }));
+
+    const answers = [{ question: "Which library should the app use?", answer: "Vue" }];
+    expect(rust.callsTo("answer_questions")).toEqual([
+      { sessionId: "session-1", itemId: "turn-1-questions-1", answers },
+    ]);
+    rust.emit({
+      type: "itemAdded",
+      turnId: "turn-1",
+      item: { ...asking, answers, state: "answered" },
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("form", { name: "Claude asks you" })).toBeNull();
+    });
+    expect(screen.getByText("Vue")).toBeVisible();
+    expect(within(statusBar).getByText("Claude: replying")).toBeVisible();
   });
 });
 

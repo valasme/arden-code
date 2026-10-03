@@ -6,11 +6,20 @@ import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import type { AnswerHandler } from "./ApprovalItem";
 import { ItemView } from "./ItemView";
+import type { QuestionsHandler } from "./QuestionsItem";
 
 import "@/styles/global.css";
 
 function renderItem(item: Item, streaming = false, onAnswer = vi.fn<AnswerHandler>()) {
-  return render(<ItemView item={item} streaming={streaming} agent="claude" onAnswer={onAnswer} />);
+  return render(
+    <ItemView
+      item={item}
+      streaming={streaming}
+      agent="claude"
+      onAnswer={onAnswer}
+      onAnswerQuestions={vi.fn<QuestionsHandler>()}
+    />,
+  );
 }
 
 function approval(overrides: Partial<Extract<Item, { type: "approval" }>> = {}): Item {
@@ -222,6 +231,21 @@ describe("Every kind of item", () => {
         rule: "Edit",
       }),
       approval({ id: "9", state: "allowed" }),
+      {
+        type: "questions",
+        id: "10",
+        toolCallId: null,
+        questions: [
+          {
+            header: "Library",
+            question: "Which library?",
+            options: [{ label: "React", description: "The one in use" }],
+            multiSelect: false,
+          },
+        ],
+        answers: [],
+        state: "waiting",
+      },
     ];
     const { container } = render(
       <div>
@@ -232,6 +256,7 @@ describe("Every kind of item", () => {
             streaming={false}
             agent="claude"
             onAnswer={vi.fn<AnswerHandler>()}
+            onAnswerQuestions={vi.fn<QuestionsHandler>()}
           />
         ))}
       </div>,

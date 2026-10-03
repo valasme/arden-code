@@ -6,6 +6,7 @@ pub mod driver;
 pub mod launch;
 pub mod locate;
 pub mod protocol;
+mod question;
 mod reply;
 
 #[cfg(test)]

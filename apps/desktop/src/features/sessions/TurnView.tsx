@@ -6,6 +6,7 @@ import type { AgentKind, Turn } from "@/ipc/bindings";
 
 import type { AnswerHandler } from "./items/ApprovalItem";
 import { ItemView } from "./items/ItemView";
+import type { QuestionsHandler } from "./items/QuestionsItem";
 
 /**
  * One message and the reply to it (ADR 0032): the person's message is a filled block at the end of
@@ -15,10 +16,12 @@ export const TurnView = memo(function TurnView({
   turn,
   agent,
   onAnswer,
+  onAnswerQuestions,
 }: {
   turn: Turn;
   agent: AgentKind;
   onAnswer: AnswerHandler;
+  onAnswerQuestions: QuestionsHandler;
 }) {
   const { t } = useTranslation();
   const formatters = useFormatters();
@@ -46,6 +49,7 @@ export const TurnView = memo(function TurnView({
             streaming={turn.status === "running"}
             agent={agent}
             onAnswer={onAnswer}
+            onAnswerQuestions={onAnswerQuestions}
           />
         ))}
         {turn.status === "running" ? (

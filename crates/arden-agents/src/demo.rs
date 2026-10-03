@@ -258,6 +258,7 @@ mod tests {
                 Item::FileChange { .. } => "file",
                 Item::Error { .. } => "error",
                 Item::Approval { .. } => "approval",
+                Item::Questions { .. } => "questions",
                 Item::Status { .. } => "status",
             })
             .collect()

@@ -12,10 +12,11 @@ use super::launch::{Conversation, LaunchError};
 use super::script::{Scripted, Step, handshake};
 use crate::driver::Answer;
 use crate::model::{
-    AgentKind, ApprovalAction, ApprovalState, Item, ToolStatus, Turn, TurnEvent, TurnStatus,
+    AgentKind, ApprovalAction, ApprovalState, Item, Question, QuestionAnswer, QuestionOption,
+    QuestionState, ToolStatus, Turn, TurnEvent, TurnStatus,
 };
 use crate::playground;
-use crate::store::SessionStore;
+use crate::store::{SessionStore, StoreError};
 
 const FOLDER: &str = r"C:\Projects\demo";
 
@@ -274,7 +275,7 @@ fn claude_codes_own_error_fails_the_reply_with_its_words() {
 }
 
 #[test]
-fn until_questions_arrive_a_question_from_claude_is_answered_no() {
+fn questions_that_cannot_be_read_are_answered_no() {
     let mut script = handshake();
     script.extend([
         message("Plan it"),
@@ -293,7 +294,234 @@ fn until_questions_arrive_a_question_from_claude_is_answered_no() {
     send(&store, &driver, &session, "Plan it");
 
     scripted.assert_followed();
-    assert_eq!(turn(&store, &session, 0).status, TurnStatus::Done);
+    let turn = turn(&store, &session, 0);
+    assert_eq!(turn.status, TurnStatus::Done);
+    assert!(
+        !turn
+            .items
+            .iter()
+            .any(|item| matches!(item, Item::Questions { .. })),
+        "nothing to show: {:#?}",
+        turn.items
+    );
+}
+
+/// What Claude asks: one question to choose one answer to, one to choose several.
+fn two_questions() -> Value {
+    json!({
+        "questions": [
+            {
+                "question": "Which library should the app use?",
+                "header": "Library",
+                "options": [
+                    { "label": "React", "description": "The one the app already uses" },
+                    { "label": "Vue", "description": "" }
+                ],
+                "multiSelect": false
+            },
+            {
+                "question": "Which checks should run?",
+                "header": "Checks",
+                "options": [{ "label": "Tests" }, { "label": "Lint" }, { "label": "Types" }],
+                "multiSelect": true
+            }
+        ]
+    })
+}
+
+/// Claude asks two questions with `AskUserQuestion`: the start of a script.
+fn asks_two_questions() -> Vec<Step> {
+    let mut script = handshake();
+    script.extend([
+        message("Set it up"),
+        assistant(
+            "msg_1",
+            &json!([{ "type": "tool_use", "id": "toolu_q", "name": "AskUserQuestion", "input": two_questions() }]),
+        ),
+        Step::Play(json!({
+            "type": "control_request",
+            "request_id": "r1",
+            "request": { "subtype": "can_use_tool", "tool_name": "AskUserQuestion", "input": two_questions(), "tool_use_id": "toolu_q" }
+        })),
+    ]);
+    script
+}
+
+/// Waits until the session's first turn shows questions that wait, and answers their id.
+fn until_questions(store: &SessionStore, session: &str) -> String {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let waiting = store
+            .session(session)
+            .expect("the session")
+            .turns
+            .first()
+            .and_then(|first| {
+                first.items.iter().find_map(|item| match item {
+                    Item::Questions {
+                        id,
+                        state: QuestionState::Waiting,
+                        ..
+                    } => Some(id.clone()),
+                    _ => None,
+                })
+            });
+        if let Some(id) = waiting {
+            return id;
+        }
+        assert!(std::time::Instant::now() < deadline, "no questions came");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+fn answer(question: &str, answer: &str) -> QuestionAnswer {
+    QuestionAnswer {
+        question: question.to_owned(),
+        answer: answer.to_owned(),
+    }
+}
+
+#[test]
+fn questions_show_with_their_options_and_the_answers_go_back_keyed_by_each_questions_text() {
+    let mut script = asks_two_questions();
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": "r1",
+                "response": {
+                    "behavior": "allow",
+                    "updatedInput": {
+                        "questions": two_questions()["questions"],
+                        "answers": {
+                            "Which library should the app use?": "React",
+                            "Which checks should run?": "Tests, Lint"
+                        }
+                    }
+                }
+            }
+        })),
+        tool_result("toolu_q", "The person answered.", false),
+        success("React it is."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+    let replying = {
+        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
+        std::thread::spawn(move || send(&store, &driver, &session, "Set it up"))
+    };
+
+    let waiting = until_questions(&store, &session);
+    store
+        .answer_questions(
+            &session,
+            &waiting,
+            vec![
+                // Out of order, and with one that was never asked: it is dropped.
+                answer("Which checks should run?", "Tests, Lint"),
+                answer("Is this asked?", "No"),
+                answer("Which library should the app use?", "React"),
+            ],
+        )
+        .expect("answered");
+    replying.join().expect("the reply ends");
+
+    scripted.assert_followed();
+    let turn = turn(&store, &session, 0);
+    assert_eq!(turn.status, TurnStatus::Done);
+    let questions = turn
+        .items
+        .iter()
+        .find(|item| matches!(item, Item::Questions { .. }))
+        .cloned()
+        .expect("the questions");
+    assert_eq!(
+        questions,
+        Item::Questions {
+            id: format!("{}-questions-r1", turn.id),
+            tool_call_id: Some(format!("{}-toolu_q", turn.id)),
+            questions: vec![
+                Question {
+                    header: "Library".into(),
+                    question: "Which library should the app use?".into(),
+                    options: vec![
+                        QuestionOption {
+                            label: "React".into(),
+                            description: Some("The one the app already uses".into()),
+                        },
+                        QuestionOption {
+                            label: "Vue".into(),
+                            description: None,
+                        },
+                    ],
+                    multi_select: false,
+                },
+                Question {
+                    header: "Checks".into(),
+                    question: "Which checks should run?".into(),
+                    options: ["Tests", "Lint", "Types"]
+                        .into_iter()
+                        .map(|label| QuestionOption {
+                            label: label.into(),
+                            description: None,
+                        })
+                        .collect(),
+                    multi_select: true,
+                },
+            ],
+            answers: vec![
+                answer("Which library should the app use?", "React"),
+                answer("Which checks should run?", "Tests, Lint"),
+            ],
+            state: QuestionState::Answered,
+        }
+    );
+    assert!(
+        !turn
+            .items
+            .iter()
+            .any(|item| matches!(item, Item::ToolCall { .. })),
+        "the card shows the questions, not their tool call: {:#?}",
+        turn.items
+    );
+}
+
+#[test]
+fn stopping_while_questions_wait_answers_no_and_cancels_them() {
+    let mut script = asks_two_questions();
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "request_id": "r1", "response": { "behavior": "deny" } }
+        })),
+        Step::Expect(json!({ "type": "control_request", "request": { "subtype": "interrupt" } })),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+    let replying = {
+        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
+        std::thread::spawn(move || send(&store, &driver, &session, "Set it up"))
+    };
+
+    let waiting = until_questions(&store, &session);
+    store.stop_turn(&session).expect("stopped");
+    replying.join().expect("the reply ends");
+
+    scripted.assert_followed();
+    let stopped = turn(&store, &session, 0);
+    assert_eq!(stopped.status, TurnStatus::Stopped);
+    assert!(stopped.items.iter().any(|item| matches!(
+        item,
+        Item::Questions { id, state: QuestionState::Cancelled, .. } if *id == waiting
+    )));
+    assert_eq!(
+        store.answer_questions(&session, &waiting, Vec::new()),
+        Err(StoreError::NotWaiting),
+        "questions that no longer wait take no answers"
+    );
 }
 
 /// The rule Claude Code suggests for `npm test`.

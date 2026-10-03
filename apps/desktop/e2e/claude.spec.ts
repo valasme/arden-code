@@ -133,4 +133,27 @@ test.describe("Claude in the real app", () => {
       claude.remove();
     }
   });
+
+  test("Claude asks a question, and goes on with the answer the person chose", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+      await say(page, "Ask me which library");
+
+      const card = session.getByRole("form", { name: "Claude asks you" });
+      await expect(card).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText("Claude: waiting for your answer")).toBeVisible();
+      await card.getByRole("radio", { name: "Vue" }).check();
+      await card.getByRole("button", { name: "Send answers" }).click();
+
+      await expect(session.getByText("You chose Vue.")).toBeVisible({ timeout: 30_000 });
+      await expect(card).toBeHidden();
+      await expect(session.getByText("Claude is replying…")).toBeHidden();
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
 });

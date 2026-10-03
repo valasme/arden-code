@@ -101,6 +101,24 @@ const items: readonly Item[] = [
     rule: null,
     state: "allowed",
   },
+  {
+    type: "questions",
+    id: "questions-waiting",
+    toolCallId: null,
+    questions: [
+      {
+        header: "Library",
+        question: "Which library should the app use?",
+        options: [
+          { label: "React", description: "The one the app already uses" },
+          { label: "Vue", description: null },
+        ],
+        multiSelect: false,
+      },
+    ],
+    answers: [],
+    state: "waiting",
+  },
 ];
 
 /** Every kind of item in a reply, for the design system page. */
@@ -114,6 +132,7 @@ export function SessionItemsSample() {
           streaming={false}
           agent="claude"
           onAnswer={() => undefined}
+          onAnswerQuestions={() => undefined}
         />
       ))}
     </div>

@@ -125,6 +125,33 @@ describe("Announcing a reply to screen readers", () => {
     expect(region()).toHaveTextContent("Claude wants to run a command: npm test");
   });
 
+  it("says Claude's questions at once", async () => {
+    const asking: Turn = {
+      ...turnWith(""),
+      items: [
+        {
+          type: "questions",
+          id: "turn-1-questions-1",
+          toolCallId: null,
+          questions: [
+            {
+              header: "Library",
+              question: "Which library should the app use?",
+              options: [],
+              multiSelect: false,
+            },
+          ],
+          answers: [],
+          state: "waiting",
+        },
+      ],
+    };
+    render(<ReplyAnnouncer agent="claude" turn={asking} />);
+    await wait(10);
+
+    expect(region()).toHaveTextContent("Claude asks you: Which library should the app use?");
+  });
+
   it("says nothing about a session that was opened with its replies already over", async () => {
     render(<ReplyAnnouncer agent="claude" turn={turnWith("Old reply.", "done")} />);
 

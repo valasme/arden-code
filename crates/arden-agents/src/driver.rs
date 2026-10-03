@@ -6,7 +6,7 @@ use std::sync::mpsc::Receiver;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::model::TurnEvent;
+use crate::model::{QuestionAnswer, TurnEvent};
 
 /// Whether the driver should carry on after an event, or stop because nobody is listening.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +34,11 @@ pub enum Control {
     Stop,
     /// The person answered the approval request that is the item with this id.
     Answer { item_id: String, answer: Answer },
+    /// The person answered the questions that are the item with this id.
+    Answers {
+        item_id: String,
+        answers: Vec<QuestionAnswer>,
+    },
 }
 
 /// A message for an agent to answer, and the way the driver hears the person while it answers.
