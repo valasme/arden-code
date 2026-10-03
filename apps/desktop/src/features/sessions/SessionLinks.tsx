@@ -37,7 +37,7 @@ export function SessionLinks({ session }: { session: Session }) {
       aria-label={t("sessions.links.label")}
       className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-1 border-b border-border px-5 py-1.5 text-xs text-muted-foreground"
     >
-      <LinkIcon aria-hidden className="size-3.5" strokeWidth={1.5} />
+      <LinkIcon aria-hidden className="size-4" strokeWidth={1.5} />
       {from ? (
         <p>
           {t("sessions.links.from")} {linkTo(from)}

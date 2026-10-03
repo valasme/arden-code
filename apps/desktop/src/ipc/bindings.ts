@@ -482,6 +482,7 @@ export const commands = {
 /** Events */
 export const events = {
 	maximizeButtonChanged: makeEvent<MaximizeButtonChanged>("maximize-button-changed"),
+	replyNotSaved: makeEvent<ReplyNotSaved>("reply-not-saved"),
 	sessionRequested: makeEvent<SessionRequested>("session-requested"),
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	systemPreferencesChanged: makeEvent<SystemPreferencesChanged>("system-preferences-changed"),
@@ -791,6 +792,14 @@ export type RegionalFormat =
 "windows" | 
 /**  English (US), whatever Windows says. */
 "english";
+
+/**
+ *  Tells the page that a reply could not be written to the sessions file (ADR 0035). The session
+ *  holds it until the app closes.
+ */
+export type ReplyNotSaved = {
+	notice: AppError,
+};
 
 /**  A session: the turns with one agent, in one project. */
 export type Session = {

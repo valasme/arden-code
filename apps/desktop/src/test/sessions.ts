@@ -171,7 +171,7 @@ export function startSessionsRust({
         case "rename_session": {
           const { id, name } = z.object({ id: z.string(), name: z.string() }).parse(payload);
           const trimmed = name.trim();
-          if (trimmed === "" || trimmed.length > 100) throw failure("ARD-AGT-006");
+          if (trimmed === "" || Array.from(trimmed).length > 100) throw failure("ARD-AGT-006");
           if (find(id).archivedAt !== null) throw failure("ARD-AGT-005");
           find(id).title = trimmed;
           return null;

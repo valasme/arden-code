@@ -342,7 +342,8 @@
       "failed": "{{what}} ({{code}})",
       "label": "Name",
       "save": "Save",
-      "title": "Rename session"
+      "title": "Rename session",
+      "tooLong": "A name can have at most {{limit}} characters."
     },
     "replying": "The Demo agent is replying…",
     "stopped": "The reply stopped.",

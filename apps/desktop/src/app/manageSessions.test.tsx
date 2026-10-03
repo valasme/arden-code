@@ -143,7 +143,10 @@ describe("A session's menu", () => {
 async function renameFromTheMenu(user: ReturnType<typeof userEvent.setup>, name: string) {
   await user.click(within(sidebar()).getByRole("button", { name: `Actions for ${name}` }));
   await user.click(await screen.findByRole("menuitem", { name: /Rename/ }));
-  return screen.findByRole("dialog", { name: "Rename session" });
+  const dialog = await screen.findByRole("dialog", { name: "Rename session" });
+  // The dialog fades in.
+  await animationsDone(dialog);
+  return dialog;
 }
 
 describe("Renaming a session", () => {
@@ -186,6 +189,23 @@ describe("Renaming a session", () => {
     expect(rust.callsTo("rename_session")).toEqual([]);
     expect(screen.getByRole("heading", { level: 1, name: "Fix the build" })).toBeVisible();
     await focusGoesTo(screen.getByRole("button", { name: "Session actions" }));
+  });
+
+  it("counts a name's characters as Rust does, so 100 emoji fit and 101 do not", async () => {
+    const { rust, user } = await twoSessions();
+    const dialog = await renameFromTheMenu(user, "Fix the build");
+
+    await user.paste("🙂".repeat(101));
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(within(dialog).getByText("A name can have at most 100 characters.")).toBeVisible();
+
+    const field = within(dialog).getByRole("textbox", { name: "Name" });
+    await user.clear(field);
+    await user.paste("🙂".repeat(100));
+    await user.keyboard("{Enter}");
+
+    await noDialog();
+    expect(rust.callsTo("rename_session")).toEqual([{ id: "session-1", name: "🙂".repeat(100) }]);
   });
 
   it("renames the session whose row has the focus with F2, and otherwise the open session", async () => {

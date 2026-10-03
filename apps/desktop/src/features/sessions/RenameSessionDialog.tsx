@@ -23,6 +23,11 @@ import { findSession } from "./sessionList";
 /** The most characters a session's name can have. Rust keeps to the same number. */
 const NAME_LENGTH = 100;
 
+/** How many characters a name has, counted as Rust counts them: an emoji is one, not two. */
+function lengthOf(name: string): number {
+  return Array.from(name).length;
+}
+
 function RenameContent({
   sessionId,
   name: current,
@@ -43,10 +48,12 @@ function RenameContent({
   const [error, setError] = useState<AppError | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const trimmed = name.trim();
+  const tooLong = lengthOf(trimmed) > NAME_LENGTH;
+  const canSave = trimmed !== "" && !tooLong && !saving;
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
-    if (trimmed === "" || saving) return;
+    if (!canSave) return;
     setSaving(true);
     try {
       await commands.renameSession(sessionId, trimmed);
@@ -91,10 +98,9 @@ function RenameContent({
             ref={field}
             id={`${id}-name`}
             value={name}
-            maxLength={NAME_LENGTH}
             autoComplete="off"
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? `${id}-error` : undefined}
+            aria-invalid={error || tooLong ? true : undefined}
+            aria-describedby={error || tooLong ? `${id}-error` : undefined}
             onChange={(event) => {
               setName(event.target.value);
             }}
@@ -107,12 +113,17 @@ function RenameContent({
               })}
             </p>
           ) : null}
+          {tooLong && !error ? (
+            <p id={`${id}-error`} className="text-xs text-destructive">
+              {t("sessions.rename.tooLong", { limit: NAME_LENGTH })}
+            </p>
+          ) : null}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onDone}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" disabled={trimmed === "" || saving}>
+          <Button type="submit" disabled={!canSave}>
             {t("sessions.rename.save")}
           </Button>
         </DialogFooter>

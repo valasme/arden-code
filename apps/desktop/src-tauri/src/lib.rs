@@ -165,7 +165,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         settings::SystemPreferencesChanged,
         snap_layouts::MaximizeButtonChanged,
         updates::UpdateStatusChanged,
-        sessions::SessionRequested
+        sessions::SessionRequested,
+        sessions::ReplyNotSaved
     ])
 }
 

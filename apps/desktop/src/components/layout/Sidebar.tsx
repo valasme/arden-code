@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { SettingsIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { ArchivedLink } from "@/features/sessions/ArchivedBar";
+import { ArchivedLink } from "@/features/sessions/ArchivedLink";
 import { SessionsNav } from "@/features/sessions/SessionsNav";
 import { SettingsNav } from "@/features/settings/SettingsNav";
 import { isSettingsPage } from "@/state/settingsPage";

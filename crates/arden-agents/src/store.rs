@@ -134,6 +134,15 @@ impl Entry {
     }
 }
 
+/// Asks for a reply still running in a session to stop: its driver notices at its next event.
+fn stop_running(session: &Session, stopping: &mut HashSet<String>) {
+    for turn in &session.turns {
+        if turn.status == TurnStatus::Running {
+            stopping.insert(turn.id.clone());
+        }
+    }
+}
+
 fn find<'a>(sessions: &'a mut [Entry], id: &str) -> Result<&'a mut Entry, StoreError> {
     sessions
         .iter_mut()
@@ -161,6 +170,16 @@ impl Inner {
 
     fn next_id(&mut self, kind: &str) -> String {
         format!("{kind}-{}", self.next_number())
+    }
+
+    /// The place in its list of a session that is to be pinned or archived (`wanted`), or not: the
+    /// place it has already, or a new one at the end.
+    fn place(&mut self, wanted: bool, known: Option<u64>) -> Option<u64> {
+        match (wanted, known) {
+            (true, Some(place)) => Some(place),
+            (true, None) => Some(self.next_number()),
+            (false, _) => None,
+        }
     }
 
     /// Starts an empty session in a project, linked to the session it was started from, if any.
@@ -462,8 +481,8 @@ impl SessionStore {
     /// # Errors
     ///
     /// Returns [`StoreError::InvalidName`] when the name is empty or longer than [`NAME_LENGTH`],
-    /// [`StoreError::UnknownSession`] when there is no such session, and [`StoreError::NotSaved`]
-    /// when the name cannot be written.
+    /// [`StoreError::UnknownSession`] when there is no such session, [`StoreError::Archived`] when
+    /// it is archived, and [`StoreError::NotSaved`] when the name cannot be written.
     pub fn rename(&self, session_id: &str, name: &str) -> Result<(), StoreError> {
         let name = name.trim();
         if name.is_empty() || name.chars().count() > NAME_LENGTH {
@@ -502,11 +521,7 @@ impl SessionStore {
             return Err(StoreError::Archived);
         }
         let known = entry.order.pinned;
-        let pin = match (pinned, known) {
-            (true, Some(place)) => Some(place),
-            (true, None) => Some(inner.next_number()),
-            (false, _) => None,
-        };
+        let pin = inner.place(pinned, known);
         let last_id = inner.last_id;
         let Inner {
             sessions, database, ..
@@ -538,11 +553,7 @@ impl SessionStore {
     pub fn set_archived(&self, session_id: &str, archived: bool) -> Result<(), StoreError> {
         let mut inner = self.lock();
         let known = find(&mut inner.sessions, session_id)?.order.archived;
-        let place = match (archived, known) {
-            (true, Some(place)) => Some(place),
-            (true, None) => Some(inner.next_number()),
-            (false, _) => None,
-        };
+        let place = inner.place(archived, known);
         let last_id = inner.last_id;
         let Inner {
             sessions,
@@ -572,11 +583,7 @@ impl SessionStore {
         entry.session.archived_at = header.archived_at;
         entry.order = order;
         if archived {
-            for turn in &entry.session.turns {
-                if turn.status == TurnStatus::Running {
-                    stopping.insert(turn.id.clone());
-                }
-            }
+            stop_running(&entry.session, stopping);
         }
         Ok(())
     }
@@ -602,11 +609,7 @@ impl SessionStore {
             .delete_session(session_id, forget, last_id)
             .map_err(not_saved)?;
         let entry = inner.sessions.remove(position);
-        for turn in &entry.session.turns {
-            if turn.status == TurnStatus::Running {
-                inner.stopping.insert(turn.id.clone());
-            }
-        }
+        stop_running(&entry.session, &mut inner.stopping);
         // The file drops the links to it by itself; the sessions in memory follow.
         for other in &mut inner.sessions {
             if other.session.linked_from.as_deref() == Some(session_id) {
@@ -669,8 +672,9 @@ impl SessionStore {
     /// # Errors
     ///
     /// Returns [`StoreError::UnknownSession`] when there is no such session,
-    /// [`StoreError::TurnRunning`] while the agent is still answering the last message, and
-    /// [`StoreError::NotSaved`] when the message cannot be written.
+    /// [`StoreError::Archived`] when it is archived, [`StoreError::TurnRunning`] while the agent is
+    /// still answering the last message, and [`StoreError::NotSaved`] when the message cannot be
+    /// written.
     pub fn start_turn(&self, session_id: &str, prompt: &str) -> Result<Turn, StoreError> {
         let mut inner = self.lock();
         let turn_id = inner.next_id("turn");

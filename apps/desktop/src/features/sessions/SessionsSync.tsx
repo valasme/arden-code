@@ -12,7 +12,8 @@ import { useTauriListener } from "@/lib/useTauriListener";
  * Keeps the page in step with what Rust did with the sessions on its own. It shows the session Rust
  * made for a folder that was opened, for example by the `arden-code` terminal command: the one that
  * was waiting when the page came up, and any that come later. It also shows the notice for a
- * sessions file that could not be used (ADR 0035). Draws nothing.
+ * sessions file that could not be used, or a reply that could not be saved in it (ADR 0035). Draws
+ * nothing.
  */
 export function SessionsSync() {
   const queryClient = useQueryClient();
@@ -28,6 +29,13 @@ export function SessionsSync() {
   useTauriListener(() =>
     events.sessionRequested.listen(({ payload }) => {
       show(payload.sessionId);
+    }),
+  );
+
+  // A reply that could not be written to the sessions file is still shown, until the app closes.
+  useTauriListener(() =>
+    events.replyNotSaved.listen(({ payload }) => {
+      showNoticeToast(payload.notice);
     }),
   );
 

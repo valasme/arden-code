@@ -263,6 +263,14 @@ pub fn debug_fill_session(
     Ok(session)
 }
 
+/// Tells the page that a reply could not be written to the sessions file (ADR 0035). The session
+/// holds it until the app closes.
+#[derive(Debug, Clone, serde::Serialize, specta::Type, tauri_specta::Event)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplyNotSaved {
+    pub notice: AppError,
+}
+
 /// Sends a message. The session, with the new turn still running, is returned at once; the reply
 /// streams through `on_event` from another thread.
 ///
@@ -273,6 +281,7 @@ pub fn debug_fill_session(
 #[tauri::command]
 #[specta::specta]
 pub fn send_message(
+    app: tauri::AppHandle,
     session_id: String,
     text: String,
     on_event: Channel<TurnEvent>,
@@ -294,6 +303,8 @@ pub fn send_message(
             }
         };
         if let Err(error) = saved {
+            use tauri_specta::Event;
+
             let error = app_error(error);
             tracing::error!(
                 code = error.code.as_str(),
@@ -302,6 +313,7 @@ pub fn send_message(
                 turn = %running.id,
                 "the reply could not be saved"
             );
+            let _ = ReplyNotSaved { notice: error }.emit(&app);
         }
         tracing::debug!(session = %session_id, turn = %running.id, "reply ended");
     });
