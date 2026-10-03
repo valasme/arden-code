@@ -103,10 +103,10 @@ fn claude_streams_its_thinking_and_text_and_ends_with_its_result() {
         stream(&json!({ "type": "content_block_start", "index": 0, "content_block": { "type": "thinking", "thinking": "" } })),
         stream(&json!({ "type": "content_block_delta", "index": 0, "delta": { "type": "thinking_delta", "thinking": "A greeting." } })),
         stream(&json!({ "type": "content_block_start", "index": 1, "content_block": { "type": "text", "text": "" } })),
-        stream(&json!({ "type": "content_block_delta", "index": 1, "delta": { "type": "text_delta", "text": "Hel" } })),
-        stream(&json!({ "type": "content_block_delta", "index": 1, "delta": { "type": "text_delta", "text": "lo!" } })),
-        assistant("msg_1", &json!([{ "type": "thinking", "thinking": "A greeting." }, { "type": "text", "text": "Hello!" }])),
-        success("Hello!"),
+        stream(&json!({ "type": "content_block_delta", "index": 1, "delta": { "type": "text_delta", "text": "Good " } })),
+        stream(&json!({ "type": "content_block_delta", "index": 1, "delta": { "type": "text_delta", "text": "morning!" } })),
+        assistant("msg_1", &json!([{ "type": "thinking", "thinking": "A greeting." }, { "type": "text", "text": "Good morning!" }])),
+        success("Good morning!"),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
     let store = store();
@@ -121,13 +121,13 @@ fn claude_streams_its_thinking_and_text_and_ends_with_its_result() {
         texts(&turn),
         vec![
             ("thinking", "A greeting.".to_owned()),
-            ("text", "Hello!".to_owned())
+            ("text", "Good morning!".to_owned())
         ]
     );
     assert!(
         events
             .iter()
-            .any(|event| matches!(event, TurnEvent::TextDelta { text, .. } if text == "Hel")),
+            .any(|event| matches!(event, TurnEvent::TextDelta { text, .. } if text == "Good ")),
         "the text streamed: {events:#?}"
     );
     assert!(matches!(events.last(), Some(TurnEvent::Finished { .. })));
@@ -330,7 +330,7 @@ fn a_claude_code_that_ends_in_the_middle_fails_the_reply_and_the_next_message_st
     let mut first = handshake();
     first.extend([
         message("Hello"),
-        assistant("msg_1", &json!([{ "type": "text", "text": "Hel" }])),
+        assistant("msg_1", &json!([{ "type": "text", "text": "Starting" }])),
         Step::End,
     ]);
     let mut second = handshake();

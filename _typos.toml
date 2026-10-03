@@ -16,4 +16,6 @@ extend-exclude = [
   "**/bindings.ts",
   "**/routeTree.gen.ts",
   "**/licenses.gen.json",
+  # Recorded output of real programs, such as Claude Code: kept exactly as it was written.
+  "**/fixtures/**",
 ]

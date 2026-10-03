@@ -372,7 +372,7 @@ mod tests {
             r#"{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}},"parent_tool_use_id":null,"session_id":"s"}"#,
             r#"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Let me look."}},"parent_tool_use_id":null,"session_id":"s"}"#,
             r#"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}},"parent_tool_use_id":null,"session_id":"s"}"#,
-            r#"{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Hel"}},"parent_tool_use_id":null,"session_id":"s"}"#,
+            r#"{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Good "}},"parent_tool_use_id":null,"session_id":"s"}"#,
             r#"{"type":"stream_event","event":{"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"toolu_1","name":"Read","input":{}}},"parent_tool_use_id":null,"session_id":"s"}"#,
             r#"{"type":"stream_event","event":{"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\"file"}},"parent_tool_use_id":null,"session_id":"s"}"#,
             r#"{"type":"stream_event","event":{"type":"content_block_stop","index":2},"parent_tool_use_id":"toolu_9","session_id":"s"}"#,
@@ -414,7 +414,7 @@ mod tests {
                 stream(
                     StreamEvent::TextDelta {
                         index: 1,
-                        text: "Hel".into()
+                        text: "Good ".into()
                     },
                     false
                 ),
