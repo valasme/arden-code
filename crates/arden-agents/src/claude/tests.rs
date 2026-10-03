@@ -489,3 +489,98 @@ fn a_line_that_is_not_a_frame_is_skipped() {
     assert_eq!(turn.status, TurnStatus::Done);
     assert_eq!(texts(&turn), vec![("text", "Hello.".to_owned())]);
 }
+
+/// Waits until the session's first turn has text, as the person sees it stream.
+fn until_text(store: &SessionStore, session: &str) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let streaming = || {
+        store
+            .session(session)
+            .expect("the session")
+            .turns
+            .first()
+            .is_some_and(|first| !texts(first).is_empty())
+    };
+    while !streaming() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the reply never started"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+#[test]
+fn stopping_interrupts_claude_and_the_late_frames_of_the_stopped_reply_change_nothing() {
+    let mut script = handshake();
+    script.extend([
+        message("Write a lot"),
+        stream(&json!({ "type": "message_start", "message": { "id": "msg_1" } })),
+        stream(&json!({ "type": "content_block_start", "index": 0, "content_block": { "type": "text", "text": "" } })),
+        stream(&json!({ "type": "content_block_delta", "index": 0, "delta": { "type": "text_delta", "text": "Once upon " } })),
+        Step::Expect(json!({ "type": "control_request", "request": { "subtype": "interrupt" } })),
+        Step::Answer(json!({ "type": "control_response", "response": { "subtype": "success", "response": { "still_queued": [] } } })),
+        stream(&json!({ "type": "content_block_delta", "index": 0, "delta": { "type": "text_delta", "text": "a time" } })),
+        Step::Play(json!({ "type": "result", "subtype": "error_during_execution", "is_error": true, "result": "" })),
+        message("Next"),
+        assistant("msg_2", &json!([{ "type": "text", "text": "Two." }])),
+        success("Two."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = Arc::new(store());
+    let session = claude_session(&store);
+    let driver = Arc::new(driver);
+    let replying = {
+        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
+        std::thread::spawn(move || send(&store, &driver, &session, "Write a lot"))
+    };
+    until_text(&store, &session);
+
+    store.stop_turn(&session).expect("stopped");
+    let events = replying.join().expect("the reply ends");
+
+    assert!(matches!(events.last(), Some(TurnEvent::Stopped { .. })));
+    let stopped = turn(&store, &session, 0);
+    assert_eq!(stopped.status, TurnStatus::Stopped);
+    assert_eq!(texts(&stopped), vec![("text", "Once upon ".to_owned())]);
+
+    send(&store, &driver, &session, "Next");
+
+    scripted.assert_followed();
+    assert_eq!(
+        texts(&turn(&store, &session, 0)),
+        vec![("text", "Once upon ".to_owned())],
+        "the stopped reply's late frames changed nothing"
+    );
+    let next = turn(&store, &session, 1);
+    assert_eq!(next.status, TurnStatus::Done);
+    assert_eq!(texts(&next), vec![("text", "Two.".to_owned())]);
+    assert_eq!(
+        scripted.starts.lock().expect("starts").len(),
+        1,
+        "the same Claude Code"
+    );
+}
+
+#[test]
+fn a_stop_that_comes_after_claude_finished_does_not_stop_the_next_reply() {
+    let mut script = handshake();
+    script.extend([
+        message("First"),
+        success("One."),
+        message("Second"),
+        assistant("msg_2", &json!([{ "type": "text", "text": "Two." }])),
+        success("Two."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "First");
+    // Too late: the reply is over, so there is nothing to stop.
+    store.stop_turn(&session).expect("nothing to stop");
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    assert_eq!(turn(&store, &session, 1).status, TurnStatus::Done);
+}

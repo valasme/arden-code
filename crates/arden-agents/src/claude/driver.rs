@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::Child;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
@@ -22,6 +22,8 @@ use crate::model::{Item, TurnEvent};
 
 /// How long a new Claude Code has to answer `initialize`: it may be starting MCP servers.
 const HANDSHAKE_PATIENCE: Duration = Duration::from_secs(60);
+/// How long a stopped reply has to send its last frame before its Claude Code is started again.
+const DRAIN_PATIENCE: Duration = Duration::from_secs(30);
 /// How long a Claude Code whose input was closed has to end before it is ended.
 const ENDING_PATIENCE: Duration = Duration::from_millis(500);
 /// What Claude is told when it asks for permission, until approval requests can be answered.
@@ -32,11 +34,11 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Something the reply hears: a frame from Claude Code, its end, or the person.
+/// Something the reply hears: a frame from Claude Code, its end, or the person, during a turn.
 enum Event {
     Frame(Frame),
     Ended,
-    Control(Control),
+    Control { turn: String, control: Control },
 }
 
 /// What a frame is, for the log: never what it holds.
@@ -60,6 +62,8 @@ struct Live {
     events: Mutex<Receiver<Event>>,
     sender: Sender<Event>,
     process: Mutex<Option<Child>>,
+    /// How many stopped replies have not sent their result yet: their late frames come first.
+    owed: AtomicUsize,
 }
 
 impl Live {
@@ -92,6 +96,7 @@ impl Live {
             events: Mutex::new(events),
             sender,
             process: Mutex::new(connection.process),
+            owed: AtomicUsize::new(0),
         }
     }
 
@@ -235,8 +240,48 @@ impl ClaudeDriver {
         lock(&self.live).remove(session_id);
     }
 
+    /// Stops the turn that is running. Its result is still to come, after the frames it had sent.
     fn interrupt(&self, live: &Live) {
         let _ = live.write(&protocol::interrupt(&self.next_request()));
+        live.owed.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// The Claude Code of a session, ready for a message: the late frames of any reply that was
+    /// stopped are read first and set aside, up to its result. One that does not finish them is
+    /// ended, and another is started.
+    fn settled(&self, session_id: &str, folder: &Path) -> Result<Arc<Live>, Problem> {
+        let live = self.live(session_id, folder)?;
+        let deadline = Instant::now() + DRAIN_PATIENCE;
+        {
+            let events = lock(&live.events);
+            while live.owed.load(Ordering::Acquire) > 0 {
+                match events.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                    Ok(Event::Frame(Frame::Result { .. })) => {
+                        live.owed.fetch_sub(1, Ordering::AcqRel);
+                    }
+                    Ok(Event::Frame(Frame::Request { id, request })) => {
+                        let answer = match request {
+                            Request::CanUseTool(_) => {
+                                protocol::deny(&id, "The person stopped the reply.", false)
+                            }
+                            Request::Other(subtype) => protocol::refuse(
+                                &id,
+                                &format!("Arden Code does not serve {subtype}"),
+                            ),
+                        };
+                        let _ = live.write(&answer);
+                    }
+                    Ok(_) => {}
+                    Err(_) => {
+                        drop(events);
+                        tracing::warn!(session = %session_id, "a stopped reply never ended, so Claude Code is started again");
+                        self.forget(session_id);
+                        return self.live(session_id, folder);
+                    }
+                }
+            }
+        }
+        Ok(live)
     }
 }
 
@@ -258,7 +303,7 @@ fn fail(turn_id: &str, problem: &Problem, emit: &mut dyn FnMut(TurnEvent) -> Flo
 impl AgentDriver for ClaudeDriver {
     fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
         let (session_id, turn_id) = (request.session_id, request.turn_id);
-        let live = match self.live(session_id, request.folder) {
+        let live = match self.settled(session_id, request.folder) {
             Ok(live) => live,
             Err(problem) => {
                 tracing::warn!(session = %session_id, details = %problem.details(), "Claude could not be reached");
@@ -271,9 +316,14 @@ impl AgentDriver for ClaudeDriver {
         }
         let forward = live.sender.clone();
         let controls = request.controls;
+        let turn = turn_id.to_owned();
         thread::spawn(move || {
             while let Ok(control) = controls.recv() {
-                if forward.send(Event::Control(control)).is_err() {
+                let event = Event::Control {
+                    turn: turn.clone(),
+                    control,
+                };
+                if forward.send(event).is_err() {
                     break;
                 }
             }
@@ -330,10 +380,15 @@ impl AgentDriver for ClaudeDriver {
                     );
                     return;
                 }
-                Event::Control(Control::Stop) => {
+                Event::Control {
+                    turn,
+                    control: Control::Stop,
+                } if turn == turn_id => {
                     self.interrupt(&live);
                     return;
                 }
+                // The person's doing in a turn that is over.
+                Event::Control { .. } => {}
             }
         }
     }
