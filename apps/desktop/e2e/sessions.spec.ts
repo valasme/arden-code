@@ -170,6 +170,43 @@ test.describe("sessions kept between starts in the real app", () => {
       rmSync(dataDir, { recursive: true, force: true });
     }
   });
+
+  test("an archived session stays archived after a restart, and comes back from the archived sessions page", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-archive-"));
+    try {
+      const first = await launchApp({ dataDir });
+      try {
+        await untilTheReplyEnds(await ask(first.page, "Put this away"));
+        await first.page.getByRole("button", { name: "Session actions" }).click();
+        await first.page.getByRole("menuitem", { name: /^Archive/ }).click();
+        await expect(first.page.getByText("This session is archived.")).toBeVisible();
+      } finally {
+        await first.close();
+      }
+
+      const second = await launchApp({ dataDir });
+      try {
+        // An archived session is not opened again at start.
+        await expect(
+          second.page.getByRole("heading", {
+            level: 1,
+            name: "What should the Demo agent work on?",
+          }),
+        ).toBeVisible();
+        const sidebar = second.page.getByRole("complementary", { name: "Sidebar" });
+        await sidebar.getByRole("link", { name: /Archived/ }).click();
+        await expect(second.page.getByRole("link", { name: "Put this away" })).toBeVisible();
+        await second.page.getByRole("button", { name: "Unarchive" }).click();
+
+        await expect(second.page.getByText("No archived sessions.")).toBeVisible();
+        await expect(sidebar.getByRole("link", { name: "Put this away" })).toBeVisible();
+      } finally {
+        second.kill();
+      }
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
 });
 
 test.describe("rich replies in the real app", () => {

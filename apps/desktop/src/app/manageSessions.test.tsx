@@ -439,3 +439,214 @@ describe("Deleting a session", () => {
     await expectNoAccessibilityViolations(document.body);
   });
 });
+
+/** A session that was archived before the page came up. */
+const archivedSession = (id: string, title: string) => ({
+  ...sessionNamed(id, title),
+  archivedAt: "2026-10-01T08:00:00Z",
+});
+
+/** Rust with sessions archived first and second, and one that is not archived, opened at `entry`. */
+async function archivedSessions(entry: string) {
+  const rust = startSessionsRust({
+    sessions: [
+      archivedSession("session-1", "Old work"),
+      archivedSession("session-2", "Older plans"),
+      sessionNamed("session-3", "Current work"),
+    ],
+  });
+  const user = userEvent.setup();
+  renderApp(entry);
+  await screen.findByRole("complementary", { name: "Sidebar" });
+  return { rust, user };
+}
+
+/** The archived sessions the page lists, by name. */
+function archivedOnThePage(): string[] {
+  const list = screen.queryByRole("list", { name: "Archived sessions" });
+  if (!list) return [];
+  return within(list)
+    .getAllByRole("listitem")
+    .map((item) => within(item).getByRole("link").textContent ?? "");
+}
+
+/** The names of the items of the menu that is open, without their shortcuts. */
+function menuItems(): string[] {
+  return screen
+    .getAllByRole("menuitem")
+    .map((item) => item.textContent?.replace(/F2$|Ctrl\+Shift\+N$/u, "") ?? "");
+}
+
+describe("Archiving a session", () => {
+  it("puts it away from the sidebar's lists and shows it read-only, with Unarchive in place of the message box", async () => {
+    const { rust, user } = await twoSessions();
+
+    await user.click(await screen.findByRole("button", { name: "Session actions" }));
+    await user.click(await shownItem(/^Archive/));
+
+    expect(await screen.findByText("This session is archived.")).toBeVisible();
+    expect(rust.callsTo("set_session_archived")).toEqual([{ id: "session-1", archived: true }]);
+    expect(screen.queryByRole("textbox", { name: "Message" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Unarchive" })).toBeVisible();
+    await waitFor(() => {
+      expect(listedUnder("Playground")).toEqual(["Write the docs"]);
+    });
+    expect(within(sidebar()).getByRole("link", { name: /Archived/ })).toBeVisible();
+    expect(await screen.findByText("Session archived")).toBeInTheDocument();
+  });
+
+  it("is undone from the notice", async () => {
+    const { rust, user } = await twoSessions();
+    await user.click(await screen.findByRole("button", { name: "Session actions" }));
+    await user.click(await shownItem(/^Archive/));
+
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      expect(listedUnder("Playground")).toEqual(["Write the docs", "Fix the build"]);
+    });
+    expect(rust.callsTo("set_session_archived")).toEqual([
+      { id: "session-1", archived: true },
+      { id: "session-1", archived: false },
+    ]);
+    expect(await screen.findByRole("textbox", { name: "Message" })).toBeVisible();
+  });
+
+  it("brings the message box back with Unarchive, with the focus in it", async () => {
+    const { user } = await archivedSessions("/session/session-1");
+    expect(await screen.findByText("This session is archived.")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Unarchive" }));
+
+    await focusGoesTo(await screen.findByRole("textbox", { name: "Message" }));
+    expect(screen.queryByText("This session is archived.")).toBeNull();
+  });
+
+  it("offers only Unarchive and Delete in an archived session's menu", async () => {
+    const { user } = await archivedSessions("/session/session-1");
+
+    await user.click(await screen.findByRole("button", { name: "Session actions" }));
+
+    await shownItem(/Unarchive/);
+    expect(menuItems()).toEqual(["Unarchive", "Delete…"]);
+  });
+
+  it("moves the focus to the next row when it is archived from its row", async () => {
+    const { user } = await twoSessions({ entry: "/" });
+    row("Write the docs").focus();
+
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+    await user.click(await shownItem(/^Archive/));
+
+    await waitFor(() => {
+      expect(listedUnder("Playground")).toEqual(["Fix the build"]);
+    });
+    await focusGoesTo(row("Fix the build"));
+  });
+
+  it("offers Archive session or Unarchive session in the command palette, whichever applies", async () => {
+    const { user } = await twoSessions();
+
+    await openPalette(user);
+    expect(screen.queryByRole("option", { name: /Unarchive session/ })).toBeNull();
+    await user.click(screen.getByRole("option", { name: /Archive session/ }));
+    expect(await screen.findByText("This session is archived.")).toBeVisible();
+
+    await openPalette(user);
+    expect(screen.getByRole("option", { name: /Unarchive session/ })).toBeVisible();
+    expect(screen.queryByRole("option", { name: /^Archive session/ })).toBeNull();
+  });
+});
+
+describe("The archived sessions page", () => {
+  it("lists archived sessions, the last archived first, with their project and the date", async () => {
+    const { user } = await archivedSessions("/");
+
+    await user.click(await within(sidebar()).findByRole("link", { name: /Archived/ }));
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Archived sessions" }),
+    ).toBeVisible();
+    expect(archivedOnThePage()).toEqual(["Older plans", "Old work"]);
+    const [first] = within(screen.getByRole("list", { name: "Archived sessions" })).getAllByRole(
+      "listitem",
+    );
+    if (!first) throw new Error("no first row");
+    expect(first.textContent).toMatch(/Playground · Archived/u);
+    expect(within(first).getByRole("button", { name: "Unarchive" })).toBeVisible();
+    expect(within(first).getByRole("button", { name: "Delete…" })).toBeVisible();
+  });
+
+  it("opens an archived session from the page", async () => {
+    const { user } = await archivedSessions("/archived");
+
+    await user.click(await screen.findByRole("link", { name: "Old work" }));
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Old work" })).toBeVisible();
+    expect(screen.getByText("This session is archived.")).toBeVisible();
+  });
+
+  it("unarchives a session, which goes back to its project, and moves the focus to the next row", async () => {
+    const { rust, user } = await archivedSessions("/archived");
+    await screen.findByRole("heading", { level: 1, name: "Archived sessions" });
+    const [first] = screen.getAllByRole("button", { name: "Unarchive" });
+    if (!first) throw new Error("no Unarchive button");
+
+    await user.click(first);
+
+    await waitFor(() => {
+      expect(archivedOnThePage()).toEqual(["Old work"]);
+    });
+    expect(rust.callsTo("set_session_archived")).toEqual([{ id: "session-2", archived: false }]);
+    // Back in its project, where it stands by when it was last used.
+    expect(listedUnder("Playground")).toEqual(["Current work", "Older plans"]);
+    await focusGoesTo(screen.getByRole("button", { name: "Unarchive" }));
+  });
+
+  it("deletes a session after asking, says so when none is left, and the sidebar's Archived row goes", async () => {
+    const { rust, user } = await archivedSessions("/archived");
+    await screen.findByRole("heading", { level: 1, name: "Archived sessions" });
+
+    for (const name of ["Older plans", "Old work"]) {
+      const [button] = screen.getAllByRole("button", { name: "Delete…" });
+      if (!button) throw new Error("no Delete button");
+      // oxlint-disable-next-line no-await-in-loop -- one row after the other
+      await user.click(button);
+      // oxlint-disable-next-line no-await-in-loop -- one row after the other
+      const question = await screen.findByRole("alertdialog", { name: "Delete this session?" });
+      expect(question).toHaveTextContent(`“${name}”`);
+      // oxlint-disable-next-line no-await-in-loop -- one row after the other
+      await user.click(within(question).getByRole("button", { name: "Delete session" }));
+      // oxlint-disable-next-line no-await-in-loop -- one row after the other
+      await waitFor(() => {
+        expect(archivedOnThePage()).not.toContain(name);
+      });
+    }
+
+    expect(await screen.findByText("No archived sessions.")).toBeVisible();
+    expect(rust.callsTo("delete_session")).toEqual([{ id: "session-2" }, { id: "session-1" }]);
+    expect(within(sidebar()).queryByRole("link", { name: /Archived/ })).toBeNull();
+  });
+
+  it("opens from the command palette", async () => {
+    const { user } = await twoSessions();
+
+    await openPalette(user);
+    await user.click(screen.getByRole("option", { name: /Archived sessions/ }));
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Archived sessions" }),
+    ).toBeVisible();
+    expect(screen.getByText("No archived sessions.")).toBeVisible();
+  });
+
+  it("has no accessibility violations, and neither has an archived session", async () => {
+    const { user } = await archivedSessions("/archived");
+    await screen.findByRole("list", { name: "Archived sessions" });
+    await expectNoAccessibilityViolations(document.body);
+
+    await user.click(screen.getByRole("link", { name: "Old work" }));
+    await screen.findByText("This session is archived.");
+    await expectNoAccessibilityViolations(document.body);
+  });
+});

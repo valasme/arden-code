@@ -46,9 +46,13 @@ export function sessionNamed(
     createdAt: "2026-09-30T14:05:09Z",
     updatedAt: "2026-09-30T14:05:09Z",
     pinned: false,
+    archivedAt: null,
     turns: [],
   };
 }
+
+/** When the stand-in archives a session. */
+export const archivedAt = "2026-10-02T09:30:00Z";
 
 /** A folder opened as a project. */
 export function folderProject(id: string, name: string): Project {
@@ -96,11 +100,18 @@ export function startSessionsRust({
     if (!found) throw failure("ARD-AGT-001");
     return found;
   };
-  // The pinned sessions, in the order they were pinned.
+  // The pinned sessions, in the order they were pinned, and the archived ones, the last first.
   const pins: string[] = sessions.filter((session) => session.pinned).map(({ id }) => id);
+  const archives: string[] = sessions
+    .filter((session) => session.archivedAt !== null)
+    .map(({ id }) => id)
+    .toReversed();
   const list = (): SessionList => {
-    const newestFirst = sessions.toReversed().filter((session) => !session.pinned);
+    const newestFirst = sessions
+      .toReversed()
+      .filter((session) => !session.pinned && session.archivedAt === null);
     return {
+      archived: archives.map((id) => summaryOf(find(id))),
       pinned: pins.map((id) => summaryOf(find(id))),
       projects: [playground, ...folders].map((project) => ({
         project,
@@ -149,6 +160,7 @@ export function startSessionsRust({
           const { id, name } = z.object({ id: z.string(), name: z.string() }).parse(payload);
           const trimmed = name.trim();
           if (trimmed === "" || trimmed.length > 100) throw failure("ARD-AGT-006");
+          if (find(id).archivedAt !== null) throw failure("ARD-AGT-005");
           find(id).title = trimmed;
           return null;
         }
@@ -160,10 +172,28 @@ export function startSessionsRust({
           session.pinned = pinned;
           return null;
         }
+        case "set_session_archived": {
+          const { id, archived } = z
+            .object({ id: z.string(), archived: z.boolean() })
+            .parse(payload);
+          const session = find(id);
+          if (archived && session.archivedAt === null) {
+            archives.unshift(id);
+            if (session.pinned) pins.splice(pins.indexOf(id), 1);
+            session.pinned = false;
+            session.archivedAt = archivedAt;
+          }
+          if (!archived && session.archivedAt !== null) {
+            archives.splice(archives.indexOf(id), 1);
+            session.archivedAt = null;
+          }
+          return null;
+        }
         case "delete_session": {
           const { id } = withId.parse(payload);
           sessions.splice(sessions.indexOf(find(id)), 1);
           if (pins.includes(id)) pins.splice(pins.indexOf(id), 1);
+          if (archives.includes(id)) archives.splice(archives.indexOf(id), 1);
           return null;
         }
         case "send_message": {
@@ -175,6 +205,7 @@ export function startSessionsRust({
             })
             .parse(payload);
           const session = find(sessionId);
+          if (session.archivedAt !== null) throw failure("ARD-AGT-005");
           channel = onEvent;
           session.title ??= text;
           session.turns.push({

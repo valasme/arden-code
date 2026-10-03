@@ -364,6 +364,14 @@ export const commands = {
 	 */
 	setSessionPinned: (id: string, pinned: boolean) => __TAURI_INVOKE<null>("set_session_pinned", { id, pinned }),
 	/**
+	 *  Archives a session, or unarchives it (ADR 0036). Archiving stops a reply that is still running.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or the change cannot be saved.
+	 */
+	setSessionArchived: (id: string, archived: boolean) => __TAURI_INVOKE<null>("set_session_archived", { id, archived }),
+	/**
 	 *  Deletes a session for good, after the person confirmed it (ADR 0036). A reply that is still
 	 *  running stops.
 	 * 
@@ -618,6 +626,8 @@ export type ErrorCode =
 "ARD-AGT-003" | 
 /**  The saved sessions could not be read, so Arden Code started without them. */
 "ARD-AGT-004" | 
+/**  The session is archived, so it takes no message, name or pin until it is unarchived. */
+"ARD-AGT-005" | 
 /**  A name given to a session is empty or too long. */
 "ARD-AGT-006" | 
 /**  Programs cannot be started and supervised on this computer. */
@@ -787,6 +797,8 @@ export type Session = {
 	updatedAt: string,
 	/**  Whether it is pinned to the top of the sidebar (ADR 0036). */
 	pinned: boolean,
+	/**  When it was archived, in UTC, while it is (ADR 0036). An archived session is read-only. */
+	archivedAt: string | null,
 	turns: Turn[],
 };
 
@@ -796,9 +808,11 @@ export type SessionList = {
 	pinned: SessionSummary[],
 	/**
 	 *  Every project, the Playground first and the others in the order they were opened, each with
-	 *  its sessions that are not pinned.
+	 *  its sessions that are neither pinned nor archived.
 	 */
 	projects: ProjectListing[],
+	/**  The archived sessions, whatever their project, the last archived first. */
+	archived: SessionSummary[],
 };
 
 /**  Tells the page to show a session, such as the one made for a folder that was opened. */
@@ -815,6 +829,7 @@ export type SessionSummary = {
 	createdAt: string,
 	updatedAt: string,
 	pinned: boolean,
+	archivedAt: string | null,
 };
 
 /**  One change to one setting. The UI sends these, so each setting keeps its own type. */

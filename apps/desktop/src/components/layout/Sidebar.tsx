@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { SettingsIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { ArchivedLink } from "@/features/sessions/ArchivedBar";
 import { SessionsNav } from "@/features/sessions/SessionsNav";
 import { SettingsNav } from "@/features/settings/SettingsNav";
 import { isSettingsPage } from "@/state/settingsPage";
@@ -36,7 +37,8 @@ export function Sidebar({ hidden }: { hidden: boolean }) {
           >
             <SessionsNav />
           </nav>
-          <div className="border-t border-sidebar-border p-2">
+          <div className="flex flex-col gap-px border-t border-sidebar-border p-2">
+            <ArchivedLink />
             <Link to="/settings/$tab" params={{ tab: "general" }} className={sidebarRow}>
               <SettingsIcon
                 aria-hidden

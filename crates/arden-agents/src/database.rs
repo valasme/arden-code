@@ -36,7 +36,9 @@ CREATE TABLE sessions (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     used INTEGER NOT NULL,
-    pinned INTEGER
+    pinned INTEGER,
+    archived INTEGER,
+    archived_at TEXT
 ) STRICT;
 
 CREATE TABLE turns (
@@ -81,13 +83,15 @@ impl From<std::io::Error> for DatabaseError {
 }
 
 /// Where a session stands in the sidebar's lists: numbers that only grow, given when it was last
-/// used and when it was pinned.
+/// used, pinned and archived.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Order {
     /// When it was last used: the most recently used is listed first.
     pub used: u64,
     /// When it was pinned, while it is: the first pinned is listed first.
     pub pinned: Option<u64>,
+    /// When it was archived, while it is: the last archived is listed first.
+    pub archived: Option<u64>,
 }
 
 /// A session as the file lists it: everything but its turns, which are read when it is opened.
@@ -150,10 +154,12 @@ fn put_session(
     order: Order,
 ) -> rusqlite::Result<()> {
     transaction.execute(
-        "INSERT INTO sessions (id, project_id, agent, title, created_at, updated_at, used, pinned)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        "INSERT INTO sessions (id, project_id, agent, title, created_at, updated_at, used, pinned,
+             archived, archived_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
          ON CONFLICT (id) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at,
-             used = excluded.used, pinned = excluded.pinned",
+             used = excluded.used, pinned = excluded.pinned, archived = excluded.archived,
+             archived_at = excluded.archived_at",
         params![
             session.id,
             session.project_id,
@@ -163,6 +169,8 @@ fn put_session(
             session.updated_at,
             stored(order.used),
             order.pinned.map(stored),
+            order.archived.map(stored),
+            session.archived_at,
         ],
     )?;
     Ok(())
@@ -291,7 +299,9 @@ impl Database {
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
         let mut statement = self.connection.prepare(
-            "SELECT id, project_id, agent, title, created_at, updated_at, used, pinned FROM sessions ORDER BY rowid",
+            "SELECT id, project_id, agent, title, created_at, updated_at, used, pinned, archived,
+                archived_at
+             FROM sessions ORDER BY rowid",
         )?;
         let sessions = statement
             .query_map([], |row| {
@@ -299,6 +309,7 @@ impl Database {
                 let order = Order {
                     used: number(row.get(6)?),
                     pinned: row.get::<_, Option<i64>>(7)?.map(number),
+                    archived: row.get::<_, Option<i64>>(8)?.map(number),
                 };
                 Ok(SavedSession {
                     session: Session {
@@ -309,6 +320,7 @@ impl Database {
                         created_at: row.get(4)?,
                         updated_at: row.get(5)?,
                         pinned: order.pinned.is_some(),
+                        archived_at: row.get(9)?,
                         turns: Vec::new(),
                     },
                     order,

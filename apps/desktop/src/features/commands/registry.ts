@@ -1,4 +1,6 @@
 import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
   CommandIcon,
@@ -31,7 +33,10 @@ export type CommandId =
   | "session.rename"
   | "session.pin"
   | "session.unpin"
+  | "session.archive"
+  | "session.unarchive"
   | "session.delete"
+  | "archived.open"
   | "settings.open"
   | "sidebar.toggle"
   | "inspector.toggle"
@@ -62,7 +67,10 @@ export interface CommandDefinition {
     | "commands.sessionRename"
     | "commands.sessionPin"
     | "commands.sessionUnpin"
+    | "commands.sessionArchive"
+    | "commands.sessionUnarchive"
     | "commands.sessionDelete"
+    | "commands.archivedOpen"
     | "commands.settingsOpen"
     | "commands.sidebarToggle"
     | "commands.inspectorToggle"
@@ -135,10 +143,31 @@ export const commandDefinitions = [
     shortcuts: [],
   },
   {
+    id: "session.archive",
+    group: "session",
+    labelKey: "commands.sessionArchive",
+    icon: ArchiveIcon,
+    shortcuts: [],
+  },
+  {
+    id: "session.unarchive",
+    group: "session",
+    labelKey: "commands.sessionUnarchive",
+    icon: ArchiveRestoreIcon,
+    shortcuts: [],
+  },
+  {
     id: "session.delete",
     group: "session",
     labelKey: "commands.sessionDelete",
     icon: Trash2Icon,
+    shortcuts: [],
+  },
+  {
+    id: "archived.open",
+    group: "goTo",
+    labelKey: "commands.archivedOpen",
+    icon: ArchiveIcon,
     shortcuts: [],
   },
   {

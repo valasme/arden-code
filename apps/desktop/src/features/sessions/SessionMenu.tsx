@@ -24,6 +24,8 @@ const items = {
   rename: { labelKey: "sessions.actions.rename", command: "session.rename" },
   pin: { labelKey: "sessions.actions.pin", command: "session.pin" },
   unpin: { labelKey: "sessions.actions.unpin", command: "session.unpin" },
+  archive: { labelKey: "sessions.actions.archive", command: "session.archive" },
+  unarchive: { labelKey: "sessions.actions.unarchive", command: "session.unarchive" },
   delete: { labelKey: "sessions.actions.delete", command: "session.delete" },
 } as const satisfies Record<SessionAction, { labelKey: string; command: CommandId }>;
 

@@ -227,6 +227,8 @@ pub struct Session {
     pub updated_at: String,
     /// Whether it is pinned to the top of the sidebar (ADR 0036).
     pub pinned: bool,
+    /// When it was archived, in UTC, while it is (ADR 0036). An archived session is read-only.
+    pub archived_at: Option<String>,
     pub turns: Vec<Turn>,
 }
 
@@ -241,6 +243,7 @@ pub struct SessionSummary {
     pub created_at: String,
     pub updated_at: String,
     pub pinned: bool,
+    pub archived_at: Option<String>,
 }
 
 /// A project and its sessions, the most recently used first.
@@ -258,8 +261,10 @@ pub struct SessionList {
     /// The pinned sessions, whatever their project, in the order they were pinned.
     pub pinned: Vec<SessionSummary>,
     /// Every project, the Playground first and the others in the order they were opened, each with
-    /// its sessions that are not pinned.
+    /// its sessions that are neither pinned nor archived.
     pub projects: Vec<ProjectListing>,
+    /// The archived sessions, whatever their project, the last archived first.
+    pub archived: Vec<SessionSummary>,
 }
 
 /// What happens while a reply streams. The store applies these, and the UI receives them through a

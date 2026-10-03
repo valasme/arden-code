@@ -62,6 +62,9 @@ pub enum ErrorCode {
     /// The saved sessions could not be read, so Arden Code started without them.
     #[serde(rename = "ARD-AGT-004")]
     SessionsUnreadable,
+    /// The session is archived, so it takes no message, name or pin until it is unarchived.
+    #[serde(rename = "ARD-AGT-005")]
+    SessionArchived,
     /// A name given to a session is empty or too long.
     #[serde(rename = "ARD-AGT-006")]
     SessionNameInvalid,
@@ -101,6 +104,7 @@ impl ErrorCode {
             Self::TurnRunning => "ARD-AGT-002",
             Self::SessionsNotSaved => "ARD-AGT-003",
             Self::SessionsUnreadable => "ARD-AGT-004",
+            Self::SessionArchived => "ARD-AGT-005",
             Self::SessionNameInvalid => "ARD-AGT-006",
             Self::ProcessSupervisor => "ARD-PROC-001",
             Self::UpdateInstall => "ARD-UPD-001",

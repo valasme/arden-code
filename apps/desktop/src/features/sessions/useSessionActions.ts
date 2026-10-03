@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -15,22 +15,62 @@ import { useSessionDialogsStore } from "@/state/sessionDialogs";
 import { findSession } from "./sessionList";
 
 /** What can be done to a session from its menu (ADR 0036). */
-export type SessionAction = "rename" | "pin" | "unpin" | "delete";
+export type SessionAction = "rename" | "pin" | "unpin" | "archive" | "unarchive" | "delete";
 
-/** The actions that apply to a session now, in the order its menu lists them. */
+/**
+ * The actions that apply to a session now, in the order its menu lists them. An archived session
+ * can only be unarchived or deleted.
+ */
 export function actionsFor(session: SessionSummary): SessionAction[] {
-  return ["rename", session.pinned ? "unpin" : "pin", "delete"];
+  if (session.archivedAt !== null) return ["unarchive", "delete"];
+  return ["rename", session.pinned ? "unpin" : "pin", "archive", "delete"];
+}
+
+/** The session whose row in the sidebar comes after this one's, or else before it. */
+function neighborOf(sessionId: string): string | undefined {
+  const rows = [...document.querySelectorAll<HTMLElement>("[data-area=sidebar] [data-session-id]")];
+  const at = rows.findIndex((row) => row.dataset["sessionId"] === sessionId);
+  if (at === -1) return undefined;
+  return (rows[at + 1] ?? rows[at - 1])?.dataset["sessionId"];
+}
+
+type FocusRow = ReturnType<typeof useRowFocusStore.getState>["focusRow"];
+
+/**
+ * Gives the focus to the row that stood next to a row that left the sidebar's lists, once the list
+ * has changed, or to New session when there is none (ADR 0036).
+ */
+function focusNeighbor(queryClient: QueryClient, focusRow: FocusRow, neighbor: string | undefined) {
+  const list = queryClient.getQueryData(sessionListQuery.queryKey) ?? noSessions;
+  const next = neighbor === undefined ? undefined : findSession(list, neighbor);
+  if (next && next.archivedAt === null) focusRow({ sessionId: next.id, pinned: next.pinned });
+  else document.querySelector<HTMLElement>("[data-new-session]")?.focus();
+}
+
+/**
+ * Brings the session's own copy in step with the list Rust gave, in place: reading it again could
+ * repeat a reply that is still streaming (ADR 0016).
+ */
+function updateFromList(queryClient: QueryClient, sessionId: string) {
+  const list = queryClient.getQueryData(sessionListQuery.queryKey) ?? noSessions;
+  const summary = findSession(list, sessionId);
+  if (!summary) return;
+  queryClient.setQueryData(
+    sessionQuery(sessionId).queryKey,
+    (session) => session && { ...session, pinned: summary.pinned, archivedAt: summary.archivedAt },
+  );
 }
 
 /**
  * Runs an action of a session's menu on a session. `fromRow` says it was chosen on the session's row
- * in the sidebar, which keeps the focus when the action moves it.
+ * in the sidebar, which keeps the focus when the action moves the row or takes it away.
  */
 export function useSessionActions(): (
   action: SessionAction,
   sessionId: string,
   fromRow?: boolean,
 ) => void {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const rename = useSessionDialogsStore((state) => state.rename);
   const askToDelete = useSessionDialogsStore((state) => state.askToDelete);
@@ -38,16 +78,34 @@ export function useSessionActions(): (
 
   return useCallback(
     (action, sessionId, fromRow = false) => {
+      const failed = (error: unknown) => {
+        showErrorToast(toAppError(error));
+      };
+
       const setPinned = async (pinned: boolean) => {
         await commands.setSessionPinned(sessionId, pinned);
-        // The session's own copy changes in place: reading it again could repeat a reply that is
-        // still streaming (ADR 0016).
-        queryClient.setQueryData(
-          sessionQuery(sessionId).queryKey,
-          (session) => session && { ...session, pinned },
-        );
         await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
+        updateFromList(queryClient, sessionId);
         if (fromRow) focusRow({ sessionId, pinned });
+      };
+
+      const setArchived = async (archived: boolean, onRow: boolean) => {
+        const neighbor = onRow && archived ? neighborOf(sessionId) : undefined;
+        await commands.setSessionArchived(sessionId, archived);
+        await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
+        updateFromList(queryClient, sessionId);
+        if (onRow && archived) focusNeighbor(queryClient, focusRow, neighbor);
+        if (archived) {
+          // Archiving takes the session out of sight: the notice says where it went, and can undo it.
+          toast.success(t("sessions.archived.done"), {
+            action: {
+              label: t("sessions.archived.undo"),
+              onClick: () => {
+                setArchived(false, false).catch(failed);
+              },
+            },
+          });
+        }
       };
 
       switch (action) {
@@ -57,9 +115,12 @@ export function useSessionActions(): (
         }
         case "pin":
         case "unpin": {
-          setPinned(action === "pin").catch((error: unknown) => {
-            showErrorToast(toAppError(error));
-          });
+          setPinned(action === "pin").catch(failed);
+          break;
+        }
+        case "archive":
+        case "unarchive": {
+          setArchived(action === "archive", fromRow).catch(failed);
           break;
         }
         case "delete": {
@@ -68,16 +129,8 @@ export function useSessionActions(): (
         }
       }
     },
-    [queryClient, rename, askToDelete, focusRow],
+    [t, queryClient, rename, askToDelete, focusRow],
   );
-}
-
-/** The session whose row in the sidebar comes after this one's, or else before it. */
-function neighborOf(sessionId: string): string | undefined {
-  const rows = [...document.querySelectorAll<HTMLElement>("[data-area=sidebar] [data-session-id]")];
-  const at = rows.findIndex((row) => row.dataset["sessionId"] === sessionId);
-  if (at === -1) return undefined;
-  return (rows[at + 1] ?? rows[at - 1])?.dataset["sessionId"];
 }
 
 /**
@@ -106,12 +159,7 @@ export function useDeleteSession(): (sessionId: string, fromRow: boolean) => Pro
       }
       queryClient.removeQueries({ queryKey: sessionQuery(sessionId).queryKey });
       await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
-      if (fromRow) {
-        const list = queryClient.getQueryData(sessionListQuery.queryKey) ?? noSessions;
-        const next = neighbor === undefined ? undefined : findSession(list, neighbor);
-        if (next) focusRow({ sessionId: next.id, pinned: next.pinned });
-        else document.querySelector<HTMLElement>("[data-new-session]")?.focus();
-      }
+      if (fromRow) focusNeighbor(queryClient, focusRow, neighbor);
       toast.success(t("sessions.deleted"));
     },
     [t, queryClient, navigate, focusRow],

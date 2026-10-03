@@ -12,6 +12,7 @@ import { toAppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { useRepliesStore } from "@/state/replies";
 
+import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
 import { SessionMenu } from "./SessionMenu";
@@ -217,19 +218,23 @@ export function SessionView({ id }: { id: string }) {
         )}
       </div>
       <ReplyAnnouncer turn={lastTurn} />
-      <MessageBox
-        busy={busy}
-        context={context}
-        onStop={() => {
-          run("reply.stop");
-        }}
-        onSend={(text) => {
-          stuck.current = true;
-          setAtEnd(true);
-          void send(id, text);
-          return true;
-        }}
-      />
+      {session.archivedAt === null ? (
+        <MessageBox
+          busy={busy}
+          context={context}
+          onStop={() => {
+            run("reply.stop");
+          }}
+          onSend={(text) => {
+            stuck.current = true;
+            setAtEnd(true);
+            void send(id, text);
+            return true;
+          }}
+        />
+      ) : (
+        <ArchivedBar sessionId={id} />
+      )}
     </div>
   );
 }

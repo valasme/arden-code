@@ -2,7 +2,11 @@ import type { SessionList, SessionSummary } from "@/ipc/bindings";
 
 /** Every session in the list, whichever part of the sidebar lists it. */
 export function allSessions(list: SessionList): SessionSummary[] {
-  return [...list.pinned, ...list.projects.flatMap((listing) => listing.sessions)];
+  return [
+    ...list.pinned,
+    ...list.projects.flatMap((listing) => listing.sessions),
+    ...list.archived,
+  ];
 }
 
 /** The session with this id, if the list has it. */

@@ -30,6 +30,8 @@ pub enum StoreError {
     TurnRunning,
     /// A name for a session is empty, or longer than [`NAME_LENGTH`].
     InvalidName,
+    /// The session is archived: it takes no message, name or pin until it is unarchived.
+    Archived,
     /// The change could not be written to the file, so it was not made. Says why, for the logs.
     NotSaved(String),
     /// What the file holds could not be read. Says why, for the logs.
@@ -99,6 +101,7 @@ impl Entry {
             created_at: session.created_at.clone(),
             updated_at: session.updated_at.clone(),
             pinned: session.pinned,
+            archived_at: session.archived_at.clone(),
             turns: Vec::new(),
         }
     }
@@ -113,6 +116,7 @@ impl Entry {
             created_at: session.created_at.clone(),
             updated_at: session.updated_at.clone(),
             pinned: session.pinned,
+            archived_at: session.archived_at.clone(),
         }
     }
 
@@ -306,10 +310,17 @@ impl SessionStore {
     }
 
     /// The sessions as the sidebar lists them: the pinned ones in the order they were pinned, then
-    /// the projects, each with its other sessions, the most recently used first.
+    /// the projects, each with its other sessions, the most recently used first, and the archived
+    /// ones apart, the last archived first.
     #[must_use]
     pub fn list(&self) -> SessionList {
         let inner = self.lock();
+        let mut archived: Vec<&Entry> = inner
+            .sessions
+            .iter()
+            .filter(|entry| entry.order.archived.is_some())
+            .collect();
+        archived.sort_by_key(|entry| std::cmp::Reverse(entry.order.archived));
         let mut pinned: Vec<&Entry> = inner
             .sessions
             .iter()
@@ -319,10 +330,11 @@ impl SessionStore {
         let mut sessions: Vec<&Entry> = inner
             .sessions
             .iter()
-            .filter(|entry| entry.order.pinned.is_none())
+            .filter(|entry| entry.order.pinned.is_none() && entry.order.archived.is_none())
             .collect();
         sessions.sort_by_key(|entry| std::cmp::Reverse(entry.order.used));
         SessionList {
+            archived: archived.iter().map(|entry| entry.summary()).collect(),
             pinned: pinned.iter().map(|entry| entry.summary()).collect(),
             projects: inner
                 .projects
@@ -391,14 +403,16 @@ impl SessionStore {
         Ok(())
     }
 
-    /// The session that was opened last, if it is still there.
+    /// The session that was opened last, if it is still there and not archived.
     #[must_use]
     pub fn last_open(&self) -> Option<String> {
         let inner = self.lock();
-        inner
-            .last_open
-            .clone()
-            .filter(|id| inner.sessions.iter().any(|entry| &entry.session.id == id))
+        inner.last_open.clone().filter(|id| {
+            inner
+                .sessions
+                .iter()
+                .any(|entry| &entry.session.id == id && entry.order.archived.is_none())
+        })
     }
 
     /// Gives a session a name, trimmed of spaces at either end. A session that has a name keeps it
@@ -420,6 +434,9 @@ impl SessionStore {
             sessions, database, ..
         } = &mut *inner;
         let entry = find(sessions, session_id)?;
+        if entry.session.archived_at.is_some() {
+            return Err(StoreError::Archived);
+        }
         let mut header = entry.header();
         header.title = Some(name.to_owned());
         database
@@ -434,11 +451,16 @@ impl SessionStore {
     ///
     /// # Errors
     ///
-    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
-    /// [`StoreError::NotSaved`] when the change cannot be written.
+    /// Returns [`StoreError::UnknownSession`] when there is no such session,
+    /// [`StoreError::Archived`] when it is archived, and [`StoreError::NotSaved`] when the change
+    /// cannot be written.
     pub fn set_pinned(&self, session_id: &str, pinned: bool) -> Result<(), StoreError> {
         let mut inner = self.lock();
-        let known = find(&mut inner.sessions, session_id)?.order.pinned;
+        let entry = find(&mut inner.sessions, session_id)?;
+        if pinned && entry.order.archived.is_some() {
+            return Err(StoreError::Archived);
+        }
+        let known = entry.order.pinned;
         let pin = match (pinned, known) {
             (true, Some(place)) => Some(place),
             (true, None) => Some(inner.next_number()),
@@ -460,6 +482,61 @@ impl SessionStore {
             .map_err(not_saved)?;
         entry.session.pinned = header.pinned;
         entry.order = order;
+        Ok(())
+    }
+
+    /// Archives a session, or unarchives it (ADR 0036). An archived session leaves the sidebar's
+    /// lists for the archived ones, is no longer pinned, and takes no message, name or pin until it
+    /// is unarchived; a reply that is still running stops at its driver's next event. Archiving an
+    /// archived session leaves it where it is, with its date.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotSaved`] when the change cannot be written.
+    pub fn set_archived(&self, session_id: &str, archived: bool) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let known = find(&mut inner.sessions, session_id)?.order.archived;
+        let place = match (archived, known) {
+            (true, Some(place)) => Some(place),
+            (true, None) => Some(inner.next_number()),
+            (false, _) => None,
+        };
+        let last_id = inner.last_id;
+        let Inner {
+            sessions,
+            database,
+            stopping,
+            ..
+        } = &mut *inner;
+        let entry = find(sessions, session_id)?;
+        let mut header = entry.header();
+        if archived {
+            header.pinned = false;
+            if known.is_none() {
+                header.archived_at = Some(now_utc());
+            }
+        } else {
+            header.archived_at = None;
+        }
+        let order = Order {
+            pinned: if archived { None } else { entry.order.pinned },
+            archived: place,
+            ..entry.order
+        };
+        database
+            .save_session(&header, order, last_id)
+            .map_err(not_saved)?;
+        entry.session.pinned = header.pinned;
+        entry.session.archived_at = header.archived_at;
+        entry.order = order;
+        if archived {
+            for turn in &entry.session.turns {
+                if turn.status == TurnStatus::Running {
+                    stopping.insert(turn.id.clone());
+                }
+            }
+        }
         Ok(())
     }
 
@@ -524,12 +601,14 @@ impl SessionStore {
                 created_at: now.clone(),
                 updated_at: now,
                 pinned: false,
+                archived_at: None,
                 turns: Vec::new(),
             },
             loaded: true,
             order: Order {
                 used: inner.next_number(),
                 pinned: None,
+                archived: None,
             },
         };
         let last_id = inner.last_id;
@@ -576,6 +655,9 @@ impl SessionStore {
         } = &mut *inner;
         let entry = find(sessions, session_id)?;
         entry.load(database)?;
+        if entry.session.archived_at.is_some() {
+            return Err(StoreError::Archived);
+        }
         if entry
             .session
             .turns
@@ -1671,6 +1753,148 @@ mod tests {
         }
 
         assert_eq!(store_in(&file).last_open(), None);
+    }
+
+    #[test]
+    fn archived_sessions_leave_the_lists_and_are_listed_apart_the_last_archived_first() {
+        let store = store();
+        let [first, second, third] = three_sessions(&store);
+        store.set_pinned(&first, true).expect("pinned");
+
+        store.set_archived(&first, true).expect("archived");
+        store.set_archived(&third, true).expect("archived");
+
+        let list = store.list();
+        assert_eq!(ids(&list.archived), vec![third.as_str(), first.as_str()]);
+        assert!(list.pinned.is_empty(), "archiving unpins");
+        assert_eq!(ids(&list.projects[0].sessions), vec![second.as_str()]);
+        let archived = store.session(&first).expect("the session");
+        assert!(archived.archived_at.is_some());
+        assert!(!archived.pinned);
+
+        store.set_archived(&first, false).expect("unarchived");
+
+        let list = store.list();
+        assert_eq!(ids(&list.archived), vec![third.as_str()]);
+        assert!(list.pinned.is_empty(), "no pin comes back");
+        assert_eq!(
+            ids(&list.projects[0].sessions),
+            vec![second.as_str(), first.as_str()]
+        );
+        assert_eq!(
+            store.session(&first).expect("the session").archived_at,
+            None
+        );
+    }
+
+    #[test]
+    fn archiving_an_archived_session_again_keeps_its_place_and_date() {
+        let store = store();
+        let [first, second, _] = three_sessions(&store);
+        store.set_archived(&first, true).expect("archived");
+        store.set_archived(&second, true).expect("archived");
+        let date = store.session(&first).expect("the session").archived_at;
+
+        store.set_archived(&first, true).expect("archived again");
+
+        assert_eq!(
+            ids(&store.list().archived),
+            vec![second.as_str(), first.as_str()]
+        );
+        assert_eq!(
+            store.session(&first).expect("the session").archived_at,
+            date
+        );
+    }
+
+    #[test]
+    fn archived_sessions_and_their_order_are_kept_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let [first, _, third] = {
+            let store = store_in(&file);
+            let sessions = three_sessions(&store);
+            store.set_archived(&sessions[0], true).expect("archived");
+            store.set_archived(&sessions[2], true).expect("archived");
+            sessions
+        };
+
+        let store = store_in(&file);
+
+        assert_eq!(
+            ids(&store.list().archived),
+            vec![third.as_str(), first.as_str()]
+        );
+        assert!(
+            store
+                .session(&first)
+                .expect("the session")
+                .archived_at
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn an_archived_session_takes_no_message_name_or_pin_until_it_is_unarchived() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        store.set_archived(&session.id, true).expect("archived");
+
+        assert_eq!(
+            store.start_turn(&session.id, "hello"),
+            Err(StoreError::Archived)
+        );
+        assert_eq!(
+            store.rename(&session.id, "A name"),
+            Err(StoreError::Archived)
+        );
+        assert_eq!(
+            store.set_pinned(&session.id, true),
+            Err(StoreError::Archived)
+        );
+
+        store.set_archived(&session.id, false).expect("unarchived");
+        assert!(store.start_turn(&session.id, "hello").is_ok());
+    }
+
+    #[test]
+    fn archiving_a_session_stops_its_reply() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        let turn = store.start_turn(&session.id, "hello").expect("a turn");
+
+        let mut heard = Vec::new();
+        store
+            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
+                heard.push(event.clone());
+                if heard.len() == 2 {
+                    store.set_archived(&session.id, true).expect("archived");
+                }
+                true
+            })
+            .expect("saved");
+
+        assert!(matches!(heard.last(), Some(TurnEvent::Stopped { .. })));
+        let saved = store.session(&session.id).expect("the session");
+        assert_eq!(saved.turns[0].status, TurnStatus::Stopped);
+        assert!(saved.archived_at.is_some());
+    }
+
+    #[test]
+    fn an_archived_session_is_not_opened_again_at_the_next_start() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        store.remember_open(&session.id).expect("remembered");
+
+        store.set_archived(&session.id, true).expect("archived");
+
+        assert_eq!(store.last_open(), None);
     }
 
     #[test]

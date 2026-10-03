@@ -28,6 +28,7 @@ fn app_error(error: StoreError) -> AppError {
         }
         StoreError::TurnRunning => AppError::new(ErrorCode::TurnRunning),
         StoreError::InvalidName => AppError::new(ErrorCode::SessionNameInvalid),
+        StoreError::Archived => AppError::new(ErrorCode::SessionArchived),
         StoreError::NotSaved(reason) => {
             AppError::new(ErrorCode::SessionsNotSaved).with_details(reason)
         }
@@ -167,6 +168,21 @@ pub fn set_session_pinned(
     sessions: State<'_, Sessions>,
 ) -> Result<(), AppError> {
     sessions.set_pinned(&id, pinned).map_err(app_error)
+}
+
+/// Archives a session, or unarchives it (ADR 0036). Archiving stops a reply that is still running.
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, or the change cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn set_session_archived(
+    id: String,
+    archived: bool,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions.set_archived(&id, archived).map_err(app_error)
 }
 
 /// Deletes a session for good, after the person confirmed it (ADR 0036). A reply that is still

@@ -15,6 +15,7 @@
     "view": "View"
   },
   "commands": {
+    "archivedOpen": "Archived sessions",
     "focusNext": "Move to the next area",
     "focusPrevious": "Move to the previous area",
     "inspectorToggle": "Toggle inspector",
@@ -23,10 +24,12 @@
     "navigateForward": "Forward",
     "paletteOpen": "Command palette",
     "replyStop": "Stop the reply",
+    "sessionArchive": "Archive session",
     "sessionDelete": "Delete session",
     "sessionNew": "New session",
     "sessionPin": "Pin session",
     "sessionRename": "Rename session",
+    "sessionUnarchive": "Unarchive session",
     "sessionUnpin": "Unpin session",
     "settingsOpen": "Settings",
     "shortcutsShow": "Keyboard shortcuts",
@@ -72,6 +75,11 @@
       "action": "The old file was kept next to the new one as sessions.invalid-<date>.db, in Arden Code's local data folder.",
       "what": "Your saved sessions could not be read, so Arden Code started without them.",
       "why": "The sessions file was damaged, or it was made by a newer version of Arden Code."
+    },
+    "ARD-AGT-005": {
+      "action": "Unarchive the session to carry on with it, or start a linked session from it.",
+      "what": "This session is archived.",
+      "why": "An archived session is put away and kept as it was: it takes no new messages, names or pins."
     },
     "ARD-AGT-006": {
       "action": "Write a name of 1 to 100 characters, then save it again.",
@@ -276,15 +284,27 @@
   },
   "sessions": {
     "actions": {
+      "archive": "Archive",
       "delete": "Delete…",
       "pin": "Pin",
       "rename": "Rename…",
+      "unarchive": "Unarchive",
       "unpin": "Unpin"
     },
     "announce": {
       "done": "Reply finished.",
       "failed": "Reply failed.",
       "stopped": "Reply stopped."
+    },
+    "archived": {
+      "description": "Sessions you put away. Open one to read it, unarchive it to carry on with it, or delete it.",
+      "done": "Session archived",
+      "empty": "No archived sessions.",
+      "line": "{{project}} · Archived {{date}}",
+      "notice": "This session is archived.",
+      "title": "Archived sessions",
+      "unarchive": "Unarchive",
+      "undo": "Undo"
     },
     "context": "{{agent}} · {{project}}",
     "delete": {
@@ -581,6 +601,7 @@
     "tabsLabel": "Settings sections"
   },
   "sidebar": {
+    "archived": "Archived",
     "navigation": "Main navigation",
     "noSessions": "No sessions yet.",
     "pinned": "Pinned",
