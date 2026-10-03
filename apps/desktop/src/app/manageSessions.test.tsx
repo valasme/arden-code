@@ -337,3 +337,105 @@ describe("Pinning a session", () => {
     await expectNoAccessibilityViolations(document.body);
   });
 });
+
+/** Asks to delete a session from its row's menu. */
+async function deleteFromTheMenu(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(within(sidebar()).getByRole("button", { name: `Actions for ${name}` }));
+  await user.click(await shownItem(/Delete/));
+  return screen.findByRole("alertdialog", { name: "Delete this session?" });
+}
+
+describe("Deleting a session", () => {
+  it("asks first, then deletes it for good and goes to the welcome state when it was open", async () => {
+    const { rust, user } = await twoSessions();
+
+    const question = await deleteFromTheMenu(user, "Fix the build");
+    expect(question).toHaveTextContent(
+      "“Fix the build” and all of its messages will be deleted. This cannot be undone.",
+    );
+    await focusGoesTo(within(question).getByRole("button", { name: "Cancel" }));
+    await user.click(within(question).getByRole("button", { name: "Delete session" }));
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "What should the Demo agent work on?" }),
+    ).toBeVisible();
+    expect(rust.callsTo("delete_session")).toEqual([{ id: "session-1" }]);
+    expect(within(sidebar()).queryByRole("link", { name: "Fix the build" })).toBeNull();
+    expect(await screen.findByText("Session deleted")).toBeInTheDocument();
+  });
+
+  it("deletes nothing when the question is cancelled, or left with Esc", async () => {
+    const { rust, user } = await twoSessions();
+
+    const question = await deleteFromTheMenu(user, "Write the docs");
+    await user.click(within(question).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    await deleteFromTheMenu(user, "Write the docs");
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+
+    expect(rust.callsTo("delete_session")).toEqual([]);
+    expect(row("Write the docs")).toBeVisible();
+  });
+
+  it("asks to delete the session whose row has the focus with the Delete key, then moves the focus to the next row", async () => {
+    const { rust, user } = await twoSessions({ entry: "/" });
+    row("Write the docs").focus();
+
+    await user.keyboard("{Delete}");
+    const question = await screen.findByRole("alertdialog", { name: "Delete this session?" });
+    expect(question).toHaveTextContent("“Write the docs”");
+    await user.click(within(question).getByRole("button", { name: "Delete session" }));
+
+    await waitFor(() => {
+      expect(rust.callsTo("delete_session")).toEqual([{ id: "session-2" }]);
+    });
+    await focusGoesTo(row("Fix the build"));
+  });
+
+  it("moves the focus to the row before when the last row goes, and to New session when none is left", async () => {
+    const { user } = await twoSessions({ entry: "/" });
+    row("Fix the build").focus();
+
+    await user.keyboard("{Delete}");
+    await user.click(await screen.findByRole("button", { name: "Delete session" }));
+    await focusGoesTo(row("Write the docs"));
+
+    await user.keyboard("{Delete}");
+    await user.click(await screen.findByRole("button", { name: "Delete session" }));
+    await focusGoesTo(within(sidebar()).getByRole("button", { name: "New session" }));
+    expect(within(sidebar()).getByText("No sessions yet.")).toBeVisible();
+  });
+
+  it("leaves the Delete key alone in a text field", async () => {
+    const { rust, user } = await twoSessions();
+    await user.click(screen.getByRole("textbox", { name: "Message" }));
+    await user.keyboard("abc{ArrowLeft}{Delete}");
+
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue("ab");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(rust.callsTo("delete_session")).toEqual([]);
+  });
+
+  it("is in the command palette for the open session", async () => {
+    const { user } = await twoSessions();
+
+    await openPalette(user);
+    await user.click(screen.getByRole("option", { name: /Delete session/ }));
+
+    expect(
+      await screen.findByRole("alertdialog", { name: "Delete this session?" }),
+    ).toHaveTextContent("“Fix the build”");
+  });
+
+  it("has no accessibility violations while it asks", async () => {
+    const { user } = await twoSessions();
+    await animationsDone(await deleteFromTheMenu(user, "Fix the build"));
+
+    await expectNoAccessibilityViolations(document.body);
+  });
+});

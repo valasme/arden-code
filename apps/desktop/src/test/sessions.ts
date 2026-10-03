@@ -160,6 +160,12 @@ export function startSessionsRust({
           session.pinned = pinned;
           return null;
         }
+        case "delete_session": {
+          const { id } = withId.parse(payload);
+          sessions.splice(sessions.indexOf(find(id)), 1);
+          if (pins.includes(id)) pins.splice(pins.indexOf(id), 1);
+          return null;
+        }
         case "send_message": {
           const { sessionId, text, onEvent } = z
             .object({

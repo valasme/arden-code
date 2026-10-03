@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
@@ -23,6 +24,7 @@ const items = {
   rename: { labelKey: "sessions.actions.rename", command: "session.rename" },
   pin: { labelKey: "sessions.actions.pin", command: "session.pin" },
   unpin: { labelKey: "sessions.actions.unpin", command: "session.unpin" },
+  delete: { labelKey: "sessions.actions.delete", command: "session.delete" },
 } as const satisfies Record<SessionAction, { labelKey: string; command: CommandId }>;
 
 function SessionMenuItem({
@@ -36,17 +38,27 @@ function SessionMenuItem({
   const { labelKey, command } = items[action];
   const { icon: Icon } = definitionOf(command);
   const [shortcut] = useShortcutsOf(command);
+  // Deleting cannot be undone: it stands apart, in the color of destructive actions.
+  const destructive = action === "delete";
 
   return (
-    <DropdownMenuItem
-      onSelect={() => {
-        onChoose(action);
-      }}
-    >
-      <Icon aria-hidden className="size-4 text-muted-foreground" strokeWidth={1.5} />
-      {t(labelKey)}
-      {shortcut ? <Kbd className="ms-auto">{formatShortcut(shortcut)}</Kbd> : null}
-    </DropdownMenuItem>
+    <>
+      {destructive ? <DropdownMenuSeparator /> : null}
+      <DropdownMenuItem
+        variant={destructive ? "destructive" : "default"}
+        onSelect={() => {
+          onChoose(action);
+        }}
+      >
+        <Icon
+          aria-hidden
+          className={destructive ? "size-4" : "size-4 text-muted-foreground"}
+          strokeWidth={1.5}
+        />
+        {t(labelKey)}
+        {shortcut ? <Kbd className="ms-auto">{formatShortcut(shortcut)}</Kbd> : null}
+      </DropdownMenuItem>
+    </>
   );
 }
 

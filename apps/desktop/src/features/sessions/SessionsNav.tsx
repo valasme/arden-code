@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useRowFocusStore } from "@/state/rowFocus";
 
 import { SessionMenu } from "./SessionMenu";
+import { useSessionActions } from "./useSessionActions";
 
 /**
  * A session in the sidebar: a link that opens it, and at its end the button of its menu (ADR 0036).
@@ -24,6 +25,7 @@ function SessionRow({ session }: { session: SessionSummary }) {
   const { t } = useTranslation();
   const title = session.title ?? t("sessions.untitled");
   const link = useRef<HTMLAnchorElement>(null);
+  const runAction = useSessionActions();
 
   // The row takes the focus that was asked for it, once it stands in the list it was asked for: the
   // row a pin moved away from is not this one.
@@ -42,6 +44,13 @@ function SessionRow({ session }: { session: SessionSummary }) {
         to="/session/$id"
         params={{ id: session.id }}
         className={cn(sidebarRow, "pe-8")}
+        // Delete asks to delete the session, as it does for a file in File Explorer.
+        onKeyDown={(event) => {
+          const plain = !(event.ctrlKey || event.altKey || event.shiftKey || event.metaKey);
+          if (event.key !== "Delete" || !plain) return;
+          event.preventDefault();
+          runAction("delete", session.id, true);
+        }}
       >
         <span className="truncate">{title}</span>
       </Link>
@@ -77,6 +86,7 @@ export function SessionsNav() {
       <CommandTooltip command="session.new">
         <button
           type="button"
+          data-new-session
           className={sidebarRow}
           onClick={() => {
             run("session.new");

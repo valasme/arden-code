@@ -364,6 +364,15 @@ export const commands = {
 	 */
 	setSessionPinned: (id: string, pinned: boolean) => __TAURI_INVOKE<null>("set_session_pinned", { id, pinned }),
 	/**
+	 *  Deletes a session for good, after the person confirmed it (ADR 0036). A reply that is still
+	 *  running stops.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or the file cannot be written.
+	 */
+	deleteSession: (id: string) => __TAURI_INVOKE<null>("delete_session", { id }),
+	/**
 	 *  Starts an empty Demo agent session in the Playground.
 	 * 
 	 *  # Errors

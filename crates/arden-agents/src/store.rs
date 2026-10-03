@@ -463,6 +463,38 @@ impl SessionStore {
         Ok(())
     }
 
+    /// Deletes a session for good (ADR 0036): from the list, and from the file, where its text is
+    /// overwritten. A reply that is still running stops at its driver's next event.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotSaved`] when the file cannot be written, in which case nothing is deleted.
+    pub fn delete(&self, session_id: &str) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let position = inner
+            .sessions
+            .iter()
+            .position(|entry| entry.session.id == session_id)
+            .ok_or(StoreError::UnknownSession)?;
+        let forget = inner.last_open.as_deref() == Some(session_id);
+        let last_id = inner.last_id;
+        inner
+            .database
+            .delete_session(session_id, forget, last_id)
+            .map_err(not_saved)?;
+        let entry = inner.sessions.remove(position);
+        for turn in &entry.session.turns {
+            if turn.status == TurnStatus::Running {
+                inner.stopping.insert(turn.id.clone());
+            }
+        }
+        if forget {
+            inner.last_open = None;
+        }
+        Ok(())
+    }
+
     /// Starts an empty session in a project.
     ///
     /// # Errors
@@ -1535,6 +1567,110 @@ mod tests {
             ids(&store_in(&file).list().pinned),
             vec![third.as_str(), first.as_str()]
         );
+    }
+
+    #[test]
+    fn a_deleted_session_is_gone_from_the_list_and_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let kept = {
+            let store = store_in(&file);
+            let [first, second, third] = three_sessions(&store);
+            store.set_pinned(&third, true).expect("pinned");
+
+            store.delete(&second).expect("deleted");
+            store.delete(&third).expect("deleted");
+
+            assert_eq!(
+                ids(&store.list().projects[0].sessions),
+                vec![first.as_str()]
+            );
+            assert!(store.list().pinned.is_empty());
+            assert_eq!(store.session(&second), Err(StoreError::UnknownSession));
+            assert_eq!(store.delete(&second), Err(StoreError::UnknownSession));
+            first
+        };
+
+        let store = store_in(&file);
+        assert_eq!(ids(&store.list().projects[0].sessions), vec![kept.as_str()]);
+        assert!(store.list().pinned.is_empty());
+    }
+
+    #[test]
+    fn the_text_of_a_deleted_session_does_not_stay_in_the_file() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let secret = "a note only this session ever held";
+        let in_the_files = || {
+            ["", "-wal"].iter().any(|ending| {
+                let mut path = file.clone().into_os_string();
+                path.push(ending);
+                std::fs::read(&path).is_ok_and(|bytes| {
+                    bytes
+                        .windows(secret.len())
+                        .any(|window| window == secret.as_bytes())
+                })
+            })
+        };
+        let store = store_in(&file);
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        let turn = store.start_turn(&session.id, secret).expect("a turn");
+        store
+            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| true)
+            .expect("saved");
+        assert!(in_the_files(), "the text was written");
+
+        store.delete(&session.id).expect("deleted");
+
+        assert!(!in_the_files(), "the text was overwritten");
+    }
+
+    #[test]
+    fn deleting_a_session_stops_its_reply() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        let turn = store.start_turn(&session.id, "hello").expect("a turn");
+
+        let mut heard = Vec::new();
+        let saved = store.stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
+            heard.push(event.clone());
+            if heard.len() == 2 {
+                store.delete(&session.id).expect("deleted");
+            }
+            true
+        });
+
+        assert_eq!(saved, Ok(()));
+        assert_eq!(
+            heard.len(),
+            3,
+            "the reply stopped at the next event: {heard:?}"
+        );
+        assert!(matches!(heard.last(), Some(TurnEvent::Stopped { .. })));
+        assert!(store.list().projects[0].sessions.is_empty());
+    }
+
+    #[test]
+    fn a_deleted_session_is_not_remembered_as_the_last_one_opened() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            store.remember_open(&session.id).expect("remembered");
+
+            store.delete(&session.id).expect("deleted");
+
+            assert_eq!(store.last_open(), None);
+        }
+
+        assert_eq!(store_in(&file).last_open(), None);
     }
 
     #[test]

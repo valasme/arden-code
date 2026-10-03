@@ -23,6 +23,7 @@
     "navigateForward": "Forward",
     "paletteOpen": "Command palette",
     "replyStop": "Stop the reply",
+    "sessionDelete": "Delete session",
     "sessionNew": "New session",
     "sessionPin": "Pin session",
     "sessionRename": "Rename session",
@@ -275,6 +276,7 @@
   },
   "sessions": {
     "actions": {
+      "delete": "Delete…",
       "pin": "Pin",
       "rename": "Rename…",
       "unpin": "Unpin"
@@ -285,6 +287,12 @@
       "stopped": "Reply stopped."
     },
     "context": "{{agent}} · {{project}}",
+    "delete": {
+      "confirm": "Delete session",
+      "description": "“{{title}}” and all of its messages will be deleted. This cannot be undone.",
+      "title": "Delete this session?"
+    },
+    "deleted": "Session deleted",
     "demoAgent": "Demo agent",
     "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
     "jumpToLatest": "Jump to latest",

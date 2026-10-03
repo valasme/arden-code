@@ -169,6 +169,20 @@ pub fn set_session_pinned(
     sessions.set_pinned(&id, pinned).map_err(app_error)
 }
 
+/// Deletes a session for good, after the person confirmed it (ADR 0036). A reply that is still
+/// running stops.
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, or the file cannot be written.
+#[tauri::command]
+#[specta::specta]
+pub fn delete_session(id: String, sessions: State<'_, Sessions>) -> Result<(), AppError> {
+    sessions.delete(&id).map_err(app_error)?;
+    tracing::info!(session = %id, "session deleted");
+    Ok(())
+}
+
 /// Stops the reply that is running in a session. The turn ends as stopped, and the reply's channel
 /// is told.
 ///

@@ -143,6 +143,7 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
       "session.rename": sessionCommand("rename"),
       "session.pin": sessionCommand("pin"),
       "session.unpin": sessionCommand("unpin"),
+      "session.delete": sessionCommand("delete"),
       "settings.open": {
         run: () => void navigate({ to: "/settings/$tab", params: { tab: "general" } }),
       },

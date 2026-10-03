@@ -16,6 +16,7 @@ import {
   SettingsIcon,
   SquareIcon,
   SquarePenIcon,
+  Trash2Icon,
   TextCursorInputIcon,
   ZoomInIcon,
   ZoomOutIcon,
@@ -30,6 +31,7 @@ export type CommandId =
   | "session.rename"
   | "session.pin"
   | "session.unpin"
+  | "session.delete"
   | "settings.open"
   | "sidebar.toggle"
   | "inspector.toggle"
@@ -60,6 +62,7 @@ export interface CommandDefinition {
     | "commands.sessionRename"
     | "commands.sessionPin"
     | "commands.sessionUnpin"
+    | "commands.sessionDelete"
     | "commands.settingsOpen"
     | "commands.sidebarToggle"
     | "commands.inspectorToggle"
@@ -129,6 +132,13 @@ export const commandDefinitions = [
     group: "session",
     labelKey: "commands.sessionUnpin",
     icon: PinOffIcon,
+    shortcuts: [],
+  },
+  {
+    id: "session.delete",
+    group: "session",
+    labelKey: "commands.sessionDelete",
+    icon: Trash2Icon,
     shortcuts: [],
   },
   {

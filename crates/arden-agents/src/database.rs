@@ -404,6 +404,31 @@ impl Database {
         })
     }
 
+    /// Deletes a session and its turns, and forgets it as the session opened last when
+    /// `forget_last_open` says it was. What they held is overwritten in the file (`secure_delete`),
+    /// and the log of changes is folded into the file and emptied, so no earlier copy of it stays.
+    ///
+    /// # Errors
+    ///
+    /// When the file cannot be written.
+    pub fn delete_session(
+        &mut self,
+        session_id: &str,
+        forget_last_open: bool,
+        last_id: u64,
+    ) -> Result<(), DatabaseError> {
+        self.write(last_id, |transaction| {
+            transaction.execute("DELETE FROM sessions WHERE id = ?1", [session_id])?;
+            if forget_last_open {
+                transaction.execute("DELETE FROM meta WHERE key = 'last_open'", [])?;
+            }
+            Ok(())
+        })?;
+        self.connection
+            .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?;
+        Ok(())
+    }
+
     /// Writes a project that was opened, at its place in the list.
     ///
     /// # Errors
