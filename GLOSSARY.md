@@ -11,8 +11,12 @@ A folder on the user's disk that agents work in.
 _Avoid_: workspace, repo, directory
 
 **Playground**:
-The built-in project, a folder Arden Code creates for itself, that holds Demo agent sessions.
+The built-in project, a folder Arden Code creates for itself, for sessions that need no folder of the user's, such as Demo agent sessions.
 _Avoid_: sandbox, demo project
+
+**Trusted project**:
+A project the user has agreed to let agents work in together with the setup the project brings along, such as its own hooks and servers.
+_Avoid_: safe project, approved folder
 
 **Session**:
 An ongoing exchange of turns between the user and one agent, inside one project.
@@ -35,7 +39,7 @@ One message from the user together with the agent's reply to it, whether the rep
 _Avoid_: exchange, round
 
 **Item**:
-One piece of an agent's reply within a turn: text, thinking, a tool call, a file change, an error or a status marker.
+One piece of an agent's reply within a turn: text, thinking, a tool call, a file change, an approval request, a question, an error or a status marker.
 _Avoid_: event, chunk, block
 
 **Tool call**:
@@ -49,10 +53,14 @@ _Avoid_: diff, patch
 A point where an agent pauses and asks the user to allow or deny an action.
 _Avoid_: permission prompt, confirmation
 
+**Question**:
+A point where an agent pauses and asks the user to choose among answers it offers.
+_Avoid_: prompt, clarification, elicitation
+
 ### Agents
 
 **Agent**:
-A coding assistant that works in a session: Claude Code, Codex, or the built-in Demo agent.
+A coding assistant that works in a session: Claude, Codex, or the built-in Demo agent.
 _Avoid_: model, bot, AI, assistant
 
 **Demo agent**:
@@ -60,11 +68,11 @@ The built-in agent that produces realistic but fake replies, used before real ag
 _Avoid_: mock agent, fake agent
 
 **Vendor**:
-The company behind an agent: Anthropic for Claude Code, OpenAI for Codex.
+The company behind an agent: Anthropic for Claude, OpenAI for Codex.
 _Avoid_: provider
 
 **Agent CLI**:
-A vendor's own command-line program (`claude` or `codex`) through which Arden Code runs that agent. It owns the user's sign-in.
+A vendor's own command-line program through which Arden Code runs an agent: Claude Code (`claude`) for Claude, Codex (`codex`) for Codex. It owns the user's sign-in.
 _Avoid_: SDK, backend
 
 **Raw mode**:
