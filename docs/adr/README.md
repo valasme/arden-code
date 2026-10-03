@@ -44,3 +44,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0034](0034-the-logo-and-the-window-menu.md) | The logo and the window menu, apart | Accepted |
 | [0035](0035-saving-sessions.md) | Saving sessions | Accepted |
 | [0036](0036-managing-sessions.md) | Managing sessions | Accepted |
+| [0037](0037-the-window-buttons-keep-the-arrow.md) | The window buttons keep the arrow | Accepted |

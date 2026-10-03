@@ -241,7 +241,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 
 - **Panes:** the sidebar and the inspector can be collapsed and resized. Their sizes are remembered.
 - **Layout controls** ([ADR 0033](adr/0033-layout-controls-in-the-title-bar.md)): toggles for the sidebar, the inspector and the status bar sit in the title bar, as in VS Code, so they are on screen whatever is hidden. The status bar only says things.
-- **The look** ([ADR 0032](adr/0032-the-redesign.md)): a quiet frame in the spirit of Linear, the session view in the spirit of Claude Desktop. New session is the sidebar's first row and Settings its last, each with its shortcut; each project is a small label over its sessions. Every enabled control shows the pointer cursor, the window buttons included.
+- **The look** ([ADR 0032](adr/0032-the-redesign.md)): a quiet frame in the spirit of Linear, the session view in the spirit of Claude Desktop. New session is the sidebar's first row and Settings its last, each with its shortcut; each project is a small label over its sessions. Every enabled control shows the pointer cursor, except the window buttons, which keep the arrow as Windows' own do ([ADR 0037](adr/0037-the-window-buttons-keep-the-arrow.md)).
 - **No white flash:** the window starts hidden, with its background already in the current theme. It appears after the first frame is drawn.
 - **Window memory:** size, position, monitor and maximized state are restored. A position that would now be off-screen is corrected.
 - **Smallest size:** 500 × 560 px. Windows asks for 500 px or less, or the window does not fit the zones of Snap Layouts; the sidebar and the session view at their smallest fit in it.
@@ -499,7 +499,7 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
 
 - **Focus:** shown for keyboard focus only (`:focus-visible`), as a 1px `--ring` outline with a 1px offset. No glow, no animation. Mouse clicks never show a ring.
 - **Motion:** short fades and slides (120–160 ms), for overlays only. All motion stops when Windows "Animation effects" is off or Reduce motion is on. Nothing behind an overlay is blurred; its scrim is a flat tint.
-- **Cursor:** every enabled button, link and control shows the pointer.
+- **Cursor:** every enabled button, link and control shows the pointer, except the window buttons (Minimize, Maximize or Restore, Close), which keep the arrow (ADR 0037).
 - **Density:** the Lyra style, tuned toward compact. The minimum pointer target is 24×24 px.
 
 ### 7.5 Icons

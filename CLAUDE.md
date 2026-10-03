@@ -2,6 +2,13 @@
 
 A Windows 11 desktop cockpit for Claude Code and Codex, built on Tauri 2 and React. Pre-alpha: the app foundation is built (merged in #29); work continues issue by issue.
 
+## The rule above all: `main` is never red
+
+- Never push to `main`. Every change arrives by pull request.
+- Merge only when CI passed on the pull request's latest commit, on a branch up to date with `main`. Branch protection enforces both.
+- A test that fails sometimes is a failing test. Run a new or changed end-to-end or screenshot test 10 times (Playwright's `--repeat-each 10`) before merging.
+- If `main` turns red anyway, stop: fixing it, or reverting the change that broke it, comes before any other work.
+
 ## Sources of truth
 
 - `GLOSSARY.md`: the project's language. Name code, tickets, commits and UI copy with its terms.
