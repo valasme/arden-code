@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
 import { z } from "zod";
 
+import { noSessions } from "@/ipc/queries";
 import type { Session, TurnEvent } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
@@ -23,6 +24,10 @@ function longSession(count: number): Session {
     agent: "demo",
     title: "A long session",
     createdAt: "2026-09-30T14:05:09Z",
+    updatedAt: "2026-09-30T14:05:10Z",
+    pinned: false,
+    archivedAt: null,
+    linkedFrom: null,
     turns: Array.from({ length: count }, (_, index) => ({
       id: `turn-${index + 1}`,
       prompt: `Message number ${index + 1}`,
@@ -47,7 +52,7 @@ function startRust(session: Session) {
     (command, payload) => {
       if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
       if (command === "get_settings") return settingsWith();
-      if (command === "list_projects") return [];
+      if (command === "list_sessions") return noSessions;
       if (command === "get_session") return structuredClone(session);
       if (command === "send_message") {
         const { text, onEvent } = z

@@ -5,7 +5,7 @@ import { defaultSettings } from "@/ipc/defaults.gen";
 
 import { fallbackSystemPreferences } from "@/features/settings/systemPreferences";
 
-import { commands, type UpdateStatus } from "./bindings";
+import { commands, type SessionList, type UpdateStatus } from "./bindings";
 
 /** The product name and version. They never change while the app runs. */
 export const appInfoQuery = queryOptions({
@@ -53,10 +53,16 @@ export const pendingCrashesQuery = queryOptions({
   staleTime: Number.POSITIVE_INFINITY,
 });
 
-/** The projects and their sessions. Refetched after a session is made or gets its title. */
-export const projectsQuery = queryOptions({
-  queryKey: ["projects"],
-  queryFn: () => (isTauri() ? commands.listProjects() : []),
+/** The sessions as the sidebar lists them, before Rust has said, or where there is no Rust. */
+export const noSessions: SessionList = { pinned: [], projects: [], archived: [] };
+
+/**
+ * The projects and their sessions, in the order the sidebar lists them. Read again after anything
+ * changes a session: one is made, gets its title, or has a message sent.
+ */
+export const sessionListQuery = queryOptions({
+  queryKey: ["sessions"],
+  queryFn: () => (isTauri() ? commands.listSessions() : noSessions),
   staleTime: Number.POSITIVE_INFINITY,
 });
 

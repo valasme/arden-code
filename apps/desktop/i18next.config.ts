@@ -28,6 +28,7 @@ export default defineConfig({
       "commands.*",
       "items.*",
       "sessions.announce.*",
+      "sessions.actions.*",
       "settings.agents.names.*",
     ],
   },

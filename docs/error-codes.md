@@ -28,6 +28,10 @@ do), and add a row here. Never reuse or renumber a code.
 | `ARD-LOG-002` | The diagnostics bundle could not be written | Settings → Advanced → Export diagnostics; after a crash |
 | `ARD-AGT-001` | A session or project does not exist any more | Sending a message, or opening a session |
 | `ARD-AGT-002` | A message was sent while the agent was still answering the last one | Sending a message |
+| `ARD-AGT-003` | The sessions could not be saved, so they last only until Arden Code closes | Starting the app; anything that changes a session |
+| `ARD-AGT-004` | The saved sessions could not be read, so Arden Code started without them | Starting the app; opening a session |
+| `ARD-AGT-005` | The session is archived, so it takes no message, name or pin until it is unarchived | Sending a message, renaming or pinning an archived session |
+| `ARD-AGT-006` | A name given to a session is empty or too long | Renaming a session |
 | `ARD-PROC-001` | Programs cannot be started and supervised on this computer | Settings → Agents; starting an agent |
 | `ARD-UPD-001` | The update could not be installed | Choosing "Update ready: restart" |
 | `ARD-WIN-001` | Windows' window menu could not be opened | The title bar's Window menu button and Alt+Space |

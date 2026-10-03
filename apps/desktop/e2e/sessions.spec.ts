@@ -1,8 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { Locator, Page } from "@playwright/test";
+import { z } from "zod";
 
 import { expect, launchApp, openDevPage, test } from "./fixtures";
 
@@ -89,6 +91,159 @@ test.describe("sessions in the real app", () => {
       await expect(session.getByText(/^first\nsecond$/).first()).toBeVisible();
     } finally {
       app.kill();
+    }
+  });
+});
+
+test.describe("sessions kept between starts in the real app", () => {
+  test("a session and its reply are there after the app is closed and started again", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-sessions-"));
+    try {
+      const first = await launchApp({ dataDir });
+      try {
+        await untilTheReplyEnds(await ask(first.page, "Keep this session"));
+        expect(existsSync(path.join(dataDir, "local", "sessions.db"))).toBe(true);
+      } finally {
+        await first.close();
+      }
+
+      const second = await launchApp({ dataDir });
+      try {
+        const sidebar = second.page.getByRole("complementary", { name: "Sidebar" });
+        await sidebar.getByRole("link", { name: "Keep this session" }).click();
+        const session = second.page.getByRole("main", { name: "Session" });
+        await expect(
+          second.page.getByRole("heading", { level: 1, name: "Keep this session" }),
+        ).toBeVisible();
+        // The person's message comes first; the Demo agent's reply quotes it.
+        await expect(session.getByText("Keep this session", { exact: true }).first()).toBeVisible();
+        await expect(session.getByText(/shows how an unusual link asks first/)).toBeVisible();
+      } finally {
+        second.kill();
+      }
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("the session open last time opens again at the next start, unless the person starts fresh", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-restore-"));
+    const onStartup = () =>
+      z
+        .object({ general: z.object({ onStartup: z.string() }) })
+        .parse(JSON.parse(readFileSync(path.join(dataDir, "config", "settings.json"), "utf8")))
+        .general.onStartup;
+    try {
+      const first = await launchApp({ dataDir });
+      try {
+        await untilTheReplyEnds(await ask(first.page, "Open me again"));
+      } finally {
+        await first.close();
+      }
+
+      const second = await launchApp({ dataDir });
+      try {
+        await expect(
+          second.page.getByRole("heading", { level: 1, name: "Open me again" }),
+        ).toBeVisible();
+        await second.page.keyboard.press("Control+,");
+        await second.page.getByRole("radio", { name: "Start fresh" }).click();
+        await expect.poll(onStartup).toBe("fresh");
+      } finally {
+        await second.close();
+      }
+
+      const third = await launchApp({ dataDir });
+      try {
+        await expect(
+          third.page.getByRole("heading", {
+            level: 1,
+            name: "What should the Demo agent work on?",
+          }),
+        ).toBeVisible();
+        // The session is still there, only not opened.
+        await expect(third.page.getByRole("link", { name: "Open me again" })).toBeVisible();
+      } finally {
+        third.kill();
+      }
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("an archived session stays archived after a restart, and comes back from the archived sessions page", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-archive-"));
+    try {
+      const first = await launchApp({ dataDir });
+      try {
+        await untilTheReplyEnds(await ask(first.page, "Put this away"));
+        await first.page.getByRole("button", { name: "Session actions" }).click();
+        await first.page.getByRole("menuitem", { name: /^Archive/ }).click();
+        await expect(first.page.getByText("This session is archived.")).toBeVisible();
+      } finally {
+        await first.close();
+      }
+
+      const second = await launchApp({ dataDir });
+      try {
+        // An archived session is not opened again at start.
+        await expect(
+          second.page.getByRole("heading", {
+            level: 1,
+            name: "What should the Demo agent work on?",
+          }),
+        ).toBeVisible();
+        const sidebar = second.page.getByRole("complementary", { name: "Sidebar" });
+        await sidebar.getByRole("link", { name: /Archived/ }).click();
+        await expect(second.page.getByRole("link", { name: "Put this away" })).toBeVisible();
+        await second.page.getByRole("button", { name: "Unarchive" }).click();
+
+        await expect(second.page.getByText("No archived sessions.")).toBeVisible();
+        await expect(sidebar.getByRole("link", { name: "Put this away" })).toBeVisible();
+      } finally {
+        second.kill();
+      }
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("Ctrl+Shift+N starts a linked session, and the links lead both ways, also after a restart", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-link-"));
+    try {
+      const first = await launchApp({ dataDir });
+      try {
+        await untilTheReplyEnds(await ask(first.page, "The first part"));
+
+        await first.page.keyboard.press("Control+Shift+N");
+
+        const links = first.page.getByRole("navigation", { name: "Linked sessions" });
+        await expect(links).toHaveText(/Linked from\s*The first part/u);
+        await expect(first.page.getByRole("textbox", { name: "Message" })).toBeFocused();
+        await first.page.getByRole("textbox", { name: "Message" }).fill("The second part");
+        await first.page.getByRole("textbox", { name: "Message" }).press("Enter");
+        await expect(
+          first.page.getByRole("heading", { level: 1, name: "The second part" }),
+        ).toBeVisible();
+      } finally {
+        await first.close();
+      }
+
+      const second = await launchApp({ dataDir });
+      try {
+        // The linked session was the last one open.
+        const links = second.page.getByRole("navigation", { name: "Linked sessions" });
+        await links.getByRole("link", { name: "The first part" }).click();
+
+        await expect(
+          second.page.getByRole("heading", { level: 1, name: "The first part" }),
+        ).toBeVisible();
+        await expect(links).toHaveText(/Linked to\s*The second part/u);
+      } finally {
+        second.kill();
+      }
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
     }
   });
 });

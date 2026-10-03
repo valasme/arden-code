@@ -1,6 +1,6 @@
 # 0016. Chat placeholder and Demo agent
 
-- Status: Accepted
+- Status: Accepted; the part on storage is superseded by [0035](0035-saving-sessions.md)
 - Date: 2026-09-29
 
 ## Context

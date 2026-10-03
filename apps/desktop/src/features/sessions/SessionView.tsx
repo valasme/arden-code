@@ -1,17 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDownIcon } from "lucide-react";
+import { ArrowDownIcon, EllipsisIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
-import { projectsQuery, sessionQuery } from "@/ipc/queries";
+import { commands } from "@/ipc/bindings";
+import { noSessions, sessionListQuery, sessionQuery } from "@/ipc/queries";
 import { toAppError } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 import { useRepliesStore } from "@/state/replies";
 
+import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
+import { SessionLinks } from "./SessionLinks";
+import { SessionMenu } from "./SessionMenu";
 import { TurnView } from "./TurnView";
 import { useSendMessage } from "./useSendMessage";
 
@@ -32,7 +37,7 @@ export function SessionView({ id }: { id: string }) {
   const { t } = useTranslation();
   const { run } = useCommands();
   const { data: session, error } = useQuery(sessionQuery(id));
-  const { data: projects = [] } = useQuery(projectsQuery);
+  const { data: list = noSessions } = useQuery(sessionListQuery);
   const send = useSendMessage();
   const transcript = useRef<HTMLElement>(null);
   const stuck = useRef(true);
@@ -70,8 +75,18 @@ export function SessionView({ id }: { id: string }) {
     if (count > 0) virtualizer.scrollToIndex(count - 1, { align: "end" });
   };
 
-  // A session opens at its end.
   const loaded = session !== undefined;
+
+  // The session opens again at the next start, when the person asked for that (ADR 0036).
+  useEffect(() => {
+    if (!loaded) return;
+    commands.rememberOpenSession(id).catch((failure: unknown) => {
+      const { code } = toAppError(failure);
+      logger.warn("sessions", "the open session could not be remembered", code);
+    });
+  }, [id, loaded]);
+
+  // A session opens at its end.
   useEffect(() => {
     if (loaded && count > 0) virtualizer.scrollToIndex(count - 1, { align: "end" });
     // Only when the session has arrived: after that the effect below follows the reply.
@@ -109,7 +124,9 @@ export function SessionView({ id }: { id: string }) {
   }
   if (!session) return null;
 
-  const project = projects.find((listing) => listing.project.id === session.projectId)?.project;
+  const project = list.projects.find(
+    (listing) => listing.project.id === session.projectId,
+  )?.project;
   const context = t("sessions.context", {
     agent: t("sessions.demoAgent"),
     project:
@@ -127,7 +144,18 @@ export function SessionView({ id }: { id: string }) {
         <span className="shrink-0 border border-border px-1.5 text-2xs leading-4 text-muted-foreground">
           {t("sessions.demoAgent")}
         </span>
+        <SessionMenu sessionId={id}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="ms-auto"
+            aria-label={t("sessions.menu.open")}
+          >
+            <EllipsisIcon aria-hidden className="size-4" strokeWidth={1.5} />
+          </Button>
+        </SessionMenu>
       </header>
+      <SessionLinks session={session} />
       <div className="relative min-h-0 flex-1">
         <main
           ref={transcript}
@@ -192,19 +220,23 @@ export function SessionView({ id }: { id: string }) {
         )}
       </div>
       <ReplyAnnouncer turn={lastTurn} />
-      <MessageBox
-        busy={busy}
-        context={context}
-        onStop={() => {
-          run("reply.stop");
-        }}
-        onSend={(text) => {
-          stuck.current = true;
-          setAtEnd(true);
-          void send(id, text);
-          return true;
-        }}
-      />
+      {session.archivedAt === null ? (
+        <MessageBox
+          busy={busy}
+          context={context}
+          onStop={() => {
+            run("reply.stop");
+          }}
+          onSend={(text) => {
+            stuck.current = true;
+            setAtEnd(true);
+            void send(id, text);
+            return true;
+          }}
+        />
+      ) : (
+        <ArchivedBar sessionId={id} />
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 
+import { noSessions } from "@/ipc/queries";
 import { Toaster } from "@/components/Toaster";
 import type { AppError } from "@/ipc/bindings";
 import { showErrorToast } from "@/lib/errorToasts";
@@ -75,7 +76,7 @@ function startFailing(failing: string, error: unknown) {
     (command) => {
       if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
       if (command === "get_settings") return settingsWith();
-      if (command === "list_projects") return [];
+      if (command === "list_sessions") return noSessions;
       if (command === "plugin:window|is_fullscreen") return false;
       if (command === failing) throw error;
       return null;

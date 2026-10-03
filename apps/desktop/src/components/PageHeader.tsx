@@ -6,13 +6,20 @@ interface PageHeaderProps {
   description?: string;
   /** Moves the focus to the title when the page opens, as an error screen does. */
   focusOnOpen?: boolean;
+  /** Lets the page give the title the focus, as when what had the focus goes away. */
+  focusable?: boolean;
 }
 
 /**
  * The top of a page (ADR 0032): Settings, the log viewer and the error screens share it, a 20px
  * title over a muted line.
  */
-export function PageHeader({ title, description, focusOnOpen = false }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  description,
+  focusOnOpen = false,
+  focusable = false,
+}: PageHeaderProps) {
   const heading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -23,7 +30,7 @@ export function PageHeader({ title, description, focusOnOpen = false }: PageHead
     <div className="mb-6 flex flex-col gap-1">
       <h1
         ref={heading}
-        {...(focusOnOpen ? { tabIndex: -1 } : {})}
+        {...(focusOnOpen || focusable ? { tabIndex: -1 } : {})}
         className="text-xl font-semibold text-balance outline-none"
       >
         {title}

@@ -3,6 +3,7 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { render, screen } from "@testing-library/react";
 import { z } from "zod";
 
+import { noSessions } from "@/ipc/queries";
 import type { Settings } from "@/ipc/bindings";
 import { settingsWith } from "@/test/settings";
 
@@ -26,7 +27,7 @@ function startRust() {
   mockIPC(
     (command, payload) => {
       if (command === "app_info") return { name: "Arden Code", version: "0.1.0" };
-      if (command === "list_projects") return [];
+      if (command === "list_sessions") return noSessions;
       if (command === "get_settings") return current;
       if (command === "get_system_preferences") return { textScalePercent: 100, locale: "en-US" };
       if (command === "change_setting") {

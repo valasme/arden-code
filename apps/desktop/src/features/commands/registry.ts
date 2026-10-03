@@ -1,18 +1,25 @@
 import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
   CommandIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
   KeyboardIcon,
+  LinkIcon,
   MaximizeIcon,
   PanelBottomIcon,
   PanelLeftIcon,
   PanelRightIcon,
+  PencilIcon,
+  PinIcon,
+  PinOffIcon,
   RotateCcwIcon,
   SettingsIcon,
   SquareIcon,
   SquarePenIcon,
+  Trash2Icon,
   TextCursorInputIcon,
   ZoomInIcon,
   ZoomOutIcon,
@@ -23,7 +30,15 @@ import {
 export type CommandId =
   | "palette.open"
   | "session.new"
+  | "session.newLinked"
   | "reply.stop"
+  | "session.rename"
+  | "session.pin"
+  | "session.unpin"
+  | "session.archive"
+  | "session.unarchive"
+  | "session.delete"
+  | "archived.open"
   | "settings.open"
   | "sidebar.toggle"
   | "inspector.toggle"
@@ -50,7 +65,15 @@ export interface CommandDefinition {
   labelKey:
     | "commands.paletteOpen"
     | "commands.sessionNew"
+    | "commands.sessionNewLinked"
     | "commands.replyStop"
+    | "commands.sessionRename"
+    | "commands.sessionPin"
+    | "commands.sessionUnpin"
+    | "commands.sessionArchive"
+    | "commands.sessionUnarchive"
+    | "commands.sessionDelete"
+    | "commands.archivedOpen"
     | "commands.settingsOpen"
     | "commands.sidebarToggle"
     | "commands.inspectorToggle"
@@ -95,11 +118,67 @@ export const commandDefinitions = [
     shortcuts: ["Ctrl+N"],
   },
   {
+    id: "session.newLinked",
+    group: "session",
+    labelKey: "commands.sessionNewLinked",
+    icon: LinkIcon,
+    shortcuts: ["Ctrl+Shift+N"],
+  },
+  {
     id: "reply.stop",
     group: "session",
     labelKey: "commands.replyStop",
     icon: SquareIcon,
     shortcuts: ["Escape"],
+  },
+  {
+    id: "session.rename",
+    group: "session",
+    labelKey: "commands.sessionRename",
+    icon: PencilIcon,
+    shortcuts: ["F2"],
+  },
+  {
+    id: "session.pin",
+    group: "session",
+    labelKey: "commands.sessionPin",
+    icon: PinIcon,
+    shortcuts: [],
+  },
+  {
+    id: "session.unpin",
+    group: "session",
+    labelKey: "commands.sessionUnpin",
+    icon: PinOffIcon,
+    shortcuts: [],
+  },
+  {
+    id: "session.archive",
+    group: "session",
+    labelKey: "commands.sessionArchive",
+    icon: ArchiveIcon,
+    shortcuts: [],
+  },
+  {
+    id: "session.unarchive",
+    group: "session",
+    labelKey: "commands.sessionUnarchive",
+    icon: ArchiveRestoreIcon,
+    shortcuts: [],
+  },
+  {
+    id: "session.delete",
+    group: "session",
+    labelKey: "commands.sessionDelete",
+    icon: Trash2Icon,
+    shortcuts: [],
+  },
+  {
+    id: "archived.open",
+    group: "goTo",
+    labelKey: "commands.archivedOpen",
+    icon: ArchiveIcon,
+    shortcuts: [],
   },
   {
     id: "settings.open",

@@ -8,13 +8,13 @@ use crate::APP_IDENTIFIER;
 /// automated tests, so they never touch a real user's settings, and for portable setups.
 pub const DATA_DIR_VARIABLE: &str = "ARDEN_CODE_DATA_DIR";
 
-/// The folders for the app's files: settings live in `config`, logs, crash reports and caches in
-/// `local`. Nothing is created until something is written.
+/// The folders for the app's files: settings live in `config`; sessions, logs, crash reports and
+/// caches in `local`. Nothing is created until something is written.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppPaths {
     /// `%APPDATA%\io.github.valasme.arden`: settings and other files that follow the user.
     pub config: PathBuf,
-    /// `%LOCALAPPDATA%\io.github.valasme.arden`: logs, crash reports and caches.
+    /// `%LOCALAPPDATA%\io.github.valasme.arden`: sessions, logs, crash reports and caches.
     pub local: PathBuf,
 }
 
@@ -51,6 +51,13 @@ impl AppPaths {
     #[must_use]
     pub fn playground_dir(&self) -> PathBuf {
         self.local.join("playground")
+    }
+
+    /// The saved sessions (ADR 0035). They stay with the local files: a transcript can be large, and
+    /// it has no reason to roam with the Windows profile.
+    #[must_use]
+    pub fn sessions_file(&self) -> PathBuf {
+        self.local.join("sessions.db")
     }
 
     /// The saved window position and size.
@@ -98,6 +105,16 @@ mod tests {
         assert_eq!(
             paths.crashes_dir(),
             Path::new(r"C:\Local\io.github.valasme.arden\crashes")
+        );
+    }
+
+    #[test]
+    fn keeps_the_sessions_with_the_local_files_so_they_never_roam() {
+        let paths = AppPaths::resolve(None, Path::new(r"C:\Roaming"), Path::new(r"C:\Local"));
+
+        assert_eq!(
+            paths.sessions_file(),
+            Path::new(r"C:\Local\io.github.valasme.arden\sessions.db")
         );
     }
 

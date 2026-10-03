@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 
 import { commands } from "@/ipc/bindings";
-import { projectsQuery } from "@/ipc/queries";
+import { sessionListQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 
@@ -18,7 +18,7 @@ export function useStartSession() {
   return useCallback(async (): Promise<string | undefined> => {
     try {
       const session = await commands.createSession();
-      await queryClient.invalidateQueries({ queryKey: projectsQuery.queryKey });
+      await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
       await navigate({ to: "/session/$id", params: { id: session.id } });
       return session.id;
     } catch (error) {

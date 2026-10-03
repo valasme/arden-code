@@ -30,12 +30,125 @@ use arden_diagnostics::redact::Redactor;
 use arden_diagnostics::{crash, logging};
 use arden_process::supervisor::Supervisor;
 use arden_settings::service::SettingsService;
-use arden_settings::settings::{LogLevel, Settings};
+use arden_settings::settings::{LogLevel, OnStartup, Settings};
 use arden_windows::preferences;
 use specta_typescript::Typescript;
 use tauri::Manager;
 use tauri_specta::Event;
 use tauri_specta::{Builder, ErrorHandlingMode, collect_commands, collect_events};
+
+/// Every command the UI can call. A debug build also has the ones that make test data and
+/// failures on purpose.
+#[cfg(debug_assertions)]
+fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
+    collect_commands![
+        commands::app_info,
+        commands::show_system_menu,
+        snap_layouts::set_maximize_button,
+        diagnostics::log_from_ui,
+        diagnostics::open_logs_folder,
+        diagnostics::redact_text,
+        settings::get_settings,
+        settings::change_setting,
+        settings::reset_setting,
+        settings::set_shortcuts,
+        settings::reset_shortcuts,
+        settings::take_settings_notice,
+        settings::get_system_preferences,
+        commands::get_system_info,
+        settings::open_settings_file,
+        commands::open_project_page,
+        commands::open_link,
+        updates::get_update_status,
+        updates::check_for_updates,
+        updates::restart_to_update,
+        commands::send_test_notification,
+        diagnostics::open_bug_report,
+        diagnostics::read_logs,
+        diagnostics::export_diagnostics,
+        diagnostics::pending_crashes,
+        diagnostics::acknowledge_crashes,
+        diagnostics::take_web_engine_notice,
+        settings::export_settings,
+        settings::import_settings,
+        settings::reset_settings,
+        commands::reset_app,
+        commands::take_reset_notice,
+        commands::restart_app,
+        sessions::list_sessions,
+        sessions::take_sessions_notice,
+        sessions::remember_open_session,
+        sessions::rename_session,
+        sessions::set_session_pinned,
+        sessions::set_session_archived,
+        sessions::delete_session,
+        sessions::create_session,
+        sessions::create_linked_session,
+        sessions::get_session,
+        sessions::send_message,
+        sessions::stop_reply,
+        sessions::take_pending_open,
+        agents::detect_agents,
+        sessions::debug_fill_session,
+        agents::debug_spawn_sleeper,
+        diagnostics::debug_fail,
+        diagnostics::debug_panic,
+    ]
+}
+
+/// Every command the UI can call.
+#[cfg(not(debug_assertions))]
+fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
+    collect_commands![
+        commands::app_info,
+        commands::show_system_menu,
+        snap_layouts::set_maximize_button,
+        diagnostics::log_from_ui,
+        diagnostics::open_logs_folder,
+        diagnostics::redact_text,
+        settings::get_settings,
+        settings::change_setting,
+        settings::reset_setting,
+        settings::set_shortcuts,
+        settings::reset_shortcuts,
+        settings::take_settings_notice,
+        settings::get_system_preferences,
+        commands::get_system_info,
+        settings::open_settings_file,
+        commands::open_project_page,
+        commands::open_link,
+        updates::get_update_status,
+        updates::check_for_updates,
+        updates::restart_to_update,
+        commands::send_test_notification,
+        diagnostics::open_bug_report,
+        diagnostics::read_logs,
+        diagnostics::export_diagnostics,
+        diagnostics::pending_crashes,
+        diagnostics::acknowledge_crashes,
+        diagnostics::take_web_engine_notice,
+        settings::export_settings,
+        settings::import_settings,
+        settings::reset_settings,
+        commands::reset_app,
+        commands::take_reset_notice,
+        commands::restart_app,
+        sessions::list_sessions,
+        sessions::take_sessions_notice,
+        sessions::remember_open_session,
+        sessions::rename_session,
+        sessions::set_session_pinned,
+        sessions::set_session_archived,
+        sessions::delete_session,
+        sessions::create_session,
+        sessions::create_linked_session,
+        sessions::get_session,
+        sessions::send_message,
+        sessions::stop_reply,
+        sessions::take_pending_open,
+        agents::detect_agents,
+    ]
+}
 
 /// The typed contract between Rust and the UI.
 fn specta_builder() -> Builder<tauri::Wry> {
@@ -47,103 +160,13 @@ fn specta_builder() -> Builder<tauri::Wry> {
         // versions for types whose fields have defaults.
         .disable_serde_phases();
 
-    #[cfg(debug_assertions)]
-    let commands = collect_commands![
-        commands::app_info,
-        commands::show_system_menu,
-        snap_layouts::set_maximize_button,
-        diagnostics::log_from_ui,
-        diagnostics::open_logs_folder,
-        diagnostics::redact_text,
-        settings::get_settings,
-        settings::change_setting,
-        settings::reset_setting,
-        settings::set_shortcuts,
-        settings::reset_shortcuts,
-        settings::take_settings_notice,
-        settings::get_system_preferences,
-        commands::get_system_info,
-        settings::open_settings_file,
-        commands::open_project_page,
-        commands::open_link,
-        updates::get_update_status,
-        updates::check_for_updates,
-        updates::restart_to_update,
-        commands::send_test_notification,
-        diagnostics::open_bug_report,
-        diagnostics::read_logs,
-        diagnostics::export_diagnostics,
-        diagnostics::pending_crashes,
-        diagnostics::acknowledge_crashes,
-        diagnostics::take_web_engine_notice,
-        settings::export_settings,
-        settings::import_settings,
-        settings::reset_settings,
-        commands::reset_app,
-        commands::take_reset_notice,
-        commands::restart_app,
-        sessions::list_projects,
-        sessions::create_session,
-        sessions::get_session,
-        sessions::send_message,
-        sessions::stop_reply,
-        sessions::take_pending_open,
-        agents::detect_agents,
-        sessions::debug_fill_session,
-        agents::debug_spawn_sleeper,
-        diagnostics::debug_fail,
-        diagnostics::debug_panic,
-    ];
-    #[cfg(not(debug_assertions))]
-    let commands = collect_commands![
-        commands::app_info,
-        commands::show_system_menu,
-        snap_layouts::set_maximize_button,
-        diagnostics::log_from_ui,
-        diagnostics::open_logs_folder,
-        diagnostics::redact_text,
-        settings::get_settings,
-        settings::change_setting,
-        settings::reset_setting,
-        settings::set_shortcuts,
-        settings::reset_shortcuts,
-        settings::take_settings_notice,
-        settings::get_system_preferences,
-        commands::get_system_info,
-        settings::open_settings_file,
-        commands::open_project_page,
-        commands::open_link,
-        updates::get_update_status,
-        updates::check_for_updates,
-        updates::restart_to_update,
-        commands::send_test_notification,
-        diagnostics::open_bug_report,
-        diagnostics::read_logs,
-        diagnostics::export_diagnostics,
-        diagnostics::pending_crashes,
-        diagnostics::acknowledge_crashes,
-        diagnostics::take_web_engine_notice,
-        settings::export_settings,
-        settings::import_settings,
-        settings::reset_settings,
-        commands::reset_app,
-        commands::take_reset_notice,
-        commands::restart_app,
-        sessions::list_projects,
-        sessions::create_session,
-        sessions::get_session,
-        sessions::send_message,
-        sessions::stop_reply,
-        sessions::take_pending_open,
-        agents::detect_agents,
-    ];
-
-    builder.commands(commands).events(collect_events![
+    builder.commands(ui_commands()).events(collect_events![
         settings::SettingsChanged,
         settings::SystemPreferencesChanged,
         snap_layouts::MaximizeButtonChanged,
         updates::UpdateStatusChanged,
-        sessions::SessionRequested
+        sessions::SessionRequested,
+        sessions::ReplyNotSaved
     ])
 }
 
@@ -275,14 +298,19 @@ fn create_main_window(
     Ok(())
 }
 
-/// Makes the Playground folder on the first launch, and starts the store of sessions.
-fn manage_sessions(app: &tauri::App, paths: &AppPaths) {
+/// Makes the Playground folder on the first launch, and opens the sessions kept in the sessions
+/// file (ADR 0035), keeping what went wrong with it, if anything, for the page. The session that
+/// was open last time waits for the page, when the person asked for it to be restored.
+fn manage_sessions(app: &tauri::App, paths: &AppPaths, on_startup: OnStartup) {
     let folder = paths.playground_dir();
     let playground = playground::ensure(&folder).unwrap_or_else(|error| {
         tracing::error!(%error, "could not create the Playground folder");
         playground::describe(&folder)
     });
-    let store: sessions::Sessions = Arc::new(SessionStore::new(vec![playground]));
+    let opened = SessionStore::open(&paths.sessions_file(), &playground);
+    app.manage(sessions::SessionsNotice::after(opened.problem.as_ref()));
+    app.manage(sessions::PendingOpen::at_start(on_startup, &opened.store));
+    let store: sessions::Sessions = Arc::new(opened.store);
     app.manage(store);
 }
 
@@ -464,8 +492,7 @@ pub fn run() {
             window::prepare_main_window(app, &paths, &started_with)?;
             app.manage(snap_layouts::add_overlay(app));
             app.manage(settings);
-            manage_sessions(app, &paths);
-            app.manage(sessions::PendingOpen::default());
+            manage_sessions(app, &paths, started_with.general.on_startup);
             manage_programs(app, &paths);
             app.manage(updates::Updates::default());
             app.manage(paths);

@@ -15,6 +15,7 @@
     "view": "View"
   },
   "commands": {
+    "archivedOpen": "Archived sessions",
     "focusNext": "Move to the next area",
     "focusPrevious": "Move to the previous area",
     "inspectorToggle": "Toggle inspector",
@@ -23,7 +24,14 @@
     "navigateForward": "Forward",
     "paletteOpen": "Command palette",
     "replyStop": "Stop the reply",
+    "sessionArchive": "Archive session",
+    "sessionDelete": "Delete session",
     "sessionNew": "New session",
+    "sessionNewLinked": "New linked session",
+    "sessionPin": "Pin session",
+    "sessionRename": "Rename session",
+    "sessionUnarchive": "Unarchive session",
+    "sessionUnpin": "Unpin session",
     "settingsOpen": "Settings",
     "shortcutsShow": "Keyboard shortcuts",
     "sidebarToggle": "Toggle sidebar",
@@ -52,12 +60,32 @@
     "ARD-AGT-001": {
       "action": "Start a new session with New session.",
       "what": "That session does not exist any more.",
-      "why": "Sessions live in memory for now, so they are gone after Arden Code restarts."
+      "why": "It was deleted, or the file it was kept in could not be read."
     },
     "ARD-AGT-002": {
       "action": "Wait for the reply to finish, or stop it with Esc, then send your message again.",
       "what": "Your message was not sent.",
       "why": "The agent is still answering the last message."
+    },
+    "ARD-AGT-003": {
+      "action": "Your sessions keep working until Arden Code closes. Free some space or check the folder, then restart Arden Code.",
+      "what": "Your sessions are not being saved.",
+      "why": "Arden Code could not write to its sessions file. The disk may be full, or the folder may be read-only."
+    },
+    "ARD-AGT-004": {
+      "action": "The old file was kept next to the new one as sessions.invalid-<date>.db, in Arden Code's local data folder.",
+      "what": "Your saved sessions could not be read, so Arden Code started without them.",
+      "why": "The sessions file was damaged, or it was made by a newer version of Arden Code."
+    },
+    "ARD-AGT-005": {
+      "action": "Unarchive the session to carry on with it, or start a linked session from it.",
+      "what": "This session is archived.",
+      "why": "An archived session is put away and kept as it was: it takes no new messages, names or pins."
+    },
+    "ARD-AGT-006": {
+      "action": "Write a name of 1 to 100 characters, then save it again.",
+      "what": "That name cannot be used.",
+      "why": "A session's name needs 1 to 100 characters, not counting spaces at either end."
     },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
@@ -256,15 +284,49 @@
     "sidebar": "Sidebar"
   },
   "sessions": {
+    "actions": {
+      "archive": "Archive",
+      "delete": "Delete…",
+      "link": "New linked session",
+      "pin": "Pin",
+      "rename": "Rename…",
+      "unarchive": "Unarchive",
+      "unpin": "Unpin"
+    },
     "announce": {
       "done": "Reply finished.",
       "failed": "Reply failed.",
       "stopped": "Reply stopped."
     },
+    "archived": {
+      "description": "Sessions you put away. Open one to read it, unarchive it to carry on with it, or delete it.",
+      "done": "Session archived",
+      "empty": "No archived sessions.",
+      "line": "{{project}} · Archived {{date}}",
+      "notice": "This session is archived.",
+      "title": "Archived sessions",
+      "unarchive": "Unarchive",
+      "undo": "Undo"
+    },
     "context": "{{agent}} · {{project}}",
+    "delete": {
+      "confirm": "Delete session",
+      "description": "“{{title}}” and all of its messages will be deleted. This cannot be undone.",
+      "title": "Delete this session?"
+    },
+    "deleted": "Session deleted",
     "demoAgent": "Demo agent",
     "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
     "jumpToLatest": "Jump to latest",
+    "links": {
+      "from": "Linked from",
+      "label": "Linked sessions",
+      "to": "Linked to"
+    },
+    "menu": {
+      "label": "Actions for {{title}}",
+      "open": "Session actions"
+    },
     "messageBox": {
       "label": "Message",
       "placeholder": "Message the Demo agent",
@@ -275,6 +337,14 @@
     "messages": "Messages",
     "new": "New session",
     "playground": "Playground",
+    "rename": {
+      "description": "The name shows in the sidebar and at the top of the session.",
+      "failed": "{{what}} ({{code}})",
+      "label": "Name",
+      "save": "Save",
+      "title": "Rename session",
+      "tooLong": "A name can have at most {{limit}} characters."
+    },
     "replying": "The Demo agent is replying…",
     "stopped": "The reply stopped.",
     "transcript": "Session",
@@ -393,9 +463,9 @@
       "resetApp": {
         "button": "Reset…",
         "confirm": "Reset Arden Code",
-        "confirmDescription": "This deletes your settings, logs, crash reports and caches, and starts Arden Code again. This cannot be undone.",
+        "confirmDescription": "This deletes your settings, sessions, logs, crash reports and caches, and starts Arden Code again. This cannot be undone.",
         "confirmTitle": "Reset Arden Code?",
-        "description": "Delete your settings, logs, crash reports and caches, and start again as if it were new.",
+        "description": "Delete your settings, sessions, logs, crash reports and caches, and start again as if it were new.",
         "label": "Reset Arden Code"
       }
     },
@@ -539,8 +609,10 @@
     "tabsLabel": "Settings sections"
   },
   "sidebar": {
+    "archived": "Archived",
     "navigation": "Main navigation",
     "noSessions": "No sessions yet.",
+    "pinned": "Pinned",
     "projects": "Projects",
     "settings": "Settings"
   },

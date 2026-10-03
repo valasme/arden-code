@@ -284,9 +284,9 @@ export const commands = {
 	 */
 	resetSettings: () => __TAURI_INVOKE<Settings>("reset_settings"),
 	/**
-	 *  Wipes the settings, logs, crash reports and caches, and starts the app again. The wiping is done
-	 *  by the new start, once this one and its web engine have ended: the logs and caches are in use
-	 *  until then.
+	 *  Wipes the settings, sessions, logs, crash reports and caches, and starts the app again. The
+	 *  wiping is done by the new start, once this one and its web engine have ended: the sessions, logs
+	 *  and caches are in use until then.
 	 * 
 	 *  # Errors
 	 * 
@@ -322,21 +322,86 @@ export const commands = {
 	 * 
 	 *  Never fails today; it returns a `Result` like every command.
 	 */
-	listProjects: () => __TAURI_INVOKE<ProjectListing[]>("list_projects"),
+	listSessions: () => __TAURI_INVOKE<SessionList>("list_sessions"),
+	/**
+	 *  What went wrong with the sessions file at start, if anything. Asking takes it: it is never
+	 *  returned twice.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	takeSessionsNotice: () => __TAURI_INVOKE<{
+	code: ErrorCode,
+	/**  The key in the UI's language file that says what happened, why, and what to do. */
+	messageKey: string,
+	/**  Technical detail that helps find the cause. Never shown as the message itself. */
+	details: string | null,
+} | null>("take_sessions_notice"),
+	/**
+	 *  Remembers that the page opened a session, to open it again at the next start (ADR 0036).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or it cannot be saved.
+	 */
+	rememberOpenSession: (id: string) => __TAURI_INVOKE<null>("remember_open_session", { id }),
+	/**
+	 *  Gives a session a name (ADR 0036).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when the name is empty or too long, there is no such session, or the name
+	 *  cannot be saved.
+	 */
+	renameSession: (id: string, name: string) => __TAURI_INVOKE<null>("rename_session", { id, name }),
+	/**
+	 *  Pins a session to the top of the sidebar, or unpins it (ADR 0036).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or the change cannot be saved.
+	 */
+	setSessionPinned: (id: string, pinned: boolean) => __TAURI_INVOKE<null>("set_session_pinned", { id, pinned }),
+	/**
+	 *  Archives a session, or unarchives it (ADR 0036). Archiving stops a reply that is still running.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or the change cannot be saved.
+	 */
+	setSessionArchived: (id: string, archived: boolean) => __TAURI_INVOKE<null>("set_session_archived", { id, archived }),
+	/**
+	 *  Deletes a session for good, after the person confirmed it (ADR 0036). A reply that is still
+	 *  running stops.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or the file cannot be written.
+	 */
+	deleteSession: (id: string) => __TAURI_INVOKE<null>("delete_session", { id }),
 	/**
 	 *  Starts an empty Demo agent session in the Playground.
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns an error when the Playground does not exist.
+	 *  Returns an error when the Playground does not exist, or the session cannot be saved.
 	 */
 	createSession: () => __TAURI_INVOKE<SessionSummary>("create_session"),
+	/**
+	 *  Starts an empty session linked to another one, in its project and with its agent (ADR 0036).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no session to start from, or the new one cannot be saved.
+	 */
+	createLinkedSession: (fromId: string) => __TAURI_INVOKE<SessionSummary>("create_linked_session", { fromId }),
 	/**
 	 *  A session with all of its turns.
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns an error when there is no such session.
+	 *  Returns an error when there is no such session, or its turns cannot be read.
 	 */
 	getSession: (id: string) => __TAURI_INVOKE<Session>("get_session", { id }),
 	/**
@@ -345,7 +410,8 @@ export const commands = {
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns an error when there is no such session, or its agent is still answering.
+	 *  Returns an error when there is no such session, its agent is still answering, or the message
+	 *  cannot be saved.
 	 */
 	sendMessage: (sessionId: string, text: string, onEvent: Channel<TurnEvent>) => __TAURI_INVOKE<Session>("send_message", { sessionId, text, onEvent }),
 	/**
@@ -382,7 +448,7 @@ export const commands = {
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns an error when the Playground does not exist.
+	 *  Returns an error when the Playground does not exist, or the session cannot be saved.
 	 */
 	debugFillSession: (count: number) => __TAURI_INVOKE<SessionSummary>("debug_fill_session", { count }),
 	/**
@@ -416,6 +482,7 @@ export const commands = {
 /** Events */
 export const events = {
 	maximizeButtonChanged: makeEvent<MaximizeButtonChanged>("maximize-button-changed"),
+	replyNotSaved: makeEvent<ReplyNotSaved>("reply-not-saved"),
 	sessionRequested: makeEvent<SessionRequested>("session-requested"),
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	systemPreferencesChanged: makeEvent<SystemPreferencesChanged>("system-preferences-changed"),
@@ -564,6 +631,14 @@ export type ErrorCode =
 "ARD-AGT-001" | 
 /**  A message was sent while the agent was still answering the last one. */
 "ARD-AGT-002" | 
+/**  The sessions could not be saved, so they last only until Arden Code closes. */
+"ARD-AGT-003" | 
+/**  The saved sessions could not be read, so Arden Code started without them. */
+"ARD-AGT-004" | 
+/**  The session is archived, so it takes no message, name or pin until it is unarchived. */
+"ARD-AGT-005" | 
+/**  A name given to a session is empty or too long. */
+"ARD-AGT-006" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -686,7 +761,7 @@ export type ProjectKind =
 /**  A folder the person opened, for example with the `arden-code` command. */
 "folder";
 
-/**  A project and its sessions, the newest first. */
+/**  A project and its sessions, the most recently used first. */
 export type ProjectListing = {
 	project: Project,
 	sessions: SessionSummary[],
@@ -718,6 +793,14 @@ export type RegionalFormat =
 /**  English (US), whatever Windows says. */
 "english";
 
+/**
+ *  Tells the page that a reply could not be written to the sessions file (ADR 0035). The session
+ *  holds it until the app closes.
+ */
+export type ReplyNotSaved = {
+	notice: AppError,
+};
+
 /**  A session: the turns with one agent, in one project. */
 export type Session = {
 	id: string,
@@ -727,7 +810,28 @@ export type Session = {
 	title: string | null,
 	/**  When the session was created, in UTC. */
 	createdAt: string,
+	/**  When a message was last sent in it, or when it was created if none was, in UTC. */
+	updatedAt: string,
+	/**  Whether it is pinned to the top of the sidebar (ADR 0036). */
+	pinned: boolean,
+	/**  When it was archived, in UTC, while it is (ADR 0036). An archived session is read-only. */
+	archivedAt: string | null,
+	/**  The session it was started from, while that one exists: a linked session (ADR 0036). */
+	linkedFrom: string | null,
 	turns: Turn[],
+};
+
+/**  The sessions as the sidebar lists them. */
+export type SessionList = {
+	/**  The pinned sessions, whatever their project, in the order they were pinned. */
+	pinned: SessionSummary[],
+	/**
+	 *  Every project, the Playground first and the others in the order they were opened, each with
+	 *  its sessions that are neither pinned nor archived.
+	 */
+	projects: ProjectListing[],
+	/**  The archived sessions, whatever their project, the last archived first. */
+	archived: SessionSummary[],
 };
 
 /**  Tells the page to show a session, such as the one made for a folder that was opened. */
@@ -742,6 +846,10 @@ export type SessionSummary = {
 	agent: AgentKind,
 	title: string | null,
 	createdAt: string,
+	updatedAt: string,
+	pinned: boolean,
+	archivedAt: string | null,
+	linkedFrom: string | null,
 };
 
 /**  One change to one setting. The UI sends these, so each setting keeps its own type. */

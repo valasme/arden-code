@@ -1776,6 +1776,18 @@
     "kind": "npm"
   },
   {
+    "name": "fallible-iterator",
+    "version": "0.3.0",
+    "license": "MIT/Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "fallible-streaming-iterator",
+    "version": "0.1.9",
+    "license": "MIT/Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "fast-deep-equal",
     "version": "3.1.3",
     "license": "MIT",
@@ -2048,6 +2060,12 @@
   {
     "name": "hashbrown",
     "version": "0.17.1",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "hashlink",
+    "version": "0.12.2",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
@@ -2631,6 +2649,12 @@
     "name": "libc",
     "version": "0.2.189",
     "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "libsqlite3-sys",
+    "version": "0.38.2",
+    "license": "MIT",
     "kind": "crate"
   },
   {
@@ -3826,6 +3850,12 @@
     "version": "1.2.0",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "rusqlite",
+    "version": "0.40.2",
+    "license": "MIT",
+    "kind": "crate"
   },
   {
     "name": "rustc-hash",
