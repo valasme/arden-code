@@ -54,7 +54,7 @@ export const pendingCrashesQuery = queryOptions({
 });
 
 /** The sessions as the sidebar lists them, before Rust has said, or where there is no Rust. */
-export const noSessions: SessionList = { projects: [] };
+export const noSessions: SessionList = { pinned: [], projects: [] };
 
 /**
  * The projects and their sessions, in the order the sidebar lists them. Read again after anything

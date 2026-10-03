@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -6,16 +7,21 @@ import { createContext, type ReactNode, useContext, useEffect, useMemo } from "r
 import { useChangeSetting, useSettings } from "@/features/settings/useSettings";
 import { nextZoom } from "@/features/settings/zoom";
 import { commands as ipc } from "@/ipc/bindings";
+import { noSessions, sessionListQuery } from "@/ipc/queries";
 import { defaultSettings } from "@/ipc/defaults.gen";
 import { reportFailure, showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
-import { focusedSessionId } from "@/features/sessions/sessionList";
+import { findSession, focusedSessionId } from "@/features/sessions/sessionList";
+import {
+  actionsFor,
+  type SessionAction,
+  useSessionActions,
+} from "@/features/sessions/useSessionActions";
 import { useStartSession } from "@/features/sessions/useStartSession";
 import { moveToArea } from "./areas";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
 import { useLayoutStore } from "@/state/layout";
 import { useRepliesStore } from "@/state/replies";
-import { useSessionDialogsStore } from "@/state/sessionDialogs";
 import { useOverlayStore } from "@/state/overlays";
 
 import {
@@ -99,14 +105,27 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
   // Stopping a reply is offered while one is running; the list of commands follows it.
   const replying = useRepliesStore((state) => state.busy);
   const openSession = useRepliesStore((state) => state.sessionId);
-  const renameSession = useSessionDialogsStore((state) => state.rename);
+  const { data: sessionList = noSessions } = useQuery(sessionListQuery);
+  const runSessionAction = useSessionActions();
 
   const startSession = useStartSession();
 
   const value = useMemo<Commands>(() => {
     // A command for a session acts on the one whose row has the focus, as a key does in File
-    // Explorer, and otherwise on the open session (ADR 0036).
-    const sessionToActOn = () => focusedSessionId() ?? openSession;
+    // Explorer, and otherwise on the open session. It applies when its action is in that session's
+    // menu (ADR 0036).
+    const sessionCommand = (action: SessionAction) => ({
+      run: () => {
+        const focused = focusedSessionId();
+        const id = focused ?? openSession;
+        if (id !== undefined) runSessionAction(action, id, focused !== undefined);
+      },
+      enabled: () => {
+        const id = focusedSessionId() ?? openSession;
+        const session = id === undefined ? undefined : findSession(sessionList, id);
+        return session !== undefined && actionsFor(session).includes(action);
+      },
+    });
     const actions: Record<CommandId, { run: () => void; enabled?: () => boolean }> = {
       "palette.open": { run: () => setPaletteOpen(true) },
       "session.new": { run: () => void startSession() },
@@ -121,13 +140,9 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
         },
         enabled: () => replying,
       },
-      "session.rename": {
-        run: () => {
-          const id = sessionToActOn();
-          if (id !== undefined) renameSession(id);
-        },
-        enabled: () => sessionToActOn() !== undefined,
-      },
+      "session.rename": sessionCommand("rename"),
+      "session.pin": sessionCommand("pin"),
+      "session.unpin": sessionCommand("unpin"),
       "settings.open": {
         run: () => void navigate({ to: "/settings/$tab", params: { tab: "general" } }),
       },
@@ -188,7 +203,8 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
     changed,
     replying,
     openSession,
-    renameSession,
+    sessionList,
+    runSessionAction,
   ]);
 
   useEffect(() => {

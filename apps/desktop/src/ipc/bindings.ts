@@ -356,6 +356,14 @@ export const commands = {
 	 */
 	renameSession: (id: string, name: string) => __TAURI_INVOKE<null>("rename_session", { id, name }),
 	/**
+	 *  Pins a session to the top of the sidebar, or unpins it (ADR 0036).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or the change cannot be saved.
+	 */
+	setSessionPinned: (id: string, pinned: boolean) => __TAURI_INVOKE<null>("set_session_pinned", { id, pinned }),
+	/**
 	 *  Starts an empty Demo agent session in the Playground.
 	 * 
 	 *  # Errors
@@ -768,12 +776,19 @@ export type Session = {
 	createdAt: string,
 	/**  When a message was last sent in it, or when it was created if none was, in UTC. */
 	updatedAt: string,
+	/**  Whether it is pinned to the top of the sidebar (ADR 0036). */
+	pinned: boolean,
 	turns: Turn[],
 };
 
 /**  The sessions as the sidebar lists them. */
 export type SessionList = {
-	/**  Every project, the Playground first and the others in the order they were opened. */
+	/**  The pinned sessions, whatever their project, in the order they were pinned. */
+	pinned: SessionSummary[],
+	/**
+	 *  Every project, the Playground first and the others in the order they were opened, each with
+	 *  its sessions that are not pinned.
+	 */
 	projects: ProjectListing[],
 };
 
@@ -790,6 +805,7 @@ export type SessionSummary = {
 	title: string | null,
 	createdAt: string,
 	updatedAt: string,
+	pinned: boolean,
 };
 
 /**  One change to one setting. The UI sends these, so each setting keeps its own type. */

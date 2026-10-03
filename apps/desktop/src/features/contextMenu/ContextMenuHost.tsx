@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -8,8 +9,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SessionMenuItems } from "@/features/sessions/SessionMenu";
+import { findSession } from "@/features/sessions/sessionList";
 import { type SessionAction, useSessionActions } from "@/features/sessions/useSessionActions";
 import { useSettings } from "@/features/settings/useSettings";
+import { noSessions, sessionListQuery } from "@/ipc/queries";
 import { logger } from "@/lib/logger";
 
 import { readClipboard, writeClipboard } from "./clipboard";
@@ -82,6 +85,7 @@ export function ContextMenuHost() {
   // The same for a session's menu: a dialog it opens gives the focus back to the row.
   const chosenForSession = useRef<SessionAction | undefined>(undefined);
   const runSessionAction = useSessionActions();
+  const { data: sessionList = noSessions } = useQuery(sessionListQuery);
   const content = useRef<HTMLDivElement>(null);
   // In developer mode the browser's own menu (with Inspect) stays available.
   const { developerMode } = useSettings().advanced;
@@ -173,7 +177,7 @@ export function ContextMenuHost() {
           const forSession = chosenForSession.current;
           chosenForSession.current = undefined;
           if (forSession && menu.target.kind === "session") {
-            runSessionAction(forSession, menu.target.sessionId);
+            runSessionAction(forSession, menu.target.sessionId, true);
           }
           const action = chosen.current;
           chosen.current = undefined;
@@ -185,6 +189,7 @@ export function ContextMenuHost() {
       >
         {menu.target.kind === "session" ? (
           <SessionMenuItems
+            session={findSession(sessionList, menu.target.sessionId)}
             onChoose={(action) => {
               chosenForSession.current = action;
             }}

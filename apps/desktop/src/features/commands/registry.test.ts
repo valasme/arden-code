@@ -117,6 +117,8 @@ describe("the groups", () => {
     "session.new": "session",
     "reply.stop": "session",
     "session.rename": "session",
+    "session.pin": "session",
+    "session.unpin": "session",
     "messageBox.focus": "session",
     "palette.open": "goTo",
     "settings.open": "goTo",

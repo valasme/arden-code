@@ -10,6 +10,8 @@ import {
   PanelLeftIcon,
   PanelRightIcon,
   PencilIcon,
+  PinIcon,
+  PinOffIcon,
   RotateCcwIcon,
   SettingsIcon,
   SquareIcon,
@@ -26,6 +28,8 @@ export type CommandId =
   | "session.new"
   | "reply.stop"
   | "session.rename"
+  | "session.pin"
+  | "session.unpin"
   | "settings.open"
   | "sidebar.toggle"
   | "inspector.toggle"
@@ -54,6 +58,8 @@ export interface CommandDefinition {
     | "commands.sessionNew"
     | "commands.replyStop"
     | "commands.sessionRename"
+    | "commands.sessionPin"
+    | "commands.sessionUnpin"
     | "commands.settingsOpen"
     | "commands.sidebarToggle"
     | "commands.inspectorToggle"
@@ -110,6 +116,20 @@ export const commandDefinitions = [
     labelKey: "commands.sessionRename",
     icon: PencilIcon,
     shortcuts: ["F2"],
+  },
+  {
+    id: "session.pin",
+    group: "session",
+    labelKey: "commands.sessionPin",
+    icon: PinIcon,
+    shortcuts: [],
+  },
+  {
+    id: "session.unpin",
+    group: "session",
+    labelKey: "commands.sessionUnpin",
+    icon: PinOffIcon,
+    shortcuts: [],
   },
   {
     id: "settings.open",

@@ -154,6 +154,21 @@ pub fn rename_session(
     sessions.rename(&id, &name).map_err(app_error)
 }
 
+/// Pins a session to the top of the sidebar, or unpins it (ADR 0036).
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, or the change cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn set_session_pinned(
+    id: String,
+    pinned: bool,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions.set_pinned(&id, pinned).map_err(app_error)
+}
+
 /// Stops the reply that is running in a session. The turn ends as stopped, and the reply's channel
 /// is told.
 ///

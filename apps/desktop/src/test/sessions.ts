@@ -5,6 +5,7 @@ import { z } from "zod";
 import type {
   AppError,
   ErrorCode,
+  Project,
   Session,
   SessionList,
   SessionSummary,
@@ -31,17 +32,27 @@ function summaryOf({ turns: _turns, ...summary }: Session): SessionSummary {
   return summary;
 }
 
-/** A session as Rust keeps it: made at the given time, with no turns. */
-export function sessionNamed(id: string, title: string | null): Session {
+/** A session as Rust keeps it: made at the given time, with no turns, in the Playground unless said. */
+export function sessionNamed(
+  id: string,
+  title: string | null,
+  projectId: string = playground.id,
+): Session {
   return {
     id,
-    projectId: playground.id,
+    projectId,
     agent: "demo",
     title,
     createdAt: "2026-09-30T14:05:09Z",
     updatedAt: "2026-09-30T14:05:09Z",
+    pinned: false,
     turns: [],
   };
+}
+
+/** A folder opened as a project. */
+export function folderProject(id: string, name: string): Project {
+  return { id, kind: "folder", name, path: `C:\\Work\\${name}` };
 }
 
 interface Options {
@@ -55,6 +66,8 @@ interface Options {
   sessions?: Session[];
   /** Commands that fail, each with the code it fails with. */
   failing?: Partial<Record<string, ErrorCode>>;
+  /** Folders opened as projects, after the Playground. */
+  folders?: Project[];
 }
 
 /**
@@ -68,6 +81,7 @@ export function startSessionsRust({
   sessionsNotice = null,
   sessions: kept = [],
   failing = {},
+  folders = [],
 }: Options = {}) {
   Object.assign(globalThis, { isTauri: true });
   mockWindows("main");
@@ -82,9 +96,18 @@ export function startSessionsRust({
     if (!found) throw failure("ARD-AGT-001");
     return found;
   };
-  const list = (): SessionList => ({
-    projects: [{ project: playground, sessions: sessions.toReversed().map(summaryOf) }],
-  });
+  // The pinned sessions, in the order they were pinned.
+  const pins: string[] = sessions.filter((session) => session.pinned).map(({ id }) => id);
+  const list = (): SessionList => {
+    const newestFirst = sessions.toReversed().filter((session) => !session.pinned);
+    return {
+      pinned: pins.map((id) => summaryOf(find(id))),
+      projects: [playground, ...folders].map((project) => ({
+        project,
+        sessions: newestFirst.filter((session) => session.projectId === project.id).map(summaryOf),
+      })),
+    };
+  };
   const withId = z.object({ id: z.string() });
 
   mockIPC(
@@ -127,6 +150,14 @@ export function startSessionsRust({
           const trimmed = name.trim();
           if (trimmed === "" || trimmed.length > 100) throw failure("ARD-AGT-006");
           find(id).title = trimmed;
+          return null;
+        }
+        case "set_session_pinned": {
+          const { id, pinned } = z.object({ id: z.string(), pinned: z.boolean() }).parse(payload);
+          const session = find(id);
+          if (pinned && !session.pinned) pins.push(id);
+          if (!pinned && session.pinned) pins.splice(pins.indexOf(id), 1);
+          session.pinned = pinned;
           return null;
         }
         case "send_message": {

@@ -225,6 +225,8 @@ pub struct Session {
     pub created_at: String,
     /// When a message was last sent in it, or when it was created if none was, in UTC.
     pub updated_at: String,
+    /// Whether it is pinned to the top of the sidebar (ADR 0036).
+    pub pinned: bool,
     pub turns: Vec<Turn>,
 }
 
@@ -238,6 +240,7 @@ pub struct SessionSummary {
     pub title: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub pinned: bool,
 }
 
 /// A project and its sessions, the most recently used first.
@@ -252,7 +255,10 @@ pub struct ProjectListing {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionList {
-    /// Every project, the Playground first and the others in the order they were opened.
+    /// The pinned sessions, whatever their project, in the order they were pinned.
+    pub pinned: Vec<SessionSummary>,
+    /// Every project, the Playground first and the others in the order they were opened, each with
+    /// its sessions that are not pinned.
     pub projects: Vec<ProjectListing>,
 }
 

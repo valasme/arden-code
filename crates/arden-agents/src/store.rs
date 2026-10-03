@@ -8,7 +8,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-use crate::database::{Database, DatabaseError};
+use crate::database::{Database, DatabaseError, Order};
 use crate::driver::{AgentDriver, Flow};
 use crate::model::{
     AgentKind, Item, Project, ProjectKind, ProjectListing, Session, SessionList, SessionSummary,
@@ -82,8 +82,8 @@ struct Entry {
     session: Session,
     /// Whether `session.turns` holds its turns: they are read from the file when it is first opened.
     loaded: bool,
-    /// When it was last used, as a number that only grows: the list's order.
-    used: u64,
+    /// Where it stands in the lists.
+    order: Order,
 }
 
 impl Entry {
@@ -98,6 +98,7 @@ impl Entry {
             title: session.title.clone(),
             created_at: session.created_at.clone(),
             updated_at: session.updated_at.clone(),
+            pinned: session.pinned,
             turns: Vec::new(),
         }
     }
@@ -111,6 +112,7 @@ impl Entry {
             title: session.title.clone(),
             created_at: session.created_at.clone(),
             updated_at: session.updated_at.clone(),
+            pinned: session.pinned,
         }
     }
 
@@ -285,7 +287,7 @@ impl SessionStore {
             .map(|saved| Entry {
                 session: saved.session,
                 loaded: false,
-                used: saved.used,
+                order: saved.order,
             })
             .collect();
         Ok(Self::with(
@@ -303,13 +305,25 @@ impl SessionStore {
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// The projects with their sessions, the most recently used first.
+    /// The sessions as the sidebar lists them: the pinned ones in the order they were pinned, then
+    /// the projects, each with its other sessions, the most recently used first.
     #[must_use]
     pub fn list(&self) -> SessionList {
         let inner = self.lock();
-        let mut sessions: Vec<&Entry> = inner.sessions.iter().collect();
-        sessions.sort_by_key(|entry| std::cmp::Reverse(entry.used));
+        let mut pinned: Vec<&Entry> = inner
+            .sessions
+            .iter()
+            .filter(|entry| entry.order.pinned.is_some())
+            .collect();
+        pinned.sort_by_key(|entry| entry.order.pinned);
+        let mut sessions: Vec<&Entry> = inner
+            .sessions
+            .iter()
+            .filter(|entry| entry.order.pinned.is_none())
+            .collect();
+        sessions.sort_by_key(|entry| std::cmp::Reverse(entry.order.used));
         SessionList {
+            pinned: pinned.iter().map(|entry| entry.summary()).collect(),
             projects: inner
                 .projects
                 .iter()
@@ -409,9 +423,43 @@ impl SessionStore {
         let mut header = entry.header();
         header.title = Some(name.to_owned());
         database
-            .save_session(&header, entry.used, last_id)
+            .save_session(&header, entry.order, last_id)
             .map_err(not_saved)?;
         entry.session.title = header.title;
+        Ok(())
+    }
+
+    /// Pins a session to the top of the sidebar, or unpins it (ADR 0036). Pinned sessions are
+    /// listed in the order they were pinned; pinning a pinned session leaves it where it is.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotSaved`] when the change cannot be written.
+    pub fn set_pinned(&self, session_id: &str, pinned: bool) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let known = find(&mut inner.sessions, session_id)?.order.pinned;
+        let pin = match (pinned, known) {
+            (true, Some(place)) => Some(place),
+            (true, None) => Some(inner.next_number()),
+            (false, _) => None,
+        };
+        let last_id = inner.last_id;
+        let Inner {
+            sessions, database, ..
+        } = &mut *inner;
+        let entry = find(sessions, session_id)?;
+        let mut header = entry.header();
+        header.pinned = pin.is_some();
+        let order = Order {
+            pinned: pin,
+            ..entry.order
+        };
+        database
+            .save_session(&header, order, last_id)
+            .map_err(not_saved)?;
+        entry.session.pinned = header.pinned;
+        entry.order = order;
         Ok(())
     }
 
@@ -443,15 +491,19 @@ impl SessionStore {
                 title: None,
                 created_at: now.clone(),
                 updated_at: now,
+                pinned: false,
                 turns: Vec::new(),
             },
             loaded: true,
-            used: inner.next_number(),
+            order: Order {
+                used: inner.next_number(),
+                pinned: None,
+            },
         };
         let last_id = inner.last_id;
         inner
             .database
-            .save_session(&entry.session, entry.used, last_id)
+            .save_session(&entry.session, entry.order, last_id)
             .map_err(not_saved)?;
         let summary = entry.summary();
         inner.sessions.push(entry);
@@ -515,11 +567,19 @@ impl SessionStore {
         header.updated_at = now;
         let position = entry.session.turns.len();
         database
-            .save_session_and_turns(&header, used, &[(position, &turn)], last_id)
+            .save_session_and_turns(
+                &header,
+                Order {
+                    used,
+                    ..entry.order
+                },
+                &[(position, &turn)],
+                last_id,
+            )
             .map_err(not_saved)?;
         entry.session.title = header.title;
         entry.session.updated_at = header.updated_at;
-        entry.used = used;
+        entry.order.used = used;
         entry.session.turns.push(turn.clone());
         Ok(turn)
     }
@@ -601,11 +661,19 @@ impl SessionStore {
             .map(|(offset, turn)| (first + offset, turn))
             .collect();
         database
-            .save_session_and_turns(&header, used, &placed, last_id)
+            .save_session_and_turns(
+                &header,
+                Order {
+                    used,
+                    ..entry.order
+                },
+                &placed,
+                last_id,
+            )
             .map_err(not_saved)?;
         entry.session.title = header.title;
         entry.session.updated_at = header.updated_at;
-        entry.used = used;
+        entry.order.used = used;
         entry.session.turns.extend(turns);
         Ok(())
     }
@@ -1389,6 +1457,83 @@ mod tests {
         assert_eq!(
             store.rename("session-99", "A name"),
             Err(StoreError::UnknownSession)
+        );
+    }
+
+    fn ids(sessions: &[SessionSummary]) -> Vec<&str> {
+        sessions.iter().map(|session| session.id.as_str()).collect()
+    }
+
+    fn three_sessions(store: &SessionStore) -> [String; 3] {
+        [(); 3].map(|()| {
+            store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session")
+                .id
+        })
+    }
+
+    #[test]
+    fn pinned_sessions_are_listed_apart_in_the_order_they_were_pinned() {
+        let store = store();
+        let [first, second, third] = three_sessions(&store);
+
+        store.set_pinned(&third, true).expect("pinned");
+        store.set_pinned(&first, true).expect("pinned");
+
+        let list = store.list();
+        assert_eq!(ids(&list.pinned), vec![third.as_str(), first.as_str()]);
+        assert!(list.pinned.iter().all(|session| session.pinned));
+        assert_eq!(
+            ids(&list.projects[0].sessions),
+            vec![second.as_str()],
+            "a pinned session leaves its project's list"
+        );
+        assert!(store.session(&first).expect("the session").pinned);
+    }
+
+    #[test]
+    fn pinning_a_pinned_session_again_keeps_its_place_and_unpinning_puts_it_back() {
+        let store = store();
+        let [first, second, third] = three_sessions(&store);
+        store.set_pinned(&first, true).expect("pinned");
+        store.set_pinned(&second, true).expect("pinned");
+
+        store.set_pinned(&first, true).expect("pinned again");
+        assert_eq!(
+            ids(&store.list().pinned),
+            vec![first.as_str(), second.as_str()]
+        );
+
+        store.set_pinned(&first, false).expect("unpinned");
+        let list = store.list();
+        assert_eq!(ids(&list.pinned), vec![second.as_str()]);
+        assert_eq!(
+            ids(&list.projects[0].sessions),
+            vec![third.as_str(), first.as_str()]
+        );
+        assert!(!store.session(&first).expect("the session").pinned);
+        assert_eq!(
+            store.set_pinned("session-99", true),
+            Err(StoreError::UnknownSession)
+        );
+    }
+
+    #[test]
+    fn pins_and_their_order_are_kept_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let [first, _, third] = {
+            let store = store_in(&file);
+            let sessions = three_sessions(&store);
+            store.set_pinned(&sessions[2], true).expect("pinned");
+            store.set_pinned(&sessions[0], true).expect("pinned");
+            sessions
+        };
+
+        assert_eq!(
+            ids(&store_in(&file).list().pinned),
+            vec![third.as_str(), first.as_str()]
         );
     }
 

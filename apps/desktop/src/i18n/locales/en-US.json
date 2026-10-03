@@ -24,7 +24,9 @@
     "paletteOpen": "Command palette",
     "replyStop": "Stop the reply",
     "sessionNew": "New session",
+    "sessionPin": "Pin session",
     "sessionRename": "Rename session",
+    "sessionUnpin": "Unpin session",
     "settingsOpen": "Settings",
     "shortcutsShow": "Keyboard shortcuts",
     "sidebarToggle": "Toggle sidebar",
@@ -273,7 +275,9 @@
   },
   "sessions": {
     "actions": {
-      "rename": "Rename…"
+      "pin": "Pin",
+      "rename": "Rename…",
+      "unpin": "Unpin"
     },
     "announce": {
       "done": "Reply finished.",
@@ -571,6 +575,7 @@
   "sidebar": {
     "navigation": "Main navigation",
     "noSessions": "No sessions yet.",
+    "pinned": "Pinned",
     "projects": "Projects",
     "settings": "Settings"
   },

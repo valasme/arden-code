@@ -25,6 +25,7 @@ function longSession(count: number): Session {
     title: "A long session",
     createdAt: "2026-09-30T14:05:09Z",
     updatedAt: "2026-09-30T14:05:10Z",
+    pinned: false,
     turns: Array.from({ length: count }, (_, index) => ({
       id: `turn-${index + 1}`,
       prompt: `Message number ${index + 1}`,

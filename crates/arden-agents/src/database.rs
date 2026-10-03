@@ -35,7 +35,8 @@ CREATE TABLE sessions (
     title TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    used INTEGER NOT NULL
+    used INTEGER NOT NULL,
+    pinned INTEGER
 ) STRICT;
 
 CREATE TABLE turns (
@@ -79,11 +80,20 @@ impl From<std::io::Error> for DatabaseError {
     }
 }
 
+/// Where a session stands in the sidebar's lists: numbers that only grow, given when it was last
+/// used and when it was pinned.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Order {
+    /// When it was last used: the most recently used is listed first.
+    pub used: u64,
+    /// When it was pinned, while it is: the first pinned is listed first.
+    pub pinned: Option<u64>,
+}
+
 /// A session as the file lists it: everything but its turns, which are read when it is opened.
 pub struct SavedSession {
     pub session: Session,
-    /// When it was last used, as a number that only grows.
-    pub used: u64,
+    pub order: Order,
 }
 
 /// Everything the file holds but the turns.
@@ -137,13 +147,13 @@ fn put_project(
 fn put_session(
     transaction: &Transaction<'_>,
     session: &Session,
-    used: u64,
+    order: Order,
 ) -> rusqlite::Result<()> {
     transaction.execute(
-        "INSERT INTO sessions (id, project_id, agent, title, created_at, updated_at, used)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "INSERT INTO sessions (id, project_id, agent, title, created_at, updated_at, used, pinned)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT (id) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at,
-             used = excluded.used",
+             used = excluded.used, pinned = excluded.pinned",
         params![
             session.id,
             session.project_id,
@@ -151,7 +161,8 @@ fn put_session(
             session.title,
             session.created_at,
             session.updated_at,
-            stored(used),
+            stored(order.used),
+            order.pinned.map(stored),
         ],
     )?;
     Ok(())
@@ -280,10 +291,15 @@ impl Database {
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
         let mut statement = self.connection.prepare(
-            "SELECT id, project_id, agent, title, created_at, updated_at, used FROM sessions ORDER BY rowid",
+            "SELECT id, project_id, agent, title, created_at, updated_at, used, pinned FROM sessions ORDER BY rowid",
         )?;
         let sessions = statement
             .query_map([], |row| {
+                let number = |value: i64| u64::try_from(value).unwrap_or_default();
+                let order = Order {
+                    used: number(row.get(6)?),
+                    pinned: row.get::<_, Option<i64>>(7)?.map(number),
+                };
                 Ok(SavedSession {
                     session: Session {
                         id: row.get(0)?,
@@ -292,9 +308,10 @@ impl Database {
                         title: row.get(3)?,
                         created_at: row.get(4)?,
                         updated_at: row.get(5)?,
+                        pinned: order.pinned.is_some(),
                         turns: Vec::new(),
                     },
-                    used: u64::try_from(row.get::<_, i64>(6)?).unwrap_or_default(),
+                    order,
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -411,11 +428,11 @@ impl Database {
     pub fn save_session(
         &mut self,
         session: &Session,
-        used: u64,
+        order: Order,
         last_id: u64,
     ) -> Result<(), DatabaseError> {
         self.write(last_id, |transaction| {
-            put_session(transaction, session, used)
+            put_session(transaction, session, order)
         })
     }
 
@@ -427,12 +444,12 @@ impl Database {
     pub fn save_session_and_turns(
         &mut self,
         session: &Session,
-        used: u64,
+        order: Order,
         turns: &[(usize, &Turn)],
         last_id: u64,
     ) -> Result<(), DatabaseError> {
         self.write(last_id, |transaction| {
-            put_session(transaction, session, used)?;
+            put_session(transaction, session, order)?;
             for (position, turn) in turns {
                 put_turn(transaction, &session.id, *position, turn)?;
             }

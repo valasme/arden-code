@@ -9,6 +9,7 @@ const session: Session = {
   title: "Hello",
   createdAt: "2026-09-30T14:05:09Z",
   updatedAt: "2026-09-30T14:05:10Z",
+  pinned: false,
   turns: [
     {
       id: "turn-2",

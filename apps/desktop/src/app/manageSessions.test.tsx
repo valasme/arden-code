@@ -9,7 +9,7 @@ import { useOverlayStore } from "@/state/overlays";
 import { useSessionDialogsStore } from "@/state/sessionDialogs";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
-import { sessionNamed, startSessionsRust } from "@/test/sessions";
+import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
 
@@ -41,6 +41,11 @@ const focusGoesTo = (element: HTMLElement) =>
   waitFor(() => {
     expect(element).toHaveFocus();
   });
+/** Opens the command palette, and waits for it to have faded in. */
+async function openPalette(user: ReturnType<typeof userEvent.setup>) {
+  await user.keyboard("{Control>}k{/Control}");
+  await animationsDone(await screen.findByRole("dialog", { name: "Command palette" }));
+}
 const noDialog = () =>
   waitFor(() => {
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -230,6 +235,104 @@ describe("Renaming a session", () => {
   it("has no accessibility violations with the dialog open", async () => {
     const { user } = await twoSessions();
     await animationsDone(await renameFromTheMenu(user, "Fix the build"));
+
+    await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+/** The sessions listed under a heading of the sidebar, by name. */
+function listedUnder(heading: string): string[] {
+  const section = within(sidebar()).getByRole("heading", { name: heading }).closest("section");
+  if (!section) throw new Error(`no section for ${heading}`);
+  return within(section)
+    .queryAllByRole("link")
+    .map((link) => link.textContent ?? "");
+}
+
+describe("Pinning a session", () => {
+  it("moves it to Pinned at the top of the sidebar, and Unpin puts it back", async () => {
+    const { rust, user } = await twoSessions();
+    expect(within(sidebar()).queryByRole("heading", { name: "Pinned" })).toBeNull();
+
+    await user.click(within(sidebar()).getByRole("button", { name: "Actions for Fix the build" }));
+    await user.click(await shownItem(/^Pin/));
+
+    await waitFor(() => {
+      expect(listedUnder("Pinned")).toEqual(["Fix the build"]);
+    });
+    expect(listedUnder("Playground")).toEqual(["Write the docs"]);
+    expect(rust.callsTo("set_session_pinned")).toEqual([{ id: "session-1", pinned: true }]);
+
+    await user.click(within(sidebar()).getByRole("button", { name: "Actions for Fix the build" }));
+    await user.click(await shownItem(/Unpin/));
+
+    await waitFor(() => {
+      expect(within(sidebar()).queryByRole("heading", { name: "Pinned" })).toBeNull();
+    });
+    expect(listedUnder("Playground")).toEqual(["Write the docs", "Fix the build"]);
+  });
+
+  it("keeps the focus on the row as it moves to the other list", async () => {
+    const { user } = await twoSessions({ entry: "/" });
+    row("Write the docs").focus();
+
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+    await focusGoesTo(await shownItem(/Rename/));
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    await waitFor(() => {
+      expect(listedUnder("Pinned")).toEqual(["Write the docs"]);
+    });
+    await focusGoesTo(row("Write the docs"));
+  });
+
+  it("offers Pin session or Unpin session in the command palette, whichever applies", async () => {
+    const { user } = await twoSessions();
+
+    await openPalette(user);
+    expect(screen.getByRole("option", { name: /Pin session/ })).toBeVisible();
+    expect(screen.queryByRole("option", { name: /Unpin session/ })).toBeNull();
+    await user.click(screen.getByRole("option", { name: /Pin session/ }));
+    await waitFor(() => {
+      expect(listedUnder("Pinned")).toEqual(["Fix the build"]);
+    });
+
+    await openPalette(user);
+    expect(screen.getByRole("option", { name: /Unpin session/ })).toBeVisible();
+    expect(screen.queryByRole("option", { name: /^Pin session/ })).toBeNull();
+  });
+
+  it("hides a folder project with no sessions left in its list, but never the Playground", async () => {
+    startSessionsRust({
+      folders: [folderProject("folder-1", "my-app")],
+      sessions: [sessionNamed("session-1", "In the folder", "folder-1")],
+    });
+    const user = userEvent.setup();
+    renderApp("/");
+    await screen.findByRole("heading", { name: "my-app" });
+
+    await user.click(
+      within(await screen.findByRole("complementary", { name: "Sidebar" })).getByRole("button", {
+        name: "Actions for In the folder",
+      }),
+    );
+    await user.click(await shownItem(/^Pin/));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "my-app" })).toBeNull();
+    });
+    expect(listedUnder("Pinned")).toEqual(["In the folder"]);
+    expect(within(sidebar()).getByRole("heading", { name: "Playground" })).toBeVisible();
+    expect(within(sidebar()).getByText("No sessions yet.")).toBeVisible();
+  });
+
+  it("has no accessibility violations with a session pinned", async () => {
+    const { user } = await twoSessions();
+    await user.click(within(sidebar()).getByRole("button", { name: "Actions for Fix the build" }));
+    await user.click(await shownItem(/^Pin/));
+    await waitFor(() => {
+      expect(listedUnder("Pinned")).toEqual(["Fix the build"]);
+    });
 
     await expectNoAccessibilityViolations(document.body);
   });
