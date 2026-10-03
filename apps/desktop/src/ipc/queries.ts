@@ -5,7 +5,7 @@ import { defaultSettings } from "@/ipc/defaults.gen";
 
 import { fallbackSystemPreferences } from "@/features/settings/systemPreferences";
 
-import { commands, type SessionList, type UpdateStatus } from "./bindings";
+import { type AgentKind, commands, type SessionList, type UpdateStatus } from "./bindings";
 
 /** The product name and version. They never change while the app runs. */
 export const appInfoQuery = queryOptions({
@@ -63,6 +63,17 @@ export const noSessions: SessionList = { pinned: [], projects: [], archived: [] 
 export const sessionListQuery = queryOptions({
   queryKey: ["sessions"],
   queryFn: () => (isTauri() ? commands.listSessions() : noSessions),
+  staleTime: Number.POSITIVE_INFINITY,
+});
+
+/**
+ * The agent a new session in the Playground takes (ADR 0039). It shares the key of the list of
+ * sessions, so it is read again whenever the list is.
+ */
+export const newSessionAgentQuery = queryOptions({
+  queryKey: ["sessions", "new-session-agent"],
+  queryFn: (): Promise<AgentKind> =>
+    isTauri() ? commands.agentForNewSession(null) : Promise.resolve("demo"),
   staleTime: Number.POSITIVE_INFINITY,
 });
 

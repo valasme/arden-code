@@ -1,14 +1,17 @@
 //! What the sidebar and the session view show: projects, sessions, turns and their items.
 
+use arden_core::error::ErrorCode;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// Which agent answers in a session. Claude and Codex arrive with their drivers.
+/// Which agent answers in a session. Codex arrives with its driver.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum AgentKind {
     /// The built-in demonstration agent.
     Demo,
+    /// Claude, through the person's own Claude Code (ADR 0038).
+    Claude,
 }
 
 /// What a project is. Only the Playground exists in the foundation.
@@ -96,9 +99,18 @@ pub enum Item {
         added: u32,
         removed: u32,
     },
-    /// Something the agent reports as having gone wrong.
+    /// Something that went wrong: reported by the agent, or found by Arden Code, which then gives
+    /// the error's code so the person is told what to do.
     #[serde(rename_all = "camelCase")]
-    Error { id: String, message: String },
+    Error {
+        id: String,
+        /// What the agent said, or Arden Code's details for the logs.
+        message: String,
+        /// Arden Code's code for the error, when it is one Arden Code knows. Items saved before
+        /// codes existed have none.
+        #[serde(default)]
+        code: Option<ErrorCode>,
+    },
     /// A marker between the parts of a reply.
     #[serde(rename_all = "camelCase")]
     Status { id: String, kind: StatusKind },
@@ -373,6 +385,7 @@ mod tests {
             item: Item::Error {
                 id: "e".into(),
                 message: text.into(),
+                code: None,
             },
         };
 
@@ -408,6 +421,28 @@ mod tests {
             &turn.items[0],
             Item::ToolCall { status: ToolStatus::Done, output: Some(text), .. } if text == "3 lines"
         ));
+    }
+
+    #[test]
+    fn an_error_of_arden_codes_own_carries_its_code_and_one_saved_before_codes_reads_without() {
+        let coded = Item::Error {
+            id: "e".into(),
+            message: "Not logged in".into(),
+            code: Some(ErrorCode::ClaudeSignedOut),
+        };
+        let saved = serde_json::to_value(&coded).expect("JSON");
+        assert_eq!(saved["code"], "ARD-AGT-009");
+
+        let older: Item = serde_json::from_str(r#"{"type":"error","id":"e","message":"It broke"}"#)
+            .expect("an item saved before error codes");
+        assert_eq!(
+            older,
+            Item::Error {
+                id: "e".into(),
+                message: "It broke".into(),
+                code: None
+            }
+        );
     }
 
     #[test]

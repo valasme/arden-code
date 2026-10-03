@@ -1,6 +1,6 @@
 # Arden Code: plan
 
-**Status:** accepted · **Date:** 2026-09-29 · **Owner:** [@valasme](https://github.com/valasme)
+**Status:** accepted · **Date:** 2026-10-03 · **Owner:** [@valasme](https://github.com/valasme)
 
 This is the single source of truth for the app foundation. The reasoning behind each decision lives in
 [the decision records](adr/README.md). To change the plan, add or supersede a decision record, then update this file.
@@ -43,7 +43,7 @@ The first build is the **foundation**:
 All of it is production-grade, so real features plug into it later.
 
 **Out of scope for the foundation:**
-- Real Claude Code or Codex sessions.
+- Real agent sessions. Claude followed the foundation as the first real agent (§5.8, §6.12); Codex is still to come.
 - Tray icon and background mode.
 - App links and Explorer integration.
 - Agent-specific colors.
@@ -188,6 +188,7 @@ Versions are current at the time of writing. Renovate keeps them fresh.
   - A session is written when it is made or changed, and a turn when its message is sent and when its reply ends. Nothing is written while a reply streams.
   - A reply cut off by closing the app comes back as failed. Ids are never reused.
   - A file that cannot be read is set aside, and the app starts with no sessions (`ARD-AGT-004`).
+- Each project records whether the person trusts it, and each Claude session the id of its conversation in Claude Code ([ADR 0039](adr/0039-working-with-claude.md)).
 - Timestamps are stored in UTC and shown in local time.
 
 ### 5.7 Domain model
@@ -196,31 +197,36 @@ Versions are current at the time of writing. Renovate keeps them fresh.
 Project   a folder on disk, where agents work
 └─ Session   one conversation with one agent (Claude, Codex or Demo): pinned, archived, or linked from another
    └─ Turn   the user's message plus the agent's reply
-      └─ Item   text · thinking · tool call · file change · error · status marker
+      └─ Item   text · thinking · tool call · file change · approval request · question · error · status marker
 ```
 
-The sidebar lists the pinned sessions, then each project's other sessions, the most recently used first (§6.11). The foundation ships one built-in project, the **Playground**: a real folder the app creates for itself on first launch, in `%LOCALAPPDATA%io.github.valasme.ardenplayground`. It holds the Demo agent sessions, so every project, including this one, is a folder on disk.
+The sidebar lists the pinned sessions, then each project's other sessions, the most recently used first (§6.11). The foundation ships one built-in project, the **Playground**: a real folder the app creates for itself on first launch, in `%LOCALAPPDATA%io.github.valasme.ardenplayground`. It holds the sessions that need no folder of the person's, such as Demo agent sessions, so every project, including this one, is a folder on disk.
 
-### 5.8 Agent integration (direction only; not built in the foundation)
+### 5.8 Agent integration
 
 - **Common interface:** an `AgentDriver` trait with these operations: start or resume a session, send a turn, stream items, answer approval requests, cancel.
 - **Demo driver (in the foundation):** streams realistic fake output through the real pipeline.
 - **Codex (later):** `codex app-server`, JSON-RPC over stdio. This is the protocol OpenAI's own clients use.
-- **Claude (later):**
-  - Arden Code runs the user's installed `claude` CLI in headless streaming mode (`--input-format stream-json --output-format stream-json`).
-  - Tool approvals come back to Arden Code through its own MCP permission tool (`--permission-prompt-tool`).
+- **Claude** ([ADR 0038](adr/0038-claude-through-its-own-protocol.md), from [the research](research/claude-agent.md) and [the councils](research/claude-agent-councils.md)):
+  - Arden Code runs the person's installed `claude` in headless streaming mode (`-p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode default`) and speaks Claude Code's control protocol itself, in Rust.
+  - Approval requests and Claude's questions arrive on the same pipes (`--permission-prompt-tool stdio`) and are answered there. Stop sends `interrupt`.
+  - One `claude` per session, started by its first message. It ends when the session is archived or deleted, when the app closes, or after 10 minutes with no turn and nothing heard.
+  - Arden Code makes each session's conversation id (`--session-id`), and later starts carry it on (`--resume`).
+  - Claude Code 2.1.223 or later. npm's `claude.cmd` is followed to the package's own `claude.exe`; untrusted text never reaches a `.cmd`.
+  - Claude Code's error output goes to the child's log; the conversation on its standard output does not.
 - **Raw mode (later):** an embedded terminal (ConPTY + xterm.js) running the vendor's own terminal UI.
 - **Deliberately not used:**
   - The Agent Client Protocol: it mainly helped with Cursor, which is out of scope.
-  - Anthropic's TypeScript Agent SDK: it needs a bundled JavaScript runtime and drives the same CLI anyway.
+  - Anthropic's TypeScript Agent SDK: it needs a bundled JavaScript runtime and speaks the same protocol to the same CLI.
+  - An MCP permission tool: Claude Code's control protocol carries approvals itself.
+  - Community Rust crates for Claude Code: lightly used; Arden Code keeps its own small client.
 - **Process supervisor (in the foundation):**
   - Resolves executables through PATH and PATHEXT, preferring real `.exe` files.
   - Never passes untrusted arguments through `.cmd` or `.bat` wrappers, a known class of Windows argument-injection bugs.
   - Runs child processes inside a Windows Job Object, so they close when the app closes.
   - Logs each child process's output to its own file.
-- **Detection (in the foundation):** Settings → Agents shows whether `claude` and `codex` are installed, where, and which version. This screen is read-only.
-- **Vendor terms:** Anthropic's rules on using subscriptions from other tools changed several times in 2026. Arden Code only ever launches the user's own CLI, which handles the user's own login.
-  - With the first integration, `docs/vendors.md` will summarize the current terms.
+- **Detection:** Settings → Agents shows whether `claude` and `codex` are installed, where, and which version; for Claude Code also the minimum version and whether it is signed in. It runs once in the background after start, and again with Look again.
+- **Vendor terms:** Anthropic's rules on using subscriptions from other tools changed several times in 2026. Arden Code only ever launches the person's own CLI, which handles the person's own sign-in. [vendors.md](vendors.md) summarizes the current terms, with the date they were checked.
 
 ## 6. User experience
 
@@ -272,7 +278,7 @@ On a settings page the sidebar shows Back, the settings search and the tabs inst
 | Appearance | Theme: system [default], light or dark · Zoom 80–200% [100%] · Follow Windows text size [on] · Code font size 11–20 px [13] · Code ligatures [off] · Reduce motion: follow Windows [default], on or off · Show status bar [on] |
 | Keyboard | Every command with its shortcut · click to record a new shortcut · conflict warnings · reset one or all |
 | Notifications | Desktop notifications [on] · Send a test notification |
-| Agents | Read-only: install status, path and version for Claude Code and Codex, with an install link · "Real integration coming later" |
+| Agents | Install status, path and version for Claude Code and Codex, with an install link · for Claude Code, the minimum version and whether it is signed in · Look again |
 | Advanced | Log level [info] · View logs · Open logs folder · Export diagnostics · Developer mode [off], which enables F12 dev tools · Use native title bar [off] · Hardware acceleration [on]; turning it off works around GPU glitches and needs a restart · Open `settings.json` · Export or import settings · Reset settings · Reset Arden Code |
 | About | Logo, version, build (commit and date), Windows and WebView2 versions · Copy system info · Check for updates · Release notes · Report a bug · Privacy ("Arden Code collects nothing") · MIT license · Open-source licenses · "Not affiliated with Anthropic or OpenAI" |
 
@@ -299,6 +305,7 @@ The command palette is a wide panel high on the screen: a large search line, the
 | Command palette | Ctrl+K (also Ctrl+Shift+P) |
 | New session | Ctrl+N |
 | New linked session | Ctrl+Shift+N |
+| Open folder | Ctrl+O |
 | Rename session | F2 |
 | Pin, unpin, archive, unarchive or delete the session | none (menus, command palette) |
 | Settings | Ctrl+, |
@@ -324,7 +331,7 @@ The command palette is a wide panel high on the screen: a large search line, the
 
 - **Layout:** the turns sit in a centered reading column, at most 45rem wide. The person's message is a filled block at the end of the line; the reply follows under the agent's name with no box. Tool calls, file changes and thinking are quiet lines along a rule, and turns are separated by space.
 - **Message box:**
-  - A bordered block, at least two lines tall, naming the agent and the project under the text, with Send. While a reply runs, Send becomes Stop.
+  - A bordered block, at least two lines tall, with the agent and the project under the text, and Send. While the session is empty they are menus (§6.12). While a reply runs, Send becomes Stop.
   - Enter sends; Shift+Enter adds a line.
   - Enter never sends while a character is still being composed (accent keys, input methods for other scripts).
   - Spellcheck is on.
@@ -342,9 +349,8 @@ The command palette is a wide panel high on the screen: a large search line, the
 ### 6.6 First launch
 
 There is no setup wizard. The session view shows the welcome state:
-- the mark and a question: "What should the Demo agent work on?"
-- one line: "Real agents are coming. Try the Demo agent."
-- the message box: sending from it starts a Demo agent session in the Playground and sends the message
+- the mark and a question naming the chosen agent: "What should Claude work on?"
+- the message box, with the agent and project menus: sending from it starts a session and sends the message. The agent is Claude when Claude Code is installed, else the Demo agent (§6.12)
 - three shortcut hints under it: Ctrl+K, Ctrl+N and Ctrl+,
 
 The theme follows Windows.
@@ -388,11 +394,23 @@ The decisions and the options turned down are in [ADR 0036](adr/0036-managing-se
 - **Rename** opens a small dialog (F2). A name has 1 to 100 characters, and a renamed session keeps its name after its first message.
 - **Pin** keeps a session under Pinned at the top of the sidebar, across projects, in the order it was pinned.
 - **Archive** puts a session away: off the sidebar's lists, listed on the Archived sessions page, and read-only until it is unarchived. A notice offers Undo.
-- **Delete** removes a session for good, after a confirmation.
+- **Delete** removes a session for good, after a confirmation. For a Claude session, the confirmation says that Claude Code keeps its own copy of the conversation.
 - **New linked session** (Ctrl+Shift+N) starts an empty session in the same project, with the same agent, linked to the open one. Each shows the link to the other.
 - **Order:** each project's sessions with the most recently used first. A folder project with no sessions in its list is not shown; the Playground always is.
 - **On startup,** "Restore the last session" opens the session that was opened last, unless it was archived or deleted. A folder opened from the terminal wins.
 - **Focus:** when a row leaves a list, the focus moves to the next row, else the previous one, else New session.
+
+### 6.12 Working with Claude
+
+The decisions and the options turned down are in [ADR 0039](adr/0039-working-with-claude.md).
+
+- **Starting a session:** while a session is empty, the message box's lower line holds an agent menu and a project menu; the project menu ends with Open folder. New session (Ctrl+N) starts in the open session's project, or the Playground, with the agent of that project's latest session, else of the latest session anywhere, else Claude when Claude Code is installed, else the Demo agent. Open folder (Ctrl+O) adds a folder as a project and starts a session in it. Claude may work in the Playground.
+- **Trust:** before Claude first runs in a project, the person is asked once whether they trust it, because Claude Code then runs the project's own hooks, MCP servers and environment. Cancel keeps the message in the box. The Playground needs no trust.
+- **What a reply shows:** text and thinking as they stream, tool calls with their results, and file changes with the lines added and removed. A subagent's inner steps are not shown; its tool call is.
+- **Approval requests:** a card under the tool call says what Claude wants to do and shows the command, the file and its change, or the address. Allow, Always allow (only when Claude Code suggests a rule) and Deny, which stops the reply. Once answered, it folds to a line. Stop, archiving and deleting deny it.
+- **Questions:** a card with each question's options (radio buttons, or check boxes when several may be chosen), an Other field, and Send answers. Stop cancels it.
+- **While Claude waits:** the request is announced, the status bar says Claude is waiting for an answer, and a notification is sent when the window is not focused.
+- **When Claude cannot start:** the reply says why, with a code, and what to do: install Claude Code, run `claude update`, or sign in with `claude` and `/login` in a terminal. Arden Code never offers a sign-in of its own.
 
 ## 7. Visual design
 
@@ -640,6 +658,7 @@ Every row is measured by CI on the release build, and the ones that can fail the
 - **Sessions stay on this computer,** in the local data folder. They are never part of a diagnostics bundle.
 - **Logs never leave the machine.** "Export diagnostics" creates a local zip, and you decide whether to share it.
 - **Redaction:** logs strip the user folder path, tokens and email addresses.
+- **Claude Code keeps its own transcripts** in its own folder. Arden Code never reads or changes Claude Code's files, settings or credentials, and Claude Code's standard output (the conversation) is not copied to the logs.
 
 ## 14. Diagnostics and error handling
 
@@ -717,7 +736,10 @@ The foundation is built in this order. Each milestone ends with green CI and a c
 | TanStack Hotkeys (alpha), oxfmt (beta) and Oxlint JS plugins (alpha) aren't at 1.0 | Wrap them behind our own registry; Prettier is the fallback formatter |
 | Tauri 3 will bring breaking changes | Stay on 2.x until 3.0 is stable; keep runtime-specific code isolated |
 | The Snap Layouts overlay is custom Win32 code | Isolated in `arden-windows`, with a manual test checklist; the native title bar setting is the fallback |
-| Anthropic's rules for programmatic use keep changing | Only ever launch the user's own CLI; document the current terms; never handle credentials |
+| Anthropic's rules for programmatic use keep changing | Only ever launch the user's own CLI; keep [vendors.md](vendors.md) current; never handle credentials |
+| Claude Code's control protocol changes | A minimum version, parsing that ignores what it does not know, recorded frames in the tests |
+| Claude Code makes `--bare` the default for `-p` | Opt out in the driver; otherwise the person's sign-in stops working |
+| Under `-p`, Claude Code shows no trust dialog | Arden Code asks once per project before Claude runs there (ADR 0039) |
 | Unsigned installers trigger SmartScreen warnings | Acceptable during development; sign before the first public release |
 | Affinity's MCP is in beta | Affinity is optional; the code pipeline is the source of truth |
 
@@ -726,7 +748,7 @@ The foundation is built in this order. Each milestone ends with green CI and a c
 - [Tauri 2](https://v2.tauri.app) · [Snap Layouts with custom title bars (tauri#4531)](https://github.com/tauri-apps/tauri/issues/4531)
 - [shadcn/ui changelog](https://ui.shadcn.com/docs/changelog): Base UI default, chat components, typeset
 - [TanStack](https://tanstack.com) · [Oxc: Oxlint and oxfmt](https://oxc.rs)
-- [Codex app-server](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md) · [Claude Code headless mode](https://code.claude.com/docs/en/headless)
+- [Codex app-server](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md) · [Claude Code headless mode](https://code.claude.com/docs/en/headless) · [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) · [the Claude research](research/claude-agent.md)
 - [Playwright with WebView2](https://playwright.dev/docs/webview2)
 - [SignPath Foundation terms](https://signpath.org/terms.html)
 - [WCAG 2.2](https://www.w3.org/TR/WCAG22/)

@@ -381,13 +381,18 @@ export const commands = {
 	 */
 	deleteSession: (id: string) => __TAURI_INVOKE<null>("delete_session", { id }),
 	/**
-	 *  Starts an empty Demo agent session in the Playground.
+	 *  Starts an empty session in the Playground, with the agent given, or the one a new session
+	 *  takes (ADR 0039).
 	 * 
 	 *  # Errors
 	 * 
 	 *  Returns an error when the Playground does not exist, or the session cannot be saved.
 	 */
-	createSession: () => __TAURI_INVOKE<SessionSummary>("create_session"),
+	createSession: (agent: 
+/**  The built-in demonstration agent. */
+"demo" | 
+/**  Claude, through the person's own Claude Code (ADR 0038). */
+"claude" | null) => __TAURI_INVOKE<SessionSummary>("create_session", { agent }),
 	/**
 	 *  Starts an empty session linked to another one, in its project and with its agent (ADR 0036).
 	 * 
@@ -432,6 +437,23 @@ export const commands = {
 	 *  Never fails today; it returns a `Result` like every command.
 	 */
 	takePendingOpen: () => __TAURI_INVOKE<string | null>("take_pending_open"),
+	/**
+	 *  Changes the agent of a session that has had no message yet (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, it is archived or has had a message, or the
+	 *  change cannot be saved.
+	 */
+	setSessionAgent: (id: string, agent: AgentKind) => __TAURI_INVOKE<null>("set_session_agent", { id, agent }),
+	/**
+	 *  The agent a new session in a project would have, the Playground when none is given (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	agentForNewSession: (projectId: string | null) => __TAURI_INVOKE<AgentKind>("agent_for_new_session", { projectId }),
 	/**
 	 *  Looks for the Claude Code and Codex programs, and says where they are and which version. It
 	 *  changes nothing. Asking each program for its version can take a moment, so it runs off the
@@ -512,10 +534,12 @@ export type AgentCli =
 /**  The Codex program, `codex`. */
 "codex";
 
-/**  Which agent answers in a session. Claude and Codex arrive with their drivers. */
+/**  Which agent answers in a session. Codex arrives with its driver. */
 export type AgentKind = 
 /**  The built-in demonstration agent. */
-"demo";
+"demo" | 
+/**  Claude, through the person's own Claude Code (ADR 0038). */
+"claude";
 
 /**
  *  The error every command returns: a code, the translation key of its message, and details for
@@ -639,6 +663,22 @@ export type ErrorCode =
 "ARD-AGT-005" | 
 /**  A name given to a session is empty or too long. */
 "ARD-AGT-006" | 
+/**  Claude Code (`claude`) was not found, so Claude cannot start. */
+"ARD-AGT-007" | 
+/**  The installed Claude Code is older than the minimum version. */
+"ARD-AGT-008" | 
+/**  Claude Code is not signed in. */
+"ARD-AGT-009" | 
+/**  Claude Code could not start, or stopped in the middle of a reply. */
+"ARD-AGT-010" | 
+/**  Claude Code answered in a way Arden Code does not understand. */
+"ARD-AGT-011" | 
+/**  Only npm's claude.cmd was found, with no Claude Code program beside it. */
+"ARD-AGT-012" | 
+/**  Claude could not answer, for a reason Claude Code gave. */
+"ARD-AGT-013" | 
+/**  A session's agent or project was to change after its first message. */
+"ARD-AGT-014" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -679,8 +719,18 @@ output: string | null } |
 { type: "fileChange"; id: string; 
 /**  The file's path, relative to the project. */
 path: string; change: FileChangeKind; added: number; removed: number } | 
-/**  Something the agent reports as having gone wrong. */
-{ type: "error"; id: string; message: string } | 
+/**
+ *  Something that went wrong: reported by the agent, or found by Arden Code, which then gives
+ *  the error's code so the person is told what to do.
+ */
+{ type: "error"; id: string; 
+/**  What the agent said, or Arden Code's details for the logs. */
+message: string; 
+/**
+ *  Arden Code's code for the error, when it is one Arden Code knows. Items saved before
+ *  codes existed have none.
+ */
+code?: ErrorCode | null } | 
 /**  A marker between the parts of a reply. */
 { type: "status"; id: string; kind: StatusKind };
 

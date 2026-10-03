@@ -23,7 +23,7 @@
     "bindings:check": "cargo test -p arden-desktop --test contract committed_bindings",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm knip && pnpm i18n:lint && pnpm test && pnpm format:rust:check && pnpm lint:rust && pnpm test:rust",
     "prepare": "lefthook install",
-    "build:debug": "cargo build -p arden-cli && pnpm --filter @arden/desktop build:debug",
+    "build:debug": "cargo build -p arden-cli && cargo build -p arden-agents --bin claude-stand-in && pnpm --filter @arden/desktop build:debug",
     "test:e2e": "pnpm build:debug && pnpm --filter @arden/desktop test:e2e",
     "test:e2e:release": "pnpm build && pnpm --filter @arden/desktop test:e2e:release",
     "test:perf": "pnpm build && pnpm --filter @arden/desktop test:perf",

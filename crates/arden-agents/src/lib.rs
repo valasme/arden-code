@@ -5,6 +5,7 @@
 //! [`driver::AgentDriver`] answers a message by producing [`model::TurnEvent`]s, which the store
 //! applies and the UI receives. The only driver so far is the [`demo::DemoDriver`].
 
+pub mod claude;
 mod database;
 pub mod demo;
 pub mod detect;

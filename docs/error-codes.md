@@ -32,6 +32,14 @@ do), and add a row here. Never reuse or renumber a code.
 | `ARD-AGT-004` | The saved sessions could not be read, so Arden Code started without them | Starting the app; opening a session |
 | `ARD-AGT-005` | The session is archived, so it takes no message, name or pin until it is unarchived | Sending a message, renaming or pinning an archived session |
 | `ARD-AGT-006` | A name given to a session is empty or too long | Renaming a session |
+| `ARD-AGT-007` | Claude Code is not installed, so Claude cannot start | Sending a message to Claude |
+| `ARD-AGT-008` | Claude Code is older than Arden Code needs | Sending a message to Claude |
+| `ARD-AGT-009` | Claude Code is not signed in | Sending a message to Claude |
+| `ARD-AGT-010` | Claude Code could not start, or stopped in the middle of a reply | Sending a message to Claude |
+| `ARD-AGT-011` | Claude Code answered in a way Arden Code does not understand | Sending a message to Claude |
+| `ARD-AGT-012` | Claude Code was installed with npm in a way Arden Code cannot start safely | Sending a message to Claude |
+| `ARD-AGT-013` | Claude could not answer, for a reason Claude Code gave | A reply from Claude |
+| `ARD-AGT-014` | A session's agent or project was to change after its first message | The agent or project menu of a session |
 | `ARD-PROC-001` | Programs cannot be started and supervised on this computer | Settings → Agents; starting an agent |
 | `ARD-UPD-001` | The update could not be installed | Choosing "Update ready: restart" |
 | `ARD-WIN-001` | Windows' window menu could not be opened | The title bar's Window menu button and Alt+Space |

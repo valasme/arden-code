@@ -10,12 +10,23 @@ authors.workspace = true
 publish = false
 
 [dependencies]
+arden-core.workspace = true
 arden-process.workspace = true
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde.workspace = true
 serde_json.workspace = true
 specta.workspace = true
 time = { version = "0.3", features = ["formatting"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v4"] }
+
+# A stand-in for Claude Code, for the tests of the Claude driver and of the app (ADR 0038). It is
+# never part of the app's installer.
+[[bin]]
+name = "claude-stand-in"
+path = "src/bin/claude_stand_in.rs"
+test = false
+doc = false
 
 [dev-dependencies]
 tempfile = "3"

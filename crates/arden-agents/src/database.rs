@@ -158,7 +158,8 @@ fn put_session(
         "INSERT INTO sessions (id, project_id, agent, title, created_at, updated_at, used, pinned,
              archived, archived_at, linked_from)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-         ON CONFLICT (id) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at,
+         ON CONFLICT (id) DO UPDATE SET project_id = excluded.project_id, agent = excluded.agent,
+             title = excluded.title, updated_at = excluded.updated_at,
              used = excluded.used, pinned = excluded.pinned, archived = excluded.archived,
              archived_at = excluded.archived_at, linked_from = excluded.linked_from",
         params![

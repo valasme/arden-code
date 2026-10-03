@@ -3,6 +3,7 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { z } from "zod";
 
 import type {
+  AgentKind,
   AppError,
   ErrorCode,
   Project,
@@ -32,16 +33,20 @@ function summaryOf({ turns: _turns, ...summary }: Session): SessionSummary {
   return summary;
 }
 
-/** A session as Rust keeps it: made at the given time, with no turns, in the Playground unless said. */
+/**
+ * A session as Rust keeps it: made at the given time, with no turns, in the Playground with the Demo
+ * agent unless said.
+ */
 export function sessionNamed(
   id: string,
   title: string | null,
   projectId: string = playground.id,
+  agent: AgentKind = "demo",
 ): Session {
   return {
     id,
     projectId,
-    agent: "demo",
+    agent,
     title,
     createdAt: "2026-09-30T14:05:09Z",
     updatedAt: "2026-09-30T14:05:09Z",
@@ -73,6 +78,8 @@ interface Options {
   failing?: Partial<Record<string, ErrorCode>>;
   /** Folders opened as projects, after the Playground. */
   folders?: Project[];
+  /** The agent a new session takes when none is asked for (ADR 0039). */
+  newSessionAgent?: AgentKind;
 }
 
 /**
@@ -87,6 +94,7 @@ export function startSessionsRust({
   sessions: kept = [],
   failing = {},
   folders = [],
+  newSessionAgent = "demo",
 }: Options = {}) {
   Object.assign(globalThis, { isTauri: true });
   mockWindows("main");
@@ -142,10 +150,21 @@ export function startSessionsRust({
           notice = null;
           return taken;
         }
+        case "agent_for_new_session": {
+          return newSessionAgent;
+        }
         case "create_session": {
           if (failCreate) throw failure("ARD-AGT-001");
+          const { agent } = z
+            .object({ agent: z.enum(["demo", "claude"]).nullable().optional() })
+            .parse(payload ?? {});
           made += 1;
-          const session = sessionNamed(`session-${made}`, null);
+          const session = sessionNamed(
+            `session-${made}`,
+            null,
+            playground.id,
+            agent ?? newSessionAgent,
+          );
           sessions.push(session);
           return summaryOf(session);
         }
@@ -166,6 +185,16 @@ export function startSessionsRust({
         }
         case "remember_open_session": {
           find(withId.parse(payload).id);
+          return null;
+        }
+        case "set_session_agent": {
+          const { id, agent } = z
+            .object({ id: z.string(), agent: z.enum(["demo", "claude"]) })
+            .parse(payload);
+          const session = find(id);
+          if (session.archivedAt !== null) throw failure("ARD-AGT-005");
+          if (session.turns.length > 0) throw failure("ARD-AGT-014");
+          session.agent = agent;
           return null;
         }
         case "rename_session": {

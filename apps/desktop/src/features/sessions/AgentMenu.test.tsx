@@ -1,0 +1,72 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+import type { AgentKind } from "@/ipc/bindings";
+import { animationsDone } from "@/test/animations";
+import { expectNoAccessibilityViolations } from "@/test/axe";
+
+import { AgentMenu } from "./AgentMenu";
+
+import "@/styles/global.css";
+
+function renderMenu(agent: AgentKind) {
+  const chosen: AgentKind[] = [];
+  const view = render(
+    <AgentMenu
+      agent={agent}
+      onChoose={(next) => {
+        chosen.push(next);
+      }}
+    />,
+  );
+  return { chosen, ...view };
+}
+
+describe("AgentMenu", () => {
+  it("names the session's agent, and says it is where the agent is chosen", () => {
+    renderMenu("claude");
+
+    const button = screen.getByRole("button", { name: "Agent: Claude" });
+    expect(button).toHaveTextContent("Claude");
+  });
+
+  it("lists the agents with the chosen one checked, and answers the one picked", async () => {
+    const user = userEvent.setup();
+    const { chosen } = renderMenu("claude");
+
+    await user.click(screen.getByRole("button", { name: "Agent: Claude" }));
+    const items = screen.getAllByRole("menuitemradio");
+    expect(items.map((item) => item.textContent)).toEqual(["Claude", "Demo agent"]);
+    expect(screen.getByRole("menuitemradio", { name: "Claude" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await user.click(screen.getByRole("menuitemradio", { name: "Demo agent" }));
+
+    expect(chosen).toEqual(["demo"]);
+  });
+
+  it("works by keyboard", async () => {
+    const user = userEvent.setup();
+    const { chosen } = renderMenu("demo");
+
+    screen.getByRole("button", { name: "Agent: Demo agent" }).focus();
+    await user.keyboard("{Enter}");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Enter}");
+
+    expect(chosen.length).toBe(1);
+  });
+
+  it("has no accessibility violations, closed or open", async () => {
+    const user = userEvent.setup();
+    const { container } = renderMenu("claude");
+
+    await expectNoAccessibilityViolations(container);
+    await user.click(screen.getByRole("button", { name: "Agent: Claude" }));
+    const menu = await screen.findByRole("menu");
+    await animationsDone(menu);
+    // The menu itself: Radix hides the page behind an open menu and keeps the focus in the menu.
+    await expectNoAccessibilityViolations(menu);
+  });
+});

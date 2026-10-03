@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
 use arden_agents::demo::DemoDriver;
+use arden_agents::driver::AgentDriver;
 #[cfg(debug_assertions)]
 use arden_agents::model::Item;
 use arden_agents::model::{AgentKind, Session, SessionList, SessionSummary, TurnEvent};
@@ -29,6 +30,7 @@ fn app_error(error: StoreError) -> AppError {
         StoreError::TurnRunning => AppError::new(ErrorCode::TurnRunning),
         StoreError::InvalidName => AppError::new(ErrorCode::SessionNameInvalid),
         StoreError::Archived => AppError::new(ErrorCode::SessionArchived),
+        StoreError::NotEmpty => AppError::new(ErrorCode::SessionNotEmpty),
         StoreError::NotSaved(reason) => {
             AppError::new(ErrorCode::SessionsNotSaved).with_details(reason)
         }
@@ -102,19 +104,69 @@ pub fn list_sessions(sessions: State<'_, Sessions>) -> Result<SessionList, AppEr
     Ok(sessions.list())
 }
 
-/// Starts an empty Demo agent session in the Playground.
+/// The agent for a new session in a project (ADR 0039): the agent of that project's latest
+/// session, else of the latest session anywhere, else the Demo agent.
+fn new_session_agent(sessions: &SessionStore, project_id: &str) -> AgentKind {
+    sessions
+        .agent_for_new_session(project_id)
+        .unwrap_or(AgentKind::Demo)
+}
+
+/// The agent a new session in a project would have, the Playground when none is given (ADR 0039).
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps)]
+#[tauri::command]
+#[specta::specta]
+pub fn agent_for_new_session(
+    project_id: Option<String>,
+    sessions: State<'_, Sessions>,
+) -> Result<AgentKind, AppError> {
+    Ok(new_session_agent(
+        &sessions,
+        project_id.as_deref().unwrap_or(PLAYGROUND_ID),
+    ))
+}
+
+/// Starts an empty session in the Playground, with the agent given, or the one a new session
+/// takes (ADR 0039).
 ///
 /// # Errors
 ///
 /// Returns an error when the Playground does not exist, or the session cannot be saved.
 #[tauri::command]
 #[specta::specta]
-pub fn create_session(sessions: State<'_, Sessions>) -> Result<SessionSummary, AppError> {
+pub fn create_session(
+    agent: Option<AgentKind>,
+    sessions: State<'_, Sessions>,
+) -> Result<SessionSummary, AppError> {
+    let agent = agent.unwrap_or_else(|| new_session_agent(&sessions, PLAYGROUND_ID));
     let session = sessions
-        .create_session(PLAYGROUND_ID, AgentKind::Demo)
+        .create_session(PLAYGROUND_ID, agent)
         .map_err(app_error)?;
-    tracing::info!(session = %session.id, "session created");
+    tracing::info!(session = %session.id, ?agent, "session created");
     Ok(session)
+}
+
+/// Changes the agent of a session that has had no message yet (ADR 0039).
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, it is archived or has had a message, or the
+/// change cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn set_session_agent(
+    id: String,
+    agent: AgentKind,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions.set_agent(&id, agent).map_err(app_error)?;
+    tracing::info!(session = %id, ?agent, "the session's agent changed");
+    Ok(())
 }
 
 /// Starts an empty session linked to another one, in its project and with its agent (ADR 0036).
@@ -286,22 +338,25 @@ pub fn send_message(
     text: String,
     on_event: Channel<TurnEvent>,
     sessions: State<'_, Sessions>,
+    claude: State<'_, crate::agents::Claude>,
 ) -> Result<Session, AppError> {
     let turn = sessions.start_turn(&session_id, &text).map_err(app_error)?;
     // Taken before the reply starts, so the events that follow never overlap with it.
     let snapshot = sessions.session(&session_id).map_err(app_error)?;
 
     let store = Arc::clone(sessions.inner());
+    let claude = Arc::clone(&claude.0);
     let agent = snapshot.agent;
     let running = turn.clone();
     thread::spawn(move || {
-        let saved = match agent {
-            AgentKind::Demo => {
-                store.stream_reply(&DemoDriver::new(), &session_id, &running, |event| {
-                    on_event.send(event.clone()).is_ok()
-                })
-            }
+        let demo = DemoDriver::new();
+        let driver: &dyn AgentDriver = match agent {
+            AgentKind::Demo => &demo,
+            AgentKind::Claude => claude.as_ref(),
         };
+        let saved = store.stream_reply(driver, &session_id, &running, |event| {
+            on_event.send(event.clone()).is_ok()
+        });
         if let Err(error) = saved {
             use tauri_specta::Event;
 
@@ -350,15 +405,16 @@ pub struct SessionRequested {
     pub session_id: String,
 }
 
-/// Opens a folder as a project, starts a Demo agent session in it and asks the page to show it.
+/// Opens a folder as a project, starts a session in it with the agent a new session there takes
+/// (ADR 0039), and asks the page to show it.
 pub fn open_folder(app: &tauri::AppHandle, folder: &std::path::Path) {
     use tauri::Manager;
     use tauri_specta::Event;
 
     let store = app.state::<Sessions>();
-    let session = store
-        .open_folder(folder)
-        .and_then(|project| store.create_session(&project.id, AgentKind::Demo));
+    let session = store.open_folder(folder).and_then(|project| {
+        store.create_session(&project.id, new_session_agent(&store, &project.id))
+    });
     let session = match session {
         Ok(session) => session,
         Err(error) => {
