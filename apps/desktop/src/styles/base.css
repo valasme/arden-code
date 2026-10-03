@@ -50,8 +50,8 @@
   }
 
   /*
-   * Everything that can be pressed shows the pointer, the window buttons included (ADR 0032). A
-   * disabled control keeps the arrow.
+   * Everything that can be pressed shows the pointer (ADR 0032), except the window buttons, which
+   * keep the arrow as Windows' own do (ADR 0037). A disabled control keeps the arrow.
    */
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),

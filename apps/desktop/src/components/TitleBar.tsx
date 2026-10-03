@@ -165,11 +165,13 @@ export function TitleBar({
           on screen in a small window at a high zoom. Their commands stay in the palette. */}
       {controls ? <div className="hidden @min-[calc(20rem+138px)]:flex">{controls}</div> : null}
 
+      {/* The window buttons keep the arrow, as Windows' own do (ADR 0037); every other control in
+          the bar shows the pointer. */}
       {native ? null : (
         <div className="flex">
           <BarButton
             aria-label={t("titleBar.minimize")}
-            className="w-[46px]"
+            className="w-[46px] cursor-default"
             onClick={() => void windowControls.minimize()}
           >
             <MinimizeGlyph />
@@ -179,7 +181,7 @@ export function TitleBar({
             ref={maximizeButton}
             data-look={maximizeLook}
             aria-label={maximized ? t("titleBar.restore") : t("titleBar.maximize")}
-            className="w-[46px] data-[look=hover]:bg-muted data-[look=pressed]:bg-border forced-colors:data-[look=hover]:outline forced-colors:data-[look=hover]:outline-1"
+            className="w-[46px] cursor-default data-[look=hover]:bg-muted data-[look=pressed]:bg-border forced-colors:data-[look=hover]:outline forced-colors:data-[look=hover]:outline-1"
             onClick={() => void windowControls.toggleMaximize()}
           >
             {maximized ? <RestoreGlyph /> : <MaximizeGlyph />}
@@ -187,7 +189,7 @@ export function TitleBar({
           {/* Windows' Close turns red; white on #C42B1C is 5.9:1. */}
           <BarButton
             aria-label={t("titleBar.close")}
-            className="w-[46px] hover:bg-[#c42b1c] hover:text-white active:bg-[#b32b1c] active:text-white"
+            className="w-[46px] cursor-default hover:bg-[#c42b1c] hover:text-white active:bg-[#b32b1c] active:text-white"
             onClick={() => void windowControls.close()}
           >
             <CloseGlyph />

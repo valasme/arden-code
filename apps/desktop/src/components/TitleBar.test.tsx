@@ -324,11 +324,11 @@ describe("TitleBar with the title bar of Windows", () => {
 });
 
 describe("The pointer", () => {
-  it("shows on every button in the bar, the window buttons included, and not on a disabled one", () => {
+  it("shows on the bar's own buttons, and not on a disabled one", () => {
     startWindow();
     render(<TitleBar {...navigation} canGoForward={false} />);
 
-    for (const name of ["Window menu", "Back", "Minimize", "Maximize", "Close"]) {
+    for (const name of ["Window menu", "Back"]) {
       expect(getComputedStyle(screen.getByRole("button", { name })).cursor).toBe("pointer");
     }
     expect(getComputedStyle(screen.getByRole("button", { name: /Search/u })).cursor).toBe(
@@ -337,6 +337,15 @@ describe("The pointer", () => {
     expect(getComputedStyle(screen.getByRole("button", { name: "Forward" })).cursor).not.toBe(
       "pointer",
     );
+  });
+
+  it("leaves the window buttons with the arrow, as Windows' own (ADR 0037)", () => {
+    startWindow();
+    render(<TitleBar {...navigation} />);
+
+    for (const name of ["Minimize", "Maximize", "Close"]) {
+      expect(getComputedStyle(screen.getByRole("button", { name })).cursor).toBe("default");
+    }
   });
 });
 
