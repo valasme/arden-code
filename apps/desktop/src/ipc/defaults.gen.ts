@@ -15,6 +15,7 @@ export const defaultSettings: Settings = {
     "codeFontSize": 13,
     "codeLigatures": false,
     "reduceMotion": "system",
+    "smoothScrolling": true,
     "showStatusBar": true
   },
   "layout": {

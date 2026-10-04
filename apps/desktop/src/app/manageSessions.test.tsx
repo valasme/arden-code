@@ -1,7 +1,7 @@
 import { createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { page } from "vitest/browser";
+import { page, userEvent as realInput } from "vitest/browser";
 
 import type { ErrorCode } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
@@ -431,6 +431,26 @@ describe("Deleting a session", () => {
     await user.click(await screen.findByRole("button", { name: "Delete session" }));
     await focusGoesTo(within(sidebar()).getByRole("button", { name: "New session" }));
     expect(within(sidebar()).getByText("No sessions yet.")).toBeVisible();
+  });
+
+  it("leaves no tooltip open on New session when the focus goes back to it after the last delete", async () => {
+    await twoSessions({ entry: "/" });
+    // Real clicks, through the browser, as the person makes them.
+    const deleteWithClicks = async (name: string) => {
+      await realInput.click(within(sidebar()).getByRole("button", { name: `Actions for ${name}` }));
+      await realInput.click(await shownItem(/Delete/));
+      await realInput.click(await screen.findByRole("button", { name: "Delete session" }));
+      await noDialog();
+    };
+    await deleteWithClicks("Fix the build");
+    await deleteWithClicks("Write the docs");
+    await focusGoesTo(within(sidebar()).getByRole("button", { name: "New session" }));
+
+    // Past the tooltip's delay: one opened by the focus would be showing by now.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 700);
+    });
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("leaves the Delete key alone in a text field", async () => {

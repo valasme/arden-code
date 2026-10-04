@@ -16,6 +16,8 @@ function startWindow({ maximized = false } = {}) {
   const commands: string[] = [];
   /** Every place the title bar said its Maximize button is, `null` for none. */
   const maximizeButtonAreas: unknown[] = [];
+  /** Where each opening of the system menu asked for it, `null` for Windows' own place. */
+  const menuPoints: unknown[] = [];
   let isMaximized = maximized;
   Object.assign(globalThis, { isTauri: true });
   mockWindows("main");
@@ -26,6 +28,9 @@ function startWindow({ maximized = false } = {}) {
       if (command === "set_maximize_button") {
         maximizeButtonAreas.push(z.object({ area: z.unknown() }).parse(payload).area);
       }
+      if (command === "show_system_menu") {
+        menuPoints.push(z.object({ at: z.unknown() }).parse(payload).at);
+      }
       return null;
     },
     { shouldMockEvents: true },
@@ -33,6 +38,7 @@ function startWindow({ maximized = false } = {}) {
   return {
     commands,
     maximizeButtonAreas,
+    menuPoints,
     /** Pretends the user maximized or restored the window, as Windows would announce it. */
     async setMaximized(value: boolean) {
       isMaximized = value;
@@ -144,27 +150,32 @@ describe("TitleBar", () => {
     );
   });
 
-  it("opens the system menu from its button, from Alt+Space and from a right click on the bar", async () => {
+  it("opens the system menu under its button, at the pointer for a right click on the bar, and where Windows puts it for Alt+Space", async () => {
     const window = startWindow();
     const user = userEvent.setup();
     const { container } = render(<TitleBar {...navigation} />);
-    const menuCommands = () => window.commands.filter((command) => command === "show_system_menu");
+    const button = screen.getByRole("button", { name: "Window menu" });
+    const header = container.querySelector("header") ?? document.body;
 
-    await user.click(screen.getByRole("button", { name: "Window menu" }));
-    expect(menuCommands()).toHaveLength(1);
+    await user.click(button);
+    const below = button.getBoundingClientRect();
+    expect(window.menuPoints).toEqual([{ x: below.left, y: below.bottom }]);
 
     await user.keyboard("{Alt>} {/Alt}");
     await waitFor(() => {
-      expect(menuCommands()).toHaveLength(2);
+      expect(window.menuPoints).toHaveLength(2);
     });
+    expect(window.menuPoints[1]).toBeNull();
 
     await user.pointer({
       keys: "[MouseRight]",
-      target: container.querySelector("header") ?? document.body,
+      target: header,
+      coords: { clientX: 600, clientY: 12 },
     });
     await waitFor(() => {
-      expect(menuCommands()).toHaveLength(3);
+      expect(window.menuPoints).toHaveLength(3);
     });
+    expect(window.menuPoints[2]).toEqual({ x: 600, y: 12 });
   });
 
   it("disables Back and Forward when there is nowhere to go", () => {

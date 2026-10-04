@@ -9,6 +9,33 @@ import { agentsQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 
+/**
+ * A button to the agent's page, saying how to install it when it is missing or how to update it
+ * when it is too old. An agent that is ready has nothing to do, so it gets no button.
+ */
+function NextStep({ agent, name }: { agent: Detection; name: string }) {
+  const { t } = useTranslation();
+  const step = agent.installed ? (agent.tooOld ? "update" : undefined) : "install";
+  if (step === undefined) return null;
+
+  return (
+    <div>
+      <Button
+        variant="outline"
+        size="sm"
+        aria-label={t(`settings.agents.${step}Label`, { name })}
+        onClick={() => {
+          commands.openLink(agent.installUrl, false).catch((error: unknown) => {
+            showErrorToast(toAppError(error));
+          });
+        }}
+      >
+        {t(`settings.agents.${step}`)}
+      </Button>
+    </div>
+  );
+}
+
 function AgentRow({ agent }: { agent: Detection }) {
   const { t } = useTranslation();
   const name = t(`settings.agents.names.${agent.cli}`);
@@ -71,20 +98,7 @@ function AgentRow({ agent }: { agent: Detection }) {
       {agent.installed && agent.signedIn === false ? (
         <p className="text-xs text-muted-foreground">{t("settings.agents.howToSignIn")}</p>
       ) : null}
-      <div>
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label={t("settings.agents.installLabel", { name })}
-          onClick={() => {
-            commands.openLink(agent.installUrl, false).catch((error: unknown) => {
-              showErrorToast(toAppError(error));
-            });
-          }}
-        >
-          {t("settings.agents.install")}
-        </Button>
-      </div>
+      <NextStep agent={agent} name={name} />
     </section>
   );
 }

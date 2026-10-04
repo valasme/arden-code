@@ -1,5 +1,5 @@
 import type { ParseKeys } from "i18next";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import type {
@@ -15,7 +15,7 @@ import { defaultSettings } from "@/ipc/defaults.gen";
 
 import { ChoiceControl, RangeControl, ToggleControl } from "./controls";
 import { RegionalPreview } from "./RegionalPreview";
-import { RestartNote, RestartPrompt } from "./RestartControls";
+import { RestartToggle } from "./RestartControls";
 import { useStartupSettings } from "./startup";
 import type { SettingsTab } from "./tabs";
 import type { useChangeSetting } from "./useSettings";
@@ -258,6 +258,29 @@ export const settingDefinitions: readonly SettingDefinition[] = [
     },
   },
   {
+    id: "smooth-scrolling",
+    tab: "appearance",
+    key: "appearanceSmoothScrolling",
+    labelKey: "settings.appearance.smoothScrolling.label",
+    descriptionKey: "settings.appearance.smoothScrolling.description",
+    isDefault: (settings) =>
+      settings.appearance.smoothScrolling === same.appearance.smoothScrolling,
+    Control: function SmoothScrollingControl({ id, settings, change }) {
+      const { t } = useTranslation();
+      return (
+        <RestartToggle
+          id={id}
+          checked={settings.appearance.smoothScrolling}
+          startedWith={useStartupSettings().appearance.smoothScrolling}
+          prompt={t("settings.appearance.smoothScrolling.restartPrompt")}
+          onChange={(checked) => {
+            change.mutate({ appearanceSmoothScrolling: checked });
+          }}
+        />
+      );
+    },
+  },
+  {
     id: "show-status-bar",
     tab: "appearance",
     key: "appearanceShowStatusBar",
@@ -359,28 +382,16 @@ export const settingDefinitions: readonly SettingDefinition[] = [
       settings.advanced.hardwareAcceleration === same.advanced.hardwareAcceleration,
     Control: function HardwareAccelerationControl({ id, settings, change }) {
       const { t } = useTranslation();
-      const startedWith = useStartupSettings().advanced.hardwareAcceleration;
-      const [asking, setAsking] = useState(false);
-      const waiting = settings.advanced.hardwareAcceleration !== startedWith;
       return (
-        <div className="flex flex-col gap-2">
-          <ToggleControl
-            id={id}
-            checked={settings.advanced.hardwareAcceleration}
-            onChange={(checked) => {
-              change.mutate({ advancedHardwareAcceleration: checked });
-              setAsking(checked !== startedWith);
-            }}
-          />
-          {waiting ? (
-            <RestartNote note={t("settings.advanced.hardwareAcceleration.restartNote")} />
-          ) : null}
-          <RestartPrompt
-            open={asking}
-            onOpenChange={setAsking}
-            description={t("settings.advanced.hardwareAcceleration.restartPrompt")}
-          />
-        </div>
+        <RestartToggle
+          id={id}
+          checked={settings.advanced.hardwareAcceleration}
+          startedWith={useStartupSettings().advanced.hardwareAcceleration}
+          prompt={t("settings.advanced.hardwareAcceleration.restartPrompt")}
+          onChange={(checked) => {
+            change.mutate({ advancedHardwareAcceleration: checked });
+          }}
+        />
       );
     },
   },

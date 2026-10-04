@@ -19,8 +19,24 @@ function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root
   return <TooltipPrimitive.Root data-slot="tooltip" {...props} />;
 }
 
-function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
+function TooltipTrigger({
+  onFocus,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      onFocus={(event) => {
+        onFocus?.(event);
+        // Radix opens the tooltip on any focus. Focus the app moves by script, such as a dialog
+        // giving it back as it closes, is not the keyboard's, and a tooltip opened by it would stay
+        // until the control loses focus, wherever the pointer is. Preventing the default skips
+        // Radix's handler.
+        if (!event.currentTarget.matches(":focus-visible")) event.preventDefault();
+      }}
+      {...props}
+    />
+  );
 }
 
 function TooltipContent({

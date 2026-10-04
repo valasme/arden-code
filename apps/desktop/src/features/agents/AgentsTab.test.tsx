@@ -169,7 +169,34 @@ describe("Settings → Agents", () => {
     expect(within(agent).queryByText("Location")).toBeNull();
   });
 
-  it("offers a way to install each agent, which opens its page in the browser", async () => {
+  it("offers no install or update for an agent that is installed and new enough", async () => {
+    startApp();
+    renderTab();
+
+    const agent = await screen.findByRole("region", { name: "Claude Code" });
+
+    expect(within(agent).queryByRole("button")).toBeNull();
+  });
+
+  it("offers a way to update an agent that is too old, which opens its page", async () => {
+    const calls = startApp([{ ...claude, version: "2.1.100", tooOld: true }, codex]);
+    const user = userEvent.setup();
+    renderTab();
+    const agent = await screen.findByRole("region", { name: "Claude Code" });
+
+    expect(within(agent).queryByRole("button", { name: /install/iu })).toBeNull();
+    await user.click(within(agent).getByRole("button", { name: "How to update Claude Code" }));
+
+    await waitFor(() => {
+      const opened = calls.find((call) => call.command === "open_link");
+      expect(z.object({ url: z.string(), confirmed: z.boolean() }).parse(opened?.payload)).toEqual({
+        url: "https://code.claude.com/docs/en/setup",
+        confirmed: false,
+      });
+    });
+  });
+
+  it("offers a way to install an agent that is not installed, which opens its page", async () => {
     const calls = startApp();
     const user = userEvent.setup();
     renderTab();

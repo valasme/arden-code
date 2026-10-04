@@ -88,6 +88,9 @@ impl Default for General {
 }
 
 /// How the app looks.
+// Each switch is a setting of its own that the person turns on or off, not a state to fold into an
+// enum.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Appearance {
@@ -103,6 +106,8 @@ pub struct Appearance {
     pub code_ligatures: bool,
     /// Play fewer animations.
     pub reduce_motion: ReduceMotion,
+    /// Animate scrolling with the wheel and the keyboard. The web engine reads it when it starts.
+    pub smooth_scrolling: bool,
     /// Show the bar along the bottom of the window.
     pub show_status_bar: bool,
 }
@@ -116,6 +121,7 @@ impl Default for Appearance {
             code_font_size: 13,
             code_ligatures: false,
             reduce_motion: ReduceMotion::default(),
+            smooth_scrolling: true,
             show_status_bar: true,
         }
     }
@@ -278,6 +284,7 @@ pub enum SettingChange {
     AppearanceCodeFontSize(u8),
     AppearanceCodeLigatures(bool),
     AppearanceReduceMotion(ReduceMotion),
+    AppearanceSmoothScrolling(bool),
     AppearanceShowStatusBar(bool),
     LayoutSidebarWidth(u16),
     LayoutInspectorWidth(u16),
@@ -301,6 +308,7 @@ pub enum SettingKey {
     AppearanceCodeFontSize,
     AppearanceCodeLigatures,
     AppearanceReduceMotion,
+    AppearanceSmoothScrolling,
     AppearanceShowStatusBar,
     LayoutSidebarWidth,
     LayoutInspectorWidth,
@@ -313,7 +321,7 @@ pub enum SettingKey {
 
 impl SettingKey {
     /// Every setting.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::GeneralOnStartup,
         Self::GeneralCheckForUpdates,
         Self::GeneralRegionalFormat,
@@ -323,6 +331,7 @@ impl SettingKey {
         Self::AppearanceCodeFontSize,
         Self::AppearanceCodeLigatures,
         Self::AppearanceReduceMotion,
+        Self::AppearanceSmoothScrolling,
         Self::AppearanceShowStatusBar,
         Self::LayoutSidebarWidth,
         Self::LayoutInspectorWidth,
@@ -350,6 +359,9 @@ impl Settings {
             SettingChange::AppearanceCodeFontSize(value) => self.appearance.code_font_size = value,
             SettingChange::AppearanceCodeLigatures(value) => self.appearance.code_ligatures = value,
             SettingChange::AppearanceReduceMotion(value) => self.appearance.reduce_motion = value,
+            SettingChange::AppearanceSmoothScrolling(value) => {
+                self.appearance.smooth_scrolling = value;
+            }
             SettingChange::AppearanceShowStatusBar(value) => {
                 self.appearance.show_status_bar = value;
             }
@@ -416,6 +428,9 @@ impl Settings {
             }
             SettingKey::AppearanceReduceMotion => {
                 self.appearance.reduce_motion = defaults.appearance.reduce_motion;
+            }
+            SettingKey::AppearanceSmoothScrolling => {
+                self.appearance.smooth_scrolling = defaults.appearance.smooth_scrolling;
             }
             SettingKey::AppearanceShowStatusBar => {
                 self.appearance.show_status_bar = defaults.appearance.show_status_bar;
@@ -484,6 +499,7 @@ mod tests {
         assert_eq!(settings.appearance.code_font_size, 13);
         assert!(!settings.appearance.code_ligatures);
         assert_eq!(settings.appearance.reduce_motion, ReduceMotion::System);
+        assert!(settings.appearance.smooth_scrolling);
         assert!(settings.appearance.show_status_bar);
         assert!(settings.notifications.desktop);
         assert_eq!(settings.advanced.log_level, LogLevel::Info);
@@ -512,6 +528,7 @@ mod tests {
                     "codeFontSize": 13,
                     "codeLigatures": false,
                     "reduceMotion": "system",
+                    "smoothScrolling": true,
                     "showStatusBar": true
                 },
                 "layout": { "sidebarWidth": 260, "inspectorWidth": 320 },
@@ -552,6 +569,7 @@ mod tests {
         settings.apply(SettingChange::AppearanceCodeFontSize(16));
         settings.apply(SettingChange::AppearanceCodeLigatures(true));
         settings.apply(SettingChange::AppearanceReduceMotion(ReduceMotion::On));
+        settings.apply(SettingChange::AppearanceSmoothScrolling(false));
         settings.apply(SettingChange::AppearanceShowStatusBar(false));
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
@@ -573,6 +591,7 @@ mod tests {
         assert_eq!(settings.appearance.code_font_size, 16);
         assert!(settings.appearance.code_ligatures);
         assert_eq!(settings.appearance.reduce_motion, ReduceMotion::On);
+        assert!(!settings.appearance.smooth_scrolling);
         assert!(!settings.appearance.show_status_bar);
         assert_eq!(settings.layout.sidebar_width, 300);
         assert_eq!(settings.layout.inspector_width, 400);
@@ -625,6 +644,7 @@ mod tests {
         settings.apply(SettingChange::AppearanceCodeFontSize(16));
         settings.apply(SettingChange::AppearanceCodeLigatures(true));
         settings.apply(SettingChange::AppearanceReduceMotion(ReduceMotion::On));
+        settings.apply(SettingChange::AppearanceSmoothScrolling(false));
         settings.apply(SettingChange::AppearanceShowStatusBar(false));
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
@@ -786,7 +806,7 @@ mod tests {
     #[test]
     fn unknown_keys_are_ignored_so_a_schema_reference_or_a_future_setting_does_no_harm() {
         let settings: Settings = serde_json::from_str(
-            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"notifications":{"desktop":true},"keyboard":{"shortcuts":{}},"advanced":{"logLevel":"info","developerMode":false,"nativeTitleBar":false,"hardwareAcceleration":true},"extra":1}"#,
+            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","smoothScrolling":true,"showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"notifications":{"desktop":true},"keyboard":{"shortcuts":{}},"advanced":{"logLevel":"info","developerMode":false,"nativeTitleBar":false,"hardwareAcceleration":true},"extra":1}"#,
         )
         .unwrap();
 
