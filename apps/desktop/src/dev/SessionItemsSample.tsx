@@ -81,47 +81,12 @@ const items: readonly Item[] = [
   },
   { type: "error", id: "error", message: "The agent could not finish: the file is read-only." },
   { type: "status", id: "stopped", kind: "stopped" },
-  {
-    type: "approval",
-    id: "approval-waiting",
-    toolCallId: null,
-    action: "runCommand",
-    subject: "npm test",
-    detail: "Run the tests",
-    rule: "Bash(npm test:*)",
-    state: "waiting",
-  },
-  {
-    type: "approval",
-    id: "approval-allowed",
-    toolCallId: null,
-    action: "editFile",
-    subject: "src/main.ts",
-    detail: null,
-    rule: null,
-    state: "allowed",
-  },
-  {
-    type: "questions",
-    id: "questions-waiting",
-    toolCallId: null,
-    questions: [
-      {
-        header: "Library",
-        question: "Which library should the app use?",
-        options: [
-          { label: "React", description: "The one the app already uses" },
-          { label: "Vue", description: null },
-        ],
-        multiSelect: false,
-      },
-    ],
-    answers: [],
-    state: "waiting",
-  },
 ];
 
-/** Every kind of item in a reply, for the design system page. */
+/**
+ * The kinds of item in a reply, for the design system page. Approval requests and questions wait
+ * for an answer, so they are shown where they are tested, in the session.
+ */
 export function SessionItemsSample() {
   return (
     <div className="max-w-2xl border border-border p-4">
