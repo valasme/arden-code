@@ -52,7 +52,8 @@ describe("With no session open", () => {
     const main = screen.getByRole("main");
     expect(within(main).getByRole("img", { name: "Arden Code" })).toBeVisible();
     expect(within(main).getByRole("textbox", { name: "Message" })).toHaveFocus();
-    expect(within(main).getByText("Demo agent · Playground")).toBeVisible();
+    expect(within(main).getByRole("button", { name: "Agent: Demo agent" })).toBeVisible();
+    expect(within(main).getByRole("button", { name: "Project: Playground" })).toBeVisible();
     const hints = within(within(main).getByRole("list")).getAllByRole("listitem");
     expect(hints.map((hint) => hint.textContent)).toEqual([
       "Ctrl+KCommand palette",

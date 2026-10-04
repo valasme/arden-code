@@ -77,6 +77,15 @@ export const newSessionAgentQuery = queryOptions({
   staleTime: Number.POSITIVE_INFINITY,
 });
 
+/** The agent a new session in a project takes (ADR 0039), for the welcome screen's choice. */
+export const agentForProjectQuery = (projectId: string) =>
+  queryOptions({
+    queryKey: [...newSessionAgentQuery.queryKey, projectId],
+    queryFn: (): Promise<AgentKind> =>
+      isTauri() ? commands.agentForNewSession(projectId) : Promise.resolve("demo"),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
 /**
  * One session with its turns. While a reply streams the cache is updated from the channel, so it
  * is never fetched again on its own.

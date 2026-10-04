@@ -42,3 +42,9 @@ export function projectsByUse(list: SessionList): Project[] {
       .toSorted((a, b) => lastUsed(b).localeCompare(lastUsed(a))),
   ];
 }
+
+/** The project of the session used last, archived ones aside, if there is one. */
+export function latestProjectId(list: SessionList): string | undefined {
+  const current = [...list.pinned, ...list.projects.flatMap(({ sessions }) => sessions)];
+  return current.toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.projectId;
+}

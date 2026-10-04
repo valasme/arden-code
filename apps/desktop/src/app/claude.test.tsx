@@ -446,12 +446,15 @@ describe("The welcome state (ADR 0039)", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "What should Claude work on?" }),
     ).toBeVisible();
-    expect(screen.getByText("Claude · Playground")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Agent: Claude" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Project: Playground" })).toBeVisible();
 
     await user.type(screen.getByRole("textbox", { name: "Message" }), "Hello{Enter}");
 
     await waitFor(() => {
-      expect(rust.callsTo("create_session")).toEqual([{ agent: "claude", projectId: null }]);
+      expect(rust.callsTo("create_session")).toEqual([
+        { agent: "claude", projectId: "playground" },
+      ]);
     });
   });
 });
