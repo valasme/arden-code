@@ -12,7 +12,9 @@ import type { SessionSummary } from "@/ipc/bindings";
 import { noSessions, sessionListQuery } from "@/ipc/queries";
 import { cn } from "@/lib/utils";
 import { useRowFocusStore } from "@/state/rowFocus";
+import { useSessionDialogsStore } from "@/state/sessionDialogs";
 
+import { ProjectActionsMenu } from "./ProjectActions";
 import { SessionMenu } from "./SessionMenu";
 import { useSessionActions } from "./useSessionActions";
 
@@ -80,6 +82,7 @@ export function SessionsNav() {
   const { t } = useTranslation();
   const { run } = useCommands();
   const { data: list = noSessions } = useQuery(sessionListQuery);
+  const askToRemove = useSessionDialogsStore((state) => state.askToRemove);
 
   return (
     <>
@@ -114,13 +117,36 @@ export function SessionsNav() {
         .filter(({ project, sessions }) => project.kind === "playground" || sessions.length > 0)
         .map(({ project, sessions }) => (
           <section key={project.id} aria-labelledby={`project-${project.id}`} className="pt-3">
-            <h3
-              id={`project-${project.id}`}
-              title={project.kind === "playground" ? undefined : project.path}
-              className={sectionLabel}
-            >
-              {project.kind === "playground" ? t("sessions.playground") : project.name}
-            </h3>
+            {project.kind === "playground" ? (
+              <h3 id={`project-${project.id}`} className={sectionLabel}>
+                {t("sessions.playground")}
+              </h3>
+            ) : (
+              // A right click on the name opens the project's menu too (ContextMenuHost). Unlike a
+              // session's, the … button stays in the Tab order: the name itself takes no focus.
+              <div data-project-id={project.id} className="group/project relative">
+                <h3
+                  id={`project-${project.id}`}
+                  title={project.path}
+                  className={cn(sectionLabel, "pe-8")}
+                >
+                  {project.name}
+                </h3>
+                <ProjectActionsMenu
+                  onRemove={() => {
+                    askToRemove(project.id);
+                  }}
+                >
+                  <button
+                    type="button"
+                    aria-label={t("projects.menu", { name: project.name })}
+                    className="absolute end-1 -top-1 grid size-6 place-items-center text-muted-foreground opacity-0 group-focus-within/project:opacity-100 group-hover/project:opacity-100 hover:bg-sidebar-border hover:text-sidebar-accent-foreground focus-visible:opacity-100 data-[state=open]:opacity-100 forced-colors:hover:outline forced-colors:hover:outline-1"
+                  >
+                    <EllipsisIcon aria-hidden className="size-4" strokeWidth={1.5} />
+                  </button>
+                </ProjectActionsMenu>
+              </div>
+            )}
             {sessions.length === 0 ? (
               <p className="px-2 py-1 text-xs text-muted-foreground">{t("sidebar.noSessions")}</p>
             ) : (

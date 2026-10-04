@@ -18,7 +18,7 @@ import {
   type CommandId,
 } from "@/features/commands/registry";
 
-import { matchesSearch } from "./search";
+import { matchesSearch } from "@/lib/search";
 import { useResetShortcuts, useSetShortcuts } from "./useShortcuts";
 import { useSettings } from "./useSettings";
 
