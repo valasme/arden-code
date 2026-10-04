@@ -594,6 +594,8 @@
       "signedIn": "Signed in",
       "signedOut": "Not signed in",
       "tooOld": "This version is too old for Arden Code. Run claude update in a terminal, then look again.",
+      "update": "How to update",
+      "updateLabel": "How to update {{name}}",
       "version": "Version",
       "versionUnknown": "Unknown"
     },
