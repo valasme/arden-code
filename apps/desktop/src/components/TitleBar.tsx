@@ -30,9 +30,13 @@ interface TitleBarProps {
   controls?: ReactNode;
 }
 
-function showSystemMenu() {
+/**
+ * Opens Windows' own window menu: with its top left corner at a point of the page, or, with none,
+ * where Windows puts it for Alt+Space.
+ */
+function showSystemMenu(at: { x: number; y: number } | null = null) {
   if (!isTauri()) return;
-  commands.showSystemMenu().catch((error: unknown) => {
+  commands.showSystemMenu(at).catch((error: unknown) => {
     reportFailure("Opening the window menu", error);
   });
 }
@@ -84,7 +88,7 @@ export function TitleBar({
         event.code === "Space"
       ) {
         event.preventDefault();
-        showSystemMenu();
+        showSystemMenu(null);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -93,11 +97,11 @@ export function TitleBar({
     };
   }, [native]);
 
-  // A right click on the bar's empty space also opens it.
+  // A right click on the bar's empty space also opens it, at the pointer, as on a bar Windows draws.
   const onContextMenu = (event: MouseEvent<HTMLElement>) => {
     if (!native && event.target === event.currentTarget) {
       event.preventDefault();
-      showSystemMenu();
+      showSystemMenu({ x: event.clientX, y: event.clientY });
     }
   };
 
@@ -118,7 +122,11 @@ export function TitleBar({
             aria-label={t("titleBar.menu")}
             aria-haspopup="menu"
             className="w-8"
-            onClick={showSystemMenu}
+            onClick={(event) => {
+              // Under the button, as a menu button opens its menu.
+              const button = event.currentTarget.getBoundingClientRect();
+              showSystemMenu({ x: button.left, y: button.bottom });
+            }}
           >
             <MenuIcon aria-hidden className="size-5" strokeWidth={1.5} />
           </BarButton>

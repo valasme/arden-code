@@ -14,7 +14,9 @@ export const commands = {
 	 */
 	appInfo: () => __TAURI_INVOKE<AppInfo>("app_info"),
 	/**
-	 *  Opens the window's system menu (Restore, Move, Size, Minimize, Maximize, Close), like Alt+Space.
+	 *  Opens the window's system menu (Restore, Move, Size, Minimize, Maximize, Close): at a point of
+	 *  the page, under the Window menu button or at the pointer, or where Windows puts it for
+	 *  Alt+Space when no point is given.
 	 * 
 	 *  The title bar is drawn by the UI, so Windows' own menu has to be asked for.
 	 * 
@@ -22,7 +24,10 @@ export const commands = {
 	 * 
 	 *  `ARD-WIN-001` when the window handle is missing or Windows refuses the request.
 	 */
-	showSystemMenu: () => __TAURI_INVOKE<null>("show_system_menu"),
+	showSystemMenu: (at: {
+	x: number | null,
+	y: number | null,
+} | null) => __TAURI_INVOKE<null>("show_system_menu", { at }),
 	/**
 	 *  Where the page's Maximize button is now, or `None` when the page has none, as with the title
 	 *  bar of Windows.
@@ -902,6 +907,12 @@ export type OnStartup =
 "restore" | 
 /**  Start with no session open. */
 "fresh";
+
+/**  A point of the page, in its own (logical) pixels from its top left corner. */
+export type PagePoint = {
+	x: number | null,
+	y: number | null,
+};
 
 /**  A folder on disk where agents work. */
 export type Project = {

@@ -1,7 +1,16 @@
 import type { Page } from "@playwright/test";
 
 import { expect, launchApp, test } from "./fixtures";
-import { getWindow, hitTest, isMenuOpen, narrowestWidth } from "./windows";
+import {
+  bringForward,
+  clientToScreen,
+  getWindow,
+  hitTest,
+  isMenuOpen,
+  narrowestWidth,
+  openMenuRect,
+  pressKeyInFront,
+} from "./windows";
 
 /** Windows' answer for a Maximize button, the one that brings up Snap Layouts. */
 const maximizeButtonAnswer = 9;
@@ -120,6 +129,32 @@ test.describe("the title bar in the real app", () => {
       await app.page.getByRole("button", { name: "Window menu" }).click();
 
       await expect.poll(isMenuOpen, { timeout: 5000 }).toBe(true);
+    } finally {
+      app.kill();
+    }
+  });
+
+  test("the Window menu button opens the menu under itself, not at the window's corner", async () => {
+    const app = await launchApp();
+    try {
+      await expect.poll(() => getWindow(app.pid), { timeout: 15_000 }).toBeDefined();
+      const button = app.page.getByRole("button", { name: "Window menu" });
+      const box = await button.boundingBox();
+      if (!box) throw new Error("the page has no Window menu button");
+      const scale = await app.page.evaluate(() => globalThis.devicePixelRatio);
+      const below = clientToScreen(app.pid, box.x * scale, (box.y + box.height) * scale);
+      expect(bringForward(app.pid)).toBe(true);
+
+      await button.click();
+
+      await expect.poll(openMenuRect, { timeout: 5000 }).toBeDefined();
+      const menu = openMenuRect();
+      expect(Math.abs((menu?.x ?? 0) - below.x)).toBeLessThanOrEqual(2);
+      expect(Math.abs((menu?.y ?? 0) - below.y)).toBeLessThanOrEqual(2);
+
+      // Its commands still work: X is Maximize's access key.
+      pressKeyInFront(0x58);
+      await expect.poll(() => getWindow(app.pid)?.maximized, { timeout: 5000 }).toBe(true);
     } finally {
       app.kill();
     }
