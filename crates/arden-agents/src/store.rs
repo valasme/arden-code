@@ -12,8 +12,9 @@ use time::format_description::well_known::Rfc3339;
 use crate::database::{Database, DatabaseError, Order};
 use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
 use crate::model::{
-    AgentKind, ApprovalState, Item, Model, Project, ProjectKind, ProjectListing, QuestionAnswer,
-    QuestionState, Session, SessionList, SessionSummary, Turn, TurnEvent, TurnStatus,
+    AgentKind, ApprovalState, Choices, Effort, Item, Model, Project, ProjectKind, ProjectListing,
+    QuestionAnswer, QuestionState, Session, SessionList, SessionSummary, Turn, TurnEvent,
+    TurnStatus,
 };
 
 /// How many characters of the first message become the session's title.
@@ -113,7 +114,15 @@ impl Entry {
             archived_at: session.archived_at.clone(),
             linked_from: session.linked_from.clone(),
             model: session.model,
+            effort: session.effort,
             turns: Vec::new(),
+        }
+    }
+
+    fn choices(&self) -> Choices {
+        Choices {
+            model: self.session.model,
+            effort: self.session.effort,
         }
     }
 
@@ -234,19 +243,15 @@ impl Inner {
         if !self.projects.iter().any(|project| project.id == project_id) {
             return Err(StoreError::UnknownProject);
         }
-        // The model comes from the session it was started from, else from the session the agent
-        // rule follows when it has the same agent (councils Q6).
-        let model = match &linked_from {
-            Some(from) => self
-                .sessions
-                .iter()
-                .find(|entry| entry.session.id == *from)
-                .and_then(|entry| entry.session.model),
+        // The model and effort come from the session it was started from, else from the session
+        // the agent rule follows when it has the same agent (councils Q6).
+        let source = match &linked_from {
+            Some(from) => self.sessions.iter().find(|entry| entry.session.id == *from),
             None => self
                 .latest_for(project_id)
-                .filter(|entry| entry.session.agent == agent)
-                .and_then(|entry| entry.session.model),
+                .filter(|entry| entry.session.agent == agent),
         };
+        let Choices { model, effort } = source.map(Entry::choices).unwrap_or_default();
         let now = now_utc();
         let entry = Entry {
             session: Session {
@@ -260,6 +265,7 @@ impl Inner {
                 archived_at: None,
                 linked_from,
                 model,
+                effort,
                 turns: Vec::new(),
             },
             loaded: true,
@@ -742,6 +748,14 @@ impl SessionStore {
             .and_then(|entry| entry.session.model)
     }
 
+    /// The effort a new session in a project takes, as [`Self::model_for_new_session`] does.
+    #[must_use]
+    pub fn effort_for_new_session(&self, project_id: &str) -> Option<Effort> {
+        self.lock()
+            .latest_for(project_id)
+            .and_then(|entry| entry.session.effort)
+    }
+
     /// Changes the model of a session (ADR 0041), also after its first message. The agent takes it
     /// from the next message on.
     ///
@@ -751,6 +765,24 @@ impl SessionStore {
     /// [`StoreError::Archived`] when it is archived, [`StoreError::TurnRunning`] while a reply
     /// runs, and [`StoreError::NotSaved`] when the change cannot be written.
     pub fn set_model(&self, session_id: &str, model: Option<Model>) -> Result<(), StoreError> {
+        self.set_choice(session_id, |session| session.model = model)
+    }
+
+    /// Changes the effort of a session, as [`Self::set_model`] changes its model.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::set_model`].
+    pub fn set_effort(&self, session_id: &str, effort: Option<Effort>) -> Result<(), StoreError> {
+        self.set_choice(session_id, |session| session.effort = effort)
+    }
+
+    /// Changes what a session's agent works with, between messages (ADR 0041).
+    fn set_choice(
+        &self,
+        session_id: &str,
+        change: impl Fn(&mut Session),
+    ) -> Result<(), StoreError> {
         let mut inner = self.lock();
         let last_id = inner.last_id;
         let Inner {
@@ -770,11 +802,11 @@ impl SessionStore {
             return Err(StoreError::TurnRunning);
         }
         let mut header = entry.header();
-        header.model = model;
+        change(&mut header);
         database
             .save_session(&header, entry.order, last_id)
             .map_err(not_saved)?;
-        entry.session.model = model;
+        change(&mut entry.session);
         Ok(())
     }
 
@@ -1191,7 +1223,7 @@ impl SessionStore {
         let mut ended = false;
         let mut saved = Ok(());
         let (sender, controls) = mpsc::channel();
-        let (folder, conversation, model) = {
+        let (folder, conversation, choices) = {
             let mut inner = self.lock();
             inner.controls.insert(turn.id.clone(), sender);
             let entry = inner
@@ -1210,7 +1242,7 @@ impl SessionStore {
             (
                 folder,
                 entry.and_then(|entry| entry.conversation.clone()),
-                entry.and_then(|entry| entry.session.model),
+                entry.map(Entry::choices).unwrap_or_default(),
             )
         };
         let remember = |id: &str| {
@@ -1224,7 +1256,7 @@ impl SessionStore {
             prompt: &turn.prompt,
             folder: &folder,
             conversation: conversation.as_deref(),
-            model,
+            choices,
             remember: &remember,
             controls,
         };
@@ -1978,7 +2010,7 @@ mod tests {
         let version: i64 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("the version");
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
     }
 
     #[test]
@@ -2848,6 +2880,51 @@ mod tests {
         assert_eq!(
             store.session(&linked).expect("the session").linked_from,
             Some(original)
+        );
+    }
+
+    #[test]
+    fn a_session_s_effort_is_kept_inherited_and_waits_while_a_reply_runs() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let (first, next) = {
+            let store = store_in(&file);
+            let first = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .expect("a session");
+            assert_eq!(store.session(&first.id).expect("it").effort, None);
+            store
+                .set_effort(&first.id, Some(Effort::ExtraHigh))
+                .expect("chosen");
+            store.start_turn(&first.id, "hello").expect("a turn");
+            assert_eq!(
+                store.set_effort(&first.id, Some(Effort::Low)),
+                Err(StoreError::TurnRunning)
+            );
+            store.stop_turn(&first.id).expect("stopped");
+            let next = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .expect("a session");
+            let linked = store.create_linked_session(&first.id).expect("linked");
+            assert_eq!(
+                store.session(&linked.id).expect("it").effort,
+                Some(Effort::ExtraHigh)
+            );
+            assert_eq!(
+                store.effort_for_new_session(playground::PLAYGROUND_ID),
+                Some(Effort::ExtraHigh)
+            );
+            (first.id, next.id)
+        };
+
+        let store = store_in(&file);
+        assert_eq!(
+            store.session(&first).expect("it").effort,
+            Some(Effort::ExtraHigh)
+        );
+        assert_eq!(
+            store.session(&next).expect("it").effort,
+            Some(Effort::ExtraHigh)
         );
     }
 

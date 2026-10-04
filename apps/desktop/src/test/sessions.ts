@@ -5,6 +5,7 @@ import { z } from "zod";
 import type {
   AgentKind,
   AppError,
+  Effort,
   ErrorCode,
   Model,
   Project,
@@ -86,6 +87,8 @@ interface Options {
   newSessionAgent?: AgentKind;
   /** The model a new session takes (ADR 0041), null for the agent's own setting. */
   newSessionModel?: Model | null;
+  /** The effort a new session takes (ADR 0041), null for the agent's own setting. */
+  newSessionEffort?: Effort | null;
   /** The folder the person picks in Windows' dialog, or null when they cancel. */
   pickedFolder?: Project | null;
 }
@@ -104,6 +107,7 @@ export function startSessionsRust({
   folders: opened = [],
   newSessionAgent = "demo",
   newSessionModel = null,
+  newSessionEffort = null,
   pickedFolder = null,
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
@@ -204,6 +208,22 @@ export function startSessionsRust({
         }
         case "model_for_new_session": {
           return newSessionModel;
+        }
+        case "effort_for_new_session": {
+          return newSessionEffort;
+        }
+        case "set_session_effort": {
+          const { id, effort } = z
+            .object({
+              id: z.string(),
+              effort: z.enum(["low", "medium", "high", "extraHigh", "max"]).nullable(),
+            })
+            .parse(payload);
+          const session = find(id);
+          if (session.archivedAt !== null) throw failure("ARD-AGT-005");
+          if (session.turns.some((turn) => turn.status === "running")) throw failure("ARD-AGT-002");
+          session.effort = effort;
+          return null;
         }
         case "set_session_model": {
           const { id, model } = z

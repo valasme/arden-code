@@ -14,7 +14,7 @@ use arden_process::supervisor::Supervisor;
 
 use super::locate::{self, Missing};
 use crate::detect::parse_version;
-use crate::model::Model;
+use crate::model::{Effort, Model};
 
 /// How long Claude Code gets to say its version.
 const VERSION_PATIENCE: Duration = Duration::from_secs(10);
@@ -58,6 +58,8 @@ pub struct Start {
     pub conversation: Conversation,
     /// The model to work with, or none for Claude Code's own setting (ADR 0041).
     pub model: Option<Model>,
+    /// How much to think, or none for Claude Code's own setting (ADR 0041).
+    pub effort: Option<Effort>,
 }
 
 /// A running Claude Code: what Arden Code writes to it, what it writes back, and its process, when
@@ -186,6 +188,10 @@ fn arguments(start: &Start) -> Vec<Arg> {
         arguments.push(Arg::Literal("--model"));
         arguments.push(Arg::Literal(model.alias()));
     }
+    if let Some(effort) = start.effort {
+        arguments.push(Arg::Literal("--effort"));
+        arguments.push(Arg::Literal(effort.word()));
+    }
     match &start.conversation {
         Conversation::New(id) => {
             arguments.push(Arg::Literal("--session-id"));
@@ -243,10 +249,36 @@ mod tests {
 
     fn start(model: Option<Model>) -> Start {
         Start {
-            folder: PathBuf::from(r"C:Work"),
+            folder: PathBuf::from(r"C:\Work"),
             conversation: Conversation::New("c1".into()),
             model,
+            effort: None,
         }
+    }
+
+    #[test]
+    fn a_chosen_effort_is_passed_by_claude_code_s_word_and_default_passes_none() {
+        let with = |effort| {
+            texts(&Start {
+                effort,
+                ..start(None)
+            })
+        };
+        for (effort, word) in [
+            (Effort::Low, "low"),
+            (Effort::Medium, "medium"),
+            (Effort::High, "high"),
+            (Effort::ExtraHigh, "xhigh"),
+            (Effort::Max, "max"),
+        ] {
+            let chosen = with(Some(effort));
+            let at = chosen
+                .iter()
+                .position(|text| text == "--effort")
+                .expect("--effort");
+            assert_eq!(chosen[at + 1], word);
+        }
+        assert!(!with(None).contains(&"--effort".to_owned()));
     }
 
     #[test]

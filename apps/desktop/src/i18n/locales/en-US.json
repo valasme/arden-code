@@ -407,6 +407,10 @@
       "unarchive": "Unarchive",
       "undo": "Undo"
     },
+    "choiceMenu": {
+      "default": "Default",
+      "defaultHint": "Claude Code's own setting"
+    },
     "context": "{{agent}} · {{project}}",
     "delete": {
       "claude": "Claude Code keeps its own copy of the conversation in its folder.",
@@ -415,6 +419,14 @@
       "title": "Delete this session?"
     },
     "deleted": "Session deleted",
+    "effortMenu": {
+      "extraHigh": "Extra high",
+      "high": "High",
+      "label": "Effort: {{effort}}",
+      "low": "Low",
+      "max": "Max",
+      "medium": "Medium"
+    },
     "jumpToLatest": "Jump to latest",
     "links": {
       "from": "Linked from",
@@ -433,8 +445,6 @@
     },
     "messages": "Messages",
     "modelMenu": {
-      "default": "Default",
-      "defaultHint": "Claude Code's own setting",
       "fable": "Fable",
       "haiku": "Haiku",
       "label": "Model: {{model}}",

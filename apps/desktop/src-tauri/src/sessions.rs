@@ -9,8 +9,8 @@ use std::thread;
 use arden_agents::demo::DemoDriver;
 use arden_agents::driver::{AgentDriver, Answer};
 use arden_agents::model::{
-    AgentKind, ApprovalAction, ApprovalState, Item, Model, Project, QuestionAnswer, QuestionState,
-    Session, SessionList, SessionSummary, TurnEvent,
+    AgentKind, ApprovalAction, ApprovalState, Effort, Item, Model, Project, QuestionAnswer,
+    QuestionState, Session, SessionList, SessionSummary, TurnEvent,
 };
 use arden_agents::playground::PLAYGROUND_ID;
 use arden_agents::store::{OpenProblem, SessionStore, StoreError};
@@ -178,6 +178,42 @@ pub fn set_session_model(
 ) -> Result<(), AppError> {
     sessions.set_model(&id, model).map_err(app_error)?;
     tracing::info!(session = %id, ?model, "the session's model changed");
+    Ok(())
+}
+
+/// The effort a new session in a project would take, the Playground when none is given, as
+/// [`model_for_new_session`] says its model (ADR 0041).
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps)]
+#[tauri::command]
+#[specta::specta]
+pub fn effort_for_new_session(
+    project_id: Option<String>,
+    sessions: State<'_, Sessions>,
+) -> Result<Option<Effort>, AppError> {
+    Ok(sessions.effort_for_new_session(project_id.as_deref().unwrap_or(PLAYGROUND_ID)))
+}
+
+/// Changes how much a session's agent thinks, none for its own setting (ADR 0041). It applies from
+/// the next message.
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, it is archived, a reply is running, or the
+/// change cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn set_session_effort(
+    id: String,
+    effort: Option<Effort>,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions.set_effort(&id, effort).map_err(app_error)?;
+    tracing::info!(session = %id, ?effort, "the session's effort changed");
     Ok(())
 }
 

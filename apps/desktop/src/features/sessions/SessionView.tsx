@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
 import {
+  type Effort,
   type Model,
   type AgentKind,
   type Answer,
@@ -22,6 +23,7 @@ import { useRepliesStore } from "@/state/replies";
 import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
+import { EffortMenu } from "./EffortMenu";
 import { ModelMenu } from "./ModelMenu";
 import { ProjectMenu } from "./ProjectMenu";
 import { projectsByUse } from "./sessionList";
@@ -210,6 +212,16 @@ export function SessionView({ id }: { id: string }) {
         showErrorToast(toAppError(failure));
       });
   };
+  const chooseEffort = (effort: Effort | null) => {
+    commands
+      .setSessionEffort(id, effort)
+      .then(async () => {
+        await queryClient.invalidateQueries({ queryKey: sessionQuery(id).queryKey });
+      })
+      .catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      });
+  };
   const choices =
     count === 0 && session.archivedAt === null ? (
       <span className="flex min-w-0 items-center gap-1.5">
@@ -234,7 +246,10 @@ export function SessionView({ id }: { id: string }) {
     <span className="flex min-w-0 items-center gap-1.5">
       {choices}
       {agent === "claude" && session.archivedAt === null ? (
-        <ModelMenu model={session.model ?? null} disabled={busy} onChoose={chooseModel} />
+        <>
+          <ModelMenu model={session.model ?? null} disabled={busy} onChoose={chooseModel} />
+          <EffortMenu effort={session.effort ?? null} disabled={busy} onChoose={chooseEffort} />
+        </>
       ) : null}
     </span>
   );

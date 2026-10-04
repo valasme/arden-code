@@ -7,9 +7,10 @@ import { Kbd } from "@/components/ui/kbd";
 import { useShortcutsOf } from "@/features/commands/CommandsProvider";
 import type { CommandId } from "@/features/commands/registry";
 import { formatShortcut } from "@/features/commands/shortcuts";
-import { type AgentKind, commands, type Model, type Project } from "@/ipc/bindings";
+import { type AgentKind, commands, type Effort, type Model, type Project } from "@/ipc/bindings";
 import {
   agentForProjectQuery,
+  effortForProjectQuery,
   modelForProjectQuery,
   noSessions,
   sessionListQuery,
@@ -18,6 +19,7 @@ import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 
 import { AgentMenu } from "./AgentMenu";
+import { EffortMenu } from "./EffortMenu";
 import { MessageBox } from "./MessageBox";
 import { ModelMenu } from "./ModelMenu";
 import { ProjectMenu } from "./ProjectMenu";
@@ -59,6 +61,7 @@ export function Welcome() {
   const [chosenProject, setChosenProject] = useState<string | undefined>(undefined);
   const [chosenAgent, setChosenAgent] = useState<AgentKind | undefined>(undefined);
   const [chosenModel, setChosenModel] = useState<Model | null | undefined>(undefined);
+  const [chosenEffort, setChosenEffort] = useState<Effort | null | undefined>(undefined);
   /** A message that waits for the person to trust the chosen folder, and how to say what became of it. */
   const [trusting, setTrusting] = useState<{
     text: string;
@@ -75,17 +78,23 @@ export function Welcome() {
   // The model a new session there takes, until the person chooses one (ADR 0041).
   const inherited = useQuery(modelForProjectQuery(projectId)).data ?? null;
   const model = chosenModel === undefined ? inherited : chosenModel;
+  const inheritedEffort = useQuery(effortForProjectQuery(projectId)).data ?? null;
+  const effort = chosenEffort === undefined ? inheritedEffort : chosenEffort;
 
   const start = async (text: string) => {
     const id = await startSession(agent, projectId);
     if (id === undefined) return false;
-    // The session takes the inherited model by itself; one chosen here is given before the message.
-    if (agent === "claude" && chosenModel !== undefined) {
-      try {
+    // The session takes the inherited model and effort by itself; one chosen here is given
+    // before the message.
+    try {
+      if (agent === "claude" && chosenModel !== undefined) {
         await commands.setSessionModel(id, chosenModel);
-      } catch (error) {
-        showErrorToast(toAppError(error));
       }
+      if (agent === "claude" && chosenEffort !== undefined) {
+        await commands.setSessionEffort(id, chosenEffort);
+      }
+    } catch (error) {
+      showErrorToast(toAppError(error));
     }
     await send(id, text);
     return true;
@@ -115,7 +124,12 @@ export function Welcome() {
                 });
               }}
             />
-            {agent === "claude" ? <ModelMenu model={model} onChoose={setChosenModel} /> : null}
+            {agent === "claude" ? (
+              <>
+                <ModelMenu model={model} onChoose={setChosenModel} />
+                <EffortMenu effort={effort} onChoose={setChosenEffort} />
+              </>
+            ) : null}
           </span>
         }
         onSend={(text) => {

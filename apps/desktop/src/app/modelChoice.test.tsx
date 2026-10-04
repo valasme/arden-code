@@ -50,6 +50,42 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, "isTauri");
 });
 
+describe("Choosing the effort (ADR 0041)", () => {
+  it("is offered beside the model for Claude, saved when chosen, and waits while a reply runs", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({ sessions: [answered()] });
+    renderApp("/session/session-1");
+
+    await choose(user, "Effort: Default", /^High/);
+
+    expect(rust.callsTo("set_session_effort")).toEqual([{ id: "session-1", effort: "high" }]);
+    expect(await screen.findByRole("button", { name: "Effort: High" })).toBeVisible();
+  });
+
+  it("is not offered for a Demo agent session", async () => {
+    startSessionsRust({ sessions: [sessionNamed("session-1", null)] });
+    renderApp("/session/session-1");
+
+    await screen.findByRole("button", { name: "Agent: Demo agent" });
+    expect(screen.queryByRole("button", { name: /^Effort:/ })).toBeNull();
+  });
+
+  it("is chosen on the welcome screen too, and given to the session before its first message", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({ newSessionAgent: "claude", newSessionEffort: "low" });
+    renderApp("/");
+
+    await choose(user, "Effort: Low", /^Max/);
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "Hello{Enter}");
+
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+    expect(rust.callsTo("set_session_effort")).toEqual([{ id: expect.any(String), effort: "max" }]);
+    expect(rust.callsTo("set_session_model")).toEqual([]);
+  });
+});
+
 describe("Choosing the model (ADR 0041)", () => {
   it("is offered for a Claude session, also after its first message, and not for the Demo agent", async () => {
     startSessionsRust({ sessions: [answered("claude"), { ...answered("demo"), id: "session-2" }] });

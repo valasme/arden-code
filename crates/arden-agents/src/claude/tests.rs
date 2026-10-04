@@ -13,7 +13,7 @@ use super::launch::{Conversation, LaunchError};
 use super::script::{Scripted, Step, handshake};
 use crate::driver::{AgentDriver, Answer};
 use crate::model::{
-    AgentKind, ApprovalAction, ApprovalState, FileChangeKind, Item, Model, Question,
+    AgentKind, ApprovalAction, ApprovalState, Effort, FileChangeKind, Item, Model, Question,
     QuestionAnswer, QuestionOption, QuestionState, StatusKind, ToolStatus, Turn, TurnEvent,
     TurnStatus,
 };
@@ -1149,6 +1149,30 @@ fn claude_code_starts_with_the_session_s_model_and_keeps_running_while_it_stays(
     let starts = scripted.starts.lock().expect("starts");
     assert_eq!(starts.len(), 1, "the same Claude Code answers both");
     assert_eq!(starts[0].model, Some(Model::Opus));
+}
+
+#[test]
+fn a_new_effort_starts_claude_code_again_with_it() {
+    let (scripted, driver) = claude(vec![
+        Ok(answers("First", "One.")),
+        Ok(answers("Second", "Two.")),
+    ]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "First");
+    store
+        .set_effort(&session, Some(Effort::Max))
+        .expect("changed");
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    let starts = scripted.starts.lock().expect("starts");
+    assert_eq!(
+        starts.iter().map(|start| start.effort).collect::<Vec<_>>(),
+        [None, Some(Effort::Max)]
+    );
+    assert!(matches!(starts[1].conversation, Conversation::Resume(_)));
 }
 
 #[test]

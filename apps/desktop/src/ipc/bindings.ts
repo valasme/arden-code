@@ -495,6 +495,25 @@ export const commands = {
 	 */
 	modelForNewSession: (projectId: string | null) => __TAURI_INVOKE<"fable" | "opus" | "sonnet" | "haiku" | null>("model_for_new_session", { projectId }),
 	/**
+	 *  Changes how much a session's agent thinks, none for its own setting (ADR 0041). It applies from
+	 *  the next message.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, it is archived, a reply is running, or the
+	 *  change cannot be saved.
+	 */
+	setSessionEffort: (id: string, effort: "low" | "medium" | "high" | "extraHigh" | "max" | null) => __TAURI_INVOKE<null>("set_session_effort", { id, effort }),
+	/**
+	 *  The effort a new session in a project would take, the Playground when none is given, as
+	 *  [`model_for_new_session`] says its model (ADR 0041).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	effortForNewSession: (projectId: string | null) => __TAURI_INVOKE<"low" | "medium" | "high" | "extraHigh" | "max" | null>("effort_for_new_session", { projectId }),
+	/**
 	 *  Moves a session that has had no message yet to another project (ADR 0039).
 	 * 
 	 *  # Errors
@@ -720,6 +739,12 @@ export type Detection = {
 	/**  Where to install it. */
 	installUrl: string,
 };
+
+/**
+ *  How much Claude thinks before it answers in a session, as Claude Code's `--effort` takes it
+ *  (ADR 0041). No choice leaves it to Claude Code's own setting.
+ */
+export type Effort = "low" | "medium" | "high" | "extraHigh" | "max";
 
 /**  One line of a log file, in the shape the log viewer shows. */
 export type Entry = {
@@ -1053,6 +1078,8 @@ export type Session = {
 	linkedFrom: string | null,
 	/**  The model the agent works with, or none for the agent's own setting (ADR 0041). */
 	model?: Model | null,
+	/**  How much the agent thinks, or none for the agent's own setting (ADR 0041). */
+	effort?: Effort | null,
 	turns: Turn[],
 };
 

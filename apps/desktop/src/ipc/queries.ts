@@ -6,6 +6,7 @@ import { defaultSettings } from "@/ipc/defaults.gen";
 import { fallbackSystemPreferences } from "@/features/settings/systemPreferences";
 
 import {
+  type Effort,
   type Model,
   type AgentKind,
   commands,
@@ -89,6 +90,15 @@ export const modelForProjectQuery = (projectId: string) =>
     queryKey: [...newSessionAgentQuery.queryKey, projectId, "model"],
     queryFn: (): Promise<Model | null> =>
       isTauri() ? commands.modelForNewSession(projectId) : Promise.resolve(null),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+/** The effort a new session in a project takes (ADR 0041), null for the agent's own setting. */
+export const effortForProjectQuery = (projectId: string) =>
+  queryOptions({
+    queryKey: [...newSessionAgentQuery.queryKey, projectId, "effort"],
+    queryFn: (): Promise<Effort | null> =>
+      isTauri() ? commands.effortForNewSession(projectId) : Promise.resolve(null),
     staleTime: Number.POSITIVE_INFINITY,
   });
 

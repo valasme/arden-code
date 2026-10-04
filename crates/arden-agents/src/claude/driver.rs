@@ -21,7 +21,7 @@ use super::question;
 use super::reply::Reply;
 use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
 use crate::model::{
-    ApprovalState, Item, Model, QuestionAnswer, QuestionState, StatusKind, TurnEvent,
+    ApprovalState, Choices, Item, QuestionAnswer, QuestionState, StatusKind, TurnEvent,
 };
 
 /// How long a new Claude Code has to answer `initialize`: it may be starting MCP servers.
@@ -87,8 +87,8 @@ struct Live {
     owed: AtomicUsize,
     /// The conversation it carries on, and whether the session remembers it already.
     conversation: String,
-    /// The model it was started with: another one needs another Claude Code (ADR 0041).
-    model: Option<Model>,
+    /// The model and effort it was started with: others need another Claude Code (ADR 0041).
+    choices: Choices,
     remembered: AtomicBool,
     /// When Claude Code last wrote, or a reply last ended.
     heard: Arc<Mutex<Instant>>,
@@ -135,7 +135,10 @@ impl Live {
                 Conversation::New(id) | Conversation::Resume(id) => id.clone(),
             },
             remembered: AtomicBool::new(matches!(conversation, Conversation::Resume(_))),
-            model: start.model,
+            choices: Choices {
+                model: start.model,
+                effort: start.effort,
+            },
             heard,
             busy: AtomicBool::new(false),
         }
@@ -291,35 +294,35 @@ impl ClaudeDriver {
         session_id: &str,
         folder: &Path,
         saved: Option<&str>,
-        model: Option<Model>,
+        choices: Choices,
     ) -> Result<(Arc<Live>, bool), Problem> {
         let running = lock(&self.live).get(session_id).map(Arc::clone);
         if let Some(live) = running {
-            if live.model == model {
+            if live.choices == choices {
                 live.busy.store(true, Ordering::Release);
                 return Ok((live, false));
             }
-            // Started with another model: it is ended, and the conversation carries on in a
-            // Claude Code started with this one (ADR 0041).
+            // Started with another model or effort: it is ended, and the conversation carries on
+            // in a Claude Code started with these (ADR 0041).
             self.forget(session_id);
         }
         let fresh = || Conversation::New(uuid::Uuid::new_v4().to_string());
         let Some(saved) = saved else {
             return self
-                .start(session_id, folder, fresh(), model)
+                .start(session_id, folder, fresh(), choices)
                 .map(|live| (live, false));
         };
         match self.start(
             session_id,
             folder,
             Conversation::Resume(saved.to_owned()),
-            model,
+            choices,
         ) {
             Ok(live) => Ok((live, false)),
             // Claude Code ends at once when it has no such conversation.
             Err(Problem::Stopped(why)) => {
                 tracing::warn!(session = %session_id, %why, "Claude Code did not carry on the conversation, so a new one starts");
-                self.start(session_id, folder, fresh(), model)
+                self.start(session_id, folder, fresh(), choices)
                     .map(|live| (live, true))
             }
             Err(problem) => Err(problem),
@@ -332,12 +335,13 @@ impl ClaudeDriver {
         session_id: &str,
         folder: &Path,
         conversation: Conversation,
-        model: Option<Model>,
+        choices: Choices,
     ) -> Result<Arc<Live>, Problem> {
         let start = Start {
             folder: folder.to_path_buf(),
             conversation,
-            model,
+            model: choices.model,
+            effort: choices.effort,
         };
         let connection = self.launcher.launch(&start).map_err(Problem::Launch)?;
         let live = Arc::new(Live::begin(connection, session_id, &start));
@@ -399,9 +403,9 @@ impl ClaudeDriver {
         session_id: &str,
         folder: &Path,
         saved: Option<&str>,
-        model: Option<Model>,
+        choices: Choices,
     ) -> Result<(Arc<Live>, bool), Problem> {
-        let (live, lost) = self.live(session_id, folder, saved, model)?;
+        let (live, lost) = self.live(session_id, folder, saved, choices)?;
         let deadline = Instant::now() + DRAIN_PATIENCE;
         {
             let events = lock(&live.events);
@@ -432,7 +436,7 @@ impl ClaudeDriver {
                             .load(Ordering::Acquire)
                             .then(|| live.conversation.clone());
                         drop(live);
-                        return self.live(session_id, folder, saved.as_deref(), model);
+                        return self.live(session_id, folder, saved.as_deref(), choices);
                     }
                 }
             }
@@ -699,7 +703,7 @@ impl AgentDriver for ClaudeDriver {
             session_id,
             request.folder,
             request.conversation,
-            request.model,
+            request.choices,
         );
         let (live, lost) = match settled {
             Ok(settled) => settled,

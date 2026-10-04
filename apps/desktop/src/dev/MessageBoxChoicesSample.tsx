@@ -1,4 +1,6 @@
 import { AgentMenu } from "@/features/sessions/AgentMenu";
+import { EffortMenu } from "@/features/sessions/EffortMenu";
+import { ModelMenu } from "@/features/sessions/ModelMenu";
 import { ProjectMenu } from "@/features/sessions/ProjectMenu";
 
 const projects = [
@@ -18,7 +20,7 @@ const projects = [
   },
 ] as const;
 
-/** The lower line of an empty session's message box, with its menus closed. */
+/** The lower line of an empty Claude session's message box, with its menus closed. */
 export function MessageBoxChoicesSample() {
   return (
     <div className="flex max-w-[45rem] flex-col border border-input bg-background">
@@ -31,6 +33,8 @@ export function MessageBoxChoicesSample() {
           onChoose={() => {}}
           onOpenFolder={() => {}}
         />
+        <ModelMenu model="opus" onChoose={() => {}} />
+        <EffortMenu effort={null} onChoose={() => {}} />
       </div>
     </div>
   );

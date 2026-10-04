@@ -12,7 +12,7 @@ use crate::model::{Item, Project, Session, Turn, TurnStatus};
 
 /// The version of the tables, kept in SQLite's `user_version`. Each later version comes with the
 /// migration that brings the file up to it from the one before.
-const VERSION: i64 = 4;
+const VERSION: i64 = 5;
 
 /// The tables of version 1, which every file starts from.
 pub(crate) const TABLES: &str = "
@@ -66,6 +66,8 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE projects ADD COLUMN trusted INTEGER NOT NULL DEFAULT 0;",
     // Version 4: the model each session works with, none for the agent's own setting (ADR 0041).
     "ALTER TABLE sessions ADD COLUMN model TEXT;",
+    // Version 5: the effort each session works with, none for the agent's own setting (ADR 0041).
+    "ALTER TABLE sessions ADD COLUMN effort TEXT;",
 ];
 
 /// What went wrong with the file, in words for the logs.
@@ -178,13 +180,13 @@ fn put_session(
 ) -> rusqlite::Result<()> {
     transaction.execute(
         "INSERT INTO sessions (id, project_id, agent, title, created_at, updated_at, used, pinned,
-             archived, archived_at, linked_from, model)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+             archived, archived_at, linked_from, model, effort)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
          ON CONFLICT (id) DO UPDATE SET project_id = excluded.project_id, agent = excluded.agent,
              title = excluded.title, updated_at = excluded.updated_at,
              used = excluded.used, pinned = excluded.pinned, archived = excluded.archived,
              archived_at = excluded.archived_at, linked_from = excluded.linked_from,
-             model = excluded.model",
+             model = excluded.model, effort = excluded.effort",
         params![
             session.id,
             session.project_id,
@@ -198,6 +200,7 @@ fn put_session(
             session.archived_at,
             session.linked_from,
             session.model.map(name_of).transpose()?,
+            session.effort.map(name_of).transpose()?,
         ],
     )?;
     Ok(())
@@ -332,7 +335,7 @@ impl Database {
 
         let mut statement = self.connection.prepare(
             "SELECT id, project_id, agent, title, created_at, updated_at, used, pinned, archived,
-                archived_at, linked_from, conversation, model
+                archived_at, linked_from, conversation, model, effort
              FROM sessions ORDER BY rowid",
         )?;
         let sessions = statement
@@ -356,6 +359,10 @@ impl Database {
                         linked_from: row.get(10)?,
                         model: row
                             .get::<_, Option<String>>(12)?
+                            .map(from_name)
+                            .transpose()?,
+                        effort: row
+                            .get::<_, Option<String>>(13)?
                             .map(from_name)
                             .transpose()?,
                         turns: Vec::new(),
