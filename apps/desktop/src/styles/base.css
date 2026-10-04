@@ -18,6 +18,45 @@
     color-scheme: dark;
   }
 
+  /*
+   * Scrollbars are thin, with no arrow buttons: a muted thumb on a clear track, as in Windows 11's
+   * own apps. They are drawn with the engine's scrollbar pseudo-elements, since the standard
+   * scrollbar-width and scrollbar-color keep the arrows, and setting them would turn these off.
+   * Pixels, not rems: a scrollbar does not follow the zoom (ADR 0023). In a contrast theme the
+   * tokens are system colors, so the thumb stays visible.
+   */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+  }
+
+  ::-webkit-scrollbar-thumb:hover,
+  ::-webkit-scrollbar-thumb:active {
+    background-color: var(--muted-foreground);
+  }
+
+  @media (forced-colors: active) {
+    ::-webkit-scrollbar-thumb {
+      background-color: CanvasText;
+    }
+  }
+
   /* A desktop app fills its window and never scrolls as a page: regions scroll inside themselves. */
   html,
   body,
