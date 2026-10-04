@@ -70,7 +70,16 @@ pub(crate) fn system_info_text() -> String {
     )
 }
 
-/// Opens the window's system menu (Restore, Move, Size, Minimize, Maximize, Close), like Alt+Space.
+/// A point of the page, in its own (logical) pixels from its top left corner.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Type)]
+pub struct PagePoint {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Opens the window's system menu (Restore, Move, Size, Minimize, Maximize, Close): at a point of
+/// the page, under the Window menu button or at the pointer, or where Windows puts it for
+/// Alt+Space when no point is given.
 ///
 /// The title bar is drawn by the UI, so Windows' own menu has to be asked for.
 ///
@@ -81,12 +90,28 @@ pub(crate) fn system_info_text() -> String {
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command]
 #[specta::specta]
-pub fn show_system_menu(window: tauri::WebviewWindow) -> Result<(), AppError> {
+pub fn show_system_menu(
+    window: tauri::WebviewWindow,
+    at: Option<PagePoint>,
+) -> Result<(), AppError> {
     let failed = |error: &dyn std::fmt::Display| {
         AppError::new(ErrorCode::WindowsSystemMenu).with_details(error.to_string())
     };
-    let handle = window.hwnd().map_err(|error| failed(&error))?;
-    arden_windows::system_menu::show(handle.0 as isize).map_err(|error| failed(&error))
+    let handle = window.hwnd().map_err(|error| failed(&error))?.0 as isize;
+    let Some(at) = at else {
+        return arden_windows::system_menu::show(handle).map_err(|error| failed(&error));
+    };
+    let scale = window.scale_factor().map_err(|error| failed(&error))?;
+    let point = arden_windows::system_menu::client_point(at.x, at.y, scale);
+    // The menu runs on the window's own thread and returns once it closes, so the command does not
+    // wait for it: a failure from then on is only logged, as the page has moved on.
+    window
+        .run_on_main_thread(move || {
+            if let Err(error) = arden_windows::system_menu::show_at(handle, point) {
+                tracing::warn!(%error, "the window menu could not be opened");
+            }
+        })
+        .map_err(|error| failed(&error))
 }
 
 /// The pages of the project that the app can open in the browser. Each one is a fixed address, so

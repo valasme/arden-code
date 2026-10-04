@@ -475,7 +475,6 @@
       "openSource": {
         "description": "Arden Code is built with these open-source packages.",
         "license": "License",
-        "more": "Showing {{shown}} of {{total}}. Type to narrow the list.",
         "none": "No package matches.",
         "package": "Package",
         "search": "Search packages",
@@ -516,7 +515,6 @@
       "hardwareAcceleration": {
         "description": "Lets your graphics card draw the window. Turn it off to work around graphics problems. It takes a restart.",
         "label": "Hardware acceleration",
-        "restartNote": "Restart Arden Code to apply this.",
         "restartPrompt": "Hardware acceleration changes the next time Arden Code starts."
       },
       "import": {
@@ -594,6 +592,8 @@
       "signedIn": "Signed in",
       "signedOut": "Not signed in",
       "tooOld": "This version is too old for Arden Code. Run claude update in a terminal, then look again.",
+      "update": "How to update",
+      "updateLabel": "How to update {{name}}",
       "version": "Version",
       "versionUnknown": "Unknown"
     },
@@ -622,6 +622,11 @@
       "showStatusBar": {
         "description": "The bar along the bottom of the window.",
         "label": "Show status bar"
+      },
+      "smoothScrolling": {
+        "description": "Glide when scrolling with the mouse wheel or the keyboard. Turn it off to jump straight there. It takes a restart.",
+        "label": "Smooth scrolling",
+        "restartPrompt": "Smooth scrolling changes the next time Arden Code starts."
       },
       "theme": {
         "dark": "Dark",
@@ -699,6 +704,7 @@
     "resetButton": "Reset",
     "restart": {
       "later": "Later",
+      "note": "Restart Arden Code to apply this.",
       "now": "Restart now",
       "title": "Restart Arden Code?"
     },

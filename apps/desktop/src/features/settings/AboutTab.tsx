@@ -16,9 +16,6 @@ import licenseText from "../../../../../LICENSE?raw";
 import licenses from "./licenses.gen.json";
 import { matchesSearch } from "./search";
 
-/** How many packages the license list shows at once. Typing narrows it. */
-const licensesShown = 100;
-
 function openPage(page: ProjectPage) {
   commands.openProjectPage(page).catch((error: unknown) => {
     showErrorToast(toAppError(error));
@@ -41,14 +38,20 @@ function Fact({ label, value }: { label: string; value: string | undefined }) {
 function OpenSourceLicenses() {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
+  // Every package is listed, so the table is only drawn once the section has been opened.
+  const [opened, setOpened] = useState(false);
 
   const matching = licenses.filter((item) =>
     matchesSearch({ label: item.name, description: `${item.license} ${item.version}` }, query),
   );
-  const shown = matching.slice(0, licensesShown);
 
   return (
-    <details className="border-b border-border py-4">
+    <details
+      className="border-b border-border py-4"
+      onToggle={(event) => {
+        if (event.currentTarget.open) setOpened(true);
+      }}
+    >
       <summary className="text-sm font-medium">
         {t("settings.about.openSource.title", { count: licenses.length })}
       </summary>
@@ -65,35 +68,32 @@ function OpenSourceLicenses() {
           setQuery(event.target.value);
         }}
       />
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-left text-muted-foreground">
-            <th scope="col" className="py-1 font-medium">
-              {t("settings.about.openSource.package")}
-            </th>
-            <th scope="col" className="py-1 font-medium">
-              {t("settings.about.openSource.license")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map((item) => (
-            <tr
-              key={`${item.kind}-${item.name}-${item.version}`}
-              className="border-t border-border"
-            >
-              <td className="py-1 pr-2 break-all">
-                {item.name} <span className="text-muted-foreground">{item.version}</span>
-              </td>
-              <td className="py-1">{item.license}</td>
+      {opened ? (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-muted-foreground">
+              <th scope="col" className="py-1 font-medium">
+                {t("settings.about.openSource.package")}
+              </th>
+              <th scope="col" className="py-1 font-medium">
+                {t("settings.about.openSource.license")}
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      {matching.length > shown.length ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          {t("settings.about.openSource.more", { shown: shown.length, total: matching.length })}
-        </p>
+          </thead>
+          <tbody>
+            {matching.map((item) => (
+              <tr
+                key={`${item.kind}-${item.name}-${item.version}`}
+                className="border-t border-border"
+              >
+                <td className="py-1 pr-2 break-all">
+                  {item.name} <span className="text-muted-foreground">{item.version}</span>
+                </td>
+                <td className="py-1">{item.license}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       ) : null}
       {matching.length === 0 ? (
         <p className="mt-2 text-xs text-muted-foreground">{t("settings.about.openSource.none")}</p>

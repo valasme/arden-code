@@ -57,6 +57,12 @@ function applyChange(settings: Settings, change: SettingChange): Settings {
       appearance: { ...appearance, reduceMotion: change.appearanceReduceMotion },
     };
   }
+  if (change.appearanceSmoothScrolling !== undefined) {
+    return {
+      ...settings,
+      appearance: { ...appearance, smoothScrolling: change.appearanceSmoothScrolling },
+    };
+  }
   if (change.appearanceShowStatusBar !== undefined) {
     return {
       ...settings,

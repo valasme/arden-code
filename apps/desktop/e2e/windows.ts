@@ -170,6 +170,29 @@ export function isMenuOpen(): boolean {
   return powershell(`[W]::FindWindow("#32768", $null) -ne 0`) === "True";
 }
 
+/** Where the open popup menu is on the screen, or `undefined` while none is open. */
+export function openMenuRect(): z.infer<typeof rectSchema> | undefined {
+  const output = powershell(`
+    $h = [W]::FindWindow("#32768", $null)
+    if ($h -eq 0) { return }
+    $r = New-Object W+RECT
+    [void][W]::GetWindowRect($h, [ref]$r)
+    @{ x = $r.Left; y = $r.Top; width = $r.Right - $r.Left; height = $r.Bottom - $r.Top } | ConvertTo-Json -Compress
+  `);
+  return output ? rectSchema.parse(JSON.parse(output)) : undefined;
+}
+
+/** Where a point of the window's client area, in the screen's pixels, is on the screen. */
+export function clientToScreen(pid: number, x: number, y: number): { x: number; y: number } {
+  const output = powershell(`
+    $point = New-Object W+POINT
+    $point.X = ${Math.round(x)}; $point.Y = ${Math.round(y)}
+    [void][W]::ClientToScreen((Main-Window ${pid}), [ref]$point)
+    @{ x = $point.X; y = $point.Y } | ConvertTo-Json -Compress
+  `);
+  return z.object({ x: z.number(), y: z.number() }).parse(JSON.parse(output));
+}
+
 /** How many Arden Code processes are running. */
 export function countAppProcesses(): number {
   return Number(
@@ -194,6 +217,22 @@ export function pressKey(pid: number, virtualKey: number): boolean {
     "yes"
   `);
   return pressed === "yes";
+}
+
+/** Brings the app's window in front, as a click on it would. Returns whether it is in front. */
+export function bringForward(pid: number): boolean {
+  return powershell(`Bring-Forward (Main-Window ${pid})`) === "True";
+}
+
+/**
+ * Presses a key the way a keyboard does, into whatever is in front, without bringing anything
+ * forward: a menu Windows has open takes the key, where bringing the window forward could close it.
+ */
+export function pressKeyInFront(virtualKey: number) {
+  powershell(`
+    [W]::keybd_event(${virtualKey}, 0, 0, [UIntPtr]::Zero)
+    [W]::keybd_event(${virtualKey}, 0, 2, [UIntPtr]::Zero)
+  `);
 }
 
 /**
