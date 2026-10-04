@@ -475,7 +475,6 @@
       "openSource": {
         "description": "Arden Code is built with these open-source packages.",
         "license": "License",
-        "more": "Showing {{shown}} of {{total}}. Type to narrow the list.",
         "none": "No package matches.",
         "package": "Package",
         "search": "Search packages",
