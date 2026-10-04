@@ -6,7 +6,7 @@ function plain(text: string): string {
     .toLowerCase();
 }
 
-/** Whether a setting's name or description contains every word that was typed. */
+/** Whether a name or its description (a setting, a package, a session) contains every word typed. */
 export function matchesSearch(
   setting: { label: string; description: string },
   query: string,

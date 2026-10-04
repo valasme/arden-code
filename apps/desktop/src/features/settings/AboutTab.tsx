@@ -14,7 +14,7 @@ import { toAppError } from "@/lib/errors";
 
 import licenseText from "../../../../../LICENSE?raw";
 import licenses from "./licenses.gen.json";
-import { matchesSearch } from "./search";
+import { matchesSearch } from "@/lib/search";
 
 /** How many packages the license list shows at once. Typing narrows it. */
 const licensesShown = 100;
