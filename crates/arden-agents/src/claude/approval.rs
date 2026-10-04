@@ -6,7 +6,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::protocol::Permission;
-use super::reply::{cut, relative};
+use super::reply::relative;
 use crate::model::{ApprovalAction, ApprovalState, Item};
 
 /// The most lines, and characters, of the details shown with a request.
@@ -15,17 +15,7 @@ const DETAIL_LENGTH: usize = 4000;
 
 /// Details cut to what fits on the card.
 fn shortened(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().collect();
-    let mut kept = lines
-        .iter()
-        .take(DETAIL_LINES)
-        .copied()
-        .collect::<Vec<_>>()
-        .join("\n");
-    if lines.len() > DETAIL_LINES {
-        kept.push_str("\n…");
-    }
-    cut(&kept, DETAIL_LENGTH)
+    super::reply::shortened(text, DETAIL_LINES, DETAIL_LENGTH)
 }
 
 /// An edit as lines taken out and lines put in.

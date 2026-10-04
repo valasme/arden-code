@@ -24,6 +24,7 @@ import { TrustDialog } from "./TrustDialog";
 import { TurnView } from "./TurnView";
 import { useOpenFolder } from "./useOpenFolder";
 import { useSendMessage } from "./useSendMessage";
+import { waitingRequest } from "./waiting";
 
 /** How close to the end the person must be for new text to keep the end in view. */
 const STICK_DISTANCE = 80;
@@ -62,11 +63,7 @@ export function SessionView({ id }: { id: string }) {
   const lastTurn = turns.at(-1);
   const busy = turns.some((turn) => turn.status === "running");
   const agent = session?.agent ?? "demo";
-  const waiting =
-    lastTurn?.status === "running" &&
-    lastTurn.items.some(
-      (item) => (item.type === "approval" || item.type === "questions") && item.state === "waiting",
-    );
+  const waiting = waitingRequest(lastTurn) !== undefined;
 
   // The virtualizer's functions cannot be memoized, so the compiler leaves this component alone.
   // oxlint-disable-next-line react/incompatible-library

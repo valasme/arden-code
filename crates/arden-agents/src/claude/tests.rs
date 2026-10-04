@@ -872,6 +872,38 @@ fn deny_refuses_and_stops_the_reply_and_the_next_message_is_answered() {
 }
 
 #[test]
+fn archiving_while_claude_waits_answers_no_and_interrupts() {
+    let mut script = asks_to_run_the_tests();
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "request_id": "r1", "response": { "behavior": "deny" } }
+        })),
+        Step::Expect(json!({ "type": "control_request", "request": { "subtype": "interrupt" } })),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+    let replying = {
+        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
+        std::thread::spawn(move || send(&store, &driver, &session, "Run the tests"))
+    };
+
+    until_waiting(&store, &session);
+    store.set_archived(&session, true).expect("archived");
+    replying.join().expect("the reply ends");
+
+    scripted.assert_followed();
+    assert!(matches!(
+        approval_of(&turn(&store, &session, 0)),
+        Item::Approval {
+            state: ApprovalState::Cancelled,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn stopping_while_claude_waits_answers_no_and_interrupts() {
     let mut script = asks_to_run_the_tests();
     script.extend([

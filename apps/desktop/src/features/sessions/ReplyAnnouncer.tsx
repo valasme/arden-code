@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { AgentKind, Turn } from "@/ipc/bindings";
 
 import { ANNOUNCE_INTERVAL_MS, finalAnnouncement, nextAnnouncement } from "./announce";
+import { waitingRequest } from "./waiting";
 
 /** What the agent has said in a turn in words, without thinking, tool calls or file changes. */
 function spokenText(turn: Turn): string {
@@ -49,9 +50,7 @@ export function ReplyAnnouncer({ turn, agent }: { turn: Turn | undefined; agent:
 
   // A request or questions that start waiting are said at once: the agent can do nothing until
   // they are answered.
-  const request = turn?.items.findLast(
-    (item) => (item.type === "approval" || item.type === "questions") && item.state === "waiting",
-  );
+  const request = waitingRequest(turn);
   const requestId = request?.id;
   useEffect(() => {
     const name = t(`agents.${agent}.name`);

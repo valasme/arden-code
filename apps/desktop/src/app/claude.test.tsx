@@ -147,6 +147,32 @@ describe("Approval requests (ADR 0039)", () => {
     expect(within(statusBar).getByText("Claude: replying")).toBeVisible();
   });
 
+  it("is reached with Shift+Tab from the message box, and answered with the keyboard", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({
+      sessions: [sessionNamed("session-1", null, "playground", "claude")],
+    });
+    renderApp("/session/session-1");
+    await user.type(
+      await screen.findByRole("textbox", { name: "Message" }),
+      "Run the tests{Enter}",
+    );
+    await screen.findByText("Claude is replying…");
+    rust.emit({ type: "itemAdded", turnId: "turn-1", item: request });
+    const card = await screen.findByRole("group", { name: "Claude wants to run a command" });
+
+    await user.tab({ shift: true });
+    expect(within(card).getByRole("button", { name: "Deny" })).toHaveFocus();
+    await user.tab({ shift: true });
+    await user.tab({ shift: true });
+    expect(within(card).getByRole("button", { name: "Allow" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(rust.callsTo("answer_approval")).toEqual([
+      { sessionId: "session-1", itemId: "turn-1-approval-1", answer: "allow" },
+    ]);
+  });
+
   it("has no accessibility violations with a request waiting", async () => {
     const user = userEvent.setup();
     const rust = startSessionsRust({

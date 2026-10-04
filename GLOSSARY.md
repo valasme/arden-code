@@ -75,6 +75,10 @@ _Avoid_: provider
 A vendor's own command-line program through which Arden Code runs an agent: Claude Code (`claude`) for Claude, Codex (`codex`) for Codex. It owns the user's sign-in.
 _Avoid_: SDK, backend
 
+**Agent conversation**:
+The agent CLI's own record of a session, kept in its own folder under an id Arden Code makes. It lets a session carry on where it left off after a restart. It belongs to the agent CLI, not to the session: deleting the session leaves it.
+_Avoid_: using "conversation" alone for a session
+
 **Raw mode**:
 Running an agent's own terminal interface inside Arden Code, instead of the session view.
 _Avoid_: terminal mode, console mode

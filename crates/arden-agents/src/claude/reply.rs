@@ -29,6 +29,22 @@ pub(super) fn cut(text: &str, limit: usize) -> String {
     kept
 }
 
+/// Text kept short enough to read under an item: at most `lines` lines and `length` characters,
+/// with an ellipsis where it was cut.
+pub(super) fn shortened(text: &str, lines: usize, length: usize) -> String {
+    let all: Vec<&str> = text.lines().collect();
+    let mut kept = all
+        .iter()
+        .take(lines)
+        .copied()
+        .collect::<Vec<_>>()
+        .join("\n");
+    if all.len() > lines {
+        kept.push_str("\n…");
+    }
+    cut(&kept, length)
+}
+
 /// A path as the person thinks of it: relative to the project when it is inside it.
 pub(super) fn relative(path: &str, folder: &Path) -> String {
     let base = folder.display().to_string();
@@ -79,17 +95,7 @@ fn summary(tool: &str, input: &Value, folder: &Path) -> String {
 
 /// What a tool answered, kept short enough to read under its line.
 fn output_of(result: &ToolResult) -> String {
-    let lines: Vec<&str> = result.text.trim_end().lines().collect();
-    let mut kept = lines
-        .iter()
-        .take(OUTPUT_LINES)
-        .copied()
-        .collect::<Vec<_>>()
-        .join("\n");
-    if lines.len() > OUTPUT_LINES {
-        kept.push_str("\n…");
-    }
-    cut(&kept, OUTPUT_LENGTH)
+    shortened(result.text.trim_end(), OUTPUT_LINES, OUTPUT_LENGTH)
 }
 
 /// How many lines a patch adds and removes, from Claude Code's `structuredPatch`.
