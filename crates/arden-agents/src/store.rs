@@ -40,6 +40,8 @@ pub enum StoreError {
     NotWaiting,
     /// Claude was asked to work in a project whose folder the person has not trusted (ADR 0039).
     NotTrusted,
+    /// The Playground was to be removed. It always stays, since a new session starts there.
+    Playground,
     /// The change could not be written to the file, so it was not made. Says why, for the logs.
     NotSaved(String),
     /// What the file holds could not be read. Says why, for the logs.
@@ -533,6 +535,74 @@ impl SessionStore {
             .database
             .save_trust(project_id, last_id)
             .map_err(not_saved)
+    }
+
+    /// Removes a folder project and deletes all of its sessions, archived and pinned ones too, with
+    /// their turns, overwritten in the file as deleting a session does (#72). Its trust goes with
+    /// it: the same folder opened again is a new project. Replies running in its sessions stop at
+    /// their driver's next event, and links to its sessions from other projects are dropped.
+    ///
+    /// Returns the ids of the sessions it deleted, so that their agents can be ended.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownProject`] when there is no such project,
+    /// [`StoreError::Playground`] for the Playground, and [`StoreError::NotSaved`] when the file
+    /// cannot be written, in which case nothing is removed.
+    pub fn remove_project(&self, project_id: &str) -> Result<Vec<String>, StoreError> {
+        let mut inner = self.lock();
+        let position = inner
+            .projects
+            .iter()
+            .position(|project| project.id == project_id)
+            .ok_or(StoreError::UnknownProject)?;
+        if inner.projects[position].kind == ProjectKind::Playground {
+            return Err(StoreError::Playground);
+        }
+        let removed: Vec<String> = inner
+            .sessions
+            .iter()
+            .filter(|entry| entry.session.project_id == project_id)
+            .map(|entry| entry.session.id.clone())
+            .collect();
+        let forget = inner
+            .last_open
+            .as_ref()
+            .is_some_and(|open| removed.contains(open));
+        let last_id = inner.last_id;
+        inner
+            .database
+            .delete_project(project_id, position, forget, last_id)
+            .map_err(not_saved)?;
+        inner.projects.remove(position);
+        let Inner {
+            sessions,
+            stopping,
+            controls,
+            ..
+        } = &mut *inner;
+        sessions.retain(|entry| {
+            let goes = entry.session.project_id == project_id;
+            if goes {
+                stop_running(&entry.session, stopping, controls);
+            }
+            !goes
+        });
+        // The file drops the links to them by itself; the sessions in memory follow.
+        for other in &mut inner.sessions {
+            if other
+                .session
+                .linked_from
+                .as_ref()
+                .is_some_and(|from| removed.contains(from))
+            {
+                other.session.linked_from = None;
+            }
+        }
+        if forget {
+            inner.last_open = None;
+        }
+        Ok(removed)
     }
 
     /// Remembers that a session was opened, so that it can be opened again at the next start.
@@ -3036,6 +3106,146 @@ mod tests {
             store.session(&linked.id).expect("it").model,
             Some(Model::Haiku)
         );
+    }
+
+    #[test]
+    fn removing_a_project_removes_it_and_all_its_sessions_also_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let work = tempfile::tempdir().expect("a project folder");
+        let (kept, removed) = {
+            let store = store_in(&file);
+            let kept = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            let project = store.open_folder(work.path()).expect("a project");
+            store.trust_project(&project.id).expect("trusted");
+            let [plain, pinned, archived] = [(); 3].map(|()| {
+                store
+                    .create_session(&project.id, AgentKind::Demo)
+                    .expect("a session")
+                    .id
+            });
+            store.start_turn(&plain, "hello").expect("a turn");
+            store.set_pinned(&pinned, true).expect("pinned");
+            store.set_archived(&archived, true).expect("archived");
+            store.remember_open(&plain).expect("remembered");
+
+            let mut removed = store.remove_project(&project.id).expect("removed");
+            removed.sort();
+
+            let mut expected = vec![plain, pinned, archived];
+            expected.sort();
+            assert_eq!(removed, expected, "it says which sessions went");
+            assert_eq!(
+                store.list().projects.len(),
+                1,
+                "only the Playground is left"
+            );
+            assert!(store.list().pinned.is_empty());
+            assert!(store.list().archived.is_empty());
+            assert_eq!(store.last_open(), None);
+            assert_eq!(
+                store.remove_project(&project.id),
+                Err(StoreError::UnknownProject)
+            );
+            (kept.id, removed)
+        };
+
+        let store = store_in(&file);
+        assert_eq!(store.list().projects.len(), 1);
+        assert_eq!(ids(&store.list().projects[0].sessions), vec![kept.as_str()]);
+        for id in &removed {
+            assert_eq!(store.session(id), Err(StoreError::UnknownSession));
+        }
+        let again = store.open_folder(work.path()).expect("the folder again");
+        assert!(!again.trusted, "a folder opened again is asked about again");
+    }
+
+    #[test]
+    fn the_projects_keep_their_order_after_one_is_removed_and_another_opened() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let names = |store: &SessionStore| -> Vec<String> {
+            store
+                .list()
+                .projects
+                .iter()
+                .map(|listing| listing.project.name.clone())
+                .collect()
+        };
+        {
+            let store = store_in(&file);
+            let first = store
+                .open_folder(Path::new(r"C:\Work\first"))
+                .expect("a project");
+            store
+                .open_folder(Path::new(r"C:\Work\second"))
+                .expect("a project");
+            store.remove_project(&first.id).expect("removed");
+            store
+                .open_folder(Path::new(r"C:\Work\third"))
+                .expect("a project");
+            assert_eq!(names(&store), ["Playground", "second", "third"]);
+        }
+
+        assert_eq!(names(&store_in(&file)), ["Playground", "second", "third"]);
+    }
+
+    #[test]
+    fn the_playground_cannot_be_removed() {
+        let store = store();
+        store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+
+        assert_eq!(
+            store.remove_project(playground::PLAYGROUND_ID),
+            Err(StoreError::Playground)
+        );
+        assert_eq!(store.list().projects[0].sessions.len(), 1);
+        assert_eq!(
+            store.remove_project("project-99"),
+            Err(StoreError::UnknownProject)
+        );
+    }
+
+    #[test]
+    fn removing_a_project_stops_a_reply_in_it_and_drops_links_to_its_sessions() {
+        let store = store();
+        let project = store
+            .open_folder(Path::new(r"C:\Work\my-app"))
+            .expect("a project");
+        let session = store
+            .create_session(&project.id, AgentKind::Demo)
+            .expect("a session");
+        let elsewhere = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        let linked = store
+            .create_linked_session(&session.id)
+            .expect("a linked session");
+        store
+            .set_project(&linked.id, playground::PLAYGROUND_ID)
+            .expect("moved");
+        let turn = store.start_turn(&session.id, "hello").expect("a turn");
+
+        let mut heard = Vec::new();
+        let saved = store.stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
+            heard.push(event.clone());
+            if heard.len() == 2 {
+                store.remove_project(&project.id).expect("removed");
+            }
+            true
+        });
+
+        assert_eq!(saved, Ok(()));
+        assert!(matches!(heard.last(), Some(TurnEvent::Stopped { .. })));
+        assert_eq!(
+            store.session(&linked.id).expect("the session").linked_from,
+            None
+        );
+        assert!(store.session(&elsewhere.id).is_ok());
     }
 
     #[test]

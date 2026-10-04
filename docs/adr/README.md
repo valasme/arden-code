@@ -47,4 +47,5 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0037](0037-the-window-buttons-keep-the-arrow.md) | The window buttons keep the arrow | Accepted |
 | [0038](0038-claude-through-its-own-protocol.md) | Claude through its own protocol | Accepted |
 | [0039](0039-working-with-claude.md) | Working with Claude | Accepted |
+| [0040](0040-finding-sessions-and-removing-projects.md) | Finding sessions in the command palette, and removing a project | Accepted |
 | [0041](0041-choosing-how-a-session-starts.md) | Choosing how a session starts: agent, project, model and effort | Accepted |

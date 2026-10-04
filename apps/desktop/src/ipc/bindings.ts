@@ -442,6 +442,16 @@ export const commands = {
 	 */
 	trustProject: (projectId: string) => __TAURI_INVOKE<null>("trust_project", { projectId }),
 	/**
+	 *  Removes a folder project and deletes its sessions, archived ones too, ending their agents
+	 *  (#72). Claude Code keeps its own copies of the conversations; the folder is not touched.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such project, for the Playground, or when the file cannot
+	 *  be written, in which case nothing is removed.
+	 */
+	removeProject: (projectId: string) => __TAURI_INVOKE<null>("remove_project", { projectId }),
+	/**
 	 *  Answers an approval request that waits in a session's running turn (ADR 0039).
 	 * 
 	 *  # Errors
@@ -823,6 +833,8 @@ export type ErrorCode =
 "ARD-AGT-015" | 
 /**  Claude was asked to work in a project whose folder the person has not trusted. */
 "ARD-AGT-016" | 
+/**  The Playground was to be removed; it always stays. */
+"ARD-AGT-017" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */

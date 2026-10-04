@@ -5,6 +5,7 @@ import { usePanelRef } from "react-resizable-panels";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
 import { DeleteSessionDialog } from "@/features/sessions/DeleteSessionDialog";
+import { RemoveProjectDialog } from "@/features/sessions/RemoveProjectDialog";
 import { RenameSessionDialog } from "@/features/sessions/RenameSessionDialog";
 import { SessionsSync } from "@/features/sessions/SessionsSync";
 import { CheatSheet } from "@/features/commands/CheatSheet";
@@ -149,6 +150,7 @@ export function AppShell() {
         <CheatSheet />
         <RenameSessionDialog />
         <DeleteSessionDialog />
+        <RemoveProjectDialog />
         <ContextMenuHost />
         <SessionsSync />
       </div>

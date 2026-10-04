@@ -154,6 +154,11 @@
       "what": "Claude cannot work in this folder until you trust it.",
       "why": "Claude Code runs a project's own hooks, MCP servers and environment settings without asking."
     },
+    "ARD-AGT-017": {
+      "action": "Archive or delete its sessions instead.",
+      "what": "The Playground cannot be removed.",
+      "why": "New sessions start in the Playground, so it always stays."
+    },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
       "what": "Something unexpected went wrong inside Arden Code.",
@@ -364,15 +369,32 @@
     "uiError": "Something went wrong ({{code}})"
   },
   "palette": {
-    "description": "Search for a command and press Enter to run it.",
-    "empty": "No command matches.",
+    "archived": "Archived",
+    "description": "Search for a command or a session and press Enter to run or open it.",
+    "empty": "Nothing matches.",
     "hints": {
       "close": "to close",
       "move": "to move",
       "run": "to run"
     },
-    "placeholder": "Type a command",
+    "placeholder": "Type a command or a session's name",
+    "session": "{{session}}, in {{project}}",
+    "sessions": "Sessions",
     "title": "Command palette"
+  },
+  "projects": {
+    "menu": "Actions for {{name}}",
+    "remove": {
+      "action": "Remove project…",
+      "confirm": "Remove project",
+      "done": "Project removed",
+      "kept": "Claude Code keeps its own copies of its conversations. The folder itself stays.",
+      "sessions_one": "Its one session will be deleted.",
+      "sessions_other": "Its {{count}} sessions will be deleted.",
+      "sessionsArchived_one": "Its one session, which is archived, will be deleted.",
+      "sessionsArchived_other": "Its {{count}} sessions, including {{archived}} archived, will be deleted.",
+      "title": "Remove “{{name}}”?"
+    }
   },
   "regions": {
     "inspector": "Inspector",

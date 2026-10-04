@@ -12,8 +12,11 @@ interface SessionDialogsState {
   renaming: string | undefined;
   /** The session the question about deleting is about, if one is asked. */
   deleting: Deleting | undefined;
+  /** The project the question about removing it is about, if one is asked (#72). */
+  removing: string | undefined;
   rename: (sessionId: string) => void;
   askToDelete: (deleting: Deleting) => void;
+  askToRemove: (projectId: string) => void;
   close: () => void;
 }
 
@@ -21,13 +24,17 @@ interface SessionDialogsState {
 export const useSessionDialogsStore = create<SessionDialogsState>()((set) => ({
   renaming: undefined,
   deleting: undefined,
+  removing: undefined,
   rename: (sessionId) => {
-    set({ renaming: sessionId, deleting: undefined });
+    set({ renaming: sessionId, deleting: undefined, removing: undefined });
   },
   askToDelete: (deleting) => {
-    set({ renaming: undefined, deleting });
+    set({ renaming: undefined, deleting, removing: undefined });
+  },
+  askToRemove: (projectId) => {
+    set({ renaming: undefined, deleting: undefined, removing: projectId });
   },
   close: () => {
-    set({ renaming: undefined, deleting: undefined });
+    set({ renaming: undefined, deleting: undefined, removing: undefined });
   },
 }));

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import { settingDefinitions } from "./definitions";
-import { matchesSearch } from "./search";
+import { matchesSearch } from "@/lib/search";
 import { SettingItem } from "./SettingItem";
 
 /** The settings, from every tab, whose name or description contains what was typed. */

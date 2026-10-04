@@ -298,7 +298,7 @@ There is no language picker until a second language exists.
 
 A single **command registry** drives the command palette, menus, tooltips, the cheat sheet and the Keyboard settings tab. Each entry has an id, a translated label, an icon, a group (Session, Go to or View), a default shortcut, a rule for when it applies, and a handler.
 
-The command palette is a wide panel high on the screen: a large search line, the commands in their groups with their shortcuts drawn as keys, and the keys that drive it written along the bottom.
+The command palette is a wide panel high on the screen: a large search line, the commands in their groups with their shortcuts drawn as keys, and the keys that drive it written along the bottom. After the commands, it lists the five sessions used last, and while typing every session whose name or project matches, with matching archived sessions apart ([ADR 0040](adr/0040-finding-sessions-and-removing-projects.md)).
 
 | Action | Default |
 |---|---|
@@ -397,6 +397,7 @@ The decisions and the options turned down are in [ADR 0036](adr/0036-managing-se
 - **Delete** removes a session for good, after a confirmation. For a Claude session, the confirmation says that Claude Code keeps its own copy of the conversation.
 - **New linked session** (Ctrl+Shift+N) starts an empty session in the same project, with the same agent, linked to the open one. Each shows the link to the other.
 - **Order:** each project's sessions with the most recently used first. A folder project with no sessions in its list is not shown; the Playground always is.
+- **Remove project** (a folder project's … button or right click) deletes the project and all its sessions, archived ones too, after a confirmation that says how many. The folder on disk stays; the Playground cannot be removed ([ADR 0040](adr/0040-finding-sessions-and-removing-projects.md)).
 - **On startup,** "Restore the last session" opens the session that was opened last, unless it was archived or deleted. A folder opened from the terminal wins.
 - **Focus:** when a row leaves a list, the focus moves to the next row, else the previous one, else New session.
 

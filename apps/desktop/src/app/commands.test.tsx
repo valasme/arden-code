@@ -214,7 +214,7 @@ describe("the command palette", () => {
     await user.keyboard("{Control>}k{/Control}");
     await user.keyboard("zzzzzz");
 
-    expect(await screen.findByText("No command matches.")).toBeVisible();
+    expect(await screen.findByText("Nothing matches.")).toBeVisible();
   });
 
   it("closes with Escape", async () => {

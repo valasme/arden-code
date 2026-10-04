@@ -14,7 +14,7 @@ import { toAppError } from "@/lib/errors";
 
 import licenseText from "../../../../../LICENSE?raw";
 import licenses from "./licenses.gen.json";
-import { matchesSearch } from "./search";
+import { matchesSearch } from "@/lib/search";
 
 function openPage(page: ProjectPage) {
   commands.openProjectPage(page).catch((error: unknown) => {

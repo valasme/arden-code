@@ -8,6 +8,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useSessionDialogsStore } from "@/state/sessionDialogs";
+import { ProjectMenuItems } from "@/features/sessions/ProjectActions";
 import { SessionMenuItems } from "@/features/sessions/SessionMenu";
 import { findSession } from "@/features/sessions/sessionList";
 import { type SessionAction, useSessionActions } from "@/features/sessions/useSessionActions";
@@ -70,8 +72,8 @@ const isInsideMenu = (target: EventTarget | null) =>
 
 /**
  * The app's own context menus, opened with a right click, Shift+F10 or the Menu key: cut, copy,
- * paste and select all in text fields, copy for selected text, and a session's own menu on its row
- * in the sidebar (ADR 0036). Draws the menu; put it once in the window.
+ * paste and select all in text fields, copy for selected text, a session's own menu on its row
+ * in the sidebar (ADR 0036), and a folder project's own menu on its name (#72). Draws the menu; put it once in the window.
  *
  * In a release build the browser's own menu never shows: where this has nothing to offer, the
  * right click does nothing.
@@ -84,6 +86,9 @@ export function ContextMenuHost() {
   const chosen = useRef<Action | undefined>(undefined);
   // The same for a session's menu: a dialog it opens gives the focus back to the row.
   const chosenForSession = useRef<SessionAction | undefined>(undefined);
+  // And for a project's menu: Remove project… asks once the focus is back.
+  const removeChosen = useRef(false);
+  const askToRemove = useSessionDialogsStore((state) => state.askToRemove);
   const runSessionAction = useSessionActions();
   const { data: sessionList = noSessions } = useQuery(sessionListQuery);
   const content = useRef<HTMLDivElement>(null);
@@ -169,13 +174,21 @@ export function ContextMenuHost() {
       <DropdownMenuContent
         ref={content}
         align="start"
-        className={menu.target.kind === "session" ? "w-auto min-w-48" : undefined}
+        className={
+          menu.target.kind === "session" || menu.target.kind === "project"
+            ? "w-auto min-w-48"
+            : undefined
+        }
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           // The text is edited where the person was, not in the menu.
           returnFocusTo.current?.focus();
           const forSession = chosenForSession.current;
           chosenForSession.current = undefined;
+          if (removeChosen.current && menu.target.kind === "project") {
+            removeChosen.current = false;
+            askToRemove(menu.target.projectId);
+          }
           if (forSession && menu.target.kind === "session") {
             runSessionAction(forSession, menu.target.sessionId, true);
           }
@@ -187,7 +200,13 @@ export function ContextMenuHost() {
           });
         }}
       >
-        {menu.target.kind === "session" ? (
+        {menu.target.kind === "project" ? (
+          <ProjectMenuItems
+            onRemove={() => {
+              removeChosen.current = true;
+            }}
+          />
+        ) : menu.target.kind === "session" ? (
           <SessionMenuItems
             session={findSession(sessionList, menu.target.sessionId)}
             onChoose={(action) => {

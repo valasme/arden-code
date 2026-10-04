@@ -4,7 +4,9 @@ export type MenuTarget =
   | { kind: "editable"; element: HTMLElement }
   | { kind: "selection"; element: HTMLElement }
   /** A session's row in the sidebar, whose menu is the session's own (ADR 0036). */
-  | { kind: "session"; element: HTMLElement; sessionId: string };
+  | { kind: "session"; element: HTMLElement; sessionId: string }
+  /** A folder project's name in the sidebar, whose menu is the project's own (#72). */
+  | { kind: "project"; element: HTMLElement; projectId: string };
 
 /** Input types that hold text a person can select and edit. */
 const textInputTypes = new Set(["text", "search", "url", "tel", "email", "password", "number", ""]);
@@ -27,6 +29,9 @@ export function menuTargetOf(node: EventTarget | null): MenuTarget | undefined {
   const row = element.closest<HTMLElement>("[data-session-id]");
   const sessionId = row?.dataset["sessionId"];
   if (row && sessionId) return { kind: "session", element: row, sessionId };
+  const header = element.closest<HTMLElement>("[data-project-id]");
+  const projectId = header?.dataset["projectId"];
+  if (header && projectId) return { kind: "project", element: header, projectId };
   if (selectedText() !== "" && element instanceof HTMLElement) {
     return { kind: "selection", element };
   }
