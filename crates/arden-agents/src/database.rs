@@ -476,6 +476,38 @@ impl Database {
         Ok(())
     }
 
+    /// Deletes a project at its place in the list, with its sessions and their turns, as
+    /// `delete_session` deletes one session; the projects after it move up a place. Forgets the
+    /// session opened last when `forget_last_open` says it was one of them.
+    ///
+    /// # Errors
+    ///
+    /// When the file cannot be written.
+    pub fn delete_project(
+        &mut self,
+        project_id: &str,
+        position: usize,
+        forget_last_open: bool,
+        last_id: u64,
+    ) -> Result<(), DatabaseError> {
+        let position = i64::try_from(position).unwrap_or(i64::MAX);
+        self.write(last_id, |transaction| {
+            transaction.execute("DELETE FROM sessions WHERE project_id = ?1", [project_id])?;
+            transaction.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
+            transaction.execute(
+                "UPDATE projects SET position = position - 1 WHERE position > ?1",
+                [position],
+            )?;
+            if forget_last_open {
+                transaction.execute("DELETE FROM meta WHERE key = 'last_open'", [])?;
+            }
+            Ok(())
+        })?;
+        self.connection
+            .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?;
+        Ok(())
+    }
+
     /// Remembers the agent's own conversation for a session, to carry on in it after a restart.
     ///
     /// # Errors

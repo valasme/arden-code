@@ -98,6 +98,9 @@ pub enum ErrorCode {
     /// Claude was asked to work in a project whose folder the person has not trusted.
     #[serde(rename = "ARD-AGT-016")]
     ProjectNotTrusted,
+    /// The Playground was to be removed; it always stays.
+    #[serde(rename = "ARD-AGT-017")]
+    PlaygroundStays,
     /// Programs cannot be started and supervised on this computer.
     #[serde(rename = "ARD-PROC-001")]
     ProcessSupervisor,
@@ -146,6 +149,7 @@ impl ErrorCode {
             Self::SessionNotEmpty => "ARD-AGT-014",
             Self::RequestNotWaiting => "ARD-AGT-015",
             Self::ProjectNotTrusted => "ARD-AGT-016",
+            Self::PlaygroundStays => "ARD-AGT-017",
             Self::ProcessSupervisor => "ARD-PROC-001",
             Self::UpdateInstall => "ARD-UPD-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",

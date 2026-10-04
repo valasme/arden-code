@@ -263,6 +263,19 @@ export function startSessionsRust({
           if (!folders.some((folder) => folder.id === pickedFolder.id)) folders.push(pickedFolder);
           return pickedFolder;
         }
+        case "remove_project": {
+          const { projectId } = z.object({ projectId: z.string() }).parse(payload);
+          if (projectId === playground.id) throw failure("ARD-AGT-017");
+          const project = folders.find((candidate) => candidate.id === projectId);
+          if (!project) throw failure("ARD-AGT-001");
+          folders.splice(folders.indexOf(project), 1);
+          for (const gone of sessions.filter((session) => session.projectId === projectId)) {
+            sessions.splice(sessions.indexOf(gone), 1);
+            if (pins.includes(gone.id)) pins.splice(pins.indexOf(gone.id), 1);
+            if (archives.includes(gone.id)) archives.splice(archives.indexOf(gone.id), 1);
+          }
+          return null;
+        }
         case "trust_project": {
           const { projectId } = z.object({ projectId: z.string() }).parse(payload);
           const project = folders.find((candidate) => candidate.id === projectId);

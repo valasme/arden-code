@@ -34,6 +34,7 @@ fn app_error(error: StoreError) -> AppError {
         StoreError::NotEmpty => AppError::new(ErrorCode::SessionNotEmpty),
         StoreError::NotWaiting => AppError::new(ErrorCode::RequestNotWaiting),
         StoreError::NotTrusted => AppError::new(ErrorCode::ProjectNotTrusted),
+        StoreError::Playground => AppError::new(ErrorCode::PlaygroundStays),
         StoreError::NotSaved(reason) => {
             AppError::new(ErrorCode::SessionsNotSaved).with_details(reason)
         }
@@ -331,6 +332,28 @@ pub fn delete_session(
     sessions.delete(&id).map_err(app_error)?;
     claude.0.end(&id);
     tracing::info!(session = %id, "session deleted");
+    Ok(())
+}
+
+/// Removes a folder project and deletes its sessions, archived ones too, ending their agents
+/// (#72). Claude Code keeps its own copies of the conversations; the folder is not touched.
+///
+/// # Errors
+///
+/// Returns an error when there is no such project, for the Playground, or when the file cannot
+/// be written, in which case nothing is removed.
+#[tauri::command]
+#[specta::specta]
+pub fn remove_project(
+    project_id: String,
+    sessions: State<'_, Sessions>,
+    claude: State<'_, crate::agents::Claude>,
+) -> Result<(), AppError> {
+    let removed = sessions.remove_project(&project_id).map_err(app_error)?;
+    for id in &removed {
+        claude.0.end(id);
+    }
+    tracing::info!(project = %project_id, sessions = removed.len(), "project removed");
     Ok(())
 }
 

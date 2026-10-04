@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ProjectMenuItems } from "@/features/sessions/ProjectActions";
 import { SessionMenuItems } from "@/features/sessions/SessionMenu";
 import { findSession } from "@/features/sessions/sessionList";
 import { type SessionAction, useSessionActions } from "@/features/sessions/useSessionActions";
@@ -70,8 +71,8 @@ const isInsideMenu = (target: EventTarget | null) =>
 
 /**
  * The app's own context menus, opened with a right click, Shift+F10 or the Menu key: cut, copy,
- * paste and select all in text fields, copy for selected text, and a session's own menu on its row
- * in the sidebar (ADR 0036). Draws the menu; put it once in the window.
+ * paste and select all in text fields, copy for selected text, a session's own menu on its row
+ * in the sidebar (ADR 0036), and a folder project's own menu on its name (#72). Draws the menu; put it once in the window.
  *
  * In a release build the browser's own menu never shows: where this has nothing to offer, the
  * right click does nothing.
@@ -169,7 +170,11 @@ export function ContextMenuHost() {
       <DropdownMenuContent
         ref={content}
         align="start"
-        className={menu.target.kind === "session" ? "w-auto min-w-48" : undefined}
+        className={
+          menu.target.kind === "session" || menu.target.kind === "project"
+            ? "w-auto min-w-48"
+            : undefined
+        }
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           // The text is edited where the person was, not in the menu.
@@ -187,7 +192,9 @@ export function ContextMenuHost() {
           });
         }}
       >
-        {menu.target.kind === "session" ? (
+        {menu.target.kind === "project" ? (
+          <ProjectMenuItems projectId={menu.target.projectId} />
+        ) : menu.target.kind === "session" ? (
           <SessionMenuItems
             session={findSession(sessionList, menu.target.sessionId)}
             onChoose={(action) => {
