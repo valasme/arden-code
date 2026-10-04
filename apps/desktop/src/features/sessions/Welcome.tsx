@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -23,14 +23,12 @@ import { EffortMenu } from "./EffortMenu";
 import { MessageBox } from "./MessageBox";
 import { ModelMenu } from "./ModelMenu";
 import { ProjectMenu } from "./ProjectMenu";
-import { latestProjectId, projectsByUse } from "./sessionList";
-import { TrustDialog } from "./TrustDialog";
+import { latestProjectId, PLAYGROUND_ID, projectsByUse } from "./sessionList";
 import { useOpenFolder } from "./useOpenFolder";
 import { useSendMessage } from "./useSendMessage";
 import { useStartSession } from "./useStartSession";
+import { useTrustGate } from "./useTrustGate";
 import { useUnavailableAgents } from "./useUnavailableAgents";
-
-const PLAYGROUND_ID = "playground";
 
 function Hint({ command, label }: { command: CommandId; label: string }) {
   const [shortcut] = useShortcutsOf(command);
@@ -52,7 +50,6 @@ function Hint({ command, label }: { command: CommandId; label: string }) {
  */
 export function Welcome() {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const startSession = useStartSession();
   const send = useSendMessage();
   const openFolder = useOpenFolder();
@@ -62,11 +59,7 @@ export function Welcome() {
   const [chosenAgent, setChosenAgent] = useState<AgentKind | undefined>(undefined);
   const [chosenModel, setChosenModel] = useState<Model | null | undefined>(undefined);
   const [chosenEffort, setChosenEffort] = useState<Effort | null | undefined>(undefined);
-  /** A message that waits for the person to trust the chosen folder, and how to say what became of it. */
-  const [trusting, setTrusting] = useState<{
-    text: string;
-    sent: (sent: boolean) => void;
-  } | null>(null);
+  const { gate, dialog: trustDialog } = useTrustGate();
 
   const projectId = chosenProject ?? latestProjectId(list) ?? PLAYGROUND_ID;
   const project: Project | undefined = list.projects.find(
@@ -76,8 +69,8 @@ export function Welcome() {
   const ruled = useQuery(agentForProjectQuery(projectId)).data ?? "demo";
   const agent = chosenAgent ?? ruled;
   // The model a new session there takes, until the person chooses one (ADR 0041).
-  const inherited = useQuery(modelForProjectQuery(projectId)).data ?? null;
-  const model = chosenModel === undefined ? inherited : chosenModel;
+  const inheritedModel = useQuery(modelForProjectQuery(projectId)).data ?? null;
+  const model = chosenModel === undefined ? inheritedModel : chosenModel;
   const inheritedEffort = useQuery(effortForProjectQuery(projectId)).data ?? null;
   const effort = chosenEffort === undefined ? inheritedEffort : chosenEffort;
 
@@ -132,15 +125,7 @@ export function Welcome() {
             ) : null}
           </span>
         }
-        onSend={(text) => {
-          // Claude first works in a folder only once the person trusts it (ADR 0039).
-          if (agent === "claude" && project?.kind === "folder" && !project.trusted) {
-            return new Promise<boolean>((sent) => {
-              setTrusting({ text, sent });
-            });
-          }
-          return start(text);
-        }}
+        onSend={(text) => gate(agent, project, () => start(text))}
         onStop={() => {}}
       />
       <ul className="flex flex-wrap justify-center gap-x-5 gap-y-2">
@@ -148,29 +133,7 @@ export function Welcome() {
         <Hint command="session.new" label={t("welcome.newSession")} />
         <Hint command="settings.open" label={t("welcome.settings")} />
       </ul>
-      {trusting && project ? (
-        <TrustDialog
-          name={project.name}
-          path={project.path}
-          onAnswer={(trusted) => {
-            setTrusting(null);
-            if (!trusted) {
-              trusting.sent(false);
-              return;
-            }
-            commands
-              .trustProject(project.id)
-              .then(async () => {
-                await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
-                trusting.sent(await start(trusting.text));
-              })
-              .catch((failure: unknown) => {
-                showErrorToast(toAppError(failure));
-                trusting.sent(false);
-              });
-          }}
-        />
-      ) : null}
+      {trustDialog}
     </main>
   );
 }

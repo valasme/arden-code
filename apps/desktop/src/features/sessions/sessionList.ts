@@ -1,6 +1,9 @@
 import type { Project, SessionList, SessionSummary } from "@/ipc/bindings";
 import { matchesSearch } from "@/lib/search";
 
+/** The Playground's id, as Rust gives it, for when the session list has not come yet. */
+export const PLAYGROUND_ID = "playground";
+
 /** Every session in the list, whichever part of the sidebar lists it. */
 export function allSessions(list: SessionList): SessionSummary[] {
   return [
