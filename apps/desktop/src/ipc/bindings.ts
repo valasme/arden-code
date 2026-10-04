@@ -476,6 +476,25 @@ export const commands = {
 	 */
 	setSessionAgent: (id: string, agent: AgentKind) => __TAURI_INVOKE<null>("set_session_agent", { id, agent }),
 	/**
+	 *  Changes the model a session works with, none for the agent's own setting (ADR 0041). It applies
+	 *  from the next message.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, it is archived, a reply is running, or the
+	 *  change cannot be saved.
+	 */
+	setSessionModel: (id: string, model: "fable" | "opus" | "sonnet" | "haiku" | null) => __TAURI_INVOKE<null>("set_session_model", { id, model }),
+	/**
+	 *  The model a new session in a project would take, the Playground when none is given (ADR 0041):
+	 *  that of the session the agent rule follows. None for the agent's own setting.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	modelForNewSession: (projectId: string | null) => __TAURI_INVOKE<"fable" | "opus" | "sonnet" | "haiku" | null>("model_for_new_session", { projectId }),
+	/**
 	 *  Moves a session that has had no message yet to another project (ADR 0039).
 	 * 
 	 *  # Errors
@@ -897,6 +916,12 @@ export type MaximizeButtonChanged = {
 /**  How the Maximize button should look while the pointer is on it or presses it. */
 export type MaximizeButtonLook = "normal" | "hover" | "pressed";
 
+/**
+ *  The model Claude works with in a session, chosen by the alias Claude Code takes, which always
+ *  means the latest of its family (ADR 0041). No choice leaves it to Claude Code's own setting.
+ */
+export type Model = "fable" | "opus" | "sonnet" | "haiku";
+
 /**  Whether Arden Code may show Windows notifications. */
 export type Notifications = {
 	/**  Show notifications, such as when an agent needs the person. With this off, nothing is shown. */
@@ -1026,6 +1051,8 @@ export type Session = {
 	archivedAt: string | null,
 	/**  The session it was started from, while that one exists: a linked session (ADR 0036). */
 	linkedFrom: string | null,
+	/**  The model the agent works with, or none for the agent's own setting (ADR 0041). */
+	model?: Model | null,
 	turns: Turn[],
 };
 

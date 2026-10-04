@@ -6,7 +6,13 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
-import { type AgentKind, type Answer, commands, type QuestionAnswer } from "@/ipc/bindings";
+import {
+  type Model,
+  type AgentKind,
+  type Answer,
+  commands,
+  type QuestionAnswer,
+} from "@/ipc/bindings";
 import { noSessions, sessionListQuery, sessionQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
@@ -16,6 +22,7 @@ import { useRepliesStore } from "@/state/replies";
 import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
+import { ModelMenu } from "./ModelMenu";
 import { ProjectMenu } from "./ProjectMenu";
 import { projectsByUse } from "./sessionList";
 import { useUnavailableAgents } from "./useUnavailableAgents";
@@ -192,7 +199,18 @@ export function SessionView({ id }: { id: string }) {
         showErrorToast(toAppError(failure));
       });
   };
-  const context =
+  // The model can change between messages, for Claude only (ADR 0041).
+  const chooseModel = (model: Model | null) => {
+    commands
+      .setSessionModel(id, model)
+      .then(async () => {
+        await queryClient.invalidateQueries({ queryKey: sessionQuery(id).queryKey });
+      })
+      .catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      });
+  };
+  const choices =
     count === 0 && session.archivedAt === null ? (
       <span className="flex min-w-0 items-center gap-1.5">
         <AgentMenu agent={agent} unavailable={unavailable} onChoose={chooseAgent} />
@@ -208,8 +226,18 @@ export function SessionView({ id }: { id: string }) {
         />
       </span>
     ) : (
-      t("sessions.context", { agent: agentName, project: projectName })
+      <span className="truncate">
+        {t("sessions.context", { agent: agentName, project: projectName })}
+      </span>
     );
+  const context = (
+    <span className="flex min-w-0 items-center gap-1.5">
+      {choices}
+      {agent === "claude" && session.archivedAt === null ? (
+        <ModelMenu model={session.model ?? null} disabled={busy} onChoose={chooseModel} />
+      ) : null}
+    </span>
+  );
 
   return (
     <div className="flex h-full flex-col">

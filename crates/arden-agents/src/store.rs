@@ -12,7 +12,7 @@ use time::format_description::well_known::Rfc3339;
 use crate::database::{Database, DatabaseError, Order};
 use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
 use crate::model::{
-    AgentKind, ApprovalState, Item, Project, ProjectKind, ProjectListing, QuestionAnswer,
+    AgentKind, ApprovalState, Item, Model, Project, ProjectKind, ProjectListing, QuestionAnswer,
     QuestionState, Session, SessionList, SessionSummary, Turn, TurnEvent, TurnStatus,
 };
 
@@ -112,6 +112,7 @@ impl Entry {
             pinned: session.pinned,
             archived_at: session.archived_at.clone(),
             linked_from: session.linked_from.clone(),
+            model: session.model,
             turns: Vec::new(),
         }
     }
@@ -211,6 +212,18 @@ impl Inner {
         }
     }
 
+    /// The session the agent rule follows for a new session in a project (ADR 0039): that
+    /// project's latest session, else the latest anywhere.
+    fn latest_for(&self, project_id: &str) -> Option<&Entry> {
+        let latest = |in_project: bool| {
+            self.sessions
+                .iter()
+                .filter(|entry| !in_project || entry.session.project_id == project_id)
+                .max_by_key(|entry| entry.order.used)
+        };
+        latest(true).or_else(|| latest(false))
+    }
+
     /// Starts an empty session in a project, linked to the session it was started from, if any.
     fn create_session(
         &mut self,
@@ -221,6 +234,19 @@ impl Inner {
         if !self.projects.iter().any(|project| project.id == project_id) {
             return Err(StoreError::UnknownProject);
         }
+        // The model comes from the session it was started from, else from the session the agent
+        // rule follows when it has the same agent (councils Q6).
+        let model = match &linked_from {
+            Some(from) => self
+                .sessions
+                .iter()
+                .find(|entry| entry.session.id == *from)
+                .and_then(|entry| entry.session.model),
+            None => self
+                .latest_for(project_id)
+                .filter(|entry| entry.session.agent == agent)
+                .and_then(|entry| entry.session.model),
+        };
         let now = now_utc();
         let entry = Entry {
             session: Session {
@@ -233,6 +259,7 @@ impl Inner {
                 pinned: false,
                 archived_at: None,
                 linked_from,
+                model,
                 turns: Vec::new(),
             },
             loaded: true,
@@ -701,16 +728,54 @@ impl SessionStore {
     /// session, else of the latest session anywhere. Nothing when there is no session at all.
     #[must_use]
     pub fn agent_for_new_session(&self, project_id: &str) -> Option<AgentKind> {
-        let inner = self.lock();
-        let latest = |in_project: bool| {
-            inner
-                .sessions
-                .iter()
-                .filter(|entry| !in_project || entry.session.project_id == project_id)
-                .max_by_key(|entry| entry.order.used)
-                .map(|entry| entry.session.agent)
-        };
-        latest(true).or_else(|| latest(false))
+        self.lock()
+            .latest_for(project_id)
+            .map(|entry| entry.session.agent)
+    }
+
+    /// The model a new session in a project takes (councils Q6): that of the session the agent
+    /// rule follows. Nothing for the agent's own setting, or when there is no session at all.
+    #[must_use]
+    pub fn model_for_new_session(&self, project_id: &str) -> Option<Model> {
+        self.lock()
+            .latest_for(project_id)
+            .and_then(|entry| entry.session.model)
+    }
+
+    /// Changes the model of a session (ADR 0041), also after its first message. The agent takes it
+    /// from the next message on.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session,
+    /// [`StoreError::Archived`] when it is archived, [`StoreError::TurnRunning`] while a reply
+    /// runs, and [`StoreError::NotSaved`] when the change cannot be written.
+    pub fn set_model(&self, session_id: &str, model: Option<Model>) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let last_id = inner.last_id;
+        let Inner {
+            sessions, database, ..
+        } = &mut *inner;
+        let entry = find(sessions, session_id)?;
+        entry.load(database)?;
+        if entry.session.archived_at.is_some() {
+            return Err(StoreError::Archived);
+        }
+        if entry
+            .session
+            .turns
+            .iter()
+            .any(|turn| turn.status == TurnStatus::Running)
+        {
+            return Err(StoreError::TurnRunning);
+        }
+        let mut header = entry.header();
+        header.model = model;
+        database
+            .save_session(&header, entry.order, last_id)
+            .map_err(not_saved)?;
+        entry.session.model = model;
+        Ok(())
     }
 
     /// Changes the agent of a session that has had no message yet (ADR 0039).
@@ -1126,7 +1191,7 @@ impl SessionStore {
         let mut ended = false;
         let mut saved = Ok(());
         let (sender, controls) = mpsc::channel();
-        let (folder, conversation) = {
+        let (folder, conversation, model) = {
             let mut inner = self.lock();
             inner.controls.insert(turn.id.clone(), sender);
             let entry = inner
@@ -1142,7 +1207,11 @@ impl SessionStore {
                 })
                 .map(|project| PathBuf::from(&project.path))
                 .unwrap_or_default();
-            (folder, entry.and_then(|entry| entry.conversation.clone()))
+            (
+                folder,
+                entry.and_then(|entry| entry.conversation.clone()),
+                entry.and_then(|entry| entry.session.model),
+            )
         };
         let remember = |id: &str| {
             if let Err(error) = self.remember_conversation(session_id, id) {
@@ -1155,6 +1224,7 @@ impl SessionStore {
             prompt: &turn.prompt,
             folder: &folder,
             conversation: conversation.as_deref(),
+            model,
             remember: &remember,
             controls,
         };
@@ -1908,7 +1978,7 @@ mod tests {
         let version: i64 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("the version");
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
     }
 
     #[test]
@@ -2778,6 +2848,116 @@ mod tests {
         assert_eq!(
             store.session(&linked).expect("the session").linked_from,
             Some(original)
+        );
+    }
+
+    #[test]
+    fn a_session_s_model_is_kept_after_a_restart_and_can_change_between_turns() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .expect("a session");
+            assert_eq!(
+                store.session(&session.id).expect("it").model,
+                None,
+                "Default at first"
+            );
+            store
+                .set_model(&session.id, Some(Model::Opus))
+                .expect("chosen");
+            let turn = store.start_turn(&session.id, "hello").expect("a turn");
+            store
+                .stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| true)
+                .expect("answered");
+            store
+                .set_model(&session.id, Some(Model::Sonnet))
+                .expect("changed after a message");
+            session.id
+        };
+
+        assert_eq!(
+            store_in(&file).session(&id).expect("the session").model,
+            Some(Model::Sonnet)
+        );
+    }
+
+    #[test]
+    fn the_model_does_not_change_while_a_reply_runs_or_in_an_archived_session() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        store.start_turn(&session.id, "hello").expect("a turn");
+
+        assert_eq!(
+            store.set_model(&session.id, Some(Model::Opus)),
+            Err(StoreError::TurnRunning)
+        );
+        store.stop_turn(&session.id).expect("stopped");
+        store.set_archived(&session.id, true).expect("archived");
+        assert_eq!(
+            store.set_model(&session.id, Some(Model::Opus)),
+            Err(StoreError::Archived)
+        );
+        assert_eq!(
+            store.set_model("session-99", None),
+            Err(StoreError::UnknownSession)
+        );
+    }
+
+    #[test]
+    fn a_new_session_takes_the_model_of_the_session_its_agent_comes_from() {
+        let store = store();
+        let earlier = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        store
+            .set_model(&earlier.id, Some(Model::Opus))
+            .expect("chosen");
+
+        let next = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        let other_agent = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+
+        assert_eq!(
+            store.session(&next.id).expect("it").model,
+            Some(Model::Opus)
+        );
+        assert_eq!(
+            store.session(&other_agent.id).expect("it").model,
+            None,
+            "another agent starts on its Default"
+        );
+        assert_eq!(store.model_for_new_session(playground::PLAYGROUND_ID), None);
+    }
+
+    #[test]
+    fn a_linked_session_takes_the_model_of_the_one_it_started_from() {
+        let store = store();
+        let original = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        store
+            .set_model(&original.id, Some(Model::Haiku))
+            .expect("chosen");
+        store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a later session");
+        store
+            .set_model(&store.list().projects[0].sessions[0].id, Some(Model::Opus))
+            .expect("chosen");
+
+        let linked = store.create_linked_session(&original.id).expect("linked");
+
+        assert_eq!(
+            store.session(&linked.id).expect("it").model,
+            Some(Model::Haiku)
         );
     }
 

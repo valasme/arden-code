@@ -14,6 +14,30 @@ pub enum AgentKind {
     Claude,
 }
 
+/// The model Claude works with in a session, chosen by the alias Claude Code takes, which always
+/// means the latest of its family (ADR 0041). No choice leaves it to Claude Code's own setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum Model {
+    Fable,
+    Opus,
+    Sonnet,
+    Haiku,
+}
+
+impl Model {
+    /// The alias Claude Code takes for it, as in `--model opus`.
+    #[must_use]
+    pub fn alias(self) -> &'static str {
+        match self {
+            Self::Fable => "fable",
+            Self::Opus => "opus",
+            Self::Sonnet => "sonnet",
+            Self::Haiku => "haiku",
+        }
+    }
+}
+
 /// What a project is. Only the Playground exists in the foundation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -373,6 +397,9 @@ pub struct Session {
     pub archived_at: Option<String>,
     /// The session it was started from, while that one exists: a linked session (ADR 0036).
     pub linked_from: Option<String>,
+    /// The model the agent works with, or none for the agent's own setting (ADR 0041).
+    #[serde(default)]
+    pub model: Option<Model>,
     pub turns: Vec<Turn>,
 }
 

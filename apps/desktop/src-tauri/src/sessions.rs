@@ -9,7 +9,7 @@ use std::thread;
 use arden_agents::demo::DemoDriver;
 use arden_agents::driver::{AgentDriver, Answer};
 use arden_agents::model::{
-    AgentKind, ApprovalAction, ApprovalState, Item, Project, QuestionAnswer, QuestionState,
+    AgentKind, ApprovalAction, ApprovalState, Item, Model, Project, QuestionAnswer, QuestionState,
     Session, SessionList, SessionSummary, TurnEvent,
 };
 use arden_agents::playground::PLAYGROUND_ID;
@@ -143,6 +143,42 @@ pub fn agent_for_new_session(
         project_id.as_deref().unwrap_or(PLAYGROUND_ID),
         detections.claude_installed(),
     ))
+}
+
+/// The model a new session in a project would take, the Playground when none is given (ADR 0041):
+/// that of the session the agent rule follows. None for the agent's own setting.
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps)]
+#[tauri::command]
+#[specta::specta]
+pub fn model_for_new_session(
+    project_id: Option<String>,
+    sessions: State<'_, Sessions>,
+) -> Result<Option<Model>, AppError> {
+    Ok(sessions.model_for_new_session(project_id.as_deref().unwrap_or(PLAYGROUND_ID)))
+}
+
+/// Changes the model a session works with, none for the agent's own setting (ADR 0041). It applies
+/// from the next message.
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, it is archived, a reply is running, or the
+/// change cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn set_session_model(
+    id: String,
+    model: Option<Model>,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions.set_model(&id, model).map_err(app_error)?;
+    tracing::info!(session = %id, ?model, "the session's model changed");
+    Ok(())
 }
 
 /// Starts an empty session in a project, the Playground when none is given, with the agent given,

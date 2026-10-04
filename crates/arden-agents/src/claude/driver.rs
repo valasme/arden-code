@@ -20,7 +20,9 @@ use super::protocol::{self, Frame, Request};
 use super::question;
 use super::reply::Reply;
 use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
-use crate::model::{ApprovalState, Item, QuestionAnswer, QuestionState, StatusKind, TurnEvent};
+use crate::model::{
+    ApprovalState, Item, Model, QuestionAnswer, QuestionState, StatusKind, TurnEvent,
+};
 
 /// How long a new Claude Code has to answer `initialize`: it may be starting MCP servers.
 const HANDSHAKE_PATIENCE: Duration = Duration::from_secs(60);
@@ -85,6 +87,8 @@ struct Live {
     owed: AtomicUsize,
     /// The conversation it carries on, and whether the session remembers it already.
     conversation: String,
+    /// The model it was started with: another one needs another Claude Code (ADR 0041).
+    model: Option<Model>,
     remembered: AtomicBool,
     /// When Claude Code last wrote, or a reply last ended.
     heard: Arc<Mutex<Instant>>,
@@ -94,7 +98,8 @@ struct Live {
 
 impl Live {
     /// Starts reading what Claude Code writes, on a thread of its own.
-    fn begin(connection: Connection, session_id: &str, conversation: &Conversation) -> Self {
+    fn begin(connection: Connection, session_id: &str, start: &Start) -> Self {
+        let conversation = &start.conversation;
         let (sender, events) = mpsc::channel();
         let reader = sender.clone();
         let session = session_id.to_owned();
@@ -130,6 +135,7 @@ impl Live {
                 Conversation::New(id) | Conversation::Resume(id) => id.clone(),
             },
             remembered: AtomicBool::new(matches!(conversation, Conversation::Resume(_))),
+            model: start.model,
             heard,
             busy: AtomicBool::new(false),
         }
@@ -285,23 +291,35 @@ impl ClaudeDriver {
         session_id: &str,
         folder: &Path,
         saved: Option<&str>,
+        model: Option<Model>,
     ) -> Result<(Arc<Live>, bool), Problem> {
-        if let Some(live) = lock(&self.live).get(session_id) {
-            live.busy.store(true, Ordering::Release);
-            return Ok((Arc::clone(live), false));
+        let running = lock(&self.live).get(session_id).map(Arc::clone);
+        if let Some(live) = running {
+            if live.model == model {
+                live.busy.store(true, Ordering::Release);
+                return Ok((live, false));
+            }
+            // Started with another model: it is ended, and the conversation carries on in a
+            // Claude Code started with this one (ADR 0041).
+            self.forget(session_id);
         }
         let fresh = || Conversation::New(uuid::Uuid::new_v4().to_string());
         let Some(saved) = saved else {
             return self
-                .start(session_id, folder, fresh())
+                .start(session_id, folder, fresh(), model)
                 .map(|live| (live, false));
         };
-        match self.start(session_id, folder, Conversation::Resume(saved.to_owned())) {
+        match self.start(
+            session_id,
+            folder,
+            Conversation::Resume(saved.to_owned()),
+            model,
+        ) {
             Ok(live) => Ok((live, false)),
             // Claude Code ends at once when it has no such conversation.
             Err(Problem::Stopped(why)) => {
                 tracing::warn!(session = %session_id, %why, "Claude Code did not carry on the conversation, so a new one starts");
-                self.start(session_id, folder, fresh())
+                self.start(session_id, folder, fresh(), model)
                     .map(|live| (live, true))
             }
             Err(problem) => Err(problem),
@@ -314,13 +332,15 @@ impl ClaudeDriver {
         session_id: &str,
         folder: &Path,
         conversation: Conversation,
+        model: Option<Model>,
     ) -> Result<Arc<Live>, Problem> {
         let start = Start {
             folder: folder.to_path_buf(),
             conversation,
+            model,
         };
         let connection = self.launcher.launch(&start).map_err(Problem::Launch)?;
-        let live = Arc::new(Live::begin(connection, session_id, &start.conversation));
+        let live = Arc::new(Live::begin(connection, session_id, &start));
         let id = self.next_request();
         live.write(&protocol::initialize(&id)).map_err(|error| {
             Problem::Stopped(format!("Claude Code could not be written to: {error}"))
@@ -379,8 +399,9 @@ impl ClaudeDriver {
         session_id: &str,
         folder: &Path,
         saved: Option<&str>,
+        model: Option<Model>,
     ) -> Result<(Arc<Live>, bool), Problem> {
-        let (live, lost) = self.live(session_id, folder, saved)?;
+        let (live, lost) = self.live(session_id, folder, saved, model)?;
         let deadline = Instant::now() + DRAIN_PATIENCE;
         {
             let events = lock(&live.events);
@@ -411,7 +432,7 @@ impl ClaudeDriver {
                             .load(Ordering::Acquire)
                             .then(|| live.conversation.clone());
                         drop(live);
-                        return self.live(session_id, folder, saved.as_deref());
+                        return self.live(session_id, folder, saved.as_deref(), model);
                     }
                 }
             }
@@ -674,7 +695,13 @@ impl Answering<'_> {
 impl AgentDriver for ClaudeDriver {
     fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
         let (session_id, turn_id) = (request.session_id, request.turn_id);
-        let (live, lost) = match self.settled(session_id, request.folder, request.conversation) {
+        let settled = self.settled(
+            session_id,
+            request.folder,
+            request.conversation,
+            request.model,
+        );
+        let (live, lost) = match settled {
             Ok(settled) => settled,
             Err(problem) => {
                 tracing::warn!(session = %session_id, details = %problem.details(), "Claude could not be reached");

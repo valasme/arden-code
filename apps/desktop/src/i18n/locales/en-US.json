@@ -432,6 +432,15 @@
       "stopShort": "Stop"
     },
     "messages": "Messages",
+    "modelMenu": {
+      "default": "Default",
+      "defaultHint": "Claude Code's own setting",
+      "fable": "Fable",
+      "haiku": "Haiku",
+      "label": "Model: {{model}}",
+      "opus": "Opus",
+      "sonnet": "Sonnet"
+    },
     "new": "New session",
     "playground": "Playground",
     "projectMenu": {

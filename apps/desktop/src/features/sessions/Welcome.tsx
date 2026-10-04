@@ -7,13 +7,19 @@ import { Kbd } from "@/components/ui/kbd";
 import { useShortcutsOf } from "@/features/commands/CommandsProvider";
 import type { CommandId } from "@/features/commands/registry";
 import { formatShortcut } from "@/features/commands/shortcuts";
-import { type AgentKind, commands, type Project } from "@/ipc/bindings";
-import { agentForProjectQuery, noSessions, sessionListQuery } from "@/ipc/queries";
+import { type AgentKind, commands, type Model, type Project } from "@/ipc/bindings";
+import {
+  agentForProjectQuery,
+  modelForProjectQuery,
+  noSessions,
+  sessionListQuery,
+} from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 
 import { AgentMenu } from "./AgentMenu";
 import { MessageBox } from "./MessageBox";
+import { ModelMenu } from "./ModelMenu";
 import { ProjectMenu } from "./ProjectMenu";
 import { latestProjectId, projectsByUse } from "./sessionList";
 import { TrustDialog } from "./TrustDialog";
@@ -52,6 +58,7 @@ export function Welcome() {
   const { data: list = noSessions } = useQuery(sessionListQuery);
   const [chosenProject, setChosenProject] = useState<string | undefined>(undefined);
   const [chosenAgent, setChosenAgent] = useState<AgentKind | undefined>(undefined);
+  const [chosenModel, setChosenModel] = useState<Model | null | undefined>(undefined);
   /** A message that waits for the person to trust the chosen folder, and how to say what became of it. */
   const [trusting, setTrusting] = useState<{
     text: string;
@@ -65,10 +72,21 @@ export function Welcome() {
   // Until Rust has answered, or where there is no Rust, the Demo agent.
   const ruled = useQuery(agentForProjectQuery(projectId)).data ?? "demo";
   const agent = chosenAgent ?? ruled;
+  // The model a new session there takes, until the person chooses one (ADR 0041).
+  const inherited = useQuery(modelForProjectQuery(projectId)).data ?? null;
+  const model = chosenModel === undefined ? inherited : chosenModel;
 
   const start = async (text: string) => {
     const id = await startSession(agent, projectId);
     if (id === undefined) return false;
+    // The session takes the inherited model by itself; one chosen here is given before the message.
+    if (agent === "claude" && chosenModel !== undefined) {
+      try {
+        await commands.setSessionModel(id, chosenModel);
+      } catch (error) {
+        showErrorToast(toAppError(error));
+      }
+    }
     await send(id, text);
     return true;
   };
@@ -97,6 +115,7 @@ export function Welcome() {
                 });
               }}
             />
+            {agent === "claude" ? <ModelMenu model={model} onChoose={setChosenModel} /> : null}
           </span>
         }
         onSend={(text) => {

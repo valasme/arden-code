@@ -14,6 +14,7 @@ use arden_process::supervisor::Supervisor;
 
 use super::locate::{self, Missing};
 use crate::detect::parse_version;
+use crate::model::Model;
 
 /// How long Claude Code gets to say its version.
 const VERSION_PATIENCE: Duration = Duration::from_secs(10);
@@ -55,6 +56,8 @@ pub struct Start {
     /// The project's folder, where Claude works.
     pub folder: PathBuf,
     pub conversation: Conversation,
+    /// The model to work with, or none for Claude Code's own setting (ADR 0041).
+    pub model: Option<Model>,
 }
 
 /// A running Claude Code: what Arden Code writes to it, what it writes back, and its process, when
@@ -164,7 +167,7 @@ impl ProgramLauncher {
 }
 
 /// The arguments that start a conversation in `claude`'s headless streaming mode (ADR 0038).
-fn arguments(conversation: &Conversation) -> Vec<Arg> {
+fn arguments(start: &Start) -> Vec<Arg> {
     let mut arguments = vec![
         Arg::Literal("-p"),
         Arg::Literal("--input-format"),
@@ -178,7 +181,12 @@ fn arguments(conversation: &Conversation) -> Vec<Arg> {
         Arg::Literal("--permission-mode"),
         Arg::Literal("default"),
     ];
-    match conversation {
+    // The alias is Arden Code's own text, from its list of models, never typed by anyone.
+    if let Some(model) = start.model {
+        arguments.push(Arg::Literal("--model"));
+        arguments.push(Arg::Literal(model.alias()));
+    }
+    match &start.conversation {
         Conversation::New(id) => {
             arguments.push(Arg::Literal("--session-id"));
             arguments.push(Arg::Untrusted(id.clone()));
@@ -206,7 +214,7 @@ impl Launcher for ProgramLauncher {
             .spawn_piped(
                 "claude",
                 &program,
-                &arguments(&start.conversation),
+                &arguments(start),
                 &start.folder,
                 HOST_VARIABLES,
             )
@@ -216,5 +224,47 @@ impl Launcher for ProgramLauncher {
             output: Box::new(piped.output),
             process: Some(piped.child),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn texts(start: &Start) -> Vec<String> {
+        arguments(start)
+            .iter()
+            .map(|argument| match argument {
+                Arg::Literal(text) => (*text).to_owned(),
+                Arg::Untrusted(text) => text.clone(),
+            })
+            .collect()
+    }
+
+    fn start(model: Option<Model>) -> Start {
+        Start {
+            folder: PathBuf::from(r"C:Work"),
+            conversation: Conversation::New("c1".into()),
+            model,
+        }
+    }
+
+    #[test]
+    fn a_chosen_model_is_passed_by_its_alias_and_default_passes_none() {
+        let chosen = texts(&start(Some(Model::Opus)));
+        let at = chosen
+            .iter()
+            .position(|text| text == "--model")
+            .expect("--model");
+        assert_eq!(chosen[at + 1], "opus");
+
+        assert!(!texts(&start(None)).contains(&"--model".to_owned()));
+        for (model, alias) in [
+            (Model::Fable, "fable"),
+            (Model::Sonnet, "sonnet"),
+            (Model::Haiku, "haiku"),
+        ] {
+            assert!(texts(&start(Some(model))).contains(&alias.to_owned()));
+        }
     }
 }

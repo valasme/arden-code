@@ -6,7 +6,7 @@ use std::sync::mpsc::Receiver;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::model::{QuestionAnswer, TurnEvent};
+use crate::model::{Model, QuestionAnswer, TurnEvent};
 
 /// Whether the driver should carry on after an event, or stop because nobody is listening.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +51,8 @@ pub struct ReplyRequest<'a> {
     pub folder: &'a Path,
     /// The agent's own conversation for the session, once it has answered in it, to carry on in.
     pub conversation: Option<&'a str>,
+    /// The model the session works with, or none for the agent's own setting (ADR 0041).
+    pub model: Option<Model>,
     /// Remembers the agent's own conversation for the session, once it has answered in it.
     pub remember: &'a dyn Fn(&str),
     /// What the person does while the reply runs. It closes when the reply has ended.

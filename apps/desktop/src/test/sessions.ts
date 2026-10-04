@@ -6,6 +6,7 @@ import type {
   AgentKind,
   AppError,
   ErrorCode,
+  Model,
   Project,
   Session,
   SessionList,
@@ -83,6 +84,8 @@ interface Options {
   folders?: Project[];
   /** The agent a new session takes when none is asked for (ADR 0039). */
   newSessionAgent?: AgentKind;
+  /** The model a new session takes (ADR 0041), null for the agent's own setting. */
+  newSessionModel?: Model | null;
   /** The folder the person picks in Windows' dialog, or null when they cancel. */
   pickedFolder?: Project | null;
 }
@@ -100,6 +103,7 @@ export function startSessionsRust({
   failing = {},
   folders: opened = [],
   newSessionAgent = "demo",
+  newSessionModel = null,
   pickedFolder = null,
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
@@ -196,6 +200,22 @@ export function startSessionsRust({
         }
         case "remember_open_session": {
           find(withId.parse(payload).id);
+          return null;
+        }
+        case "model_for_new_session": {
+          return newSessionModel;
+        }
+        case "set_session_model": {
+          const { id, model } = z
+            .object({
+              id: z.string(),
+              model: z.enum(["fable", "opus", "sonnet", "haiku"]).nullable(),
+            })
+            .parse(payload);
+          const session = find(id);
+          if (session.archivedAt !== null) throw failure("ARD-AGT-005");
+          if (session.turns.some((turn) => turn.status === "running")) throw failure("ARD-AGT-002");
+          session.model = model;
           return null;
         }
         case "set_session_agent": {

@@ -221,6 +221,7 @@ mod tests {
             prompt,
             folder: std::path::Path::new(r"C:Playground"),
             conversation: None,
+            model: None,
             remember: &|_| {},
             controls,
         }
