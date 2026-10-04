@@ -358,6 +358,12 @@ async function search(text: string) {
   return user;
 }
 
+/** The names of the settings the search found. */
+const foundSettings = async () =>
+  within(await screen.findByRole("list", { name: "Search results" }))
+    .getAllByRole("heading", { level: 2 })
+    .map((h) => h.textContent);
+
 describe("searching the settings", () => {
   it("finds a setting by its name, on any tab", async () => {
     startApp();
@@ -391,6 +397,16 @@ describe("searching the settings", () => {
       "Desktop notifications",
       "Use the Windows title bar",
     ]);
+  });
+
+  it("finds Smooth scrolling by either of its words", async () => {
+    startApp();
+    const user = await search("scroll");
+
+    expect(await foundSettings()).toEqual(["Smooth scrolling"]);
+    await user.clear(screen.getByRole("searchbox", { name: "Search settings" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search settings" }), "smooth");
+    expect(await foundSettings()).toEqual(["Smooth scrolling"]);
   });
 
   it("says when nothing matches, and goes back to the tab when the search is cleared", async () => {

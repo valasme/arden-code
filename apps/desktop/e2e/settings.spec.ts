@@ -66,6 +66,7 @@ test.describe("settings in the real app", () => {
           codeFontSize: 13,
           codeLigatures: false,
           reduceMotion: "system",
+          smoothScrolling: true,
           showStatusBar: true,
         },
         layout: { sidebarWidth: 260, inspectorWidth: 320 },

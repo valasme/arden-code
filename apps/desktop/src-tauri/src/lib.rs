@@ -260,14 +260,18 @@ fn start_diagnostics(app: &tauri::App, paths: &AppPaths, level: UiLevel) -> Reda
 #[cfg(debug_assertions)]
 const DEBUG_PORT_VARIABLE: &str = "ARDEN_CODE_DEBUG_PORT";
 
-/// The arguments the web engine starts with: the ones Tauri gives every window, the choice about
-/// hardware acceleration, and in a debug build the port of its debugging endpoint.
+/// The arguments the web engine starts with: the ones Tauri gives every window, the choices about
+/// hardware acceleration and smooth scrolling, and in a debug build the port of its debugging
+/// endpoint.
 #[must_use]
-fn browser_arguments(hardware_acceleration: bool, debug_port: Option<&str>) -> String {
+fn browser_arguments(settings: &Settings, debug_port: Option<&str>) -> String {
     let mut arguments =
         String::from("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection");
-    if !hardware_acceleration {
+    if !settings.advanced.hardware_acceleration {
         arguments.push_str(" --disable-gpu");
+    }
+    if !settings.appearance.smooth_scrolling {
+        arguments.push_str(" --disable-smooth-scrolling");
     }
     if let Some(port) = debug_port {
         arguments.push_str(" --remote-debugging-port=");
@@ -297,10 +301,7 @@ fn create_main_window(
     let debug_port = std::env::var(DEBUG_PORT_VARIABLE).ok();
     #[cfg(not(debug_assertions))]
     let debug_port: Option<String> = None;
-    let arguments = browser_arguments(
-        settings.advanced.hardware_acceleration,
-        debug_port.as_deref(),
-    );
+    let arguments = browser_arguments(settings, debug_port.as_deref());
     tracing::info!(%arguments, "the web engine's arguments");
     let mut builder = tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
         .additional_browser_args(&arguments)
@@ -537,25 +538,46 @@ pub fn run() {
 mod tests {
     use super::*;
 
+    /// The settings with hardware acceleration and smooth scrolling as given.
+    fn settings(hardware_acceleration: bool, smooth_scrolling: bool) -> Settings {
+        let mut settings = Settings::default();
+        settings.advanced.hardware_acceleration = hardware_acceleration;
+        settings.appearance.smooth_scrolling = smooth_scrolling;
+        settings
+    }
+
     #[test]
     fn the_web_engine_gets_tauris_own_arguments_and_nothing_else_by_default() {
         assert_eq!(
-            browser_arguments(true, None),
+            browser_arguments(&Settings::default(), None),
             "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
         );
     }
 
     #[test]
     fn turning_hardware_acceleration_off_adds_the_argument_that_does_it() {
-        let arguments = browser_arguments(false, None);
+        let arguments = browser_arguments(&settings(false, true), None);
 
         assert!(arguments.ends_with(" --disable-gpu"), "{arguments}");
-        assert!(!browser_arguments(true, None).contains("--disable-gpu"));
+        assert!(!browser_arguments(&settings(true, true), None).contains("--disable-gpu"));
+    }
+
+    #[test]
+    fn turning_smooth_scrolling_off_adds_the_argument_that_does_it() {
+        let arguments = browser_arguments(&settings(true, false), None);
+
+        assert!(
+            arguments.ends_with(" --disable-smooth-scrolling"),
+            "{arguments}"
+        );
+        assert!(
+            !browser_arguments(&settings(true, true), None).contains("--disable-smooth-scrolling")
+        );
     }
 
     #[test]
     fn a_debug_port_is_added_after_the_others() {
-        let arguments = browser_arguments(false, Some("9222"));
+        let arguments = browser_arguments(&settings(false, true), Some("9222"));
 
         assert!(
             arguments.ends_with(" --disable-gpu --remote-debugging-port=9222"),

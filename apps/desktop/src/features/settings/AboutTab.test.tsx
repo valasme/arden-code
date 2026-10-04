@@ -168,16 +168,31 @@ describe("About → open-source licenses", () => {
     expect(within(firstMatch).getByText(/react-dom/)).toBeVisible();
   });
 
-  it("show the first hundred and say how many there are", async () => {
+  it("are all shown once opened, without searching, and drawn only then", async () => {
+    startApp();
+    const user = userEvent.setup();
+    renderTab();
+    const summary = await screen.findByText(/^Open-source licenses/);
+
+    expect(screen.queryAllByRole("row", { hidden: true })).toHaveLength(0);
+    await user.click(summary);
+
+    expect(screen.getAllByRole("row")).toHaveLength(licenses.length + 1);
+    expect(screen.queryByText(/^Showing/)).toBeNull();
+  });
+
+  it("are all shown again when the search is cleared", async () => {
     startApp();
     const user = userEvent.setup();
     renderTab();
     await user.click(await screen.findByText(/^Open-source licenses/));
+    const search = screen.getByRole("searchbox", { name: "Search packages" });
 
-    expect(screen.getAllByRole("row")).toHaveLength(101);
-    expect(
-      screen.getByText(`Showing 100 of ${licenses.length}. Type to narrow the list.`),
-    ).toBeVisible();
+    await user.type(search, "react-dom");
+    expect(screen.getAllByRole("row").length).toBeLessThan(licenses.length + 1);
+    await user.clear(search);
+
+    expect(screen.getAllByRole("row")).toHaveLength(licenses.length + 1);
   });
 
   it("say so when nothing matches", async () => {
