@@ -364,14 +364,17 @@
     "uiError": "Something went wrong ({{code}})"
   },
   "palette": {
-    "description": "Search for a command and press Enter to run it.",
-    "empty": "No command matches.",
+    "archived": "Archived",
+    "description": "Search for a command or a session and press Enter to run or open it.",
+    "empty": "Nothing matches.",
     "hints": {
       "close": "to close",
       "move": "to move",
       "run": "to run"
     },
-    "placeholder": "Type a command",
+    "placeholder": "Type a command or a session's name",
+    "session": "{{session}}, in {{project}}",
+    "sessions": "Sessions",
     "title": "Command palette"
   },
   "regions": {
