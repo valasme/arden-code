@@ -12,6 +12,7 @@ import type { SessionSummary } from "@/ipc/bindings";
 import { noSessions, sessionListQuery } from "@/ipc/queries";
 import { cn } from "@/lib/utils";
 import { useRowFocusStore } from "@/state/rowFocus";
+import { useSessionDialogsStore } from "@/state/sessionDialogs";
 
 import { ProjectActionsMenu } from "./ProjectActions";
 import { SessionMenu } from "./SessionMenu";
@@ -81,6 +82,7 @@ export function SessionsNav() {
   const { t } = useTranslation();
   const { run } = useCommands();
   const { data: list = noSessions } = useQuery(sessionListQuery);
+  const askToRemove = useSessionDialogsStore((state) => state.askToRemove);
 
   return (
     <>
@@ -120,7 +122,8 @@ export function SessionsNav() {
                 {t("sessions.playground")}
               </h3>
             ) : (
-              // A right click on the name opens the project's menu too (ContextMenuHost).
+              // A right click on the name opens the project's menu too (ContextMenuHost). Unlike a
+              // session's, the … button stays in the Tab order: the name itself takes no focus.
               <div data-project-id={project.id} className="group/project relative">
                 <h3
                   id={`project-${project.id}`}
@@ -129,7 +132,11 @@ export function SessionsNav() {
                 >
                   {project.name}
                 </h3>
-                <ProjectActionsMenu projectId={project.id}>
+                <ProjectActionsMenu
+                  onRemove={() => {
+                    askToRemove(project.id);
+                  }}
+                >
                   <button
                     type="button"
                     aria-label={t("projects.menu", { name: project.name })}

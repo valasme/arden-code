@@ -119,6 +119,23 @@ describe("Removing a project", () => {
     });
   });
 
+  it("gives the focus back to the project's … button when cancelled, and to New session once removed", async () => {
+    const { user } = await withProject();
+    const actions = within(sidebar()).getByRole("button", { name: "Actions for arden-code" });
+
+    let question = await askToRemove(user);
+    await user.click(within(question).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(actions).toHaveFocus();
+    });
+
+    question = await askToRemove(user);
+    await user.click(within(question).getByRole("button", { name: "Remove project" }));
+    await waitFor(() => {
+      expect(within(sidebar()).getByRole("button", { name: "New session" })).toHaveFocus();
+    });
+  });
+
   it("has no accessibility violations while it asks", async () => {
     const { user } = await withProject();
 

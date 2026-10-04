@@ -42,7 +42,8 @@ function Hint({ keys, label }: { keys: readonly string[]; label: string }) {
 }
 
 /** What a session's item in the palette is known by, apart from every command's. */
-const sessionValue = (id: string) => `session:${id}`;
+const sessionPrefix = "session:";
+const sessionValue = (id: string) => `${sessionPrefix}${id}`;
 
 /**
  * Commands are scored by the palette's own filter. Sessions were filtered already
@@ -50,7 +51,7 @@ const sessionValue = (id: string) => `session:${id}`;
  * commands, the most recently used first.
  */
 function filter(value: string, search: string, keywords?: string[]): number {
-  return value.startsWith("session:") ? 0.001 : defaultFilter(value, search, keywords);
+  return value.startsWith(sessionPrefix) ? 0.001 : defaultFilter(value, search, keywords);
 }
 
 /** A session the palette offers: choosing it opens the session. */

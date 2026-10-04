@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useSessionDialogsStore } from "@/state/sessionDialogs";
 import { ProjectMenuItems } from "@/features/sessions/ProjectActions";
 import { SessionMenuItems } from "@/features/sessions/SessionMenu";
 import { findSession } from "@/features/sessions/sessionList";
@@ -85,6 +86,9 @@ export function ContextMenuHost() {
   const chosen = useRef<Action | undefined>(undefined);
   // The same for a session's menu: a dialog it opens gives the focus back to the row.
   const chosenForSession = useRef<SessionAction | undefined>(undefined);
+  // And for a project's menu: Remove project… asks once the focus is back.
+  const removeChosen = useRef(false);
+  const askToRemove = useSessionDialogsStore((state) => state.askToRemove);
   const runSessionAction = useSessionActions();
   const { data: sessionList = noSessions } = useQuery(sessionListQuery);
   const content = useRef<HTMLDivElement>(null);
@@ -181,6 +185,10 @@ export function ContextMenuHost() {
           returnFocusTo.current?.focus();
           const forSession = chosenForSession.current;
           chosenForSession.current = undefined;
+          if (removeChosen.current && menu.target.kind === "project") {
+            removeChosen.current = false;
+            askToRemove(menu.target.projectId);
+          }
           if (forSession && menu.target.kind === "session") {
             runSessionAction(forSession, menu.target.sessionId, true);
           }
@@ -193,7 +201,11 @@ export function ContextMenuHost() {
         }}
       >
         {menu.target.kind === "project" ? (
-          <ProjectMenuItems projectId={menu.target.projectId} />
+          <ProjectMenuItems
+            onRemove={() => {
+              removeChosen.current = true;
+            }}
+          />
         ) : menu.target.kind === "session" ? (
           <SessionMenuItems
             session={findSession(sessionList, menu.target.sessionId)}
