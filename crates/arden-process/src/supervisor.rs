@@ -231,10 +231,41 @@ impl Supervisor {
         args: &[Arg],
         timeout: Duration,
     ) -> Result<Completed, SpawnError> {
+        self.run_with(name, program, args, timeout, true)
+    }
+
+    /// Runs a program as [`Supervisor::run`] does, but leaves what it wrote out of its log, which
+    /// only says that it was withheld: for a program whose answer can hold private details, such
+    /// as the email of the account an agent is signed in to.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the program cannot be started, as [`Supervisor::spawn`] does.
+    pub fn run_private(
+        &self,
+        name: &str,
+        program: &Resolved,
+        args: &[Arg],
+        timeout: Duration,
+    ) -> Result<Completed, SpawnError> {
+        self.run_with(name, program, args, timeout, false)
+    }
+
+    fn run_with(
+        &self,
+        name: &str,
+        program: &Resolved,
+        args: &[Arg],
+        timeout: Duration,
+        logged: bool,
+    ) -> Result<Completed, SpawnError> {
         let mut command = command::build(program, args)?;
-        let (log, path) = self
+        let (mut log, path) = self
             .open_log(name, program, args)
             .map_err(|error| SpawnError::Io(error.to_string()))?;
+        if !logged {
+            let _ = writeln!(log, "(what the program writes is not kept here)");
+        }
         command
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -250,14 +281,14 @@ impl Supervisor {
             )));
         }
 
-        let log = Arc::new(Mutex::new(log));
+        let log = logged.then(|| Arc::new(Mutex::new(log)));
         let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
         let readers = Arc::new(AtomicUsize::new(0));
         if let Some(stream) = child.stdout.take() {
-            copy_in_background(stream, &log, &captured, &readers);
+            copy_in_background(stream, log.as_ref(), &captured, &readers);
         }
         if let Some(stream) = child.stderr.take() {
-            copy_in_background(stream, &log, &captured, &readers);
+            copy_in_background(stream, log.as_ref(), &captured, &readers);
         }
 
         let started = Instant::now();
@@ -303,11 +334,11 @@ impl Supervisor {
 /// Copies everything a stream produces to the log and to a buffer, on a thread of its own.
 fn copy_in_background(
     mut stream: impl Read + Send + 'static,
-    log: &Arc<Mutex<File>>,
+    log: Option<&Arc<Mutex<File>>>,
     captured: &Arc<Mutex<Vec<u8>>>,
     readers: &Arc<AtomicUsize>,
 ) {
-    let log = Arc::clone(log);
+    let log = log.map(Arc::clone);
     let captured = Arc::clone(captured);
     let readers = Arc::clone(readers);
     readers.fetch_add(1, Ordering::AcqRel);
@@ -318,10 +349,12 @@ fn copy_in_background(
                 break;
             }
             let bytes = &chunk[..count];
-            let _ = log
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .write_all(bytes);
+            if let Some(log) = &log {
+                let _ = log
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .write_all(bytes);
+            }
             let mut kept = captured.lock().unwrap_or_else(PoisonError::into_inner);
             let room = CAPTURE_LIMIT.saturating_sub(kept.len());
             kept.extend_from_slice(&bytes[..count.min(room)]);
@@ -360,6 +393,28 @@ mod tests {
                 Arg::Literal("127.0.0.1"),
             ],
         )
+    }
+
+    #[test]
+    fn a_private_run_returns_what_the_program_wrote_and_keeps_it_out_of_the_log() {
+        let (supervisor, _logs) = supervisor();
+
+        let done = supervisor
+            .run_private(
+                "cmd",
+                &system("cmd"),
+                &[
+                    Arg::Literal("/c"),
+                    Arg::Untrusted("echo ada@example.com".into()),
+                ],
+                Duration::from_secs(20),
+            )
+            .expect("the program runs");
+
+        assert!(done.output.contains("ada@example.com"), "{}", done.output);
+        let log = fs::read_to_string(&done.log).expect("the log");
+        assert!(!log.contains("ada@example.com"), "{log}");
+        assert!(log.contains("not kept here"), "{log}");
     }
 
     #[test]

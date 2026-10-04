@@ -4,7 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useEffectEvent } from "react";
 
 import { commands, events } from "@/ipc/bindings";
-import { sessionListQuery } from "@/ipc/queries";
+import { agentsQuery, newSessionAgentQuery, sessionListQuery } from "@/ipc/queries";
 import { showNoticeToast } from "@/lib/errorToasts";
 import { useTauriListener } from "@/lib/useTauriListener";
 
@@ -29,6 +29,15 @@ export function SessionsSync() {
   useTauriListener(() =>
     events.sessionRequested.listen(({ payload }) => {
       show(payload.sessionId);
+    }),
+  );
+
+  // What Rust found about the agent programs after it started can change the agent of a new
+  // session (ADR 0039).
+  useTauriListener(() =>
+    events.agentsDetected.listen(({ payload }) => {
+      queryClient.setQueryData(agentsQuery.queryKey, payload.detections);
+      queryClient.invalidateQueries({ queryKey: newSessionAgentQuery.queryKey }).catch(() => {});
     }),
   );
 

@@ -108,11 +108,20 @@ pub fn list_sessions(sessions: State<'_, Sessions>) -> Result<SessionList, AppEr
 }
 
 /// The agent for a new session in a project (ADR 0039): the agent of that project's latest
-/// session, else of the latest session anywhere, else the Demo agent.
-fn new_session_agent(sessions: &SessionStore, project_id: &str) -> AgentKind {
+/// session, else of the latest session anywhere, else Claude when Claude Code is installed, else
+/// the Demo agent.
+fn new_session_agent(
+    sessions: &SessionStore,
+    project_id: &str,
+    claude_installed: bool,
+) -> AgentKind {
     sessions
         .agent_for_new_session(project_id)
-        .unwrap_or(AgentKind::Demo)
+        .unwrap_or(if claude_installed {
+            AgentKind::Claude
+        } else {
+            AgentKind::Demo
+        })
 }
 
 /// The agent a new session in a project would have, the Playground when none is given (ADR 0039).
@@ -127,10 +136,12 @@ fn new_session_agent(sessions: &SessionStore, project_id: &str) -> AgentKind {
 pub fn agent_for_new_session(
     project_id: Option<String>,
     sessions: State<'_, Sessions>,
+    detections: State<'_, crate::agents::Detections>,
 ) -> Result<AgentKind, AppError> {
     Ok(new_session_agent(
         &sessions,
         project_id.as_deref().unwrap_or(PLAYGROUND_ID),
+        detections.claude_installed(),
     ))
 }
 
@@ -146,9 +157,11 @@ pub fn create_session(
     agent: Option<AgentKind>,
     project_id: Option<String>,
     sessions: State<'_, Sessions>,
+    detections: State<'_, crate::agents::Detections>,
 ) -> Result<SessionSummary, AppError> {
     let project = project_id.as_deref().unwrap_or(PLAYGROUND_ID);
-    let agent = agent.unwrap_or_else(|| new_session_agent(&sessions, project));
+    let agent = agent
+        .unwrap_or_else(|| new_session_agent(&sessions, project, detections.claude_installed()));
     let session = sessions.create_session(project, agent).map_err(app_error)?;
     tracing::info!(session = %session.id, ?agent, "session created");
     Ok(session)
@@ -550,7 +563,11 @@ pub fn open_folder(app: &tauri::AppHandle, folder: &std::path::Path) {
 
     let store = app.state::<Sessions>();
     let session = store.open_folder(folder).and_then(|project| {
-        store.create_session(&project.id, new_session_agent(&store, &project.id))
+        let claude_installed = app.state::<crate::agents::Detections>().claude_installed();
+        store.create_session(
+            &project.id,
+            new_session_agent(&store, &project.id, claude_installed),
+        )
     });
     let session = match session {
         Ok(session) => session,
@@ -629,6 +646,29 @@ mod tests {
                 state,
             },
         }
+    }
+
+    #[test]
+    fn with_no_session_at_all_a_new_session_takes_claude_when_it_is_installed() {
+        let store = SessionStore::new(vec![playground::describe(Path::new(r"C:Playground"))]);
+
+        assert_eq!(
+            new_session_agent(&store, PLAYGROUND_ID, true),
+            AgentKind::Claude
+        );
+        assert_eq!(
+            new_session_agent(&store, PLAYGROUND_ID, false),
+            AgentKind::Demo
+        );
+
+        store
+            .create_session(PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        assert_eq!(
+            new_session_agent(&store, PLAYGROUND_ID, true),
+            AgentKind::Demo,
+            "the latest session's agent comes first"
+        );
     }
 
     #[test]

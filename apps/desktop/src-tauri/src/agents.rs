@@ -1,13 +1,14 @@
 //! The commands for the agent programs: finding out which are installed.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use arden_agents::claude::driver::ClaudeDriver;
 use arden_agents::claude::launch::{Connection, LaunchError, Launcher, ProgramLauncher, Start};
-use arden_agents::detect::{self, Detection};
+use arden_agents::detect::{self, AgentCli, Detection};
 use arden_core::error::{AppError, ErrorCode};
 use arden_process::supervisor::Supervisor;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
+use tauri_specta::Event;
 
 /// The supervisor that starts programs for the app, when Windows let it be made.
 pub struct Programs(pub Option<Arc<Supervisor>>);
@@ -47,9 +48,72 @@ impl Launcher for Unsupervised {
     }
 }
 
-/// Looks for the Claude Code and Codex programs, and says where they are and which version. It
-/// changes nothing. Asking each program for its version can take a moment, so it runs off the
+/// What was found about the agent programs, once they were looked for: kept, so that Settings →
+/// Agents and the agent of a new session need not look again (ADR 0039).
+#[derive(Default)]
+pub struct Detections(Mutex<Option<Vec<Detection>>>);
+
+impl Detections {
+    fn kept(&self) -> Option<Vec<Detection>> {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    fn keep(&self, found: Vec<Detection>) {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = Some(found);
+    }
+
+    /// Whether Claude Code was found, the last time the agent programs were looked for.
+    pub fn claude_installed(&self) -> bool {
+        self.kept()
+            .into_iter()
+            .flatten()
+            .any(|found| found.cli == AgentCli::Claude && found.installed)
+    }
+}
+
+/// Tells the page what was found about the agent programs, when they were looked for on their own.
+#[derive(Debug, Clone, serde::Serialize, specta::Type, tauri_specta::Event)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentsDetected {
+    pub detections: Vec<Detection>,
+}
+
+/// Looks for the agent programs. Asking each for its version can take a moment, so it runs off the
 /// thread of the window.
+async fn look(supervisor: Arc<Supervisor>) -> Result<Vec<Detection>, AppError> {
+    tauri::async_runtime::spawn_blocking(move || detect::detect_all(&supervisor))
+        .await
+        .map_err(|error| AppError::new(ErrorCode::Unexpected).with_details(error.to_string()))
+}
+
+/// Looks for the agent programs once, in the background after start, keeps what was found, and
+/// tells the page (ADR 0039).
+pub fn detect_after_start(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some(supervisor) = app.state::<Programs>().0.clone() else {
+            return;
+        };
+        match look(supervisor).await {
+            Ok(found) => {
+                app.state::<Detections>().keep(found.clone());
+                let _ = AgentsDetected { detections: found }.emit(&app);
+            }
+            Err(error) => tracing::warn!(
+                code = error.code.as_str(),
+                details = error.details.as_deref().unwrap_or_default(),
+                "the agent programs could not be looked for"
+            ),
+        }
+    });
+}
+
+/// What was found about the Claude Code and Codex programs: where they are, which version, and
+/// whether Claude Code is signed in. It changes nothing. What was found is kept; `fresh` looks
+/// again, as Look again does.
 ///
 /// # Errors
 ///
@@ -57,11 +121,17 @@ impl Launcher for Unsupervised {
 /// error when the search itself could not run.
 #[tauri::command]
 #[specta::specta]
-pub async fn detect_agents(programs: State<'_, Programs>) -> Result<Vec<Detection>, AppError> {
-    let supervisor = programs.supervisor()?;
-    tauri::async_runtime::spawn_blocking(move || detect::detect_all(&supervisor))
-        .await
-        .map_err(|error| AppError::new(ErrorCode::Unexpected).with_details(error.to_string()))
+pub async fn detect_agents(
+    fresh: bool,
+    programs: State<'_, Programs>,
+    detections: State<'_, Detections>,
+) -> Result<Vec<Detection>, AppError> {
+    if !fresh && let Some(kept) = detections.kept() {
+        return Ok(kept);
+    }
+    let found = look(programs.supervisor()?).await?;
+    detections.keep(found.clone());
+    Ok(found)
 }
 
 /// Starts a program that runs for a minute, in the job, and returns its process number. Tests use it

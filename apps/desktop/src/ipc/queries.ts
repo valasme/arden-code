@@ -92,7 +92,8 @@ export const sessionQuery = (id: string) =>
 /** Which agent programs are installed. Looked for again when asked, since the person may install one. */
 export const agentsQuery = queryOptions({
   queryKey: ["agents"],
-  queryFn: () => (isTauri() ? commands.detectAgents() : []),
+  // What Rust found after it started; Settings → Agents asks for a fresh look itself.
+  queryFn: () => (isTauri() ? commands.detectAgents(false) : []),
   staleTime: 0,
   gcTime: 0,
 });

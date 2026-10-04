@@ -5,7 +5,7 @@ import path from "node:path";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 
-import { expect, launchApp, test } from "./fixtures";
+import { expect, launchApp, pathKey, pathWithoutAgents, test } from "./fixtures";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..", "..");
 /** The workspace's stand-in for Claude Code (ADR 0038), built with the app. */
@@ -20,9 +20,8 @@ function claudeOnPath(settings: Record<string, unknown> = {}) {
   const bin = mkdtempSync(path.join(tmpdir(), "arden-e2e-claude-"));
   copyFileSync(standIn, path.join(bin, "claude.exe"));
   writeFileSync(path.join(bin, "stand-in.json"), JSON.stringify(settings));
-  const key = Object.keys(process.env).find((name) => name.toUpperCase() === "PATH") ?? "PATH";
   return {
-    env: { [key]: `${bin};${process.env[key] ?? ""}` },
+    env: { [pathKey]: `${bin};${pathWithoutAgents()}` },
     remove: () => {
       rmSync(bin, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     },
@@ -35,7 +34,8 @@ async function claudeSession(page: Page) {
   await page.keyboard.press("Control+N");
   const session = page.getByRole("main", { name: "Session" });
   await expect(session).toBeVisible();
-  await page.getByRole("button", { name: "Agent: Demo agent" }).click();
+  // Claude may be the agent already, once the app has found the stand-in (ADR 0039).
+  await page.getByRole("button", { name: /^Agent: / }).click();
   await page.getByRole("menuitemradio", { name: "Claude" }).click();
   await expect(page.getByRole("button", { name: "Agent: Claude" })).toBeVisible();
   return session;

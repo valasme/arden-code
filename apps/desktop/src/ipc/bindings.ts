@@ -509,16 +509,16 @@ export const commands = {
 	 */
 	agentForNewSession: (projectId: string | null) => __TAURI_INVOKE<AgentKind>("agent_for_new_session", { projectId }),
 	/**
-	 *  Looks for the Claude Code and Codex programs, and says where they are and which version. It
-	 *  changes nothing. Asking each program for its version can take a moment, so it runs off the
-	 *  thread of the window.
+	 *  What was found about the Claude Code and Codex programs: where they are, which version, and
+	 *  whether Claude Code is signed in. It changes nothing. What was found is kept; `fresh` looks
+	 *  again, as Look again does.
 	 * 
 	 *  # Errors
 	 * 
 	 *  Returns `ARD-PROC-001` when programs cannot be supervised on this computer, and an unexpected
 	 *  error when the search itself could not run.
 	 */
-	detectAgents: () => __TAURI_INVOKE<Detection[]>("detect_agents"),
+	detectAgents: (fresh: boolean) => __TAURI_INVOKE<Detection[]>("detect_agents", { fresh }),
 	/**
 	 *  Makes a session with `count` finished turns, to test long conversations. Debug builds only.
 	 * 
@@ -557,6 +557,7 @@ export const commands = {
 
 /** Events */
 export const events = {
+	agentsDetected: makeEvent<AgentsDetected>("agents-detected"),
 	maximizeButtonChanged: makeEvent<MaximizeButtonChanged>("maximize-button-changed"),
 	replyNotSaved: makeEvent<ReplyNotSaved>("reply-not-saved"),
 	sessionRequested: makeEvent<SessionRequested>("session-requested"),
@@ -594,6 +595,11 @@ export type AgentKind =
 "demo" | 
 /**  Claude, through the person's own Claude Code (ADR 0038). */
 "claude";
+
+/**  Tells the page what was found about the agent programs, when they were looked for on their own. */
+export type AgentsDetected = {
+	detections: Detection[],
+};
 
 /**  The person's answer to an approval request (ADR 0039). */
 export type Answer = "allow" | 
@@ -679,6 +685,12 @@ export type Detection = {
 	path: string | null,
 	/**  Its version, when it could be read. */
 	version: string | null,
+	/**  The oldest version Arden Code works with, for the agents it works with already. */
+	minimumVersion: string | null,
+	/**  Whether the version installed is older than the minimum. */
+	tooOld: boolean,
+	/**  Whether it is signed in, when it said so. Nothing else about the account is kept. */
+	signedIn: boolean | null,
 	/**  Where to install it. */
 	installUrl: string,
 };

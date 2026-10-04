@@ -5,7 +5,7 @@ import path from "node:path";
 
 import type { Page } from "@playwright/test";
 
-import { expect, launchApp, openDevPage, test } from "./fixtures";
+import { expect, launchApp, openDevPage, pathKey, test } from "./fixtures";
 
 /** A folder with a fake agent program in it, so detection does not depend on this computer. */
 function fakeBin(files: Record<string, string> = {}) {
@@ -33,8 +33,18 @@ const isRunning = (pid: number) =>
 
 test.describe("agents in the real app", () => {
   test("Settings → Agents shows what is installed, with its version and where, and looks again when asked", async () => {
-    const bin = fakeBin({ "claude.cmd": "@echo off\r\necho 2.1.5 (Claude Code)\r\n" });
-    const app = await launchApp({ env: { PATH: `${bin};${windowsPath}` } });
+    // It says its version, and that it is signed in, with the account's email.
+    const bin = fakeBin({
+      "claude.cmd": [
+        "@echo off",
+        `if "%1"=="auth" goto auth`,
+        "echo 2.1.5 (Claude Code)",
+        "exit /b 0",
+        ":auth",
+        `echo {"loggedIn": true, "email": "ada@example.com"}`,
+      ].join("\r\n"),
+    });
+    const app = await launchApp({ env: { [pathKey]: `${bin};${windowsPath}` } });
     try {
       await openAgents(app.page);
 
@@ -42,13 +52,16 @@ test.describe("agents in the real app", () => {
       await expect(claude.getByText("Installed")).toBeVisible();
       await expect(claude.getByText("2.1.5", { exact: true })).toBeVisible();
       await expect(claude.getByText(path.join(bin, "claude.cmd"))).toBeVisible();
+      await expect(claude.getByText("Signed in", { exact: true })).toBeVisible();
+      await expect(claude.getByText("2.1.223 or later")).toBeVisible();
+      await expect(claude.getByText(/This version is too old for Arden Code/u)).toBeVisible();
       const codex = app.page.getByRole("region", { name: "Codex" });
       await expect(codex.getByText("Not installed")).toBeVisible();
       await expect(codex.getByRole("button", { name: "How to install Codex" })).toBeVisible();
 
       // The person installs Codex, and asks again.
       writeFileSync(path.join(bin, "codex.cmd"), "@echo off\r\necho codex-cli 0.46.0\r\n");
-      await app.page.getByRole("button", { name: "Check again" }).click();
+      await app.page.getByRole("button", { name: "Look again" }).click();
 
       await expect(codex.getByText("Installed")).toBeVisible();
       await expect(codex.getByText("0.46.0", { exact: true })).toBeVisible();
@@ -60,6 +73,13 @@ test.describe("agents in the real app", () => {
       expect(
         readFileSync(path.join(app.dataDir, "local", "logs", "agents", claudeLog), "utf8"),
       ).toContain("2.1.5 (Claude Code)");
+      // What Claude Code says about its account is never written to a log.
+      for (const name of logs.filter((log) => log.startsWith("claude-auth-status-"))) {
+        expect(
+          readFileSync(path.join(app.dataDir, "local", "logs", "agents", name), "utf8"),
+        ).not.toContain("ada@example.com");
+      }
+      expect(logs.some((name) => name.startsWith("claude-auth-status-"))).toBe(true);
     } finally {
       app.kill();
       rmSync(bin, { recursive: true, force: true });
@@ -68,7 +88,7 @@ test.describe("agents in the real app", () => {
 
   test("says that nothing is installed when nothing is", async () => {
     const bin = fakeBin();
-    const app = await launchApp({ env: { PATH: `${bin};${windowsPath}` } });
+    const app = await launchApp({ env: { [pathKey]: `${bin};${windowsPath}` } });
     try {
       await openAgents(app.page);
 

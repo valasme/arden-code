@@ -180,7 +180,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         snap_layouts::MaximizeButtonChanged,
         updates::UpdateStatusChanged,
         sessions::SessionRequested,
-        sessions::ReplyNotSaved
+        sessions::ReplyNotSaved,
+        agents::AgentsDetected
     ])
 }
 
@@ -339,6 +340,8 @@ fn manage_programs(app: &tauri::App, paths: &AppPaths) {
     };
     app.manage(agents::Claude::with(supervisor.as_ref()));
     app.manage(agents::Programs(supervisor));
+    app.manage(agents::Detections::default());
+    agents::detect_after_start(app.handle());
 }
 
 /// How often a debug build looks at the file that stands in for Windows' settings.

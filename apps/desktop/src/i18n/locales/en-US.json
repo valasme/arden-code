@@ -574,19 +574,26 @@
       }
     },
     "agents": {
-      "checkAgain": "Check again",
-      "description": "Claude Code and Codex are separate programs. Arden Code looks for them on this computer. It never installs them, updates them or signs in to them. Real integration is coming later.",
+      "account": "Account",
+      "description": "Claude Code and Codex are separate programs. Arden Code looks for them on this computer. It never installs them, updates them or signs in to them.",
+      "howToSignIn": "Open a terminal, run claude, and sign in with /login.",
       "install": "How to install",
       "installed": "Installed",
       "installLabel": "How to install {{name}}",
+      "lookAgain": "Look again",
       "looking": "Looking for agents…",
+      "minimum": "Needs",
+      "minimumValue": "{{version}} or later",
       "names": {
         "claude": "Claude Code",
         "codex": "Codex"
       },
-      "notFound": "{{name}} was not found. Install it, then check again.",
+      "notFound": "{{name}} was not found. Install it, then look again.",
       "notInstalled": "Not installed",
       "path": "Location",
+      "signedIn": "Signed in",
+      "signedOut": "Not signed in",
+      "tooOld": "This version is too old for Arden Code. Run claude update in a terminal, then look again.",
       "version": "Version",
       "versionUnknown": "Unknown"
     },
