@@ -389,7 +389,8 @@
       "unpin": "Unpin"
     },
     "agentMenu": {
-      "label": "Agent: {{agent}}"
+      "label": "Agent: {{agent}}",
+      "notInstalled": "Not installed"
     },
     "announce": {
       "done": "Reply finished.",

@@ -165,7 +165,7 @@ describe("Starting a session", () => {
     expect(box).toHaveFocus();
     expect(rust.calls.filter((call) => call.command === "create_session")).toHaveLength(1);
     expect(screen.getByRole("heading", { level: 1, name: "New session" })).toBeVisible();
-    expect(screen.getByText("Demo agent", { selector: "span" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Agent: Demo agent" })).toBeVisible();
     const link = await within(sidebar()).findByRole("link", { name: "New session" });
     expect(link).toHaveAttribute("aria-current", "page");
   });

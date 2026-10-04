@@ -344,11 +344,11 @@ describe("Choosing where a session works (ADR 0039)", () => {
     expect(
       within(menu)
         .getAllByRole("menuitemradio")
-        .map((item) => item.textContent),
+        .map((item) => item.querySelector("[data-name]")?.textContent),
     ).toEqual(["Playground", "demo"]);
-    expect(within(menu).getByRole("menuitem", { name: "Open folder…" })).toBeVisible();
+    expect(within(menu).getByRole("menuitem", { name: /^Open folder…/ })).toBeVisible();
     await expectNoAccessibilityViolations(menu);
-    await user.click(within(menu).getByRole("menuitemradio", { name: "demo" }));
+    await user.click(within(menu).getByRole("menuitemradio", { name: /^demo/ }));
 
     expect(rust.callsTo("set_session_project")).toEqual([
       { id: "session-1", projectId: "folder-1" },
@@ -366,7 +366,7 @@ describe("Choosing where a session works (ADR 0039)", () => {
 
     await user.click(await screen.findByRole("button", { name: "Project: Playground" }));
     await animationsDone(await screen.findByRole("menu"));
-    await user.click(screen.getByRole("menuitem", { name: "Open folder…" }));
+    await user.click(screen.getByRole("menuitem", { name: /^Open folder…/ }));
 
     expect(await screen.findByRole("button", { name: "Project: api" })).toBeVisible();
     expect(rust.callsTo("pick_folder")).toHaveLength(1);

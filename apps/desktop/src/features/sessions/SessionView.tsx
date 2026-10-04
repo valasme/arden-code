@@ -17,6 +17,8 @@ import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
 import { ProjectMenu } from "./ProjectMenu";
+import { projectsByUse } from "./sessionList";
+import { useUnavailableAgents } from "./useUnavailableAgents";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
 import { SessionLinks } from "./SessionLinks";
 import { SessionMenu } from "./SessionMenu";
@@ -47,6 +49,7 @@ export function SessionView({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const send = useSendMessage();
   const openFolder = useOpenFolder();
+  const unavailable = useUnavailableAgents();
   const transcript = useRef<HTMLElement>(null);
   const stuck = useRef(true);
   /** Where the view was last held at the end. Only a scroll above it is the person leaving the end. */
@@ -191,14 +194,11 @@ export function SessionView({ id }: { id: string }) {
   };
   const context =
     count === 0 && session.archivedAt === null ? (
-      <>
-        <AgentMenu agent={agent} onChoose={chooseAgent} />
-        <span aria-hidden className="px-1">
-          ·
-        </span>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <AgentMenu agent={agent} unavailable={unavailable} onChoose={chooseAgent} />
         <ProjectMenu
           projectId={session.projectId}
-          projects={list.projects.map((listing) => listing.project)}
+          projects={projectsByUse(list)}
           onChoose={chooseProject}
           onOpenFolder={() => {
             void openFolder().then((opened) => {
@@ -206,7 +206,7 @@ export function SessionView({ id }: { id: string }) {
             });
           }}
         />
-      </>
+      </span>
     ) : (
       t("sessions.context", { agent: agentName, project: projectName })
     );

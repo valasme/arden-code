@@ -9,11 +9,12 @@ import { AgentMenu } from "./AgentMenu";
 
 import "@/styles/global.css";
 
-function renderMenu(agent: AgentKind) {
+function renderMenu(agent: AgentKind, unavailable: AgentKind[] = []) {
   const chosen: AgentKind[] = [];
   const view = render(
     <AgentMenu
       agent={agent}
+      unavailable={unavailable}
       onChoose={(next) => {
         chosen.push(next);
       }}
@@ -28,6 +29,25 @@ describe("AgentMenu", () => {
 
     const button = screen.getByRole("button", { name: "Agent: Claude" });
     expect(button).toHaveTextContent("Claude");
+  });
+
+  it("is an outlined button with an icon, so it reads as a control and not as a caption", () => {
+    renderMenu("claude");
+
+    const button = screen.getByRole("button", { name: "Agent: Claude" });
+    expect(button).toHaveAttribute("data-variant", "outline");
+    expect(button.querySelectorAll("svg")).toHaveLength(2);
+  });
+
+  it("offers an agent whose agent CLI is not installed only as disabled, saying so", async () => {
+    const user = userEvent.setup();
+    renderMenu("demo", ["claude"]);
+
+    await user.click(screen.getByRole("button", { name: "Agent: Demo agent" }));
+
+    const claude = await screen.findByRole("menuitemradio", { name: /Claude/ });
+    expect(claude).toHaveAttribute("aria-disabled", "true");
+    expect(claude).toHaveTextContent("Not installed");
   });
 
   it("lists the agents with the chosen one checked, and answers the one picked", async () => {
