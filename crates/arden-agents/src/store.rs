@@ -91,6 +91,8 @@ struct Entry {
     loaded: bool,
     /// Where it stands in the lists.
     order: Order,
+    /// The agent's own conversation, once the agent has answered in it (ADR 0039).
+    conversation: Option<String>,
 }
 
 impl Entry {
@@ -237,6 +239,7 @@ impl Inner {
                 pinned: None,
                 archived: None,
             },
+            conversation: None,
         };
         self.database
             .save_session(&entry.session, entry.order, self.last_id)
@@ -378,6 +381,7 @@ impl SessionStore {
                 session: saved.session,
                 loaded: false,
                 order: saved.order,
+                conversation: saved.conversation,
             })
             .collect();
         Ok(Self::with(
@@ -1010,6 +1014,18 @@ impl SessionStore {
         driver.send(control).map_err(|_| StoreError::NotWaiting)
     }
 
+    /// Remembers the agent's own conversation for a session, so it carries on there after a
+    /// restart (ADR 0039).
+    fn remember_conversation(&self, session_id: &str, id: &str) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let last_id = inner.last_id;
+        find(&mut inner.sessions, session_id)?.conversation = Some(id.to_owned());
+        inner
+            .database
+            .save_conversation(session_id, id, last_id)
+            .map_err(|error| StoreError::NotSaved(error.0))
+    }
+
     fn is_stopping(&self, turn_id: &str) -> bool {
         self.lock().stopping.contains(turn_id)
     }
@@ -1033,13 +1049,14 @@ impl SessionStore {
         let mut ended = false;
         let mut saved = Ok(());
         let (sender, controls) = mpsc::channel();
-        let folder = {
+        let (folder, conversation) = {
             let mut inner = self.lock();
             inner.controls.insert(turn.id.clone(), sender);
-            inner
+            let entry = inner
                 .sessions
                 .iter()
-                .find(|entry| entry.session.id == session_id)
+                .find(|entry| entry.session.id == session_id);
+            let folder = entry
                 .and_then(|entry| {
                     inner
                         .projects
@@ -1047,13 +1064,21 @@ impl SessionStore {
                         .find(|project| project.id == entry.session.project_id)
                 })
                 .map(|project| PathBuf::from(&project.path))
-                .unwrap_or_default()
+                .unwrap_or_default();
+            (folder, entry.and_then(|entry| entry.conversation.clone()))
+        };
+        let remember = |id: &str| {
+            if let Err(error) = self.remember_conversation(session_id, id) {
+                tracing::warn!(session = %session_id, error = ?error, "the agent's conversation could not be saved");
+            }
         };
         let request = ReplyRequest {
             session_id,
             turn_id: &turn.id,
             prompt: &turn.prompt,
             folder: &folder,
+            conversation: conversation.as_deref(),
+            remember: &remember,
             controls,
         };
         driver.reply(request, &mut |event| {
@@ -1678,6 +1703,99 @@ mod tests {
         let opened = SessionStore::open(file, &playground::describe(Path::new(r"C:\Playground")));
         assert!(opened.problem.is_none(), "{:?}", opened.problem);
         opened.store
+    }
+
+    /// An agent that remembers a conversation when it answers, and notes the one it was given.
+    #[derive(Default)]
+    struct Conversing {
+        given: std::sync::Mutex<Vec<Option<String>>>,
+    }
+
+    impl AgentDriver for Conversing {
+        fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+            self.given
+                .lock()
+                .expect("given")
+                .push(request.conversation.map(str::to_owned));
+            (request.remember)("conversation-1");
+            emit(TurnEvent::Finished {
+                turn_id: request.turn_id.to_owned(),
+            });
+        }
+    }
+
+    #[test]
+    fn an_agents_conversation_is_remembered_and_handed_back_after_the_store_is_opened_again() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let agent = Conversing::default();
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .expect("a session");
+            let turn = store.start_turn(&session.id, "First").expect("a turn");
+            store
+                .stream_reply(&agent, &session.id, &turn, |_| true)
+                .expect("saved");
+            session.id
+        };
+
+        let store = store_in(&file);
+        let turn = store.start_turn(&id, "Second").expect("a turn");
+        store
+            .stream_reply(&agent, &id, &turn, |_| true)
+            .expect("saved");
+
+        assert_eq!(
+            *agent.given.lock().expect("given"),
+            vec![None, Some("conversation-1".to_owned())]
+        );
+    }
+
+    #[test]
+    fn a_file_of_the_first_version_is_brought_up_to_date_and_keeps_its_sessions() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        {
+            let connection = rusqlite::Connection::open(&file).expect("the file");
+            connection
+                .execute_batch(crate::database::TABLES)
+                .expect("the first version's tables");
+            connection
+                .execute_batch(
+                    "INSERT INTO projects VALUES ('playground', 'playground', 'Playground', 'C:\\Playground', 0);
+                     INSERT INTO sessions (id, project_id, agent, title, created_at, updated_at, used)
+                     VALUES ('session-1', 'playground', 'claude', 'Kept', '2026-10-01T09:00:00Z', '2026-10-01T09:00:00Z', 1);
+                     PRAGMA user_version = 1;",
+                )
+                .expect("a session of the first version");
+        }
+
+        let store = store_in(&file);
+
+        let list = store.list();
+        let sessions: Vec<_> = list
+            .projects
+            .iter()
+            .flat_map(|listing| listing.sessions.iter())
+            .collect();
+        assert!(
+            sessions
+                .iter()
+                .any(|session| session.title.as_deref() == Some("Kept")),
+            "{list:#?}"
+        );
+        let agent = Conversing::default();
+        let turn = store.start_turn("session-1", "Hello").expect("a turn");
+        store
+            .stream_reply(&agent, "session-1", &turn, |_| true)
+            .expect("the conversation is saved in the new column");
+        let connection = rusqlite::Connection::open(&file).expect("the file");
+        let version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("the version");
+        assert_eq!(version, 2);
     }
 
     #[test]

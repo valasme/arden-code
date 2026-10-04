@@ -49,6 +49,10 @@ pub struct ReplyRequest<'a> {
     pub prompt: &'a str,
     /// The project's folder, where the agent works.
     pub folder: &'a Path,
+    /// The agent's own conversation for the session, once it has answered in it, to carry on in.
+    pub conversation: Option<&'a str>,
+    /// Remembers the agent's own conversation for the session, once it has answered in it.
+    pub remember: &'a dyn Fn(&str),
     /// What the person does while the reply runs. It closes when the reply has ended.
     pub controls: Receiver<Control>,
 }
@@ -59,4 +63,8 @@ pub trait AgentDriver: Send + Sync {
     /// reply ends with [`TurnEvent::Finished`] or [`TurnEvent::Failed`], unless `emit` says to stop
     /// or the person stops it.
     fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow);
+
+    /// Lets go of whatever the agent keeps running for a session, as when it is archived or
+    /// deleted. Its conversation is kept, to carry on in.
+    fn end(&self, _session_id: &str) {}
 }

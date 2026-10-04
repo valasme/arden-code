@@ -3,6 +3,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use arden_core::error::ErrorCode;
 use serde_json::{Value, json};
@@ -10,10 +11,10 @@ use serde_json::{Value, json};
 use super::driver::ClaudeDriver;
 use super::launch::{Conversation, LaunchError};
 use super::script::{Scripted, Step, handshake};
-use crate::driver::Answer;
+use crate::driver::{AgentDriver, Answer};
 use crate::model::{
     AgentKind, ApprovalAction, ApprovalState, FileChangeKind, Item, Question, QuestionAnswer,
-    QuestionOption, QuestionState, ToolStatus, Turn, TurnEvent, TurnStatus,
+    QuestionOption, QuestionState, StatusKind, ToolStatus, Turn, TurnEvent, TurnStatus,
 };
 use crate::playground;
 use crate::store::{SessionStore, StoreError};
@@ -1077,6 +1078,161 @@ fn a_sessions_messages_go_to_one_claude_code_in_its_project_with_a_conversation_
         panic!("a new conversation: {:?}", starts[0].conversation);
     };
     assert!(uuid::Uuid::parse_str(id).is_ok(), "{id} is a UUID");
+}
+
+/// A script that answers one message.
+fn answers(prompt: &str, reply: &str) -> Vec<Step> {
+    let mut script = handshake();
+    script.extend([message(prompt), success(reply)]);
+    script
+}
+
+/// The conversation each start was asked for.
+fn conversations(scripted: &Scripted) -> Vec<Conversation> {
+    scripted
+        .starts
+        .lock()
+        .expect("starts")
+        .iter()
+        .map(|start| start.conversation.clone())
+        .collect()
+}
+
+#[test]
+fn a_session_whose_claude_code_ended_carries_on_its_conversation_in_the_next() {
+    let (scripted, driver) = claude(vec![
+        Ok(answers("First", "One.")),
+        Ok(answers("Second", "Two.")),
+    ]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "First");
+    // Archiving or deleting the session ends its Claude Code.
+    driver.end(&session);
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    assert_eq!(turn(&store, &session, 1).status, TurnStatus::Done);
+    let conversations = conversations(&scripted);
+    let [Conversation::New(first), Conversation::Resume(second)] = &conversations[..] else {
+        panic!("a new conversation, then the same one carried on: {conversations:?}");
+    };
+    assert_eq!(first, second);
+}
+
+#[test]
+fn a_conversation_claude_code_cannot_find_goes_on_in_a_new_one_and_the_reply_says_so() {
+    let (scripted, driver) = claude(vec![
+        Ok(answers("First", "One.")),
+        // Claude Code ends at once when it has no such conversation.
+        Ok(vec![Step::End]),
+        Ok(answers("Second", "Two.")),
+        Ok(answers("Third", "Three.")),
+    ]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "First");
+    driver.end(&session);
+    send(&store, &driver, &session, "Second");
+    driver.end(&session);
+    send(&store, &driver, &session, "Third");
+
+    scripted.assert_followed();
+    let second = turn(&store, &session, 1);
+    assert_eq!(second.status, TurnStatus::Done);
+    assert!(matches!(
+        &second.items[0],
+        Item::Status {
+            kind: StatusKind::NewConversation,
+            ..
+        }
+    ));
+    assert!(
+        !turn(&store, &session, 2)
+            .items
+            .iter()
+            .any(|item| matches!(item, Item::Status { .. })),
+        "the new conversation carries on as usual"
+    );
+    let conversations = conversations(&scripted);
+    let [
+        Conversation::New(lost),
+        Conversation::Resume(missing),
+        Conversation::New(replacement),
+        Conversation::Resume(carried),
+    ] = &conversations[..]
+    else {
+        panic!("{conversations:?}");
+    };
+    assert_eq!(lost, missing);
+    assert_ne!(lost, replacement);
+    assert_eq!(replacement, carried);
+}
+
+#[test]
+fn a_claude_code_with_nothing_to_do_for_a_while_is_ended() {
+    let scripted = Arc::new(Scripted::new(vec![
+        Ok(answers("First", "One.")),
+        Ok(answers("Second", "Two.")),
+    ]));
+    let driver = ClaudeDriver::with_idle_end(scripted.clone(), Duration::from_millis(40));
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "First");
+    std::thread::sleep(Duration::from_millis(400));
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    assert!(matches!(
+        &conversations(&scripted)[..],
+        [Conversation::New(_), Conversation::Resume(_)]
+    ));
+}
+
+#[test]
+fn a_reply_that_takes_longer_than_the_idle_end_keeps_its_claude_code() {
+    let mut script = handshake();
+    script.extend([
+        message("Take your time"),
+        Step::Play(json!({ "type": "system", "subtype": "status" })),
+    ]);
+    let (scripted, driver) = {
+        let scripted = Arc::new(Scripted::new(vec![Ok(script)]));
+        let driver = ClaudeDriver::with_idle_end(scripted.clone(), Duration::from_millis(40));
+        (scripted, Arc::new(driver))
+    };
+    let store = Arc::new(store());
+    let session = claude_session(&store);
+    let replying = {
+        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
+        std::thread::spawn(move || send(&store, &driver, &session, "Take your time"))
+    };
+
+    // Long after the idle end, the reply still runs: its Claude Code is still there to stop.
+    std::thread::sleep(Duration::from_millis(400));
+    store.stop_turn(&session).expect("stopped");
+    replying.join().expect("the reply ends");
+
+    scripted.assert_followed();
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let interrupted = || {
+        scripted
+            .written
+            .lock()
+            .expect("written")
+            .iter()
+            .any(|frame| frame["request"]["subtype"] == "interrupt")
+    };
+    while !interrupted() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the stop never reached the same Claude Code"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 
 #[test]

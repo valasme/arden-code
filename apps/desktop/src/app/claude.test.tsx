@@ -218,6 +218,25 @@ describe("Claude's questions (ADR 0039)", () => {
   });
 });
 
+describe("Deleting a Claude session (ADR 0039)", () => {
+  it("says Claude Code keeps its own copy of the conversation", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({ sessions: [answeredClaudeSession()] });
+    renderApp("/session/session-1");
+
+    await user.click(await screen.findByRole("button", { name: "Actions for Fix the build" }));
+    await animationsDone(await screen.findByRole("menu"));
+    await user.click(screen.getByRole("menuitem", { name: /Delete/u }));
+    const question = await screen.findByRole("alertdialog", { name: "Delete this session?" });
+
+    expect(question).toHaveTextContent(
+      "“Fix the build” and all of its messages will be deleted. This cannot be undone. Claude Code keeps its own copy of the conversation in its folder.",
+    );
+    await user.click(within(question).getByRole("button", { name: "Delete session" }));
+    expect(rust.callsTo("delete_session")).toEqual([{ id: "session-1" }]);
+  });
+});
+
 describe("The welcome state (ADR 0039)", () => {
   it("asks what the agent a new session takes should work on, and starts the session with it", async () => {
     const user = userEvent.setup();

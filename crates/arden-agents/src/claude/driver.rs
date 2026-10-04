@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::Child;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -20,12 +20,16 @@ use super::protocol::{self, Frame, Request};
 use super::question;
 use super::reply::Reply;
 use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
-use crate::model::{ApprovalState, Item, QuestionAnswer, QuestionState, TurnEvent};
+use crate::model::{ApprovalState, Item, QuestionAnswer, QuestionState, StatusKind, TurnEvent};
 
 /// How long a new Claude Code has to answer `initialize`: it may be starting MCP servers.
 const HANDSHAKE_PATIENCE: Duration = Duration::from_secs(60);
 /// How long a stopped reply has to send its last frame before its Claude Code is started again.
 const DRAIN_PATIENCE: Duration = Duration::from_secs(30);
+/// How long a session's Claude Code is kept with no reply running and nothing heard from it.
+const IDLE_END: Duration = Duration::from_mins(10);
+/// The longest wait between two looks for a Claude Code that has been idle too long.
+const IDLE_LOOK: Duration = Duration::from_secs(30);
 /// How long a Claude Code whose input was closed has to end before it is ended.
 const ENDING_PATIENCE: Duration = Duration::from_millis(500);
 /// What Claude is told when its questions cannot be read, so they cannot be shown.
@@ -79,18 +83,28 @@ struct Live {
     process: Mutex<Option<Child>>,
     /// How many stopped replies have not sent their result yet: their late frames come first.
     owed: AtomicUsize,
+    /// The conversation it carries on, and whether the session remembers it already.
+    conversation: String,
+    remembered: AtomicBool,
+    /// When Claude Code last wrote, or a reply last ended.
+    heard: Arc<Mutex<Instant>>,
+    /// Whether a reply is using it, which keeps it however long the reply takes.
+    busy: AtomicBool,
 }
 
 impl Live {
     /// Starts reading what Claude Code writes, on a thread of its own.
-    fn begin(connection: Connection, session_id: &str) -> Self {
+    fn begin(connection: Connection, session_id: &str, conversation: &Conversation) -> Self {
         let (sender, events) = mpsc::channel();
         let reader = sender.clone();
         let session = session_id.to_owned();
         let output = connection.output;
+        let heard = Arc::new(Mutex::new(Instant::now()));
+        let hearing = Arc::clone(&heard);
         thread::spawn(move || {
             for line in BufReader::new(output).lines() {
                 let Ok(line) = line else { break };
+                *lock(&hearing) = Instant::now();
                 match protocol::parse(&line) {
                     Some(frame) => {
                         tracing::debug!(%session, frame = kind_of(&frame), "a frame from Claude Code");
@@ -112,7 +126,18 @@ impl Live {
             sender,
             process: Mutex::new(connection.process),
             owed: AtomicUsize::new(0),
+            conversation: match conversation {
+                Conversation::New(id) | Conversation::Resume(id) => id.clone(),
+            },
+            remembered: AtomicBool::new(matches!(conversation, Conversation::Resume(_))),
+            heard,
+            busy: AtomicBool::new(false),
         }
+    }
+
+    /// Whether it has had nothing to do for `idle`.
+    fn idle_for(&self, idle: Duration) -> bool {
+        !self.busy.load(Ordering::Acquire) && lock(&self.heard).elapsed() >= idle
     }
 
     fn write(&self, frame: &str) -> io::Result<()> {
@@ -176,19 +201,70 @@ impl Problem {
     }
 }
 
+/// The Claude Code of each session that has one running.
+type Running = Mutex<HashMap<String, Arc<Live>>>;
+
+/// Ends each Claude Code that has been idle for `idle`, until the driver is gone.
+fn end_when_idle(running: &Weak<Running>, idle: Duration) {
+    let look = (idle / 4).clamp(Duration::from_millis(5), IDLE_LOOK);
+    loop {
+        thread::sleep(look);
+        let Some(running) = running.upgrade() else {
+            return;
+        };
+        // Taken out under the lock, and ended after it: ending waits for the process.
+        let ended: Vec<Arc<Live>> = {
+            let mut running = lock(&running);
+            let idle_ones: Vec<String> = running
+                .iter()
+                .filter(|(_, live)| live.idle_for(idle))
+                .map(|(session, _)| session.clone())
+                .collect();
+            idle_ones
+                .iter()
+                .filter_map(|session| {
+                    tracing::debug!(%session, "Claude Code was idle, so it is ended");
+                    running.remove(session)
+                })
+                .collect()
+        };
+        drop(ended);
+    }
+}
+
 /// Answers messages through the person's own Claude Code, one per session.
 pub struct ClaudeDriver {
     launcher: Arc<dyn Launcher>,
-    live: Mutex<HashMap<String, Arc<Live>>>,
+    live: Arc<Running>,
     requests: AtomicU64,
 }
 
+/// Marks a session's Claude Code as used by a reply until the reply ends.
+struct Busy<'a>(&'a Live);
+
+impl Drop for Busy<'_> {
+    fn drop(&mut self) {
+        *lock(&self.0.heard) = Instant::now();
+        self.0.busy.store(false, Ordering::Release);
+    }
+}
+
 impl ClaudeDriver {
+    /// A driver that ends a session's Claude Code after 10 minutes with nothing to do.
     #[must_use]
     pub fn new(launcher: Arc<dyn Launcher>) -> Self {
+        Self::with_idle_end(launcher, IDLE_END)
+    }
+
+    /// A driver that ends a session's Claude Code after `idle` with nothing to do.
+    #[must_use]
+    pub fn with_idle_end(launcher: Arc<dyn Launcher>, idle: Duration) -> Self {
+        let live: Arc<Running> = Arc::new(Mutex::new(HashMap::new()));
+        let running = Arc::downgrade(&live);
+        thread::spawn(move || end_when_idle(&running, idle));
         Self {
             launcher,
-            live: Mutex::new(HashMap::new()),
+            live,
             requests: AtomicU64::new(0),
         }
     }
@@ -201,17 +277,50 @@ impl ClaudeDriver {
         )
     }
 
-    /// The Claude Code of a session, started and greeted when it is not running.
-    fn live(&self, session_id: &str, folder: &Path) -> Result<Arc<Live>, Problem> {
+    /// The Claude Code of a session, marked busy, started and greeted when it is not running. It
+    /// carries on the session's conversation when it has one; when Claude Code cannot find it, a
+    /// new conversation starts, and the answer says so.
+    fn live(
+        &self,
+        session_id: &str,
+        folder: &Path,
+        saved: Option<&str>,
+    ) -> Result<(Arc<Live>, bool), Problem> {
         if let Some(live) = lock(&self.live).get(session_id) {
-            return Ok(Arc::clone(live));
+            live.busy.store(true, Ordering::Release);
+            return Ok((Arc::clone(live), false));
         }
+        let fresh = || Conversation::New(uuid::Uuid::new_v4().to_string());
+        let Some(saved) = saved else {
+            return self
+                .start(session_id, folder, fresh())
+                .map(|live| (live, false));
+        };
+        match self.start(session_id, folder, Conversation::Resume(saved.to_owned())) {
+            Ok(live) => Ok((live, false)),
+            // Claude Code ends at once when it has no such conversation.
+            Err(Problem::Stopped(why)) => {
+                tracing::warn!(session = %session_id, %why, "Claude Code did not carry on the conversation, so a new one starts");
+                self.start(session_id, folder, fresh())
+                    .map(|live| (live, true))
+            }
+            Err(problem) => Err(problem),
+        }
+    }
+
+    /// Starts and greets a Claude Code for a session, in a conversation.
+    fn start(
+        &self,
+        session_id: &str,
+        folder: &Path,
+        conversation: Conversation,
+    ) -> Result<Arc<Live>, Problem> {
         let start = Start {
             folder: folder.to_path_buf(),
-            conversation: Conversation::New(uuid::Uuid::new_v4().to_string()),
+            conversation,
         };
         let connection = self.launcher.launch(&start).map_err(Problem::Launch)?;
-        let live = Arc::new(Live::begin(connection, session_id));
+        let live = Arc::new(Live::begin(connection, session_id, &start.conversation));
         let id = self.next_request();
         live.write(&protocol::initialize(&id)).map_err(|error| {
             Problem::Stopped(format!("Claude Code could not be written to: {error}"))
@@ -246,6 +355,7 @@ impl ClaudeDriver {
                 }
             }
         }
+        live.busy.store(true, Ordering::Release);
         lock(&self.live).insert(session_id.to_owned(), Arc::clone(&live));
         Ok(live)
     }
@@ -264,8 +374,13 @@ impl ClaudeDriver {
     /// The Claude Code of a session, ready for a message: the late frames of any reply that was
     /// stopped are read first and set aside, up to its result. One that does not finish them is
     /// ended, and another is started.
-    fn settled(&self, session_id: &str, folder: &Path) -> Result<Arc<Live>, Problem> {
-        let live = self.live(session_id, folder)?;
+    fn settled(
+        &self,
+        session_id: &str,
+        folder: &Path,
+        saved: Option<&str>,
+    ) -> Result<(Arc<Live>, bool), Problem> {
+        let (live, lost) = self.live(session_id, folder, saved)?;
         let deadline = Instant::now() + DRAIN_PATIENCE;
         {
             let events = lock(&live.events);
@@ -291,12 +406,17 @@ impl ClaudeDriver {
                         drop(events);
                         tracing::warn!(session = %session_id, "a stopped reply never ended, so Claude Code is started again");
                         self.forget(session_id);
-                        return self.live(session_id, folder);
+                        let saved = live
+                            .remembered
+                            .load(Ordering::Acquire)
+                            .then(|| live.conversation.clone());
+                        drop(live);
+                        return self.live(session_id, folder, saved.as_deref());
                     }
                 }
             }
         }
-        Ok(live)
+        Ok((live, lost))
     }
 }
 
@@ -349,6 +469,8 @@ struct Answering<'a> {
     folder: &'a Path,
     reply: Reply,
     pending: Vec<Pending>,
+    /// Remembers the conversation for the session, once Claude has answered in it.
+    remember: &'a dyn Fn(&str),
 }
 
 /// Whether a reply goes on after something it heard.
@@ -497,6 +619,12 @@ impl Answering<'_> {
 
     /// A frame of the reply.
     fn on_frame(&mut self, frame: &Frame, emit: &mut dyn FnMut(TurnEvent) -> Flow) -> Next {
+        // Claude has answered in the conversation: from now on it can be carried on.
+        if matches!(frame, Frame::Result { .. })
+            && !self.live.remembered.swap(true, Ordering::AcqRel)
+        {
+            (self.remember)(&self.live.conversation);
+        }
         for event in self.reply.on(frame) {
             if self.show(event, emit) == Next::Over {
                 return Next::Over;
@@ -546,14 +674,26 @@ impl Answering<'_> {
 impl AgentDriver for ClaudeDriver {
     fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
         let (session_id, turn_id) = (request.session_id, request.turn_id);
-        let live = match self.settled(session_id, request.folder) {
-            Ok(live) => live,
+        let (live, lost) = match self.settled(session_id, request.folder, request.conversation) {
+            Ok(settled) => settled,
             Err(problem) => {
                 tracing::warn!(session = %session_id, details = %problem.details(), "Claude could not be reached");
                 fail(turn_id, &problem, emit);
                 return;
             }
         };
+        let _busy = Busy(&live);
+        if lost
+            && emit(TurnEvent::ItemAdded {
+                turn_id: turn_id.to_owned(),
+                item: Item::Status {
+                    id: format!("{turn_id}-new-conversation"),
+                    kind: StatusKind::NewConversation,
+                },
+            }) == Flow::Stop
+        {
+            return;
+        }
         if matches!(request.controls.try_recv(), Ok(Control::Stop)) {
             return;
         }
@@ -587,6 +727,7 @@ impl AgentDriver for ClaudeDriver {
             folder: request.folder,
             reply: Reply::new(turn_id, request.folder),
             pending: Vec::new(),
+            remember: request.remember,
         };
         let events = lock(&live.events);
         loop {
@@ -608,5 +749,9 @@ impl AgentDriver for ClaudeDriver {
                 }
             }
         }
+    }
+
+    fn end(&self, session_id: &str) {
+        self.forget(session_id);
     }
 }

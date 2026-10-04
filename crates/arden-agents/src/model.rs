@@ -65,6 +65,8 @@ pub enum StatusKind {
     Started,
     /// The person stopped the reply.
     Stopped,
+    /// The agent could not find the session's earlier conversation, so the reply starts a new one.
+    NewConversation,
 }
 
 /// What an agent asks permission to do, in Arden Code's words (ADR 0039).

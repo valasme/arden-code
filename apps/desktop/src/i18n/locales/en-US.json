@@ -287,6 +287,7 @@
       "send": "Send answers"
     },
     "status": {
+      "newConversation": "The earlier conversation could not be found, so a new one started",
       "started": "The agent started working",
       "stopped": "You stopped the reply"
     },
@@ -401,6 +402,7 @@
     },
     "context": "{{agent}} · {{project}}",
     "delete": {
+      "claude": "Claude Code keeps its own copy of the conversation in its folder.",
       "confirm": "Delete session",
       "description": "“{{title}}” and all of its messages will be deleted. This cannot be undone.",
       "title": "Delete this session?"

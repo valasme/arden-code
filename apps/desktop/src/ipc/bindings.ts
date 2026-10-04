@@ -1023,7 +1023,9 @@ export type StatusKind =
 /**  The agent started working on the message. */
 "started" | 
 /**  The person stopped the reply. */
-"stopped";
+"stopped" | 
+/**  The agent could not find the session's earlier conversation, so the reply starts a new one. */
+"newConversation";
 
 /**  What the About page shows besides the app's own version. */
 export type SystemInfo = {

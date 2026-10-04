@@ -253,8 +253,14 @@ pub fn set_session_archived(
     id: String,
     archived: bool,
     sessions: State<'_, Sessions>,
+    claude: State<'_, crate::agents::Claude>,
 ) -> Result<(), AppError> {
-    sessions.set_archived(&id, archived).map_err(app_error)
+    sessions.set_archived(&id, archived).map_err(app_error)?;
+    // An archived session needs no Claude Code until it is used again (ADR 0039).
+    if archived {
+        claude.0.end(&id);
+    }
+    Ok(())
 }
 
 /// Deletes a session for good, after the person confirmed it (ADR 0036). A reply that is still
@@ -265,8 +271,13 @@ pub fn set_session_archived(
 /// Returns an error when there is no such session, or the file cannot be written.
 #[tauri::command]
 #[specta::specta]
-pub fn delete_session(id: String, sessions: State<'_, Sessions>) -> Result<(), AppError> {
+pub fn delete_session(
+    id: String,
+    sessions: State<'_, Sessions>,
+    claude: State<'_, crate::agents::Claude>,
+) -> Result<(), AppError> {
     sessions.delete(&id).map_err(app_error)?;
+    claude.0.end(&id);
     tracing::info!(session = %id, "session deleted");
     Ok(())
 }

@@ -1,8 +1,9 @@
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { Page } from "@playwright/test";
+import { z } from "zod";
 
 import { expect, launchApp, test } from "./fixtures";
 
@@ -39,6 +40,9 @@ async function claudeSession(page: Page) {
   await expect(page.getByRole("button", { name: "Agent: Claude" })).toBeVisible();
   return session;
 }
+
+/** What the stand-in notes each time it is started. */
+const started = z.object({ args: z.array(z.string()) });
 
 /** Writes a message in the message box and sends it. */
 async function say(page: Page, text: string) {
@@ -154,6 +158,52 @@ test.describe("Claude in the real app", () => {
     } finally {
       app.kill();
       claude.remove();
+    }
+  });
+
+  test("a Claude session carries on its conversation after Arden Code restarts", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
+    const log = path.join(dataDir, "claude-starts.log");
+    const claude = claudeOnPath({ log });
+    try {
+      const first = await launchApp({ dataDir, env: claude.env });
+      const session = await claudeSession(first.page);
+      await say(first.page, "Hello from the test");
+      await expect(session.getByText("You said: Hello from the test")).toBeVisible({
+        timeout: 30_000,
+      });
+      await first.close();
+
+      const second = await launchApp({ dataDir, env: claude.env });
+      try {
+        const { page } = second;
+        await page.getByRole("link", { name: "Hello from the test" }).click();
+        // The session as it was saved, with Claude's earlier reply.
+        const reopened = page.getByRole("main", { name: "Session" });
+        await expect(reopened.getByText("You said: Hello from the test")).toBeVisible();
+        await say(page, "Hello again");
+        await expect(reopened.getByText("You said: Hello again")).toBeVisible({
+          timeout: 30_000,
+        });
+      } finally {
+        second.kill();
+      }
+
+      const starts = readFileSync(log, "utf8")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("start "))
+        .map((line) => started.parse(JSON.parse(line.slice("start ".length))).args);
+      // The starts of a conversation, not the look at Claude Code's version.
+      const conversations = starts.filter((args) => args.includes("-p"));
+      expect(conversations).toHaveLength(2);
+      const [fresh, resumed] = conversations;
+      const id = fresh?.[fresh.indexOf("--session-id") + 1];
+      expect(id).toMatch(/^[0-9a-f-]{36}$/u);
+      expect(resumed?.[resumed.indexOf("--resume") + 1]).toBe(id);
+    } finally {
+      claude.remove();
+      rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     }
   });
 });

@@ -220,6 +220,8 @@ mod tests {
             turn_id: "turn-1",
             prompt,
             folder: std::path::Path::new(r"C:Playground"),
+            conversation: None,
+            remember: &|_| {},
             controls,
         }
     }
