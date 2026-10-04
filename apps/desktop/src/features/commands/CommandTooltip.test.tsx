@@ -61,4 +61,17 @@ describe("CommandTooltip", () => {
       expect(screen.queryByRole("tooltip")).toBeNull();
     });
   });
+
+  it("closes with Escape", async () => {
+    const user = userEvent.setup();
+    renderButtons();
+    await user.hover(screen.getByRole("button", { name: "New session" }));
+    await screen.findByRole("tooltip");
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("tooltip")).toBeNull();
+    });
+  });
 });

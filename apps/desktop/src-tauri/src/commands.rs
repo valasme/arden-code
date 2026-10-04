@@ -104,7 +104,7 @@ pub fn show_system_menu(
     let scale = window.scale_factor().map_err(|error| failed(&error))?;
     let point = arden_windows::system_menu::client_point(at.x, at.y, scale);
     // The menu runs on the window's own thread and returns once it closes, so the command does not
-    // wait for it.
+    // wait for it: a failure from then on is only logged, as the page has moved on.
     window
         .run_on_main_thread(move || {
             if let Err(error) = arden_windows::system_menu::show_at(handle, point) {

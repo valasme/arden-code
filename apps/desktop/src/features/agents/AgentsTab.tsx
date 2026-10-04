@@ -10,8 +10,8 @@ import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 
 /**
- * The page that says how to install the agent when it is missing, or how to update it when it is
- * too old. An agent that is ready has nothing to do, so no button.
+ * A button to the agent's page, saying how to install it when it is missing or how to update it
+ * when it is too old. An agent that is ready has nothing to do, so it gets no button.
  */
 function NextStep({ agent, name }: { agent: Detection; name: string }) {
   const { t } = useTranslation();

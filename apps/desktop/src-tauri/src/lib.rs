@@ -536,7 +536,7 @@ pub fn run() {
 mod tests {
     use super::*;
 
-    /** The settings with hardware acceleration and smooth scrolling as given. */
+    /// The settings with hardware acceleration and smooth scrolling as given.
     fn settings(hardware_acceleration: bool, smooth_scrolling: bool) -> Settings {
         let mut settings = Settings::default();
         settings.advanced.hardware_acceleration = hardware_acceleration;
