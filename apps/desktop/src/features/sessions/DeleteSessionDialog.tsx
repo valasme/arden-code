@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import type { AgentKind } from "@/ipc/bindings";
 import { noSessions, sessionListQuery } from "@/ipc/queries";
 import { useSessionDialogsStore } from "@/state/sessionDialogs";
 
@@ -12,11 +13,13 @@ import { useDeleteSession } from "./useSessionActions";
 function DeleteQuestion({
   sessionId,
   title,
+  agent,
   fromRow,
   onClose,
 }: {
   sessionId: string;
   title: string;
+  agent: AgentKind;
   fromRow: boolean;
   onClose: () => void;
 }) {
@@ -34,7 +37,12 @@ function DeleteQuestion({
         if (!open) onClose();
       }}
       title={t("sessions.delete.title")}
-      description={t("sessions.delete.description", { title })}
+      description={
+        // Claude Code keeps the conversation in its own folder, which Arden Code leaves alone.
+        agent === "claude"
+          ? `${t("sessions.delete.description", { title })} ${t("sessions.delete.claude")}`
+          : t("sessions.delete.description", { title })
+      }
       confirmLabel={t("sessions.delete.confirm")}
       destructive
       onConfirm={() => {
@@ -70,6 +78,7 @@ export function DeleteSessionDialog() {
       key={session.id}
       sessionId={session.id}
       title={session.title ?? t("sessions.untitled")}
+      agent={session.agent}
       fromRow={deleting.fromRow}
       onClose={close}
     />

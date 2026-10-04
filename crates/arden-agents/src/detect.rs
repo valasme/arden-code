@@ -13,6 +13,8 @@ use arden_process::supervisor::Supervisor;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use crate::claude::locate::{MINIMUM_VERSION, recent_enough};
+
 /// How long an agent gets to say its version. A program that is slow to start is not broken.
 const VERSION_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -59,6 +61,12 @@ pub struct Detection {
     pub path: Option<String>,
     /// Its version, when it could be read.
     pub version: Option<String>,
+    /// The oldest version Arden Code works with, for the agents it works with already.
+    pub minimum_version: Option<String>,
+    /// Whether the version installed is older than the minimum.
+    pub too_old: bool,
+    /// Whether it is signed in, when it said so. Nothing else about the account is kept.
+    pub signed_in: Option<bool>,
     /// Where to install it.
     pub install_url: String,
 }
@@ -91,6 +99,40 @@ fn looks_like_version(word: &str) -> bool {
         })
 }
 
+/// Whether Claude Code is signed in, from what `claude auth status --json` printed. Only that is
+/// read: the rest, such as the account's email, is never kept.
+#[must_use]
+pub fn parse_signed_in(output: &str) -> Option<bool> {
+    let signed_in = |text: &str| {
+        serde_json::from_str::<serde_json::Value>(text.trim())
+            .ok()?
+            .get("loggedIn")?
+            .as_bool()
+    };
+    signed_in(output).or_else(|| output.lines().find_map(signed_in))
+}
+
+/// Whether Claude Code is signed in. What it answers is kept out of the logs: it can hold the
+/// account's email.
+fn signed_in_of(supervisor: &Supervisor, program: &Resolved) -> Option<bool> {
+    let done = supervisor
+        .run_private(
+            "claude-auth-status",
+            program,
+            &[
+                Arg::Literal("auth"),
+                Arg::Literal("status"),
+                Arg::Literal("--json"),
+            ],
+            VERSION_TIMEOUT,
+        )
+        .ok()?;
+    if done.timed_out {
+        return None;
+    }
+    parse_signed_in(&done.output)
+}
+
 fn version_of(supervisor: &Supervisor, cli: AgentCli, program: &Resolved) -> Option<String> {
     let done = supervisor
         .run(
@@ -115,15 +157,26 @@ pub fn detect(
     path_ext: &OsStr,
 ) -> Detection {
     let found = resolve::resolve(cli.program(), search_path, path_ext);
+    let version = found
+        .as_ref()
+        .and_then(|program| version_of(supervisor, cli, program));
+    let claude = cli == AgentCli::Claude;
     Detection {
         cli,
         installed: found.is_some(),
         path: found
             .as_ref()
             .map(|program| program.path.display().to_string()),
-        version: found
+        too_old: claude
+            && version
+                .as_deref()
+                .is_some_and(|version| !recent_enough(version)),
+        version,
+        minimum_version: claude.then(|| MINIMUM_VERSION.to_owned()),
+        signed_in: found
             .as_ref()
-            .and_then(|program| version_of(supervisor, cli, program)),
+            .filter(|_| claude)
+            .and_then(|program| signed_in_of(supervisor, program)),
         install_url: cli.install_url().to_owned(),
     }
 }
@@ -178,6 +231,22 @@ mod tests {
     }
 
     #[test]
+    fn reads_only_whether_claude_code_is_signed_in() {
+        assert_eq!(
+            parse_signed_in(
+                "{\n  \"loggedIn\": true,\n  \"authMethod\": \"claude.ai\",\n  \"email\": \"ada@example.com\"\n}\n"
+            ),
+            Some(true)
+        );
+        assert_eq!(
+            parse_signed_in(r#"{"loggedIn":false,"authMethod":"none"}"#),
+            Some(false)
+        );
+        assert_eq!(parse_signed_in("Not logged in"), None);
+        assert_eq!(parse_signed_in(""), None);
+    }
+
+    #[test]
     fn each_agent_has_a_program_name_and_an_install_page() {
         assert_eq!(AgentCli::Claude.program(), "claude");
         assert_eq!(AgentCli::Codex.program(), "codex");
@@ -224,6 +293,67 @@ mod tests {
                 Some(bin.path().join("claude.cmd").display().to_string().as_str())
             );
             assert_eq!(found.install_url, "https://code.claude.com/docs/en/setup");
+        }
+
+        /// A `claude.cmd` that says its version and whether it is signed in.
+        fn claude_script(version: &str, signed_in: bool) -> tempfile::TempDir {
+            let bin = tempfile::tempdir().expect("a temporary folder");
+            fs::write(
+                bin.path().join("claude.cmd"),
+                format!(
+                    "@echo off\r\nif \"%1\"==\"auth\" goto auth\r\necho {version} (Claude Code)\r\nexit /b 0\r\n:auth\r\necho {{\"loggedIn\": {signed_in}, \"email\": \"ada@example.com\"}}\r\nexit /b {}\r\n",
+                    u8::from(!signed_in)
+                ),
+            )
+            .expect("a script");
+            bin
+        }
+
+        #[test]
+        fn says_whether_claude_code_is_signed_in_and_recent_enough() {
+            let (supervisor, logs) = supervisor();
+            for (version, signed_in, too_old) in [
+                ("2.1.286", true, false),
+                ("2.1.286", false, false),
+                ("2.1.100", true, true),
+            ] {
+                let bin = claude_script(version, signed_in);
+
+                let found = detect(
+                    &supervisor,
+                    AgentCli::Claude,
+                    bin.path().as_os_str(),
+                    OsStr::new(".EXE;.CMD"),
+                );
+
+                assert_eq!(found.version.as_deref(), Some(version));
+                assert_eq!(found.signed_in, Some(signed_in), "{version} {signed_in}");
+                assert_eq!(found.too_old, too_old, "{version}");
+                assert_eq!(found.minimum_version.as_deref(), Some(MINIMUM_VERSION));
+            }
+            // The account's email never reaches a log.
+            for entry in fs::read_dir(logs.path().join("agents")).expect("the logs") {
+                let log = fs::read_to_string(entry.expect("a log").path()).expect("a log");
+                assert!(!log.contains("ada@example.com"), "{log}");
+            }
+        }
+
+        #[test]
+        fn claude_code_that_is_not_installed_is_neither_signed_in_nor_out() {
+            let (supervisor, _logs) = supervisor();
+            let empty = tempfile::tempdir().expect("a temporary folder");
+
+            let found = detect(
+                &supervisor,
+                AgentCli::Claude,
+                empty.path().as_os_str(),
+                OsStr::new(".EXE;.CMD"),
+            );
+
+            assert!(!found.installed);
+            assert_eq!(found.signed_in, None);
+            assert!(!found.too_old);
+            assert_eq!(found.minimum_version.as_deref(), Some(MINIMUM_VERSION));
         }
 
         #[test]

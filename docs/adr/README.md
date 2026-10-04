@@ -24,7 +24,7 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0014](0014-internationalization-and-input.md) | Internationalization and input | Accepted |
 | [0015](0015-accessibility-bar.md) | Accessibility bar | Accepted |
 | [0016](0016-chat-placeholder-and-demo-agent.md) | Chat placeholder and Demo agent | Accepted; storage superseded by [0035](0035-saving-sessions.md) |
-| [0017](0017-agent-integration-direction.md) | Agent integration direction | Accepted |
+| [0017](0017-agent-integration-direction.md) | Agent integration direction | Accepted; Claude's approval route superseded by [0038](0038-claude-through-its-own-protocol.md) |
 | [0018](0018-distribution-updates-signing.md) | Distribution, updates and code signing | Accepted |
 | [0019](0019-testing-and-quality-gates.md) | Testing and quality gates | Accepted |
 | [0020](0020-security-and-supply-chain.md) | Security and supply chain | Accepted |
@@ -35,7 +35,7 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0025](0025-diagnostics.md) | Diagnostics: logs, bundles and crash recovery | Accepted |
 | [0026](0026-markdown-links-and-images.md) | Markdown, links and images in an agent's reply | Accepted |
 | [0027](0027-long-sessions-and-announcements.md) | Long sessions, stopping a reply, and what screen readers hear | Accepted |
-| [0028](0028-process-supervisor.md) | The process supervisor and agent detection | Accepted |
+| [0028](0028-process-supervisor.md) | The process supervisor and agent detection | Accepted; logging an agent's protocol changed by [0038](0038-claude-through-its-own-protocol.md) |
 | [0029](0029-notifications.md) | Notifications | Accepted |
 | [0030](0030-updates.md) | Updates | Accepted |
 | [0031](0031-restarts-and-reset.md) | Starting the app again, and resetting it | Accepted |
@@ -45,3 +45,5 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0035](0035-saving-sessions.md) | Saving sessions | Accepted |
 | [0036](0036-managing-sessions.md) | Managing sessions | Accepted |
 | [0037](0037-the-window-buttons-keep-the-arrow.md) | The window buttons keep the arrow | Accepted |
+| [0038](0038-claude-through-its-own-protocol.md) | Claude through its own protocol | Accepted |
+| [0039](0039-working-with-claude.md) | Working with Claude | Accepted |

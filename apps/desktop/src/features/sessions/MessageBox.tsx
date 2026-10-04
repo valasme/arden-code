@@ -1,9 +1,10 @@
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import type { AgentKind } from "@/ipc/bindings";
 import { cn } from "@/lib/utils";
 
 /** The key code some browsers report for a key that is part of an input method's composition. */
@@ -12,8 +13,13 @@ const COMPOSING_KEY_CODE = 229;
 interface MessageBoxProps {
   /** Whether a reply is running: then the button stops it instead of sending. */
   busy: boolean;
-  /** Who the message goes to and where, such as "Demo agent · Playground". */
-  context: string;
+  /** The agent the message goes to: the placeholder names it. */
+  agent: AgentKind;
+  /**
+   * Who the message goes to and where, such as "Claude · my-app": plain text, or the agent menu
+   * while the session has had no message (ADR 0039).
+   */
+  context: ReactNode;
   /** Sends the message. Answering `false` (now or later) says it was not sent: the text comes back. */
   onSend: (text: string) => boolean | Promise<boolean>;
   onStop: () => void;
@@ -26,12 +32,14 @@ interface MessageBoxProps {
 }
 
 /**
- * Where the person writes (ADR 0032): a block at least two lines tall, naming the agent and the
- * project under the text, with Send, or Stop while a reply runs. Enter sends and Shift+Enter adds
+ * Where the person writes (ADR 0032): a block at least two lines tall, with the agent and the
+ * project under the text (menus while the session is empty, ADR 0039), and Send, or Stop while a
+ * reply runs. Enter sends and Shift+Enter adds
  * a line. Enter never sends while a character is still being composed (an accent key, an input
  * method for another script): that Enter confirms the character.
  */
 export function MessageBox({
+  agent,
   busy,
   context,
   onSend,
@@ -78,7 +86,7 @@ export function MessageBox({
           ref={box}
           data-message-box
           aria-label={t("sessions.messageBox.label")}
-          placeholder={t("sessions.messageBox.placeholder")}
+          placeholder={t(`agents.${agent}.placeholder`)}
           spellCheck
           rows={2}
           className="max-h-48 min-h-16 resize-none border-0 bg-transparent px-3 pt-3 pb-1 text-base md:text-base dark:bg-transparent"
@@ -89,7 +97,7 @@ export function MessageBox({
           onKeyDown={onKeyDown}
         />
         <div className="flex items-center gap-2 ps-3 pe-2 pb-2 text-xs text-muted-foreground">
-          <span className="min-w-0 truncate">{context}</span>
+          <span className="flex min-w-0 items-center truncate">{context}</span>
           {busy ? (
             <Button
               variant="outline"

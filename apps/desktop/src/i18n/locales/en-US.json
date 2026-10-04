@@ -1,4 +1,20 @@
 {
+  "agents": {
+    "claude": {
+      "empty": "Write a message to start. Claude works in this project's folder, with your own Claude Code.",
+      "name": "Claude",
+      "placeholder": "Message Claude",
+      "question": "What should Claude work on?",
+      "replying": "Claude is replying…"
+    },
+    "demo": {
+      "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
+      "name": "Demo agent",
+      "placeholder": "Message the Demo agent",
+      "question": "What should the Demo agent work on?",
+      "replying": "The Demo agent is replying…"
+    }
+  },
   "brand": {
     "name": "Arden Code"
   },
@@ -18,6 +34,7 @@
     "archivedOpen": "Archived sessions",
     "focusNext": "Move to the next area",
     "focusPrevious": "Move to the previous area",
+    "folderOpen": "Open folder…",
     "inspectorToggle": "Toggle inspector",
     "messageBoxFocus": "Focus the message box",
     "navigateBack": "Back",
@@ -86,6 +103,56 @@
       "action": "Write a name of 1 to 100 characters, then save it again.",
       "what": "That name cannot be used.",
       "why": "A session's name needs 1 to 100 characters, not counting spaces at either end."
+    },
+    "ARD-AGT-007": {
+      "action": "Install Claude Code (Settings → Agents shows how), then send your message again.",
+      "what": "Claude Code is not installed.",
+      "why": "Claude works through Claude Code, Anthropic's own program, and Arden Code could not find claude on this computer."
+    },
+    "ARD-AGT-008": {
+      "action": "Open a terminal and run claude update, then send your message again.",
+      "what": "Claude Code needs an update.",
+      "why": "Arden Code needs Claude Code 2.1.223 or later, and an older version is installed."
+    },
+    "ARD-AGT-009": {
+      "action": "Open a terminal, run claude, sign in with /login, then send your message again.",
+      "what": "Claude Code is not signed in.",
+      "why": "Claude Code signs in on its own, with your Claude account or your API key. Arden Code never signs in for you."
+    },
+    "ARD-AGT-010": {
+      "action": "Send your message again. If it keeps happening, check that claude runs in a terminal, and look at its log in Settings → Advanced → Open logs.",
+      "what": "Claude Code stopped unexpectedly.",
+      "why": "The program could not be started, or it ended before it finished the reply."
+    },
+    "ARD-AGT-011": {
+      "action": "Update Arden Code and Claude Code (claude update), then send your message again.",
+      "what": "Arden Code could not talk to Claude Code.",
+      "why": "Claude Code did not answer the way Arden Code expects. It may be a version Arden Code does not know yet."
+    },
+    "ARD-AGT-012": {
+      "action": "Install Claude Code with its native installer (Settings → Agents shows how), then send your message again.",
+      "what": "Arden Code cannot start this installation of Claude Code safely.",
+      "why": "Only npm's claude.cmd was found, and Windows would read a message passed to it as commands."
+    },
+    "ARD-AGT-013": {
+      "action": "Read Claude Code's reason, then send your message again when it is solved.",
+      "what": "Claude could not answer.",
+      "why": "Claude Code reported a problem, such as a usage limit, an overloaded service or a billing issue. Its own words are under this message."
+    },
+    "ARD-AGT-014": {
+      "action": "Start a new session to work with another agent or in another project.",
+      "what": "The agent and the project of this session cannot change any more.",
+      "why": "A session keeps the agent and the project of its first message."
+    },
+    "ARD-AGT-015": {
+      "action": "Nothing to do: the reply already went on without this answer.",
+      "what": "That request no longer waits for an answer.",
+      "why": "The reply stopped, or Claude Code stopped asking, before the answer arrived."
+    },
+    "ARD-AGT-016": {
+      "action": "Send the message again and choose Trust folder, if you trust what is in it.",
+      "what": "Claude cannot work in this folder until you trust it.",
+      "why": "Claude Code runs a project's own hooks, MCP servers and environment settings without asking."
     },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
@@ -189,6 +256,26 @@
     "title": "Inspector"
   },
   "items": {
+    "approval": {
+      "allow": "Allow",
+      "alwaysAllow": "Always allow",
+      "answered": {
+        "allowed": "You allowed",
+        "alwaysAllowed": "You always allowed",
+        "cancelled": "No answer was needed",
+        "denied": "You denied"
+      },
+      "asks": {
+        "createFile": "{{agent}} wants to create a file",
+        "editFile": "{{agent}} wants to edit a file",
+        "openPage": "{{agent}} wants to open a web page",
+        "runCommand": "{{agent}} wants to run a command",
+        "searchWeb": "{{agent}} wants to search the web",
+        "useTool": "{{agent}} wants to use a tool"
+      },
+      "deny": "Deny",
+      "rule": "Always allow also allows {{rule}} from now on, without asking."
+    },
     "error": {
       "label": "Error:"
     },
@@ -198,7 +285,15 @@
       "lines": "{{added}} lines added, {{removed}} lines removed",
       "modified": "Changed"
     },
+    "questions": {
+      "asks": "{{agent}} asks you",
+      "cancelled": "No answer was needed",
+      "other": "Other",
+      "own": "Your own answer to: {{question}}",
+      "send": "Send answers"
+    },
     "status": {
+      "newConversation": "The earlier conversation could not be found, so a new one started",
       "started": "The agent started working",
       "stopped": "You stopped the reply"
     },
@@ -293,6 +388,9 @@
       "unarchive": "Unarchive",
       "unpin": "Unpin"
     },
+    "agentMenu": {
+      "label": "Agent: {{agent}}"
+    },
     "announce": {
       "done": "Reply finished.",
       "failed": "Reply failed.",
@@ -310,13 +408,12 @@
     },
     "context": "{{agent}} · {{project}}",
     "delete": {
+      "claude": "Claude Code keeps its own copy of the conversation in its folder.",
       "confirm": "Delete session",
       "description": "“{{title}}” and all of its messages will be deleted. This cannot be undone.",
       "title": "Delete this session?"
     },
     "deleted": "Session deleted",
-    "demoAgent": "Demo agent",
-    "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
     "jumpToLatest": "Jump to latest",
     "links": {
       "from": "Linked from",
@@ -329,7 +426,6 @@
     },
     "messageBox": {
       "label": "Message",
-      "placeholder": "Message the Demo agent",
       "send": "Send",
       "stop": "Stop the reply",
       "stopShort": "Stop"
@@ -337,6 +433,10 @@
     "messages": "Messages",
     "new": "New session",
     "playground": "Playground",
+    "projectMenu": {
+      "label": "Project: {{project}}",
+      "openFolder": "Open folder…"
+    },
     "rename": {
       "description": "The name shows in the sidebar and at the top of the session.",
       "failed": "{{what}} ({{code}})",
@@ -345,9 +445,13 @@
       "title": "Rename session",
       "tooLong": "A name can have at most {{limit}} characters."
     },
-    "replying": "The Demo agent is replying…",
     "stopped": "The reply stopped.",
     "transcript": "Session",
+    "trust": {
+      "confirm": "Trust folder",
+      "description": "Claude Code runs a project's own hooks, MCP servers and environment settings without asking. Trust {{path}} only if you know what is in it. You are asked once for each folder.",
+      "title": "Trust “{{name}}”?"
+    },
     "untitled": "New session",
     "you": "You"
   },
@@ -470,19 +574,26 @@
       }
     },
     "agents": {
-      "checkAgain": "Check again",
-      "description": "Claude Code and Codex are separate programs. Arden Code looks for them on this computer. It never installs them, updates them or signs in to them. Real integration is coming later.",
+      "account": "Account",
+      "description": "Claude Code and Codex are separate programs. Arden Code looks for them on this computer. It never installs them, updates them or signs in to them.",
+      "howToSignIn": "Open a terminal, run claude, and sign in with /login.",
       "install": "How to install",
       "installed": "Installed",
       "installLabel": "How to install {{name}}",
+      "lookAgain": "Look again",
       "looking": "Looking for agents…",
+      "minimum": "Needs",
+      "minimumValue": "{{version}} or later",
       "names": {
         "claude": "Claude Code",
         "codex": "Codex"
       },
-      "notFound": "{{name}} was not found. Install it, then check again.",
+      "notFound": "{{name}} was not found. Install it, then look again.",
       "notInstalled": "Not installed",
       "path": "Location",
+      "signedIn": "Signed in",
+      "signedOut": "Not signed in",
+      "tooOld": "This version is too old for Arden Code. Run claude update in a terminal, then look again.",
       "version": "Version",
       "versionUnknown": "Unknown"
     },
@@ -620,7 +731,8 @@
     "replying": "{{agent}}: replying",
     "updateDownloading": "Downloading an update…",
     "updateReady": "Update ready: restart",
-    "version": "Version {{version}}"
+    "version": "Version {{version}}",
+    "waiting": "{{agent}}: waiting for your answer"
   },
   "titleBar": {
     "back": "Back",
@@ -636,10 +748,8 @@
     "statusBar": "Status bar"
   },
   "welcome": {
-    "line": "Real agents are coming. Try the Demo agent.",
     "newSession": "New session",
     "palette": "Command palette",
-    "question": "What should the Demo agent work on?",
     "settings": "Settings"
   }
 }

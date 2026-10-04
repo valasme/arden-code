@@ -3,6 +3,7 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { z } from "zod";
 
 import type {
+  AgentKind,
   AppError,
   ErrorCode,
   Project,
@@ -12,6 +13,8 @@ import type {
   TurnEvent,
 } from "@/ipc/bindings";
 
+import { applyTurnEvent } from "@/features/sessions/turnEvents";
+
 import { settingsWith } from "./settings";
 
 /** The Playground, as Rust describes it. */
@@ -20,6 +23,7 @@ export const playground = {
   kind: "playground",
   name: "Playground",
   path: String.raw`C:\Users\Ada\AppData\Local\io.github.valasme.arden\playground`,
+  trusted: true,
 } as const;
 
 /** What a command that fails throws, as it reaches the UI through the isolation frame. */
@@ -32,16 +36,20 @@ function summaryOf({ turns: _turns, ...summary }: Session): SessionSummary {
   return summary;
 }
 
-/** A session as Rust keeps it: made at the given time, with no turns, in the Playground unless said. */
+/**
+ * A session as Rust keeps it: made at the given time, with no turns, in the Playground with the Demo
+ * agent unless said.
+ */
 export function sessionNamed(
   id: string,
   title: string | null,
   projectId: string = playground.id,
+  agent: AgentKind = "demo",
 ): Session {
   return {
     id,
     projectId,
-    agent: "demo",
+    agent,
     title,
     createdAt: "2026-09-30T14:05:09Z",
     updatedAt: "2026-09-30T14:05:09Z",
@@ -56,8 +64,8 @@ export function sessionNamed(
 export const archivedAt = "2026-10-02T09:30:00Z";
 
 /** A folder opened as a project. */
-export function folderProject(id: string, name: string): Project {
-  return { id, kind: "folder", name, path: `C:\\Work\\${name}` };
+export function folderProject(id: string, name: string, trusted = false): Project {
+  return { id, kind: "folder", name, path: `C:\\Work\\${name}`, trusted };
 }
 
 interface Options {
@@ -73,6 +81,10 @@ interface Options {
   failing?: Partial<Record<string, ErrorCode>>;
   /** Folders opened as projects, after the Playground. */
   folders?: Project[];
+  /** The agent a new session takes when none is asked for (ADR 0039). */
+  newSessionAgent?: AgentKind;
+  /** The folder the person picks in Windows' dialog, or null when they cancel. */
+  pickedFolder?: Project | null;
 }
 
 /**
@@ -86,8 +98,11 @@ export function startSessionsRust({
   sessionsNotice = null,
   sessions: kept = [],
   failing = {},
-  folders = [],
+  folders: opened = [],
+  newSessionAgent = "demo",
+  pickedFolder = null,
 }: Options = {}) {
+  const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
   mockWindows("main");
   const sessions: Session[] = structuredClone(kept);
@@ -95,6 +110,8 @@ export function startSessionsRust({
   let made = sessions.length;
   let notice = sessionsNotice;
   let channel: Channel<TurnEvent> | undefined;
+  /** The session the reply streams into. */
+  let replying: string | undefined;
 
   const find = (id: string) => {
     const found = sessions.find((session) => session.id === id);
@@ -142,10 +159,23 @@ export function startSessionsRust({
           notice = null;
           return taken;
         }
+        case "agent_for_new_session": {
+          return newSessionAgent;
+        }
         case "create_session": {
           if (failCreate) throw failure("ARD-AGT-001");
+          const { agent, projectId } = z
+            .object({
+              agent: z.enum(["demo", "claude"]).nullable().optional(),
+              projectId: z.string().nullable().optional(),
+            })
+            .parse(payload ?? {});
+          const project = projectId ?? playground.id;
+          if (project !== playground.id && !folders.some((folder) => folder.id === project)) {
+            throw failure("ARD-AGT-001");
+          }
           made += 1;
-          const session = sessionNamed(`session-${made}`, null);
+          const session = sessionNamed(`session-${made}`, null, project, agent ?? newSessionAgent);
           sessions.push(session);
           return summaryOf(session);
         }
@@ -166,6 +196,16 @@ export function startSessionsRust({
         }
         case "remember_open_session": {
           find(withId.parse(payload).id);
+          return null;
+        }
+        case "set_session_agent": {
+          const { id, agent } = z
+            .object({ id: z.string(), agent: z.enum(["demo", "claude"]) })
+            .parse(payload);
+          const session = find(id);
+          if (session.archivedAt !== null) throw failure("ARD-AGT-005");
+          if (session.turns.length > 0) throw failure("ARD-AGT-014");
+          session.agent = agent;
           return null;
         }
         case "rename_session": {
@@ -209,6 +249,65 @@ export function startSessionsRust({
           for (const other of sessions) if (other.linkedFrom === id) other.linkedFrom = null;
           return null;
         }
+        case "set_session_project": {
+          const { id, projectId } = z
+            .object({ id: z.string(), projectId: z.string() })
+            .parse(payload);
+          const session = find(id);
+          if (session.turns.length > 0) throw failure("ARD-AGT-014");
+          session.projectId = projectId;
+          return null;
+        }
+        case "pick_folder": {
+          if (pickedFolder === null) return null;
+          if (!folders.some((folder) => folder.id === pickedFolder.id)) folders.push(pickedFolder);
+          return pickedFolder;
+        }
+        case "trust_project": {
+          const { projectId } = z.object({ projectId: z.string() }).parse(payload);
+          const project = folders.find((candidate) => candidate.id === projectId);
+          if (project) project.trusted = true;
+          else if (projectId !== playground.id) throw failure("ARD-AGT-001");
+          return null;
+        }
+        case "answer_approval": {
+          const { sessionId, itemId } = z
+            .object({
+              sessionId: z.string(),
+              itemId: z.string(),
+              answer: z.enum(["allow", "alwaysAllow", "deny"]),
+            })
+            .parse(payload);
+          const waits = find(sessionId).turns.some(
+            (turn) =>
+              turn.status === "running" &&
+              turn.items.some(
+                (item) =>
+                  item.type === "approval" && item.id === itemId && item.state === "waiting",
+              ),
+          );
+          if (!waits) throw failure("ARD-AGT-015");
+          return null;
+        }
+        case "answer_questions": {
+          const { sessionId, itemId } = z
+            .object({
+              sessionId: z.string(),
+              itemId: z.string(),
+              answers: z.array(z.object({ question: z.string(), answer: z.string() })),
+            })
+            .parse(payload);
+          const waits = find(sessionId).turns.some(
+            (turn) =>
+              turn.status === "running" &&
+              turn.items.some(
+                (item) =>
+                  item.type === "questions" && item.id === itemId && item.state === "waiting",
+              ),
+          );
+          if (!waits) throw failure("ARD-AGT-015");
+          return null;
+        }
         case "send_message": {
           const { sessionId, text, onEvent } = z
             .object({
@@ -220,6 +319,7 @@ export function startSessionsRust({
           const session = find(sessionId);
           if (session.archivedAt !== null) throw failure("ARD-AGT-005");
           channel = onEvent;
+          replying = sessionId;
           session.title ??= text;
           session.turns.push({
             id: `turn-${session.turns.length + 1}`,
@@ -248,7 +348,10 @@ export function startSessionsRust({
     stops: () => calls.filter((call) => call.command === "stop_reply"),
     /** Streams an event of the reply, as Rust would through the channel. */
     emit(event: TurnEvent) {
-      if (!channel) throw new Error("no message was sent yet");
+      if (!channel || replying === undefined) throw new Error("no message was sent yet");
+      // Rust keeps the turn as it streams, so what the page asks for later agrees with it.
+      const session = sessions.find((candidate) => candidate.id === replying);
+      if (session) Object.assign(session, applyTurnEvent(session, event));
       channel.onmessage(event);
     },
   };

@@ -1,4 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { TriangleAlertIcon } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -27,11 +29,31 @@ function AgentRow({ agent }: { agent: Detection }) {
       {agent.installed ? (
         <dl className="text-xs">
           <div className="flex gap-2 py-0.5">
-            <dt className="w-16 shrink-0 text-muted-foreground">{t("settings.agents.version")}</dt>
+            <dt className="w-20 shrink-0 text-muted-foreground">{t("settings.agents.version")}</dt>
             <dd className="tabular-nums">{agent.version ?? t("settings.agents.versionUnknown")}</dd>
           </div>
+          {agent.minimumVersion === null ? null : (
+            <div className="flex gap-2 py-0.5">
+              <dt className="w-20 shrink-0 text-muted-foreground">
+                {t("settings.agents.minimum")}
+              </dt>
+              <dd className="tabular-nums">
+                {t("settings.agents.minimumValue", { version: agent.minimumVersion })}
+              </dd>
+            </div>
+          )}
+          {agent.signedIn === null ? null : (
+            <div className="flex gap-2 py-0.5">
+              <dt className="w-20 shrink-0 text-muted-foreground">
+                {t("settings.agents.account")}
+              </dt>
+              <dd>
+                {agent.signedIn ? t("settings.agents.signedIn") : t("settings.agents.signedOut")}
+              </dd>
+            </div>
+          )}
           <div className="flex gap-2 py-0.5">
-            <dt className="w-16 shrink-0 text-muted-foreground">{t("settings.agents.path")}</dt>
+            <dt className="w-20 shrink-0 text-muted-foreground">{t("settings.agents.path")}</dt>
             <dd className="min-w-0 break-all">
               <code>{agent.path}</code>
             </dd>
@@ -40,6 +62,15 @@ function AgentRow({ agent }: { agent: Detection }) {
       ) : (
         <p className="text-xs text-muted-foreground">{t("settings.agents.notFound", { name })}</p>
       )}
+      {agent.installed && agent.tooOld ? (
+        <p className="flex items-start gap-2 text-xs">
+          <TriangleAlertIcon aria-hidden className="mt-px size-3.5 shrink-0" strokeWidth={1.5} />
+          {t("settings.agents.tooOld")}
+        </p>
+      ) : null}
+      {agent.installed && agent.signedIn === false ? (
+        <p className="text-xs text-muted-foreground">{t("settings.agents.howToSignIn")}</p>
+      ) : null}
       <div>
         <Button
           variant="outline"
@@ -58,10 +89,30 @@ function AgentRow({ agent }: { agent: Detection }) {
   );
 }
 
-/** Settings → Agents: which agent programs are installed. It only looks; it changes nothing. */
+/**
+ * Settings → Agents: which agent programs are installed, and whether Claude Code can work (ADR 0039).
+ * It only looks; it changes nothing. What Arden Code found after it started is shown, and Look
+ * again looks afresh.
+ */
 export function AgentsTab() {
   const { t } = useTranslation();
-  const { data, error, isFetching, refetch } = useQuery(agentsQuery);
+  const queryClient = useQueryClient();
+  const { data, error, isFetching } = useQuery(agentsQuery);
+  const [looking, setLooking] = useState(false);
+  const lookAgain = () => {
+    setLooking(true);
+    commands
+      .detectAgents(true)
+      .then((found) => {
+        queryClient.setQueryData(agentsQuery.queryKey, found);
+      })
+      .catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      })
+      .finally(() => {
+        setLooking(false);
+      });
+  };
 
   return (
     <div>
@@ -84,14 +135,8 @@ export function AgentsTab() {
         </div>
       ) : null}
       <div className="pt-4">
-        <Button
-          variant="outline"
-          disabled={isFetching}
-          onClick={() => {
-            refetch().catch(() => {});
-          }}
-        >
-          {t("settings.agents.checkAgain")}
+        <Button variant="outline" disabled={isFetching || looking} onClick={lookAgain}>
+          {t("settings.agents.lookAgain")}
         </Button>
       </div>
     </div>

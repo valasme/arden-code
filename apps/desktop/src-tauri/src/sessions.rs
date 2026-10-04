@@ -7,9 +7,11 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
 use arden_agents::demo::DemoDriver;
-#[cfg(debug_assertions)]
-use arden_agents::model::Item;
-use arden_agents::model::{AgentKind, Session, SessionList, SessionSummary, TurnEvent};
+use arden_agents::driver::{AgentDriver, Answer};
+use arden_agents::model::{
+    AgentKind, ApprovalAction, ApprovalState, Item, Project, QuestionAnswer, QuestionState,
+    Session, SessionList, SessionSummary, TurnEvent,
+};
 use arden_agents::playground::PLAYGROUND_ID;
 use arden_agents::store::{OpenProblem, SessionStore, StoreError};
 use arden_core::error::{AppError, ErrorCode};
@@ -29,6 +31,9 @@ fn app_error(error: StoreError) -> AppError {
         StoreError::TurnRunning => AppError::new(ErrorCode::TurnRunning),
         StoreError::InvalidName => AppError::new(ErrorCode::SessionNameInvalid),
         StoreError::Archived => AppError::new(ErrorCode::SessionArchived),
+        StoreError::NotEmpty => AppError::new(ErrorCode::SessionNotEmpty),
+        StoreError::NotWaiting => AppError::new(ErrorCode::RequestNotWaiting),
+        StoreError::NotTrusted => AppError::new(ErrorCode::ProjectNotTrusted),
         StoreError::NotSaved(reason) => {
             AppError::new(ErrorCode::SessionsNotSaved).with_details(reason)
         }
@@ -102,19 +107,120 @@ pub fn list_sessions(sessions: State<'_, Sessions>) -> Result<SessionList, AppEr
     Ok(sessions.list())
 }
 
-/// Starts an empty Demo agent session in the Playground.
+/// The agent for a new session in a project (ADR 0039): the agent of that project's latest
+/// session, else of the latest session anywhere, else Claude when Claude Code is installed, else
+/// the Demo agent.
+fn new_session_agent(
+    sessions: &SessionStore,
+    project_id: &str,
+    claude_installed: bool,
+) -> AgentKind {
+    sessions
+        .agent_for_new_session(project_id)
+        .unwrap_or(if claude_installed {
+            AgentKind::Claude
+        } else {
+            AgentKind::Demo
+        })
+}
+
+/// The agent a new session in a project would have, the Playground when none is given (ADR 0039).
 ///
 /// # Errors
 ///
-/// Returns an error when the Playground does not exist, or the session cannot be saved.
+/// Never fails today; it returns a `Result` like every command.
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn create_session(sessions: State<'_, Sessions>) -> Result<SessionSummary, AppError> {
-    let session = sessions
-        .create_session(PLAYGROUND_ID, AgentKind::Demo)
-        .map_err(app_error)?;
-    tracing::info!(session = %session.id, "session created");
+pub fn agent_for_new_session(
+    project_id: Option<String>,
+    sessions: State<'_, Sessions>,
+    detections: State<'_, crate::agents::Detections>,
+) -> Result<AgentKind, AppError> {
+    Ok(new_session_agent(
+        &sessions,
+        project_id.as_deref().unwrap_or(PLAYGROUND_ID),
+        detections.claude_installed(),
+    ))
+}
+
+/// Starts an empty session in a project, the Playground when none is given, with the agent given,
+/// or the one a new session there takes (ADR 0039).
+///
+/// # Errors
+///
+/// Returns an error when the project does not exist, or the session cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn create_session(
+    agent: Option<AgentKind>,
+    project_id: Option<String>,
+    sessions: State<'_, Sessions>,
+    detections: State<'_, crate::agents::Detections>,
+) -> Result<SessionSummary, AppError> {
+    let project = project_id.as_deref().unwrap_or(PLAYGROUND_ID);
+    let agent = agent
+        .unwrap_or_else(|| new_session_agent(&sessions, project, detections.claude_installed()));
+    let session = sessions.create_session(project, agent).map_err(app_error)?;
+    tracing::info!(session = %session.id, ?agent, "session created");
     Ok(session)
+}
+
+/// Changes the agent of a session that has had no message yet (ADR 0039).
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, it is archived or has had a message, or the
+/// change cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn set_session_agent(
+    id: String,
+    agent: AgentKind,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions.set_agent(&id, agent).map_err(app_error)?;
+    tracing::info!(session = %id, ?agent, "the session's agent changed");
+    Ok(())
+}
+
+/// Moves a session that has had no message yet to another project (ADR 0039).
+///
+/// # Errors
+///
+/// Returns an error when there is no such session or project, the session is archived or has had a
+/// message, or the change cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn set_session_project(
+    id: String,
+    project_id: String,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions.set_project(&id, &project_id).map_err(app_error)?;
+    tracing::info!(session = %id, project = %project_id, "the session's project changed");
+    Ok(())
+}
+
+/// Asks the person for a folder with Windows' dialog, and adds it as a project (ADR 0039). Nothing
+/// when they cancel. A folder opened before is the same project.
+///
+/// # Errors
+///
+/// Returns an error when the project cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub async fn pick_folder(
+    app: tauri::AppHandle,
+    sessions: State<'_, Sessions>,
+) -> Result<Option<Project>, AppError> {
+    let Some(folder) = crate::commands::choose_folder(&app).await else {
+        return Ok(None);
+    };
+    let project = sessions.open_folder(&folder).map_err(app_error)?;
+    tracing::info!(project = %project.id, "a folder was opened as a project");
+    Ok(Some(project))
 }
 
 /// Starts an empty session linked to another one, in its project and with its agent (ADR 0036).
@@ -199,8 +305,14 @@ pub fn set_session_archived(
     id: String,
     archived: bool,
     sessions: State<'_, Sessions>,
+    claude: State<'_, crate::agents::Claude>,
 ) -> Result<(), AppError> {
-    sessions.set_archived(&id, archived).map_err(app_error)
+    sessions.set_archived(&id, archived).map_err(app_error)?;
+    // An archived session needs no Claude Code until it is used again (ADR 0039).
+    if archived {
+        claude.0.end(&id);
+    }
+    Ok(())
 }
 
 /// Deletes a session for good, after the person confirmed it (ADR 0036). A reply that is still
@@ -211,9 +323,27 @@ pub fn set_session_archived(
 /// Returns an error when there is no such session, or the file cannot be written.
 #[tauri::command]
 #[specta::specta]
-pub fn delete_session(id: String, sessions: State<'_, Sessions>) -> Result<(), AppError> {
+pub fn delete_session(
+    id: String,
+    sessions: State<'_, Sessions>,
+    claude: State<'_, crate::agents::Claude>,
+) -> Result<(), AppError> {
     sessions.delete(&id).map_err(app_error)?;
+    claude.0.end(&id);
     tracing::info!(session = %id, "session deleted");
+    Ok(())
+}
+
+/// Remembers that the person trusts a project's folder, so Claude may work in it (ADR 0039).
+///
+/// # Errors
+///
+/// Returns an error when there is no such project, or the file cannot be written.
+#[tauri::command]
+#[specta::specta]
+pub fn trust_project(project_id: String, sessions: State<'_, Sessions>) -> Result<(), AppError> {
+    sessions.trust_project(&project_id).map_err(app_error)?;
+    tracing::info!(project = %project_id, "project trusted");
     Ok(())
 }
 
@@ -227,6 +357,75 @@ pub fn delete_session(id: String, sessions: State<'_, Sessions>) -> Result<(), A
 #[specta::specta]
 pub fn stop_reply(session_id: String, sessions: State<'_, Sessions>) -> Result<(), AppError> {
     sessions.stop_turn(&session_id).map_err(app_error)
+}
+
+/// Answers an approval request that waits in a session's running turn (ADR 0039).
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, or no such request waits for an answer.
+#[tauri::command]
+#[specta::specta]
+pub fn answer_approval(
+    session_id: String,
+    item_id: String,
+    answer: Answer,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions
+        .answer(&session_id, &item_id, answer)
+        .map_err(app_error)
+}
+
+/// Hands the person's answers to questions that wait in a session's running turn (ADR 0039).
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, or no such questions wait for answers.
+#[tauri::command]
+#[specta::specta]
+pub fn answer_questions(
+    session_id: String,
+    item_id: String,
+    answers: Vec<QuestionAnswer>,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions
+        .answer_questions(&session_id, &item_id, answers)
+        .map_err(app_error)
+}
+
+/// What a notification says when an agent waits for the person's answer, if the event is a
+/// request or questions that start waiting.
+fn waiting_notice(agent: AgentKind, event: &TurnEvent) -> Option<String> {
+    let TurnEvent::ItemAdded { item, .. } = event else {
+        return None;
+    };
+    let name = match agent {
+        AgentKind::Claude => "Claude",
+        AgentKind::Demo => "The Demo agent",
+    };
+    let action = match item {
+        Item::Approval {
+            state: ApprovalState::Waiting,
+            action,
+            ..
+        } => action,
+        Item::Questions {
+            state: QuestionState::Waiting,
+            ..
+        } => return Some(format!("{name} asks you a question.")),
+        _ => return None,
+    };
+    let what = match action {
+        ApprovalAction::RunCommand => "run a command",
+        ApprovalAction::EditFile => "edit a file",
+        ApprovalAction::CreateFile => "create a file",
+        ApprovalAction::OpenPage => "open a web page",
+        ApprovalAction::SearchWeb => "search the web",
+        ApprovalAction::UseTool => "use a tool",
+    };
+    Some(format!("{name} asks to {what}."))
 }
 
 /// Makes a session with `count` finished turns, to test long conversations. Debug builds only.
@@ -286,22 +485,28 @@ pub fn send_message(
     text: String,
     on_event: Channel<TurnEvent>,
     sessions: State<'_, Sessions>,
+    claude: State<'_, crate::agents::Claude>,
 ) -> Result<Session, AppError> {
     let turn = sessions.start_turn(&session_id, &text).map_err(app_error)?;
     // Taken before the reply starts, so the events that follow never overlap with it.
     let snapshot = sessions.session(&session_id).map_err(app_error)?;
 
     let store = Arc::clone(sessions.inner());
+    let claude = Arc::clone(&claude.0);
     let agent = snapshot.agent;
     let running = turn.clone();
     thread::spawn(move || {
-        let saved = match agent {
-            AgentKind::Demo => {
-                store.stream_reply(&DemoDriver::new(), &session_id, &running, |event| {
-                    on_event.send(event.clone()).is_ok()
-                })
-            }
+        let demo = DemoDriver::new();
+        let driver: &dyn AgentDriver = match agent {
+            AgentKind::Demo => &demo,
+            AgentKind::Claude => claude.as_ref(),
         };
+        let saved = store.stream_reply(driver, &session_id, &running, |event| {
+            if let Some(body) = waiting_notice(agent, event) {
+                crate::notifications::notify_when_away(&app, arden_core::APP_NAME, &body);
+            }
+            on_event.send(event.clone()).is_ok()
+        });
         if let Err(error) = saved {
             use tauri_specta::Event;
 
@@ -350,15 +555,20 @@ pub struct SessionRequested {
     pub session_id: String,
 }
 
-/// Opens a folder as a project, starts a Demo agent session in it and asks the page to show it.
+/// Opens a folder as a project, starts a session in it with the agent a new session there takes
+/// (ADR 0039), and asks the page to show it.
 pub fn open_folder(app: &tauri::AppHandle, folder: &std::path::Path) {
     use tauri::Manager;
     use tauri_specta::Event;
 
     let store = app.state::<Sessions>();
-    let session = store
-        .open_folder(folder)
-        .and_then(|project| store.create_session(&project.id, AgentKind::Demo));
+    let session = store.open_folder(folder).and_then(|project| {
+        let claude_installed = app.state::<crate::agents::Detections>().claude_installed();
+        store.create_session(
+            &project.id,
+            new_session_agent(&store, &project.id, claude_installed),
+        )
+    });
     let session = match session {
         Ok(session) => session,
         Err(error) => {
@@ -421,6 +631,85 @@ mod tests {
 
         assert_eq!(pending.take(), Some(id));
         assert_eq!(pending.take(), None, "it is handed over once");
+    }
+
+    fn approval(state: ApprovalState) -> TurnEvent {
+        TurnEvent::ItemAdded {
+            turn_id: "t".to_owned(),
+            item: Item::Approval {
+                id: "t-approval-1".to_owned(),
+                tool_call_id: None,
+                action: ApprovalAction::RunCommand,
+                subject: "npm test".to_owned(),
+                detail: None,
+                rule: None,
+                state,
+            },
+        }
+    }
+
+    #[test]
+    fn with_no_session_at_all_a_new_session_takes_claude_when_it_is_installed() {
+        let store = SessionStore::new(vec![playground::describe(Path::new(r"C:Playground"))]);
+
+        assert_eq!(
+            new_session_agent(&store, PLAYGROUND_ID, true),
+            AgentKind::Claude
+        );
+        assert_eq!(
+            new_session_agent(&store, PLAYGROUND_ID, false),
+            AgentKind::Demo
+        );
+
+        store
+            .create_session(PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        assert_eq!(
+            new_session_agent(&store, PLAYGROUND_ID, true),
+            AgentKind::Demo,
+            "the latest session's agent comes first"
+        );
+    }
+
+    #[test]
+    fn questions_that_start_waiting_are_worth_a_notification() {
+        let asking = TurnEvent::ItemAdded {
+            turn_id: "t".to_owned(),
+            item: Item::Questions {
+                id: "t-questions-1".to_owned(),
+                tool_call_id: None,
+                questions: Vec::new(),
+                answers: Vec::new(),
+                state: QuestionState::Waiting,
+            },
+        };
+
+        assert_eq!(
+            waiting_notice(AgentKind::Claude, &asking).as_deref(),
+            Some("Claude asks you a question.")
+        );
+    }
+
+    #[test]
+    fn a_request_that_starts_waiting_is_worth_a_notification() {
+        assert_eq!(
+            waiting_notice(AgentKind::Claude, &approval(ApprovalState::Waiting)).as_deref(),
+            Some("Claude asks to run a command.")
+        );
+        assert_eq!(
+            waiting_notice(AgentKind::Claude, &approval(ApprovalState::Allowed)),
+            None,
+            "an answered request needs no one"
+        );
+        assert_eq!(
+            waiting_notice(
+                AgentKind::Claude,
+                &TurnEvent::Finished {
+                    turn_id: "t".to_owned()
+                }
+            ),
+            None
+        );
     }
 
     #[test]

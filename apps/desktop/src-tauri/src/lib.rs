@@ -87,7 +87,14 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::get_session,
         sessions::send_message,
         sessions::stop_reply,
+        sessions::trust_project,
+        sessions::answer_approval,
+        sessions::answer_questions,
         sessions::take_pending_open,
+        sessions::set_session_agent,
+        sessions::set_session_project,
+        sessions::pick_folder,
+        sessions::agent_for_new_session,
         agents::detect_agents,
         sessions::debug_fill_session,
         agents::debug_spawn_sleeper,
@@ -145,7 +152,14 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::get_session,
         sessions::send_message,
         sessions::stop_reply,
+        sessions::trust_project,
+        sessions::answer_approval,
+        sessions::answer_questions,
         sessions::take_pending_open,
+        sessions::set_session_agent,
+        sessions::set_session_project,
+        sessions::pick_folder,
+        sessions::agent_for_new_session,
         agents::detect_agents,
     ]
 }
@@ -166,7 +180,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         snap_layouts::MaximizeButtonChanged,
         updates::UpdateStatusChanged,
         sessions::SessionRequested,
-        sessions::ReplyNotSaved
+        sessions::ReplyNotSaved,
+        agents::AgentsDetected
     ])
 }
 
@@ -323,7 +338,10 @@ fn manage_programs(app: &tauri::App, paths: &AppPaths) {
             None
         }
     };
+    app.manage(agents::Claude::with(supervisor.as_ref()));
     app.manage(agents::Programs(supervisor));
+    app.manage(agents::Detections::default());
+    agents::detect_after_start(app.handle());
 }
 
 /// How often a debug build looks at the file that stands in for Windows' settings.

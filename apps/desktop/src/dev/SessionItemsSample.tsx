@@ -83,12 +83,22 @@ const items: readonly Item[] = [
   { type: "status", id: "stopped", kind: "stopped" },
 ];
 
-/** Every kind of item in a reply, for the design system page. */
+/**
+ * The kinds of item in a reply, for the design system page. Approval requests and questions wait
+ * for an answer, so they are shown where they are tested, in the session.
+ */
 export function SessionItemsSample() {
   return (
     <div className="max-w-2xl border border-border p-4">
       {items.map((item) => (
-        <ItemView key={item.id} item={item} streaming={false} />
+        <ItemView
+          key={item.id}
+          item={item}
+          streaming={false}
+          agent="claude"
+          onAnswer={() => undefined}
+          onAnswerQuestions={() => undefined}
+        />
       ))}
     </div>
   );

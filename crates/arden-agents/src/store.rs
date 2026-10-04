@@ -1,18 +1,19 @@
 //! Projects and sessions (ADR 0016), kept in a file between starts (ADR 0035). The store holds them
 //! in memory while the app runs, and writes each change to the file.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Sender};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::database::{Database, DatabaseError, Order};
-use crate::driver::{AgentDriver, Flow};
+use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
 use crate::model::{
-    AgentKind, Item, Project, ProjectKind, ProjectListing, Session, SessionList, SessionSummary,
-    Turn, TurnEvent, TurnStatus,
+    AgentKind, ApprovalState, Item, Project, ProjectKind, ProjectListing, QuestionAnswer,
+    QuestionState, Session, SessionList, SessionSummary, Turn, TurnEvent, TurnStatus,
 };
 
 /// How many characters of the first message become the session's title.
@@ -32,6 +33,12 @@ pub enum StoreError {
     InvalidName,
     /// The session is archived: it takes no message, name or pin until it is unarchived.
     Archived,
+    /// The session has had a message, so its agent and project cannot change (ADR 0039).
+    NotEmpty,
+    /// The approval request that was answered no longer waits for an answer.
+    NotWaiting,
+    /// Claude was asked to work in a project whose folder the person has not trusted (ADR 0039).
+    NotTrusted,
     /// The change could not be written to the file, so it was not made. Says why, for the logs.
     NotSaved(String),
     /// What the file holds could not be read. Says why, for the logs.
@@ -86,6 +93,8 @@ struct Entry {
     loaded: bool,
     /// Where it stands in the lists.
     order: Order,
+    /// The agent's own conversation, once the agent has answered in it (ADR 0039).
+    conversation: Option<String>,
 }
 
 impl Entry {
@@ -134,12 +143,30 @@ impl Entry {
     }
 }
 
-/// Asks for a reply still running in a session to stop: its driver notices at its next event.
-fn stop_running(session: &Session, stopping: &mut HashSet<String>) {
+/// Asks for a reply still running in a session to stop. Its driver hears it at once, and its next
+/// event, if it sends one, is not recorded.
+fn stop_running(
+    session: &Session,
+    stopping: &mut HashSet<String>,
+    controls: &HashMap<String, Sender<Control>>,
+) {
     for turn in &session.turns {
         if turn.status == TurnStatus::Running {
-            stopping.insert(turn.id.clone());
+            stop(&turn.id, stopping, controls);
         }
+    }
+}
+
+/// Asks for the reply to a turn to stop.
+fn stop(
+    turn_id: &str,
+    stopping: &mut HashSet<String>,
+    controls: &HashMap<String, Sender<Control>>,
+) {
+    stopping.insert(turn_id.to_owned());
+    if let Some(driver) = controls.get(turn_id) {
+        // A driver that has already ended no longer listens; nothing is lost.
+        let _ = driver.send(Control::Stop);
     }
 }
 
@@ -157,6 +184,8 @@ struct Inner {
     last_id: u64,
     /// The turns whose reply the person has asked to stop, until their driver has noticed.
     stopping: HashSet<String>,
+    /// How to reach the driver of each reply that is running, by its turn.
+    controls: HashMap<String, Sender<Control>>,
     /// The session that was opened last, to open again at the next start.
     last_open: Option<String>,
     database: Database,
@@ -212,6 +241,7 @@ impl Inner {
                 pinned: None,
                 archived: None,
             },
+            conversation: None,
         };
         self.database
             .save_session(&entry.session, entry.order, self.last_id)
@@ -289,6 +319,7 @@ impl SessionStore {
                 sessions,
                 last_id,
                 stopping: HashSet::new(),
+                controls: HashMap::new(),
                 last_open,
                 database,
             }),
@@ -352,6 +383,7 @@ impl SessionStore {
                 session: saved.session,
                 loaded: false,
                 order: saved.order,
+                conversation: saved.conversation,
             })
             .collect();
         Ok(Self::with(
@@ -435,6 +467,7 @@ impl SessionStore {
             kind: ProjectKind::Folder,
             name,
             path,
+            trusted: false,
         };
         let (position, last_id) = (inner.projects.len(), inner.last_id);
         inner
@@ -443,6 +476,30 @@ impl SessionStore {
             .map_err(not_saved)?;
         inner.projects.push(project.clone());
         Ok(project)
+    }
+
+    /// Remembers that the person trusts a project's folder, so Claude may work in it (ADR 0039).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownProject`] when there is no such project, and
+    /// [`StoreError::NotSaved`] when it cannot be written.
+    pub fn trust_project(&self, project_id: &str) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let last_id = inner.last_id;
+        let project = inner
+            .projects
+            .iter_mut()
+            .find(|project| project.id == project_id)
+            .ok_or(StoreError::UnknownProject)?;
+        if project.trusted {
+            return Ok(());
+        }
+        project.trusted = true;
+        inner
+            .database
+            .save_trust(project_id, last_id)
+            .map_err(not_saved)
     }
 
     /// Remembers that a session was opened, so that it can be opened again at the next start.
@@ -559,6 +616,7 @@ impl SessionStore {
             sessions,
             database,
             stopping,
+            controls,
             ..
         } = &mut *inner;
         let entry = find(sessions, session_id)?;
@@ -583,7 +641,7 @@ impl SessionStore {
         entry.session.archived_at = header.archived_at;
         entry.order = order;
         if archived {
-            stop_running(&entry.session, stopping);
+            stop_running(&entry.session, stopping, controls);
         }
         Ok(())
     }
@@ -609,7 +667,10 @@ impl SessionStore {
             .delete_session(session_id, forget, last_id)
             .map_err(not_saved)?;
         let entry = inner.sessions.remove(position);
-        stop_running(&entry.session, &mut inner.stopping);
+        let Inner {
+            stopping, controls, ..
+        } = &mut *inner;
+        stop_running(&entry.session, stopping, controls);
         // The file drops the links to it by itself; the sessions in memory follow.
         for other in &mut inner.sessions {
             if other.session.linked_from.as_deref() == Some(session_id) {
@@ -634,6 +695,89 @@ impl SessionStore {
         agent: AgentKind,
     ) -> Result<SessionSummary, StoreError> {
         self.lock().create_session(project_id, agent, None)
+    }
+
+    /// The agent for a new session in a project (ADR 0039): the agent of that project's latest
+    /// session, else of the latest session anywhere. Nothing when there is no session at all.
+    #[must_use]
+    pub fn agent_for_new_session(&self, project_id: &str) -> Option<AgentKind> {
+        let inner = self.lock();
+        let latest = |in_project: bool| {
+            inner
+                .sessions
+                .iter()
+                .filter(|entry| !in_project || entry.session.project_id == project_id)
+                .max_by_key(|entry| entry.order.used)
+                .map(|entry| entry.session.agent)
+        };
+        latest(true).or_else(|| latest(false))
+    }
+
+    /// Changes the agent of a session that has had no message yet (ADR 0039).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session,
+    /// [`StoreError::Archived`] when it is archived, [`StoreError::NotEmpty`] once it has had a
+    /// message, and [`StoreError::NotSaved`] when the change cannot be written.
+    pub fn set_agent(&self, session_id: &str, agent: AgentKind) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let last_id = inner.last_id;
+        let Inner {
+            sessions, database, ..
+        } = &mut *inner;
+        let entry = find(sessions, session_id)?;
+        entry.load(database)?;
+        if entry.session.archived_at.is_some() {
+            return Err(StoreError::Archived);
+        }
+        if !entry.session.turns.is_empty() {
+            return Err(StoreError::NotEmpty);
+        }
+        let mut header = entry.header();
+        header.agent = agent;
+        database
+            .save_session(&header, entry.order, last_id)
+            .map_err(not_saved)?;
+        entry.session.agent = agent;
+        Ok(())
+    }
+
+    /// Moves a session that has had no message yet to another project (ADR 0039).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] or [`StoreError::UnknownProject`] when there is no
+    /// such session or project, [`StoreError::Archived`] when the session is archived,
+    /// [`StoreError::NotEmpty`] once it has had a message, and [`StoreError::NotSaved`] when the
+    /// change cannot be written.
+    pub fn set_project(&self, session_id: &str, project_id: &str) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let last_id = inner.last_id;
+        let Inner {
+            sessions,
+            database,
+            projects,
+            ..
+        } = &mut *inner;
+        if !projects.iter().any(|project| project.id == project_id) {
+            return Err(StoreError::UnknownProject);
+        }
+        let entry = find(sessions, session_id)?;
+        entry.load(database)?;
+        if entry.session.archived_at.is_some() {
+            return Err(StoreError::Archived);
+        }
+        if !entry.session.turns.is_empty() {
+            return Err(StoreError::NotEmpty);
+        }
+        let mut header = entry.header();
+        project_id.clone_into(&mut header.project_id);
+        database
+            .save_session(&header, entry.order, last_id)
+            .map_err(not_saved)?;
+        project_id.clone_into(&mut entry.session.project_id);
+        Ok(())
     }
 
     /// Starts an empty session linked to another one (ADR 0036): in the same project, with the same
@@ -681,12 +825,22 @@ impl SessionStore {
         let used = inner.next_number();
         let last_id = inner.last_id;
         let Inner {
-            sessions, database, ..
+            sessions,
+            database,
+            projects,
+            ..
         } = &mut *inner;
         let entry = find(sessions, session_id)?;
         entry.load(database)?;
         if entry.session.archived_at.is_some() {
             return Err(StoreError::Archived);
+        }
+        // Claude Code runs a project's own hooks, MCP servers and environment (ADR 0039).
+        let trusted = projects
+            .iter()
+            .any(|project| project.id == entry.session.project_id && project.trusted);
+        if entry.session.agent == AgentKind::Claude && !trusted {
+            return Err(StoreError::NotTrusted);
         }
         if entry
             .session
@@ -754,7 +908,10 @@ impl SessionStore {
         };
         let turn = &mut entry.session.turns[position];
         turn.apply(event);
-        if turn.status == TurnStatus::Running {
+        // A reply is written when it ends, and also when the agent starts waiting for the person,
+        // so that a request still waiting when Arden Code closes comes back with its turn (ADR 0039).
+        let asks = matches!(event, TurnEvent::ItemAdded { item, .. } if item.waits_for_answer());
+        if turn.status == TurnStatus::Running && !asks {
             return Ok(());
         }
         database
@@ -837,9 +994,113 @@ impl SessionStore {
             .find(|turn| turn.status == TurnStatus::Running)
             .map(|turn| turn.id.clone());
         if let Some(turn_id) = running {
-            inner.stopping.insert(turn_id);
+            let Inner {
+                stopping, controls, ..
+            } = &mut *inner;
+            stop(&turn_id, stopping, controls);
         }
         Ok(())
+    }
+
+    /// Answers an approval request of the reply that is running in a session: its driver hears
+    /// it at once (ADR 0039).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotWaiting`] when no running reply waits for an answer to that item.
+    pub fn answer(
+        &self,
+        session_id: &str,
+        item_id: &str,
+        answer: Answer,
+    ) -> Result<(), StoreError> {
+        self.hand_to_driver(
+            session_id,
+            item_id,
+            |item| {
+                matches!(
+                    item,
+                    Item::Approval {
+                        state: ApprovalState::Waiting,
+                        ..
+                    }
+                )
+            },
+            Control::Answer {
+                item_id: item_id.to_owned(),
+                answer,
+            },
+        )
+    }
+
+    /// Hands the person's answers to the questions that are `item_id` to the reply that waits for
+    /// them (ADR 0039).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotWaiting`] when no running reply waits for answers to that item.
+    pub fn answer_questions(
+        &self,
+        session_id: &str,
+        item_id: &str,
+        answers: Vec<QuestionAnswer>,
+    ) -> Result<(), StoreError> {
+        self.hand_to_driver(
+            session_id,
+            item_id,
+            |item| {
+                matches!(
+                    item,
+                    Item::Questions {
+                        state: QuestionState::Waiting,
+                        ..
+                    }
+                )
+            },
+            Control::Answers {
+                item_id: item_id.to_owned(),
+                answers,
+            },
+        )
+    }
+
+    /// Hands something the person did to the running reply whose item `item_id` still waits.
+    fn hand_to_driver(
+        &self,
+        session_id: &str,
+        item_id: &str,
+        waits: fn(&Item) -> bool,
+        control: Control,
+    ) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let waiting = find(&mut inner.sessions, session_id)?
+            .session
+            .turns
+            .iter()
+            .filter(|turn| turn.status == TurnStatus::Running)
+            .find(|turn| {
+                turn.items
+                    .iter()
+                    .any(|item| item.id() == item_id && waits(item))
+            })
+            .map(|turn| turn.id.clone())
+            .ok_or(StoreError::NotWaiting)?;
+        let driver = inner.controls.get(&waiting).ok_or(StoreError::NotWaiting)?;
+        driver.send(control).map_err(|_| StoreError::NotWaiting)
+    }
+
+    /// Remembers the agent's own conversation for a session, so it carries on there after a
+    /// restart (ADR 0039).
+    fn remember_conversation(&self, session_id: &str, id: &str) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let last_id = inner.last_id;
+        find(&mut inner.sessions, session_id)?.conversation = Some(id.to_owned());
+        inner
+            .database
+            .save_conversation(session_id, id, last_id)
+            .map_err(|error| StoreError::NotSaved(error.0))
     }
 
     fn is_stopping(&self, turn_id: &str) -> bool {
@@ -864,7 +1125,40 @@ impl SessionStore {
     ) -> Result<(), StoreError> {
         let mut ended = false;
         let mut saved = Ok(());
-        driver.reply(&turn.id, &turn.prompt, &mut |event| {
+        let (sender, controls) = mpsc::channel();
+        let (folder, conversation) = {
+            let mut inner = self.lock();
+            inner.controls.insert(turn.id.clone(), sender);
+            let entry = inner
+                .sessions
+                .iter()
+                .find(|entry| entry.session.id == session_id);
+            let folder = entry
+                .and_then(|entry| {
+                    inner
+                        .projects
+                        .iter()
+                        .find(|project| project.id == entry.session.project_id)
+                })
+                .map(|project| PathBuf::from(&project.path))
+                .unwrap_or_default();
+            (folder, entry.and_then(|entry| entry.conversation.clone()))
+        };
+        let remember = |id: &str| {
+            if let Err(error) = self.remember_conversation(session_id, id) {
+                tracing::warn!(session = %session_id, error = ?error, "the agent's conversation could not be saved");
+            }
+        };
+        let request = ReplyRequest {
+            session_id,
+            turn_id: &turn.id,
+            prompt: &turn.prompt,
+            folder: &folder,
+            conversation: conversation.as_deref(),
+            remember: &remember,
+            controls,
+        };
+        driver.reply(request, &mut |event| {
             if self.is_stopping(&turn.id) {
                 return Flow::Stop;
             }
@@ -872,7 +1166,11 @@ impl SessionStore {
             if saved.is_ok() {
                 saved = applied;
             }
-            ended = matches!(event, TurnEvent::Finished { .. } | TurnEvent::Failed { .. });
+            // A driver ends a reply as stopped itself when the person's answer stopped it.
+            ended = matches!(
+                event,
+                TurnEvent::Finished { .. } | TurnEvent::Failed { .. } | TurnEvent::Stopped { .. }
+            );
             if on_event(&event) {
                 Flow::Continue
             } else {
@@ -898,7 +1196,9 @@ impl SessionStore {
                 on_event(&event);
             }
         }
-        self.lock().stopping.remove(&turn.id);
+        let mut inner = self.lock();
+        inner.stopping.remove(&turn.id);
+        inner.controls.remove(&turn.id);
         saved
     }
 }
@@ -1220,11 +1520,506 @@ mod tests {
         );
     }
 
+    #[test]
+    fn an_empty_sessions_agent_can_change_and_one_with_a_message_keeps_its_own() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+
+        store
+            .set_agent(&session.id, AgentKind::Claude)
+            .expect("changed");
+        assert_eq!(
+            store.session(&session.id).expect("the session").agent,
+            AgentKind::Claude
+        );
+
+        store.start_turn(&session.id, "hi").expect("a turn");
+        assert_eq!(
+            store.set_agent(&session.id, AgentKind::Demo),
+            Err(StoreError::NotEmpty)
+        );
+        assert_eq!(
+            store.set_agent("session-99", AgentKind::Demo),
+            Err(StoreError::UnknownSession)
+        );
+    }
+
+    #[test]
+    fn an_empty_sessions_project_can_change_and_one_with_a_message_keeps_its_own() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let (session, project) = {
+            let store = store_in(&file);
+            let project = store.open_folder(folder.path()).expect("a project");
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+
+            store.set_project(&session.id, &project.id).expect("moved");
+            assert_eq!(
+                store.set_project(&session.id, "folder-99"),
+                Err(StoreError::UnknownProject)
+            );
+            (session.id, project.id)
+        };
+
+        let store = store_in(&file);
+        assert_eq!(
+            store.session(&session).expect("the session").project_id,
+            project,
+            "the move is kept"
+        );
+        store.start_turn(&session, "hi").expect("a turn");
+        assert_eq!(
+            store.set_project(&session, playground::PLAYGROUND_ID),
+            Err(StoreError::NotEmpty)
+        );
+        assert_eq!(
+            store.set_project("session-99", playground::PLAYGROUND_ID),
+            Err(StoreError::UnknownSession)
+        );
+    }
+
+    #[test]
+    fn a_changed_agent_is_there_when_the_store_is_opened_again() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+            store
+                .set_agent(&session.id, AgentKind::Claude)
+                .expect("changed");
+            session.id
+        };
+
+        let store = store_in(&file);
+
+        assert_eq!(
+            store.session(&id).expect("the session").agent,
+            AgentKind::Claude
+        );
+    }
+
+    #[test]
+    fn a_new_session_takes_the_agent_of_its_projects_latest_session_else_the_latest_anywhere() {
+        let store = store();
+        assert_eq!(store.agent_for_new_session(playground::PLAYGROUND_ID), None);
+
+        store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        let project = store
+            .open_folder(Path::new(r"C:\Work\app"))
+            .expect("a project");
+        assert_eq!(
+            store.agent_for_new_session(&project.id),
+            Some(AgentKind::Claude),
+            "the latest session anywhere"
+        );
+
+        store
+            .create_session(&project.id, AgentKind::Demo)
+            .expect("a session");
+        assert_eq!(
+            store.agent_for_new_session(&project.id),
+            Some(AgentKind::Demo)
+        );
+        assert_eq!(
+            store.agent_for_new_session(playground::PLAYGROUND_ID),
+            Some(AgentKind::Claude),
+            "the project's own latest session"
+        );
+    }
+
+    /// A driver whose agent asks permission, waits for the person's answer, and ends the reply as
+    /// stopped when it is denied, as Claude's does.
+    struct Asking {
+        heard: std::sync::Mutex<Vec<Control>>,
+    }
+
+    impl AgentDriver for Asking {
+        fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+            let turn_id = request.turn_id.to_owned();
+            let _ = emit(TurnEvent::ItemAdded {
+                turn_id: turn_id.clone(),
+                item: Item::Approval {
+                    id: "ask".into(),
+                    tool_call_id: None,
+                    action: crate::model::ApprovalAction::RunCommand,
+                    subject: "npm test".into(),
+                    detail: None,
+                    rule: None,
+                    state: crate::model::ApprovalState::Waiting,
+                },
+            });
+            let Ok(control) = request
+                .controls
+                .recv_timeout(std::time::Duration::from_secs(10))
+            else {
+                return;
+            };
+            self.heard
+                .lock()
+                .expect("what it heard")
+                .push(control.clone());
+            let _ = emit(match control {
+                Control::Answer {
+                    answer: crate::driver::Answer::Deny,
+                    ..
+                } => TurnEvent::Stopped { turn_id },
+                _ => TurnEvent::Finished { turn_id },
+            });
+        }
+    }
+
+    /// Runs a reply with the `Asking` driver until it waits, and answers what it heard.
+    fn answered_with(
+        answer: crate::driver::Answer,
+    ) -> (Vec<Control>, Result<(), StoreError>, Turn) {
+        let store = std::sync::Arc::new(store());
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        let turn = store.start_turn(&session.id, "test it").expect("a turn");
+        let driver = std::sync::Arc::new(Asking {
+            heard: std::sync::Mutex::new(Vec::new()),
+        });
+        let replying = {
+            let (store, driver, id) = (store.clone(), driver.clone(), session.id.clone());
+            std::thread::spawn(move || {
+                store
+                    .stream_reply(driver.as_ref(), &id, &turn, |_| true)
+                    .expect("saved");
+            })
+        };
+        while store.session(&session.id).expect("the session").turns[0]
+            .items
+            .is_empty()
+        {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        let answered = store.answer(&session.id, "ask", answer);
+        replying.join().expect("the reply ends");
+
+        let heard = driver.heard.lock().expect("what it heard").clone();
+        let turn = store.session(&session.id).expect("the session").turns[0].clone();
+        (heard, answered, turn)
+    }
+
+    #[test]
+    fn an_answer_reaches_the_driver_whose_agent_waits_for_it() {
+        let (heard, answered, turn) = answered_with(crate::driver::Answer::Allow);
+
+        assert_eq!(answered, Ok(()));
+        assert_eq!(
+            heard,
+            vec![Control::Answer {
+                item_id: "ask".into(),
+                answer: crate::driver::Answer::Allow
+            }]
+        );
+        assert_eq!(turn.status, TurnStatus::Done);
+    }
+
+    #[test]
+    fn a_denial_that_stops_the_reply_ends_the_turn_as_stopped() {
+        let (_heard, _answered, turn) = answered_with(crate::driver::Answer::Deny);
+
+        assert_eq!(turn.status, TurnStatus::Stopped);
+    }
+
+    #[test]
+    fn an_answer_to_a_request_that_does_not_wait_is_refused() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+
+        assert_eq!(
+            store.answer(&session.id, "ask", crate::driver::Answer::Allow),
+            Err(StoreError::NotWaiting)
+        );
+        assert_eq!(
+            store.answer("session-99", "ask", crate::driver::Answer::Allow),
+            Err(StoreError::UnknownSession)
+        );
+    }
+
+    /// A driver that says nothing until the person does something, as a real agent waiting on a
+    /// long tool does, and keeps what it was asked and told.
+    struct Waiting {
+        heard: std::sync::Mutex<Vec<Control>>,
+        folder: std::sync::Mutex<Option<std::path::PathBuf>>,
+    }
+
+    impl AgentDriver for Waiting {
+        fn reply(&self, request: ReplyRequest<'_>, _emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+            *self.folder.lock().expect("the folder") = Some(request.folder.to_path_buf());
+            if let Ok(control) = request
+                .controls
+                .recv_timeout(std::time::Duration::from_secs(10))
+            {
+                self.heard.lock().expect("what it heard").push(control);
+            }
+        }
+    }
+
+    #[test]
+    fn stopping_reaches_a_driver_at_once_even_between_events() {
+        let store = std::sync::Arc::new(store());
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .expect("a session");
+        let turn = store.start_turn(&session.id, "hi").expect("a turn");
+        let driver = std::sync::Arc::new(Waiting {
+            heard: std::sync::Mutex::new(Vec::new()),
+            folder: std::sync::Mutex::new(None),
+        });
+        let replying = {
+            let (store, driver, id) = (store.clone(), driver.clone(), session.id.clone());
+            std::thread::spawn(move || {
+                store
+                    .stream_reply(driver.as_ref(), &id, &turn, |_| true)
+                    .expect("saved");
+            })
+        };
+        while driver.folder.lock().expect("the folder").is_none() {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        store.stop_turn(&session.id).expect("stopped");
+        replying.join().expect("the reply ends");
+
+        assert_eq!(
+            *driver.heard.lock().expect("what it heard"),
+            vec![Control::Stop]
+        );
+        assert_eq!(
+            driver.folder.lock().expect("the folder").as_deref(),
+            Some(Path::new(r"C:\Playground")),
+            "the driver works in the project's folder"
+        );
+        assert_eq!(
+            store.session(&session.id).expect("the session").turns[0].status,
+            TurnStatus::Stopped
+        );
+    }
+
     /// A store kept in `file`, as the app keeps one in its data folder.
     fn store_in(file: &Path) -> SessionStore {
         let opened = SessionStore::open(file, &playground::describe(Path::new(r"C:\Playground")));
         assert!(opened.problem.is_none(), "{:?}", opened.problem);
         opened.store
+    }
+
+    /// An agent that remembers a conversation when it answers, and notes the one it was given.
+    #[derive(Default)]
+    struct Conversing {
+        given: std::sync::Mutex<Vec<Option<String>>>,
+    }
+
+    impl AgentDriver for Conversing {
+        fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+            self.given
+                .lock()
+                .expect("given")
+                .push(request.conversation.map(str::to_owned));
+            (request.remember)("conversation-1");
+            emit(TurnEvent::Finished {
+                turn_id: request.turn_id.to_owned(),
+            });
+        }
+    }
+
+    #[test]
+    fn an_agents_conversation_is_remembered_and_handed_back_after_the_store_is_opened_again() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let agent = Conversing::default();
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .expect("a session");
+            let turn = store.start_turn(&session.id, "First").expect("a turn");
+            store
+                .stream_reply(&agent, &session.id, &turn, |_| true)
+                .expect("saved");
+            session.id
+        };
+
+        let store = store_in(&file);
+        let turn = store.start_turn(&id, "Second").expect("a turn");
+        store
+            .stream_reply(&agent, &id, &turn, |_| true)
+            .expect("saved");
+
+        assert_eq!(
+            *agent.given.lock().expect("given"),
+            vec![None, Some("conversation-1".to_owned())]
+        );
+    }
+
+    #[test]
+    fn a_file_of_the_first_version_is_brought_up_to_date_and_keeps_its_sessions() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        {
+            let connection = rusqlite::Connection::open(&file).expect("the file");
+            connection
+                .execute_batch(crate::database::TABLES)
+                .expect("the first version's tables");
+            connection
+                .execute_batch(
+                    "INSERT INTO projects VALUES ('playground', 'playground', 'Playground', 'C:\\Playground', 0);
+                     INSERT INTO sessions (id, project_id, agent, title, created_at, updated_at, used)
+                     VALUES ('session-1', 'playground', 'claude', 'Kept', '2026-10-01T09:00:00Z', '2026-10-01T09:00:00Z', 1);
+                     PRAGMA user_version = 1;",
+                )
+                .expect("a session of the first version");
+        }
+
+        let store = store_in(&file);
+
+        let list = store.list();
+        let sessions: Vec<_> = list
+            .projects
+            .iter()
+            .flat_map(|listing| listing.sessions.iter())
+            .collect();
+        assert!(
+            sessions
+                .iter()
+                .any(|session| session.title.as_deref() == Some("Kept")),
+            "{list:#?}"
+        );
+        let agent = Conversing::default();
+        let turn = store.start_turn("session-1", "Hello").expect("a turn");
+        store
+            .stream_reply(&agent, "session-1", &turn, |_| true)
+            .expect("the conversation is saved in the new column");
+        let connection = rusqlite::Connection::open(&file).expect("the file");
+        let version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("the version");
+        assert_eq!(version, 3);
+    }
+
+    #[test]
+    fn claude_works_in_a_folder_only_once_the_person_trusts_it_and_the_trust_is_kept() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let (project, claude) = {
+            let store = store_in(&file);
+            let project = store.open_folder(folder.path()).expect("a project");
+            assert!(!project.trusted, "a folder starts untrusted");
+            let claude = store
+                .create_session(&project.id, AgentKind::Claude)
+                .expect("a session");
+            let demo = store
+                .create_session(&project.id, AgentKind::Demo)
+                .expect("a session");
+
+            assert_eq!(
+                store.start_turn(&claude.id, "Hello").map(|_| ()),
+                Err(StoreError::NotTrusted)
+            );
+            assert!(
+                store.start_turn(&demo.id, "Hello").is_ok(),
+                "the Demo agent runs nothing of the project's"
+            );
+            store.trust_project(&project.id).expect("trusted");
+            (project.id, claude.id)
+        };
+
+        let store = store_in(&file);
+        let list = store.list();
+        assert!(
+            list.projects
+                .iter()
+                .any(|listing| listing.project.id == project && listing.project.trusted),
+            "{list:#?}"
+        );
+        assert!(store.start_turn(&claude, "Hello").is_ok());
+        assert_eq!(
+            store.trust_project("folder-unknown"),
+            Err(StoreError::UnknownProject)
+        );
+    }
+
+    #[test]
+    fn a_request_still_waiting_when_the_app_closes_comes_back_cancelled_with_its_failed_turn() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .expect("a session");
+            let turn = store
+                .start_turn(&session.id, "Run the tests")
+                .expect("a turn");
+            for item in [
+                Item::Text {
+                    id: "t-1".into(),
+                    text: "I will run them.".into(),
+                },
+                Item::ToolCall {
+                    id: "t-2".into(),
+                    name: "Bash".into(),
+                    input: "npm test".into(),
+                    status: crate::model::ToolStatus::Running,
+                    output: None,
+                },
+                Item::Approval {
+                    id: "t-approval-1".into(),
+                    tool_call_id: Some("t-2".into()),
+                    action: crate::model::ApprovalAction::RunCommand,
+                    subject: "npm test".into(),
+                    detail: None,
+                    rule: None,
+                    state: ApprovalState::Waiting,
+                },
+            ] {
+                store
+                    .apply(
+                        &session.id,
+                        &TurnEvent::ItemAdded {
+                            turn_id: turn.id.clone(),
+                            item,
+                        },
+                    )
+                    .expect("applied");
+            }
+            // Arden Code closes here, with the request still waiting.
+            session.id
+        };
+
+        let store = store_in(&file);
+
+        let turn = store.session(&id).expect("the session").turns[0].clone();
+        assert_eq!(turn.status, TurnStatus::Failed);
+        assert!(matches!(&turn.items[0], Item::Text { text, .. } if text == "I will run them."));
+        assert!(matches!(
+            &turn.items[1],
+            Item::ToolCall {
+                status: crate::model::ToolStatus::Stopped,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &turn.items[2],
+            Item::Approval {
+                state: ApprovalState::Cancelled,
+                ..
+            }
+        ));
     }
 
     #[test]

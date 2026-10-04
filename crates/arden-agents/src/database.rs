@@ -8,13 +8,14 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::model::{Item, Project, Session, Turn};
+use crate::model::{Item, Project, Session, Turn, TurnStatus};
 
-/// The version of the tables below, kept in SQLite's `user_version`. A later version comes with the
-/// migration that brings an older file up to it.
-const VERSION: i64 = 1;
+/// The version of the tables, kept in SQLite's `user_version`. Each later version comes with the
+/// migration that brings the file up to it from the one before.
+const VERSION: i64 = 3;
 
-const TABLES: &str = "
+/// The tables of version 1, which every file starts from.
+pub(crate) const TABLES: &str = "
 CREATE TABLE meta (
     key TEXT PRIMARY KEY NOT NULL,
     value TEXT NOT NULL
@@ -54,6 +55,16 @@ CREATE TABLE turns (
 
 CREATE INDEX turns_of_a_session ON turns (session_id, position);
 ";
+
+/// The migrations, each bringing the file to the version after the one it starts from: the first
+/// brings version 1 to version 2.
+const MIGRATIONS: &[&str] = &[
+    // Version 2: the agent's own conversation for each session, to carry on after a restart
+    // (ADR 0039).
+    "ALTER TABLE sessions ADD COLUMN conversation TEXT;",
+    // Version 3: whether the person trusts each project's folder (ADR 0039).
+    "ALTER TABLE projects ADD COLUMN trusted INTEGER NOT NULL DEFAULT 0;",
+];
 
 /// What went wrong with the file, in words for the logs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,6 +110,8 @@ pub struct Order {
 pub struct SavedSession {
     pub session: Session,
     pub order: Order,
+    /// The agent's own conversation, once the agent has answered in it.
+    pub conversation: Option<String>,
 }
 
 /// Everything the file holds but the turns.
@@ -141,9 +154,16 @@ fn put_project(
     position: usize,
 ) -> rusqlite::Result<()> {
     transaction.execute(
-        "INSERT INTO projects (id, kind, name, path, position) VALUES (?1, ?2, ?3, ?4, ?5)
+        "INSERT INTO projects (id, kind, name, path, position, trusted) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name, path = excluded.path",
-        params![project.id, name_of(project.kind)?, project.name, project.path, stored(position as u64)],
+        params![
+            project.id,
+            name_of(project.kind)?,
+            project.name,
+            project.path,
+            stored(position as u64),
+            project.trusted
+        ],
     )?;
     Ok(())
 }
@@ -158,7 +178,8 @@ fn put_session(
         "INSERT INTO sessions (id, project_id, agent, title, created_at, updated_at, used, pinned,
              archived, archived_at, linked_from)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-         ON CONFLICT (id) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at,
+         ON CONFLICT (id) DO UPDATE SET project_id = excluded.project_id, agent = excluded.agent,
+             title = excluded.title, updated_at = excluded.updated_at,
              used = excluded.used, pinned = excluded.pinned, archived = excluded.archived,
              archived_at = excluded.archived_at, linked_from = excluded.linked_from",
         params![
@@ -254,20 +275,24 @@ impl Database {
         let version: i64 = self
             .connection
             .pragma_query_value(None, "user_version", |row| row.get(0))?;
-        match version {
-            0 => {
-                let transaction = self.connection.transaction()?;
-                transaction.execute_batch(TABLES)?;
-                transaction.pragma_update(None, "user_version", VERSION)?;
-                transaction.commit()?;
-            }
-            VERSION => {}
-            newer => {
-                return Err(DatabaseError(format!(
-                    "the file is version {newer}, made by a newer Arden Code; this one reads version {VERSION}"
-                )));
-            }
+        if version > VERSION {
+            return Err(DatabaseError(format!(
+                "the file is version {version}, made by a newer Arden Code; this one reads version {VERSION}"
+            )));
         }
+        if version == VERSION {
+            return Ok(());
+        }
+        let transaction = self.connection.transaction()?;
+        if version == 0 {
+            transaction.execute_batch(TABLES)?;
+        }
+        let from = usize::try_from(version.max(1) - 1).unwrap_or_default();
+        for migration in &MIGRATIONS[from..] {
+            transaction.execute_batch(migration)?;
+        }
+        transaction.pragma_update(None, "user_version", VERSION)?;
+        transaction.commit()?;
         Ok(())
     }
 
@@ -286,9 +311,9 @@ impl Database {
         )?;
         transaction.commit()?;
 
-        let mut statement = self
-            .connection
-            .prepare("SELECT id, kind, name, path FROM projects ORDER BY position, rowid")?;
+        let mut statement = self.connection.prepare(
+            "SELECT id, kind, name, path, trusted FROM projects ORDER BY position, rowid",
+        )?;
         let projects = statement
             .query_map([], |row| {
                 Ok(Project {
@@ -296,13 +321,14 @@ impl Database {
                     kind: from_name(row.get(1)?)?,
                     name: row.get(2)?,
                     path: row.get(3)?,
+                    trusted: row.get(4)?,
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
         let mut statement = self.connection.prepare(
             "SELECT id, project_id, agent, title, created_at, updated_at, used, pinned, archived,
-                archived_at, linked_from
+                archived_at, linked_from, conversation
              FROM sessions ORDER BY rowid",
         )?;
         let sessions = statement
@@ -327,6 +353,7 @@ impl Database {
                         turns: Vec::new(),
                     },
                     order,
+                    conversation: row.get(11)?,
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -375,13 +402,18 @@ impl Database {
             .collect::<rusqlite::Result<Vec<_>>>()?;
         rows.into_iter()
             .map(|(id, prompt, started_at, status, items)| {
-                Ok(Turn {
+                let mut turn = Turn {
                     id,
                     prompt,
                     started_at,
                     status,
                     items: serde_json::from_str::<Vec<Item>>(&items)?,
-                })
+                };
+                // A reply written while it waited for the person, and never finished, is over.
+                if turn.status != TurnStatus::Running {
+                    turn.settle();
+                }
+                Ok(turn)
             })
             .collect()
     }
@@ -442,6 +474,41 @@ impl Database {
         self.connection
             .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()))?;
         Ok(())
+    }
+
+    /// Remembers the agent's own conversation for a session, to carry on in it after a restart.
+    ///
+    /// # Errors
+    ///
+    /// When the file cannot be written.
+    pub fn save_conversation(
+        &mut self,
+        session_id: &str,
+        conversation: &str,
+        last_id: u64,
+    ) -> Result<(), DatabaseError> {
+        self.write(last_id, |transaction| {
+            transaction.execute(
+                "UPDATE sessions SET conversation = ?2 WHERE id = ?1",
+                [session_id, conversation],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Remembers that the person trusts a project's folder.
+    ///
+    /// # Errors
+    ///
+    /// When the file cannot be written.
+    pub fn save_trust(&mut self, project_id: &str, last_id: u64) -> Result<(), DatabaseError> {
+        self.write(last_id, |transaction| {
+            transaction.execute(
+                "UPDATE projects SET trusted = 1 WHERE id = ?1",
+                [project_id],
+            )?;
+            Ok(())
+        })
     }
 
     /// Writes a project that was opened, at its place in the list.

@@ -3,7 +3,7 @@
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
@@ -23,6 +23,19 @@ const DRAIN_TIME: Duration = Duration::from_millis(500);
 pub struct Started {
     pub child: Child,
     /// The file that holds everything the program wrote.
+    pub log: PathBuf,
+}
+
+/// A program started with its input and output held by Arden Code, such as an agent that speaks a
+/// protocol over them (ADR 0038).
+#[derive(Debug)]
+pub struct Piped {
+    pub child: Child,
+    /// What Arden Code writes to the program.
+    pub input: ChildStdin,
+    /// What the program writes back.
+    pub output: ChildStdout,
+    /// The file that holds what the program wrote as errors.
     pub log: PathBuf,
 }
 
@@ -152,6 +165,60 @@ impl Supervisor {
         Ok(Started { child, log: path })
     }
 
+    /// Starts a program whose input and output Arden Code holds, in `folder`, with the variables
+    /// named in `without` left out of its environment, and puts it in the job. What it writes as
+    /// errors goes to its log. What it writes on its output does not: for an agent, that is the
+    /// conversation itself (ADR 0038).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the arguments are not allowed for this kind of program, or when the
+    /// program cannot be started or cannot be put in the job (it is then ended).
+    pub fn spawn_piped(
+        &self,
+        name: &str,
+        program: &Resolved,
+        args: &[Arg],
+        folder: &Path,
+        without: &[&str],
+    ) -> Result<Piped, SpawnError> {
+        let mut command = command::build(program, args)?;
+        let (log, path) = self
+            .open_log(name, program, args)
+            .map_err(|error| SpawnError::Io(error.to_string()))?;
+        command
+            .current_dir(folder)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::from(log));
+        for variable in without {
+            command.env_remove(variable);
+        }
+        let mut child = command
+            .spawn()
+            .map_err(|error| SpawnError::Io(error.to_string()))?;
+        if let Err(error) = self.job.assign(&child) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(SpawnError::Io(format!(
+                "the program could not be put in the job: {error}"
+            )));
+        }
+        let (Some(input), Some(output)) = (child.stdin.take(), child.stdout.take()) else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(SpawnError::Io(
+                "the program's input and output could not be opened".into(),
+            ));
+        };
+        Ok(Piped {
+            child,
+            input,
+            output,
+            log: path,
+        })
+    }
+
     /// Runs a program until it ends or takes longer than `timeout`, and returns what it wrote.
     ///
     /// # Errors
@@ -164,10 +231,41 @@ impl Supervisor {
         args: &[Arg],
         timeout: Duration,
     ) -> Result<Completed, SpawnError> {
+        self.run_with(name, program, args, timeout, true)
+    }
+
+    /// Runs a program as [`Supervisor::run`] does, but leaves what it wrote out of its log, which
+    /// only says that it was withheld: for a program whose answer can hold private details, such
+    /// as the email of the account an agent is signed in to.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the program cannot be started, as [`Supervisor::spawn`] does.
+    pub fn run_private(
+        &self,
+        name: &str,
+        program: &Resolved,
+        args: &[Arg],
+        timeout: Duration,
+    ) -> Result<Completed, SpawnError> {
+        self.run_with(name, program, args, timeout, false)
+    }
+
+    fn run_with(
+        &self,
+        name: &str,
+        program: &Resolved,
+        args: &[Arg],
+        timeout: Duration,
+        logged: bool,
+    ) -> Result<Completed, SpawnError> {
         let mut command = command::build(program, args)?;
-        let (log, path) = self
+        let (mut log, path) = self
             .open_log(name, program, args)
             .map_err(|error| SpawnError::Io(error.to_string()))?;
+        if !logged {
+            let _ = writeln!(log, "(what the program writes is not kept here)");
+        }
         command
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -183,14 +281,14 @@ impl Supervisor {
             )));
         }
 
-        let log = Arc::new(Mutex::new(log));
+        let log = logged.then(|| Arc::new(Mutex::new(log)));
         let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
         let readers = Arc::new(AtomicUsize::new(0));
         if let Some(stream) = child.stdout.take() {
-            copy_in_background(stream, &log, &captured, &readers);
+            copy_in_background(stream, log.as_ref(), &captured, &readers);
         }
         if let Some(stream) = child.stderr.take() {
-            copy_in_background(stream, &log, &captured, &readers);
+            copy_in_background(stream, log.as_ref(), &captured, &readers);
         }
 
         let started = Instant::now();
@@ -236,11 +334,11 @@ impl Supervisor {
 /// Copies everything a stream produces to the log and to a buffer, on a thread of its own.
 fn copy_in_background(
     mut stream: impl Read + Send + 'static,
-    log: &Arc<Mutex<File>>,
+    log: Option<&Arc<Mutex<File>>>,
     captured: &Arc<Mutex<Vec<u8>>>,
     readers: &Arc<AtomicUsize>,
 ) {
-    let log = Arc::clone(log);
+    let log = log.map(Arc::clone);
     let captured = Arc::clone(captured);
     let readers = Arc::clone(readers);
     readers.fetch_add(1, Ordering::AcqRel);
@@ -251,10 +349,12 @@ fn copy_in_background(
                 break;
             }
             let bytes = &chunk[..count];
-            let _ = log
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .write_all(bytes);
+            if let Some(log) = &log {
+                let _ = log
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .write_all(bytes);
+            }
             let mut kept = captured.lock().unwrap_or_else(PoisonError::into_inner);
             let room = CAPTURE_LIMIT.saturating_sub(kept.len());
             kept.extend_from_slice(&bytes[..count.min(room)]);
@@ -293,6 +393,28 @@ mod tests {
                 Arg::Literal("127.0.0.1"),
             ],
         )
+    }
+
+    #[test]
+    fn a_private_run_returns_what_the_program_wrote_and_keeps_it_out_of_the_log() {
+        let (supervisor, _logs) = supervisor();
+
+        let done = supervisor
+            .run_private(
+                "cmd",
+                &system("cmd"),
+                &[
+                    Arg::Literal("/c"),
+                    Arg::Untrusted("echo ada@example.com".into()),
+                ],
+                Duration::from_secs(20),
+            )
+            .expect("the program runs");
+
+        assert!(done.output.contains("ada@example.com"), "{}", done.output);
+        let log = fs::read_to_string(&done.log).expect("the log");
+        assert!(!log.contains("ada@example.com"), "{log}");
+        assert!(log.contains("not kept here"), "{log}");
     }
 
     #[test]
@@ -399,6 +521,128 @@ mod tests {
             thread::sleep(Duration::from_millis(50));
         }
         assert!(ended, "Windows ended the program with the job");
+    }
+
+    /// Everything a piped program writes, once it has ended.
+    fn everything_written(piped: Piped) -> String {
+        let Piped {
+            mut child,
+            input,
+            mut output,
+            ..
+        } = piped;
+        drop(input);
+        let mut text = String::new();
+        output.read_to_string(&mut text).expect("its output");
+        child.wait().expect("it ends");
+        text
+    }
+
+    #[test]
+    fn a_piped_program_reads_what_arden_code_writes_and_answers_on_its_output() {
+        let (supervisor, _logs) = supervisor();
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let mut piped = supervisor
+            .spawn_piped("sort", &system("sort"), &[], folder.path(), &[])
+            .expect("the program starts");
+
+        piped
+            .input
+            .write_all(b"pear\r\napple\r\n")
+            .expect("it reads");
+
+        assert_eq!(everything_written(piped), "apple\r\npear\r\n");
+    }
+
+    #[test]
+    fn a_piped_program_runs_in_the_folder_it_was_given_without_the_variables_left_out() {
+        let (supervisor, _logs) = supervisor();
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let piped = supervisor
+            .spawn_piped(
+                "cmd",
+                &system("cmd"),
+                &[Arg::Literal("/c"), Arg::Literal("cd & echo %OS%")],
+                folder.path(),
+                &["OS"],
+            )
+            .expect("the program starts");
+
+        let written = everything_written(piped);
+        let lines: Vec<&str> = written.lines().collect();
+
+        assert_eq!(
+            fs::canonicalize(lines[0]).expect("a folder"),
+            fs::canonicalize(folder.path()).expect("a folder")
+        );
+        assert_eq!(lines[1], "%OS%", "the variable was left out");
+    }
+
+    #[test]
+    fn what_a_piped_program_writes_as_errors_goes_to_its_log() {
+        let (supervisor, _logs) = supervisor();
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let piped = supervisor
+            .spawn_piped(
+                "cmd",
+                &system("cmd"),
+                &[Arg::Literal("/c"), Arg::Literal("echo trouble 1>&2")],
+                folder.path(),
+                &[],
+            )
+            .expect("the program starts");
+        let log = piped.log.clone();
+
+        assert_eq!(
+            everything_written(piped),
+            "",
+            "errors are not on its output"
+        );
+        let text = fs::read_to_string(log).expect("the log");
+        assert!(text.starts_with("# Arden Code started cmd.exe"), "{text}");
+        assert!(text.contains("trouble"), "{text}");
+    }
+
+    #[test]
+    fn a_piped_program_ends_when_the_supervisor_is_closed() {
+        let (supervisor, _logs) = supervisor();
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let (ping, args) = long_running();
+        let mut piped = supervisor
+            .spawn_piped("ping", &ping, &args, folder.path(), &[])
+            .expect("the program starts");
+
+        drop(supervisor);
+
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while piped.child.try_wait().expect("the state").is_none() {
+            assert!(
+                Instant::now() < deadline,
+                "Windows ended the program with the job"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    #[test]
+    fn a_piped_script_never_gets_untrusted_text() {
+        let (supervisor, _logs) = supervisor();
+        let bin = tempfile::tempdir().expect("a temporary folder");
+        fs::write(bin.path().join("claude.cmd"), "@echo off\r\necho %*\r\n").expect("a script");
+        let script = Resolved {
+            path: bin.path().join("claude.cmd"),
+            kind: ProgramKind::Script,
+        };
+
+        let refused = supervisor.spawn_piped(
+            "claude",
+            &script,
+            &[Arg::Untrusted("& calc.exe".into())],
+            bin.path(),
+            &[],
+        );
+
+        assert!(matches!(refused, Err(SpawnError::UnsafeArguments)));
     }
 
     #[test]

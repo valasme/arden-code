@@ -2,28 +2,32 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 
-import { commands } from "@/ipc/bindings";
+import { type AgentKind, commands } from "@/ipc/bindings";
 import { sessionListQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 
 /**
- * Starts a Demo agent session in the Playground and opens it. Answers its id, or nothing when it
- * could not be started, which the person is told about with the error's code.
+ * Starts a session in a project, the Playground when none is given, and opens it, with the agent
+ * given, or the one a new session there takes (ADR 0039). Answers its id, or nothing when it could
+ * not be started, which the person is told about with the error's code.
  */
 export function useStartSession() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  return useCallback(async (): Promise<string | undefined> => {
-    try {
-      const session = await commands.createSession();
-      await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
-      await navigate({ to: "/session/$id", params: { id: session.id } });
-      return session.id;
-    } catch (error) {
-      showErrorToast(toAppError(error));
-      return undefined;
-    }
-  }, [navigate, queryClient]);
+  return useCallback(
+    async (agent?: AgentKind, projectId?: string): Promise<string | undefined> => {
+      try {
+        const session = await commands.createSession(agent ?? null, projectId ?? null);
+        await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
+        await navigate({ to: "/session/$id", params: { id: session.id } });
+        return session.id;
+      } catch (error) {
+        showErrorToast(toAppError(error));
+        return undefined;
+      }
+    },
+    [navigate, queryClient],
+  );
 }

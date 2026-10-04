@@ -122,6 +122,7 @@ dependencies = [
 name = "arden-agents"
 version = "0.1.0"
 dependencies = [
+ "arden-core",
  "arden-process",
  "rusqlite",
  "serde",
@@ -129,6 +130,8 @@ dependencies = [
  "specta",
  "tempfile",
  "time",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

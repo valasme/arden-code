@@ -5,7 +5,7 @@ import { defaultSettings } from "@/ipc/defaults.gen";
 
 import { fallbackSystemPreferences } from "@/features/settings/systemPreferences";
 
-import { commands, type SessionList, type UpdateStatus } from "./bindings";
+import { type AgentKind, commands, type SessionList, type UpdateStatus } from "./bindings";
 
 /** The product name and version. They never change while the app runs. */
 export const appInfoQuery = queryOptions({
@@ -67,6 +67,17 @@ export const sessionListQuery = queryOptions({
 });
 
 /**
+ * The agent a new session in the Playground takes (ADR 0039). It shares the key of the list of
+ * sessions, so it is read again whenever the list is.
+ */
+export const newSessionAgentQuery = queryOptions({
+  queryKey: ["sessions", "new-session-agent"],
+  queryFn: (): Promise<AgentKind> =>
+    isTauri() ? commands.agentForNewSession(null) : Promise.resolve("demo"),
+  staleTime: Number.POSITIVE_INFINITY,
+});
+
+/**
  * One session with its turns. While a reply streams the cache is updated from the channel, so it
  * is never fetched again on its own.
  */
@@ -81,7 +92,8 @@ export const sessionQuery = (id: string) =>
 /** Which agent programs are installed. Looked for again when asked, since the person may install one. */
 export const agentsQuery = queryOptions({
   queryKey: ["agents"],
-  queryFn: () => (isTauri() ? commands.detectAgents() : []),
+  // What Rust found after it started; Settings → Agents asks for a fresh look itself.
+  queryFn: () => (isTauri() ? commands.detectAgents(false) : []),
   staleTime: 0,
   gcTime: 0,
 });

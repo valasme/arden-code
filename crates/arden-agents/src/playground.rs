@@ -26,6 +26,7 @@ pub fn describe(folder: &Path) -> Project {
         kind: ProjectKind::Playground,
         name: "Playground".to_owned(),
         path: folder.display().to_string(),
+        trusted: true,
     }
 }
 

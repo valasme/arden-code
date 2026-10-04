@@ -381,13 +381,18 @@ export const commands = {
 	 */
 	deleteSession: (id: string) => __TAURI_INVOKE<null>("delete_session", { id }),
 	/**
-	 *  Starts an empty Demo agent session in the Playground.
+	 *  Starts an empty session in a project, the Playground when none is given, with the agent given,
+	 *  or the one a new session there takes (ADR 0039).
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns an error when the Playground does not exist, or the session cannot be saved.
+	 *  Returns an error when the project does not exist, or the session cannot be saved.
 	 */
-	createSession: () => __TAURI_INVOKE<SessionSummary>("create_session"),
+	createSession: (agent: 
+/**  The built-in demonstration agent. */
+"demo" | 
+/**  Claude, through the person's own Claude Code (ADR 0038). */
+"claude" | null, projectId: string | null) => __TAURI_INVOKE<SessionSummary>("create_session", { agent, projectId }),
 	/**
 	 *  Starts an empty session linked to another one, in its project and with its agent (ADR 0036).
 	 * 
@@ -424,6 +429,30 @@ export const commands = {
 	 */
 	stopReply: (sessionId: string) => __TAURI_INVOKE<null>("stop_reply", { sessionId }),
 	/**
+	 *  Remembers that the person trusts a project's folder, so Claude may work in it (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such project, or the file cannot be written.
+	 */
+	trustProject: (projectId: string) => __TAURI_INVOKE<null>("trust_project", { projectId }),
+	/**
+	 *  Answers an approval request that waits in a session's running turn (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or no such request waits for an answer.
+	 */
+	answerApproval: (sessionId: string, itemId: string, answer: Answer) => __TAURI_INVOKE<null>("answer_approval", { sessionId, itemId, answer }),
+	/**
+	 *  Hands the person's answers to questions that wait in a session's running turn (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or no such questions wait for answers.
+	 */
+	answerQuestions: (sessionId: string, itemId: string, answers: QuestionAnswer[]) => __TAURI_INVOKE<null>("answer_questions", { sessionId, itemId, answers }),
+	/**
 	 *  The session the page should show because a folder was opened before the page was ready. Asking
 	 *  takes it: it is never returned twice.
 	 * 
@@ -433,16 +462,63 @@ export const commands = {
 	 */
 	takePendingOpen: () => __TAURI_INVOKE<string | null>("take_pending_open"),
 	/**
-	 *  Looks for the Claude Code and Codex programs, and says where they are and which version. It
-	 *  changes nothing. Asking each program for its version can take a moment, so it runs off the
-	 *  thread of the window.
+	 *  Changes the agent of a session that has had no message yet (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, it is archived or has had a message, or the
+	 *  change cannot be saved.
+	 */
+	setSessionAgent: (id: string, agent: AgentKind) => __TAURI_INVOKE<null>("set_session_agent", { id, agent }),
+	/**
+	 *  Moves a session that has had no message yet to another project (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session or project, the session is archived or has had a
+	 *  message, or the change cannot be saved.
+	 */
+	setSessionProject: (id: string, projectId: string) => __TAURI_INVOKE<null>("set_session_project", { id, projectId }),
+	/**
+	 *  Asks the person for a folder with Windows' dialog, and adds it as a project (ADR 0039). Nothing
+	 *  when they cancel. A folder opened before is the same project.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when the project cannot be saved.
+	 */
+	pickFolder: () => __TAURI_INVOKE<{
+	id: string,
+	kind: ProjectKind,
+	/**  The folder's name. */
+	name: string,
+	/**  The folder's full path. */
+	path: string,
+	/**
+	 *  Whether the person trusts the folder, so Claude may work in it (ADR 0039): Claude Code runs
+	 *  a project's own hooks, MCP servers and environment. The Playground is always trusted.
+	 */
+	trusted: boolean,
+} | null>("pick_folder"),
+	/**
+	 *  The agent a new session in a project would have, the Playground when none is given (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	agentForNewSession: (projectId: string | null) => __TAURI_INVOKE<AgentKind>("agent_for_new_session", { projectId }),
+	/**
+	 *  What was found about the Claude Code and Codex programs: where they are, which version, and
+	 *  whether Claude Code is signed in. It changes nothing. What was found is kept; `fresh` looks
+	 *  again, as Look again does.
 	 * 
 	 *  # Errors
 	 * 
 	 *  Returns `ARD-PROC-001` when programs cannot be supervised on this computer, and an unexpected
 	 *  error when the search itself could not run.
 	 */
-	detectAgents: () => __TAURI_INVOKE<Detection[]>("detect_agents"),
+	detectAgents: (fresh: boolean) => __TAURI_INVOKE<Detection[]>("detect_agents", { fresh }),
 	/**
 	 *  Makes a session with `count` finished turns, to test long conversations. Debug builds only.
 	 * 
@@ -481,6 +557,7 @@ export const commands = {
 
 /** Events */
 export const events = {
+	agentsDetected: makeEvent<AgentsDetected>("agents-detected"),
 	maximizeButtonChanged: makeEvent<MaximizeButtonChanged>("maximize-button-changed"),
 	replyNotSaved: makeEvent<ReplyNotSaved>("reply-not-saved"),
 	sessionRequested: makeEvent<SessionRequested>("session-requested"),
@@ -512,10 +589,24 @@ export type AgentCli =
 /**  The Codex program, `codex`. */
 "codex";
 
-/**  Which agent answers in a session. Claude and Codex arrive with their drivers. */
+/**  Which agent answers in a session. Codex arrives with its driver. */
 export type AgentKind = 
 /**  The built-in demonstration agent. */
-"demo";
+"demo" | 
+/**  Claude, through the person's own Claude Code (ADR 0038). */
+"claude";
+
+/**  Tells the page what was found about the agent programs, when they were looked for on their own. */
+export type AgentsDetected = {
+	detections: Detection[],
+};
+
+/**  The person's answer to an approval request (ADR 0039). */
+export type Answer = "allow" | 
+/**  Allow, and remember the rule the agent suggested. */
+"alwaysAllow" | 
+/**  Refuse, and stop the reply. */
+"deny";
 
 /**
  *  The error every command returns: a code, the translation key of its message, and details for
@@ -557,6 +648,22 @@ export type Appearance = {
 	showStatusBar: boolean,
 };
 
+/**  What an agent asks permission to do, in Arden Code's words (ADR 0039). */
+export type ApprovalAction = "runCommand" | "editFile" | "createFile" | "openPage" | "searchWeb" | 
+/**  Any other tool, such as one of an MCP server. */
+"useTool";
+
+/**  Where an approval request stands. */
+export type ApprovalState = 
+/**  The agent waits for the person's answer. */
+"waiting" | "allowed" | 
+/**  Allowed, with the rule the agent suggested, so it is not asked again. */
+"alwaysAllowed" | 
+/**  Refused; the reply stopped with it. */
+"denied" | 
+/**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
+"cancelled";
+
 /**  What a check found, for the person who asked for it. */
 export type CheckResult = 
 /**  This is the newest version. */
@@ -578,6 +685,12 @@ export type Detection = {
 	path: string | null,
 	/**  Its version, when it could be read. */
 	version: string | null,
+	/**  The oldest version Arden Code works with, for the agents it works with already. */
+	minimumVersion: string | null,
+	/**  Whether the version installed is older than the minimum. */
+	tooOld: boolean,
+	/**  Whether it is signed in, when it said so. Nothing else about the account is kept. */
+	signedIn: boolean | null,
 	/**  Where to install it. */
 	installUrl: string,
 };
@@ -639,6 +752,26 @@ export type ErrorCode =
 "ARD-AGT-005" | 
 /**  A name given to a session is empty or too long. */
 "ARD-AGT-006" | 
+/**  Claude Code (`claude`) was not found, so Claude cannot start. */
+"ARD-AGT-007" | 
+/**  The installed Claude Code is older than the minimum version. */
+"ARD-AGT-008" | 
+/**  Claude Code is not signed in. */
+"ARD-AGT-009" | 
+/**  Claude Code could not start, or stopped in the middle of a reply. */
+"ARD-AGT-010" | 
+/**  Claude Code answered in a way Arden Code does not understand. */
+"ARD-AGT-011" | 
+/**  Only npm's claude.cmd was found, with no Claude Code program beside it. */
+"ARD-AGT-012" | 
+/**  Claude could not answer, for a reason Claude Code gave. */
+"ARD-AGT-013" | 
+/**  A session's agent or project was to change after its first message. */
+"ARD-AGT-014" | 
+/**  An approval request was answered when it no longer waited for an answer. */
+"ARD-AGT-015" | 
+/**  Claude was asked to work in a project whose folder the person has not trusted. */
+"ARD-AGT-016" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -679,10 +812,36 @@ output: string | null } |
 { type: "fileChange"; id: string; 
 /**  The file's path, relative to the project. */
 path: string; change: FileChangeKind; added: number; removed: number } | 
-/**  Something the agent reports as having gone wrong. */
-{ type: "error"; id: string; message: string } | 
+/**
+ *  Something that went wrong: reported by the agent, or found by Arden Code, which then gives
+ *  the error's code so the person is told what to do.
+ */
+{ type: "error"; id: string; 
+/**  What the agent said, or Arden Code's details for the logs. */
+message: string; 
+/**
+ *  Arden Code's code for the error, when it is one Arden Code knows. Items saved before
+ *  codes existed have none.
+ */
+code?: ErrorCode | null } | 
 /**  A marker between the parts of a reply. */
-{ type: "status"; id: string; kind: StatusKind };
+{ type: "status"; id: string; kind: StatusKind } | 
+/**  The agent asks the person to allow or deny an action (ADR 0039). */
+{ type: "approval"; id: string; 
+/**  The tool call it is about, when it has one. */
+toolCallId: string | null; action: ApprovalAction; 
+/**  The command, the file, the address or the tool, in a line. */
+subject: string; 
+/**  More to decide by: a command's description, the change to a file, a tool's input. */
+detail: string | null; 
+/**  The rule the agent suggests remembering, in a line. Always allow is offered with it. */
+rule: string | null; state: ApprovalState } | 
+/**  The agent asks the person to choose (ADR 0039). */
+{ type: "questions"; id: string; 
+/**  The tool call that asks them, when it has one. */
+toolCallId: string | null; questions: Question[]; 
+/**  The person's answers, once given. */
+answers: QuestionAnswer[]; state: QuestionState };
 
 /**  The shortcuts a person changed. A command that is not here has its default shortcuts. */
 export type Keyboard = {
@@ -752,6 +911,11 @@ export type Project = {
 	name: string,
 	/**  The folder's full path. */
 	path: string,
+	/**
+	 *  Whether the person trusts the folder, so Claude may work in it (ADR 0039): Claude Code runs
+	 *  a project's own hooks, MCP servers and environment. The Playground is always trusted.
+	 */
+	trusted: boolean,
 };
 
 /**  What a project is. Only the Playground exists in the foundation. */
@@ -776,6 +940,37 @@ export type ProjectPage =
 "releases" | 
 /**  The privacy statement. */
 "privacy";
+
+/**  Something the agent asks the person to choose (ADR 0039). */
+export type Question = {
+	/**  A word or two that names the question, such as "Library". */
+	header: string,
+	question: string,
+	options: QuestionOption[],
+	/**  Whether several options may be chosen. */
+	multiSelect: boolean,
+};
+
+/**  The person's answer to one question: the options chosen, or words of their own. */
+export type QuestionAnswer = {
+	/**  The question's text, which the answer goes back to the agent under. */
+	question: string,
+	answer: string,
+};
+
+/**  One choice a question offers. */
+export type QuestionOption = {
+	label: string,
+	/**  What choosing it means, when the agent said. */
+	description: string | null,
+};
+
+/**  Where the agent's questions stand. */
+export type QuestionState = 
+/**  The agent waits for the person's answers. */
+"waiting" | "answered" | 
+/**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
+"cancelled";
 
 /**  Whether animations play. */
 export type ReduceMotion = 
@@ -885,7 +1080,9 @@ export type StatusKind =
 /**  The agent started working on the message. */
 "started" | 
 /**  The person stopped the reply. */
-"stopped";
+"stopped" | 
+/**  The agent could not find the session's earlier conversation, so the reply starts a new one. */
+"newConversation";
 
 /**  What the About page shows besides the app's own version. */
 export type SystemInfo = {

@@ -1,14 +1,17 @@
 //! What the sidebar and the session view show: projects, sessions, turns and their items.
 
+use arden_core::error::ErrorCode;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// Which agent answers in a session. Claude and Codex arrive with their drivers.
+/// Which agent answers in a session. Codex arrives with its driver.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum AgentKind {
     /// The built-in demonstration agent.
     Demo,
+    /// Claude, through the person's own Claude Code (ADR 0038).
+    Claude,
 }
 
 /// What a project is. Only the Playground exists in the foundation.
@@ -31,6 +34,9 @@ pub struct Project {
     pub name: String,
     /// The folder's full path.
     pub path: String,
+    /// Whether the person trusts the folder, so Claude may work in it (ADR 0039): Claude Code runs
+    /// a project's own hooks, MCP servers and environment. The Playground is always trusted.
+    pub trusted: bool,
 }
 
 /// How a tool call ended.
@@ -62,6 +68,77 @@ pub enum StatusKind {
     Started,
     /// The person stopped the reply.
     Stopped,
+    /// The agent could not find the session's earlier conversation, so the reply starts a new one.
+    NewConversation,
+}
+
+/// What an agent asks permission to do, in Arden Code's words (ADR 0039).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ApprovalAction {
+    RunCommand,
+    EditFile,
+    CreateFile,
+    OpenPage,
+    SearchWeb,
+    /// Any other tool, such as one of an MCP server.
+    UseTool,
+}
+
+/// Where an approval request stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ApprovalState {
+    /// The agent waits for the person's answer.
+    Waiting,
+    Allowed,
+    /// Allowed, with the rule the agent suggested, so it is not asked again.
+    AlwaysAllowed,
+    /// Refused; the reply stopped with it.
+    Denied,
+    /// No answer is needed any more: the reply stopped, or the agent gave up on asking.
+    Cancelled,
+}
+
+/// One choice a question offers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionOption {
+    pub label: String,
+    /// What choosing it means, when the agent said.
+    pub description: Option<String>,
+}
+
+/// Something the agent asks the person to choose (ADR 0039).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Question {
+    /// A word or two that names the question, such as "Library".
+    pub header: String,
+    pub question: String,
+    pub options: Vec<QuestionOption>,
+    /// Whether several options may be chosen.
+    pub multi_select: bool,
+}
+
+/// The person's answer to one question: the options chosen, or words of their own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionAnswer {
+    /// The question's text, which the answer goes back to the agent under.
+    pub question: String,
+    pub answer: String,
+}
+
+/// Where the agent's questions stand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum QuestionState {
+    /// The agent waits for the person's answers.
+    Waiting,
+    Answered,
+    /// No answer is needed any more: the reply stopped, or the agent gave up on asking.
+    Cancelled,
 }
 
 /// One part of an agent's reply.
@@ -96,15 +173,65 @@ pub enum Item {
         added: u32,
         removed: u32,
     },
-    /// Something the agent reports as having gone wrong.
+    /// Something that went wrong: reported by the agent, or found by Arden Code, which then gives
+    /// the error's code so the person is told what to do.
     #[serde(rename_all = "camelCase")]
-    Error { id: String, message: String },
+    Error {
+        id: String,
+        /// What the agent said, or Arden Code's details for the logs.
+        message: String,
+        /// Arden Code's code for the error, when it is one Arden Code knows. Items saved before
+        /// codes existed have none.
+        #[serde(default)]
+        code: Option<ErrorCode>,
+    },
     /// A marker between the parts of a reply.
     #[serde(rename_all = "camelCase")]
     Status { id: String, kind: StatusKind },
+    /// The agent asks the person to allow or deny an action (ADR 0039).
+    #[serde(rename_all = "camelCase")]
+    Approval {
+        id: String,
+        /// The tool call it is about, when it has one.
+        tool_call_id: Option<String>,
+        action: ApprovalAction,
+        /// The command, the file, the address or the tool, in a line.
+        subject: String,
+        /// More to decide by: a command's description, the change to a file, a tool's input.
+        detail: Option<String>,
+        /// The rule the agent suggests remembering, in a line. Always allow is offered with it.
+        rule: Option<String>,
+        state: ApprovalState,
+    },
+    /// The agent asks the person to choose (ADR 0039).
+    #[serde(rename_all = "camelCase")]
+    Questions {
+        id: String,
+        /// The tool call that asks them, when it has one.
+        tool_call_id: Option<String>,
+        questions: Vec<Question>,
+        /// The person's answers, once given.
+        answers: Vec<QuestionAnswer>,
+        state: QuestionState,
+    },
 }
 
 impl Item {
+    /// Whether it is an approval request or questions that wait for the person (ADR 0039).
+    #[must_use]
+    pub fn waits_for_answer(&self) -> bool {
+        matches!(
+            self,
+            Self::Approval {
+                state: ApprovalState::Waiting,
+                ..
+            } | Self::Questions {
+                state: QuestionState::Waiting,
+                ..
+            }
+        )
+    }
+
     #[must_use]
     pub fn id(&self) -> &str {
         match self {
@@ -113,7 +240,9 @@ impl Item {
             | Self::ToolCall { id, .. }
             | Self::FileChange { id, .. }
             | Self::Error { id, .. }
-            | Self::Status { id, .. } => id,
+            | Self::Status { id, .. }
+            | Self::Approval { id, .. }
+            | Self::Questions { id, .. } => id,
         }
     }
 }
@@ -145,23 +274,36 @@ pub struct Turn {
 }
 
 impl Turn {
-    /// Ends the turn as stopped by the person: a tool that was still running stopped with it, and
-    /// a marker records it.
+    /// Ends the turn as stopped by the person: what was still under way ends with it (see
+    /// [`Turn::settle`]), and a marker records it.
     fn stop(&mut self) {
         self.status = TurnStatus::Stopped;
-        for item in &mut self.items {
-            if let Item::ToolCall { status, .. } = item
-                && *status == ToolStatus::Running
-            {
-                *status = ToolStatus::Stopped;
-            }
-        }
+        self.settle();
         let marker = format!("{}-stopped", self.id);
         if !self.items.iter().any(|item| item.id() == marker) {
             self.items.push(Item::Status {
                 id: marker,
                 kind: StatusKind::Stopped,
             });
+        }
+    }
+
+    /// Settles what was still under way in a turn that is over: a tool that was running stopped
+    /// with it, and an approval request or questions that still waited need no answer any more.
+    pub fn settle(&mut self) {
+        for item in &mut self.items {
+            match item {
+                Item::ToolCall { status, .. } if *status == ToolStatus::Running => {
+                    *status = ToolStatus::Stopped;
+                }
+                Item::Approval { state, .. } if *state == ApprovalState::Waiting => {
+                    *state = ApprovalState::Cancelled;
+                }
+                Item::Questions { state, .. } if *state == QuestionState::Waiting => {
+                    *state = QuestionState::Cancelled;
+                }
+                _ => {}
+            }
         }
     }
 
@@ -373,6 +515,7 @@ mod tests {
             item: Item::Error {
                 id: "e".into(),
                 message: text.into(),
+                code: None,
             },
         };
 
@@ -408,6 +551,28 @@ mod tests {
             &turn.items[0],
             Item::ToolCall { status: ToolStatus::Done, output: Some(text), .. } if text == "3 lines"
         ));
+    }
+
+    #[test]
+    fn an_error_of_arden_codes_own_carries_its_code_and_one_saved_before_codes_reads_without() {
+        let coded = Item::Error {
+            id: "e".into(),
+            message: "Not logged in".into(),
+            code: Some(ErrorCode::ClaudeSignedOut),
+        };
+        let saved = serde_json::to_value(&coded).expect("JSON");
+        assert_eq!(saved["code"], "ARD-AGT-009");
+
+        let older: Item = serde_json::from_str(r#"{"type":"error","id":"e","message":"It broke"}"#)
+            .expect("an item saved before error codes");
+        assert_eq!(
+            older,
+            Item::Error {
+                id: "e".into(),
+                message: "It broke".into(),
+                code: None
+            }
+        );
     }
 
     #[test]

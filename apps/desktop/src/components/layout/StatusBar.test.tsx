@@ -119,6 +119,15 @@ describe("The status bar and the open session", () => {
     expect(replying.closest("[aria-live], [role=status], output")).toBeNull();
   });
 
+  it("says when the open session's agent waits for an answer", async () => {
+    startApp({ state: "idle" });
+    useRepliesStore.setState({ sessionId: "session-1", busy: true, waiting: true });
+    renderBar();
+
+    expect(await screen.findByText("Demo agent: waiting for your answer")).toBeVisible();
+    expect(screen.queryByText("Demo agent: replying")).toBeNull();
+  });
+
   it("says nothing about the agent when no reply is running", async () => {
     startApp({ state: "idle" });
     useRepliesStore.setState({ sessionId: "session-1", busy: false });

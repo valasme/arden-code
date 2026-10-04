@@ -17,6 +17,7 @@ import {
   type SessionAction,
   useSessionActions,
 } from "@/features/sessions/useSessionActions";
+import { useOpenFolder } from "@/features/sessions/useOpenFolder";
 import { useStartSession } from "@/features/sessions/useStartSession";
 import { moveToArea } from "./areas";
 import { useNavigationHistory } from "@/lib/useNavigationHistory";
@@ -109,6 +110,7 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
   const runSessionAction = useSessionActions();
 
   const startSession = useStartSession();
+  const openFolder = useOpenFolder();
 
   const value = useMemo<Commands>(() => {
     // A command for a session acts on the one whose row has the focus, as a key does in File
@@ -128,7 +130,21 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
     });
     const actions: Record<CommandId, { run: () => void; enabled?: () => boolean }> = {
       "palette.open": { run: () => setPaletteOpen(true) },
-      "session.new": { run: () => void startSession() },
+      // A new session works where the open one does, or in the Playground (ADR 0039).
+      "session.new": {
+        run: () => {
+          const project =
+            openSession === undefined ? undefined : findSession(sessionList, openSession);
+          void startSession(undefined, project?.projectId);
+        },
+      },
+      "folder.open": {
+        run: () => {
+          void openFolder().then(async (project) => {
+            if (project) await startSession(undefined, project.id);
+          });
+        },
+      },
       "reply.stop": {
         run: () => {
           const { sessionId } = useRepliesStore.getState();
@@ -197,6 +213,7 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
   }, [
     navigate,
     startSession,
+    openFolder,
     history,
     toggleSidebar,
     toggleInspector,

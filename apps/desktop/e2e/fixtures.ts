@@ -28,6 +28,23 @@ function freePort(): Promise<number> {
   });
 }
 
+/** The name Windows gives this process's `PATH` variable, whatever the case of its letters. */
+export const pathKey =
+  Object.keys(process.env).find((name) => name.toUpperCase() === "PATH") ?? "PATH";
+
+/**
+ * This process's `PATH` without the folders that hold the person's own Claude Code or Codex, so the
+ * app under test never finds them: it would start them, and make Claude the agent of a new session.
+ * A test that needs Claude puts the workspace's stand-in first (ADR 0038).
+ */
+export function pathWithoutAgents(): string {
+  const agents = ["claude.exe", "claude.cmd", "claude", "codex.exe", "codex.cmd", "codex"];
+  return (process.env[pathKey] ?? "")
+    .split(path.delimiter)
+    .filter((folder) => !agents.some((name) => existsSync(path.join(folder, name))))
+    .join(path.delimiter);
+}
+
 /**
  * Runs the app with all of its files in a folder of its own, so tests never touch real data. The web
  * engine keeps its files in the app's `local` folder there, as on a real install.
@@ -39,6 +56,7 @@ export function appEnvironment(dataDir: string, debugPort: number): NodeJS.Proce
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
     // The engine ignores that variable on some machines, so the app is told the port as well.
     ARDEN_CODE_DEBUG_PORT: String(debugPort),
+    [pathKey]: pathWithoutAgents(),
   };
   // It would move the engine's files out of the app's folder.
   delete env["WEBVIEW2_USER_DATA_FOLDER"];

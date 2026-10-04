@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { Turn } from "@/ipc/bindings";
+import type { AgentKind, Turn } from "@/ipc/bindings";
 
 import { ANNOUNCE_INTERVAL_MS, finalAnnouncement, nextAnnouncement } from "./announce";
+import { waitingRequest } from "./waiting";
 
 /** What the agent has said in a turn in words, without thinking, tool calls or file changes. */
 function spokenText(turn: Turn): string {
@@ -14,9 +15,10 @@ function spokenText(turn: Turn): string {
  * Tells screen readers about a reply as it streams. The text on the screen is not a live region:
  * it changes with every word, and a screen reader would talk over itself. Instead this says the
  * complete sentences that arrived, at most once every few seconds, politely (it waits for the
- * screen reader to finish what it is saying), and says when the reply is over.
+ * screen reader to finish what it is saying), and says when the reply is over. An approval request
+ * is said at once, as the agent waits for it (ADR 0039).
  */
-export function ReplyAnnouncer({ turn }: { turn: Turn | undefined }) {
+export function ReplyAnnouncer({ turn, agent }: { turn: Turn | undefined; agent: AgentKind }) {
   const { t } = useTranslation();
   const [message, setMessage] = useState("");
   const turnId = turn?.id;
@@ -45,6 +47,24 @@ export function ReplyAnnouncer({ turn }: { turn: Turn | undefined }) {
       clearInterval(timer);
     };
   }, [running, turnId]);
+
+  // A request or questions that start waiting are said at once: the agent can do nothing until
+  // they are answered.
+  const request = waitingRequest(turn);
+  const requestId = request?.id;
+  useEffect(() => {
+    const name = t(`agents.${agent}.name`);
+    if (request?.type === "approval") {
+      const asks = t(`items.approval.asks.${request.action}`, { agent: name });
+      setMessage(`${asks}: ${request.subject}`);
+    }
+    if (request?.type === "questions") {
+      const asked = request.questions.map((question) => question.question).join(" ");
+      setMessage(`${t("items.questions.asks", { agent: name })}: ${asked}`);
+    }
+    // Said once, when the request arrives.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestId]);
 
   // When the reply ends, the rest of it is said, and then that it is over.
   useEffect(() => {
