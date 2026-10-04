@@ -35,9 +35,12 @@ when it asks, and know whether Claude is ready. The councils weighed each choice
   - Its answers are Allow, Always allow and Deny. Always allow appears only when Claude Code suggests a rule, and
     hands that rule back. Deny stops the reply, as in the terminal, so the person can say what to do instead.
   - It is announced politely and at once, the status bar says Claude is waiting, and a notification is sent when the
-    window is not focused. The focus does not jump: the card is the last stop before the message box.
+    window is not focused. The focus does not jump: the card is the last stop before the message box. The
+    notification's words are written in Rust, as the test notification's are, while English is the only language; a
+    second language moves them to the page.
   - Once answered, it folds to a quiet line ("You allowed …"). Stop, archiving and deleting answer it with a denial.
-    One still waiting when Arden Code closes is lost with its turn: a reply is saved only once it ends.
+    One still waiting when Arden Code closes comes back cancelled with its failed turn: a reply is written when it
+    ends, and also when a request starts waiting.
 - **Questions** (Claude asking the person to choose) are items too: each question with its options, as radio buttons
   or check boxes, an Other field, and Send answers. Stop cancels a waiting question.
 - **What a reply shows.** Text and thinking stream. Tool calls end with their results. File changes come from Claude

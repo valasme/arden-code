@@ -145,6 +145,8 @@ impl Conversation {
                 _ => {}
             }
         }
+        // Arden Code closed the input: the conversation is over.
+        log(&self.settings, "end");
     }
 
     fn stream(&self, event: &Value) {

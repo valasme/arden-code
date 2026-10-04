@@ -8,7 +8,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::model::{Item, Project, Session, Turn};
+use crate::model::{Item, Project, Session, Turn, TurnStatus};
 
 /// The version of the tables, kept in SQLite's `user_version`. Each later version comes with the
 /// migration that brings the file up to it from the one before.
@@ -402,13 +402,18 @@ impl Database {
             .collect::<rusqlite::Result<Vec<_>>>()?;
         rows.into_iter()
             .map(|(id, prompt, started_at, status, items)| {
-                Ok(Turn {
+                let mut turn = Turn {
                     id,
                     prompt,
                     started_at,
                     status,
                     items: serde_json::from_str::<Vec<Item>>(&items)?,
-                })
+                };
+                // A reply written while it waited for the person, and never finished, is over.
+                if turn.status != TurnStatus::Running {
+                    turn.settle();
+                }
+                Ok(turn)
             })
             .collect()
     }

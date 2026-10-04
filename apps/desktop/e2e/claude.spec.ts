@@ -244,4 +244,33 @@ test.describe("Claude in the real app", () => {
       rmSync(log, { force: true });
     }
   });
+
+  test("archiving a Claude session ends its Claude Code", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
+    const log = path.join(dataDir, "claude.log");
+    const claude = claudeOnPath({ log });
+    const app = await launchApp({ dataDir, env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+      await say(page, "Hello before archiving");
+      await expect(session.getByText("You said: Hello before archiving")).toBeVisible({
+        timeout: 30_000,
+      });
+      const ended = () =>
+        readFileSync(log, "utf8")
+          .split("\n")
+          .some((line) => line.trim() === "end");
+      expect(ended(), "Claude Code is kept between turns").toBe(false);
+
+      await page.getByRole("button", { name: "Session actions" }).click();
+      await page.getByRole("menuitem", { name: "Archive" }).click();
+
+      await expect.poll(ended, { timeout: 15_000 }).toBe(true);
+    } finally {
+      app.kill();
+      claude.remove();
+      rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    }
+  });
 });

@@ -908,7 +908,10 @@ impl SessionStore {
         };
         let turn = &mut entry.session.turns[position];
         turn.apply(event);
-        if turn.status == TurnStatus::Running {
+        // A reply is written when it ends, and also when the agent starts waiting for the person,
+        // so that a request still waiting when Arden Code closes comes back with its turn (ADR 0039).
+        let asks = matches!(event, TurnEvent::ItemAdded { item, .. } if item.waits_for_answer());
+        if turn.status == TurnStatus::Running && !asks {
             return Ok(());
         }
         database
@@ -1948,6 +1951,75 @@ mod tests {
             store.trust_project("folder-unknown"),
             Err(StoreError::UnknownProject)
         );
+    }
+
+    #[test]
+    fn a_request_still_waiting_when_the_app_closes_comes_back_cancelled_with_its_failed_turn() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .expect("a session");
+            let turn = store
+                .start_turn(&session.id, "Run the tests")
+                .expect("a turn");
+            for item in [
+                Item::Text {
+                    id: "t-1".into(),
+                    text: "I will run them.".into(),
+                },
+                Item::ToolCall {
+                    id: "t-2".into(),
+                    name: "Bash".into(),
+                    input: "npm test".into(),
+                    status: crate::model::ToolStatus::Running,
+                    output: None,
+                },
+                Item::Approval {
+                    id: "t-approval-1".into(),
+                    tool_call_id: Some("t-2".into()),
+                    action: crate::model::ApprovalAction::RunCommand,
+                    subject: "npm test".into(),
+                    detail: None,
+                    rule: None,
+                    state: ApprovalState::Waiting,
+                },
+            ] {
+                store
+                    .apply(
+                        &session.id,
+                        &TurnEvent::ItemAdded {
+                            turn_id: turn.id.clone(),
+                            item,
+                        },
+                    )
+                    .expect("applied");
+            }
+            // Arden Code closes here, with the request still waiting.
+            session.id
+        };
+
+        let store = store_in(&file);
+
+        let turn = store.session(&id).expect("the session").turns[0].clone();
+        assert_eq!(turn.status, TurnStatus::Failed);
+        assert!(matches!(&turn.items[0], Item::Text { text, .. } if text == "I will run them."));
+        assert!(matches!(
+            &turn.items[1],
+            Item::ToolCall {
+                status: crate::model::ToolStatus::Stopped,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &turn.items[2],
+            Item::Approval {
+                state: ApprovalState::Cancelled,
+                ..
+            }
+        ));
     }
 
     #[test]

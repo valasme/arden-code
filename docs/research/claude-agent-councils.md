@@ -242,3 +242,14 @@ there; otherwise ask for the native installer. The wrapper's text is never parse
 | 26 | Linked sessions | A new, empty Claude session in the same project, with its own conversation; nothing is handed over (ADR 0036). |
 | 27 | Welcome state | "What should Claude work on?", or the Demo agent when it is chosen; the line about real agents coming goes. |
 | 28 | Error codes | New `ARD-AGT` codes for: Claude Code missing, too old, signed out, stopped unexpectedly, answering in a way Arden Code does not understand, an untrusted project, an npm install that cannot be started safely, and Claude being unable to answer (its own API errors). |
+
+## Round 4: before the merge (2026-10-04)
+
+Held after the ten tickets were built, against the code review of pull request #88.
+
+| # | Question | Verdict and why |
+|---|---|---|
+| 29 | A request still waiting when Arden Code closes | The build had dropped Q9's verdict: such a request was lost with its turn, and ADR 0039 had been changed to say so. R2 held to the verdict; R4 found the cost negligible, since requests are rare; R1's worry about writing during a reply was settled by a store test that reopens the file around a waiting request. **Verdict:** a reply is written when it ends, and also when a request starts waiting; a turn read back as over settles what was under way (a running tool stopped, a waiting request cancelled). ADR 0039 says so again. |
+| 30 | The review's open gaps | R1: the choice of whether to notify becomes a function of its own (`send_when_away`), tested with the existing recorder. R1 and R5: the stand-in notes when its input closes, and an end-to-end test sees that archiving a Claude session ends its Claude Code (10 of 10 runs). |
+| 31 | Notification words written in Rust | E5 wants every word in the language file; A3 notes Rust cannot reach it, and the test notification already writes its words in Rust; P5 notes English is the only language. **Verdict:** kept, and noted in ADR 0039: a second language moves them to the page. |
+| 32 | How the pull request is merged | D2: with a merge commit, as #76 was, once CI passed on its latest commit on a branch up to date with `main`, and the branch is deleted. |

@@ -29,6 +29,25 @@ pub fn send(enabled: bool, sink: &dyn Sink, title: &str, body: &str) -> Result<b
     Ok(true)
 }
 
+/// Shows a notification only when the person is not looking at Arden Code, and notifications are
+/// on. Says whether one was shown.
+///
+/// # Errors
+///
+/// Returns an error when the sink could not show it.
+pub fn send_when_away(
+    looking: bool,
+    enabled: bool,
+    sink: &dyn Sink,
+    title: &str,
+    body: &str,
+) -> Result<bool, String> {
+    if looking {
+        return Ok(false);
+    }
+    send(enabled, sink, title, body)
+}
+
 /// Shows a notification when the person is not looking at Arden Code, as the settings allow
 /// (ADR 0039): an agent that waits for them says so. What went wrong is logged, never shown.
 pub fn notify_when_away(app: &AppHandle, title: &str, body: &str) {
@@ -36,17 +55,14 @@ pub fn notify_when_away(app: &AppHandle, title: &str, body: &str) {
         .get_webview_window("main")
         .and_then(|window| window.is_focused().ok())
         .unwrap_or(false);
-    if looking {
-        return;
-    }
     let enabled = app.state::<SettingsService>().get().notifications.desktop;
     #[cfg(debug_assertions)]
     let shown = match std::env::var_os(FILE_VARIABLE) {
-        Some(file) => send(enabled, &File(file.into()), title, body),
-        None => send(enabled, &Windows(app), title, body),
+        Some(file) => send_when_away(looking, enabled, &File(file.into()), title, body),
+        None => send_when_away(looking, enabled, &Windows(app), title, body),
     };
     #[cfg(not(debug_assertions))]
-    let shown = send(enabled, &Windows(app), title, body);
+    let shown = send_when_away(looking, enabled, &Windows(app), title, body);
     if let Err(reason) = shown {
         tracing::warn!(
             code = ErrorCode::NotificationNotShown.as_str(),
@@ -141,6 +157,37 @@ mod tests {
 
         assert_eq!(shown, Ok(false));
         assert!(sink.0.borrow().is_empty());
+    }
+
+    #[test]
+    fn an_agent_that_waits_is_notified_only_while_the_person_looks_elsewhere() {
+        let sink = Recorder::default();
+
+        assert_eq!(
+            send_when_away(true, true, &sink, "Arden Code", "Looking"),
+            Ok(false)
+        );
+        assert_eq!(
+            send_when_away(false, false, &sink, "Arden Code", "Off"),
+            Ok(false)
+        );
+        assert_eq!(
+            send_when_away(
+                false,
+                true,
+                &sink,
+                "Arden Code",
+                "Claude asks to run a command."
+            ),
+            Ok(true)
+        );
+        assert_eq!(
+            sink.0.borrow().as_slice(),
+            [(
+                "Arden Code".to_owned(),
+                "Claude asks to run a command.".to_owned()
+            )]
+        );
     }
 
     #[test]

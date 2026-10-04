@@ -217,6 +217,21 @@ pub enum Item {
 }
 
 impl Item {
+    /// Whether it is an approval request or questions that wait for the person (ADR 0039).
+    #[must_use]
+    pub fn waits_for_answer(&self) -> bool {
+        matches!(
+            self,
+            Self::Approval {
+                state: ApprovalState::Waiting,
+                ..
+            } | Self::Questions {
+                state: QuestionState::Waiting,
+                ..
+            }
+        )
+    }
+
     #[must_use]
     pub fn id(&self) -> &str {
         match self {
@@ -259,11 +274,23 @@ pub struct Turn {
 }
 
 impl Turn {
-    /// Ends the turn as stopped by the person: a tool that was still running stopped with it, an
-    /// approval request or questions that still waited need no answer any more, and a marker
-    /// records it.
+    /// Ends the turn as stopped by the person: what was still under way ends with it (see
+    /// [`Turn::settle`]), and a marker records it.
     fn stop(&mut self) {
         self.status = TurnStatus::Stopped;
+        self.settle();
+        let marker = format!("{}-stopped", self.id);
+        if !self.items.iter().any(|item| item.id() == marker) {
+            self.items.push(Item::Status {
+                id: marker,
+                kind: StatusKind::Stopped,
+            });
+        }
+    }
+
+    /// Settles what was still under way in a turn that is over: a tool that was running stopped
+    /// with it, and an approval request or questions that still waited need no answer any more.
+    pub fn settle(&mut self) {
         for item in &mut self.items {
             match item {
                 Item::ToolCall { status, .. } if *status == ToolStatus::Running => {
@@ -277,13 +304,6 @@ impl Turn {
                 }
                 _ => {}
             }
-        }
-        let marker = format!("{}-stopped", self.id);
-        if !self.items.iter().any(|item| item.id() == marker) {
-            self.items.push(Item::Status {
-                id: marker,
-                kind: StatusKind::Stopped,
-            });
         }
     }
 
