@@ -9,8 +9,8 @@ use std::thread;
 use arden_agents::demo::DemoDriver;
 use arden_agents::driver::{AgentDriver, Answer};
 use arden_agents::model::{
-    AgentKind, ApprovalAction, ApprovalState, Item, QuestionAnswer, QuestionState, Session,
-    SessionList, SessionSummary, TurnEvent,
+    AgentKind, ApprovalAction, ApprovalState, Item, Project, QuestionAnswer, QuestionState,
+    Session, SessionList, SessionSummary, TurnEvent,
 };
 use arden_agents::playground::PLAYGROUND_ID;
 use arden_agents::store::{OpenProblem, SessionStore, StoreError};
@@ -134,22 +134,22 @@ pub fn agent_for_new_session(
     ))
 }
 
-/// Starts an empty session in the Playground, with the agent given, or the one a new session
-/// takes (ADR 0039).
+/// Starts an empty session in a project, the Playground when none is given, with the agent given,
+/// or the one a new session there takes (ADR 0039).
 ///
 /// # Errors
 ///
-/// Returns an error when the Playground does not exist, or the session cannot be saved.
+/// Returns an error when the project does not exist, or the session cannot be saved.
 #[tauri::command]
 #[specta::specta]
 pub fn create_session(
     agent: Option<AgentKind>,
+    project_id: Option<String>,
     sessions: State<'_, Sessions>,
 ) -> Result<SessionSummary, AppError> {
-    let agent = agent.unwrap_or_else(|| new_session_agent(&sessions, PLAYGROUND_ID));
-    let session = sessions
-        .create_session(PLAYGROUND_ID, agent)
-        .map_err(app_error)?;
+    let project = project_id.as_deref().unwrap_or(PLAYGROUND_ID);
+    let agent = agent.unwrap_or_else(|| new_session_agent(&sessions, project));
+    let session = sessions.create_session(project, agent).map_err(app_error)?;
     tracing::info!(session = %session.id, ?agent, "session created");
     Ok(session)
 }
@@ -170,6 +170,44 @@ pub fn set_session_agent(
     sessions.set_agent(&id, agent).map_err(app_error)?;
     tracing::info!(session = %id, ?agent, "the session's agent changed");
     Ok(())
+}
+
+/// Moves a session that has had no message yet to another project (ADR 0039).
+///
+/// # Errors
+///
+/// Returns an error when there is no such session or project, the session is archived or has had a
+/// message, or the change cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn set_session_project(
+    id: String,
+    project_id: String,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions.set_project(&id, &project_id).map_err(app_error)?;
+    tracing::info!(session = %id, project = %project_id, "the session's project changed");
+    Ok(())
+}
+
+/// Asks the person for a folder with Windows' dialog, and adds it as a project (ADR 0039). Nothing
+/// when they cancel. A folder opened before is the same project.
+///
+/// # Errors
+///
+/// Returns an error when the project cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub async fn pick_folder(
+    app: tauri::AppHandle,
+    sessions: State<'_, Sessions>,
+) -> Result<Option<Project>, AppError> {
+    let Some(folder) = crate::commands::choose_folder(&app).await else {
+        return Ok(None);
+    };
+    let project = sessions.open_folder(&folder).map_err(app_error)?;
+    tracing::info!(project = %project.id, "a folder was opened as a project");
+    Ok(Some(project))
 }
 
 /// Starts an empty session linked to another one, in its project and with its agent (ADR 0036).

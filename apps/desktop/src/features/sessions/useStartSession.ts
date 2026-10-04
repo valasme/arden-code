@@ -8,18 +8,18 @@ import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 
 /**
- * Starts a session in the Playground and opens it, with the agent given, or the one a new session
- * takes (ADR 0039). Answers its id, or nothing when it could not be started, which the person is
- * told about with the error's code.
+ * Starts a session in a project, the Playground when none is given, and opens it, with the agent
+ * given, or the one a new session there takes (ADR 0039). Answers its id, or nothing when it could
+ * not be started, which the person is told about with the error's code.
  */
 export function useStartSession() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   return useCallback(
-    async (agent?: AgentKind): Promise<string | undefined> => {
+    async (agent?: AgentKind, projectId?: string): Promise<string | undefined> => {
       try {
-        const session = await commands.createSession(agent ?? null);
+        const session = await commands.createSession(agent ?? null, projectId ?? null);
         await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
         await navigate({ to: "/session/$id", params: { id: session.id } });
         return session.id;

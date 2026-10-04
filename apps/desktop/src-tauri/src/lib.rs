@@ -92,6 +92,8 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::answer_questions,
         sessions::take_pending_open,
         sessions::set_session_agent,
+        sessions::set_session_project,
+        sessions::pick_folder,
         sessions::agent_for_new_session,
         agents::detect_agents,
         sessions::debug_fill_session,
@@ -155,6 +157,8 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::answer_questions,
         sessions::take_pending_open,
         sessions::set_session_agent,
+        sessions::set_session_project,
+        sessions::pick_folder,
         sessions::agent_for_new_session,
         agents::detect_agents,
     ]

@@ -303,6 +303,95 @@ describe("Trusting a folder (ADR 0039)", () => {
   });
 });
 
+describe("Choosing where a session works (ADR 0039)", () => {
+  it("offers the Playground, every folder and Open folder, and choosing a folder moves the session", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({
+      folders: [folderProject("folder-1", "demo")],
+      sessions: [sessionNamed("session-1", null)],
+    });
+    renderApp("/session/session-1");
+
+    await user.click(await screen.findByRole("button", { name: "Project: Playground" }));
+    const menu = await screen.findByRole("menu");
+    await animationsDone(menu);
+    expect(
+      within(menu)
+        .getAllByRole("menuitemradio")
+        .map((item) => item.textContent),
+    ).toEqual(["Playground", "demo"]);
+    expect(within(menu).getByRole("menuitem", { name: "Open folder…" })).toBeVisible();
+    await expectNoAccessibilityViolations(menu);
+    await user.click(within(menu).getByRole("menuitemradio", { name: "demo" }));
+
+    expect(rust.callsTo("set_session_project")).toEqual([
+      { id: "session-1", projectId: "folder-1" },
+    ]);
+    expect(await screen.findByRole("button", { name: "Project: demo" })).toBeVisible();
+  });
+
+  it("opens a folder from the menu and moves the empty session to it", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({
+      sessions: [sessionNamed("session-1", null)],
+      pickedFolder: folderProject("folder-2", "api"),
+    });
+    renderApp("/session/session-1");
+
+    await user.click(await screen.findByRole("button", { name: "Project: Playground" }));
+    await animationsDone(await screen.findByRole("menu"));
+    await user.click(screen.getByRole("menuitem", { name: "Open folder…" }));
+
+    expect(await screen.findByRole("button", { name: "Project: api" })).toBeVisible();
+    expect(rust.callsTo("pick_folder")).toHaveLength(1);
+    expect(rust.callsTo("set_session_project")).toEqual([
+      { id: "session-1", projectId: "folder-2" },
+    ]);
+    expect(rust.callsTo("create_session")).toEqual([]);
+  });
+
+  it("opens a folder with Ctrl+O and starts a session in it", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({ pickedFolder: folderProject("folder-2", "api") });
+    renderApp("/");
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}o{/Control}");
+
+    expect(await screen.findByRole("button", { name: "Project: api" })).toBeVisible();
+    expect(rust.callsTo("create_session")).toEqual([{ agent: null, projectId: "folder-2" }]);
+  });
+
+  it("does nothing when the folder dialog is cancelled", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({ pickedFolder: null });
+    renderApp("/");
+    await screen.findByRole("main");
+
+    await user.keyboard("{Control>}o{/Control}");
+
+    await waitFor(() => {
+      expect(rust.callsTo("pick_folder")).toHaveLength(1);
+    });
+    expect(rust.callsTo("create_session")).toEqual([]);
+  });
+
+  it("starts a new session with Ctrl+N in the open session's folder", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({
+      folders: [folderProject("folder-1", "demo", true)],
+      sessions: [answeredClaudeSession(), sessionNamed("session-2", "In demo", "folder-1")],
+    });
+    renderApp("/session/session-2");
+    await screen.findByRole("heading", { level: 1, name: "In demo" });
+
+    await user.keyboard("{Control>}n{/Control}");
+
+    expect(await screen.findByRole("button", { name: "Project: demo" })).toBeVisible();
+    expect(rust.callsTo("create_session")).toEqual([{ agent: null, projectId: "folder-1" }]);
+  });
+});
+
 describe("Deleting a Claude session (ADR 0039)", () => {
   it("says Claude Code keeps its own copy of the conversation", async () => {
     const user = userEvent.setup();
@@ -336,7 +425,7 @@ describe("The welcome state (ADR 0039)", () => {
     await user.type(screen.getByRole("textbox", { name: "Message" }), "Hello{Enter}");
 
     await waitFor(() => {
-      expect(rust.callsTo("create_session")).toEqual([{ agent: "claude" }]);
+      expect(rust.callsTo("create_session")).toEqual([{ agent: "claude", projectId: null }]);
     });
   });
 });

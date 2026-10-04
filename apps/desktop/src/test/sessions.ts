@@ -83,6 +83,8 @@ interface Options {
   folders?: Project[];
   /** The agent a new session takes when none is asked for (ADR 0039). */
   newSessionAgent?: AgentKind;
+  /** The folder the person picks in Windows' dialog, or null when they cancel. */
+  pickedFolder?: Project | null;
 }
 
 /**
@@ -98,6 +100,7 @@ export function startSessionsRust({
   failing = {},
   folders: opened = [],
   newSessionAgent = "demo",
+  pickedFolder = null,
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
@@ -161,16 +164,18 @@ export function startSessionsRust({
         }
         case "create_session": {
           if (failCreate) throw failure("ARD-AGT-001");
-          const { agent } = z
-            .object({ agent: z.enum(["demo", "claude"]).nullable().optional() })
+          const { agent, projectId } = z
+            .object({
+              agent: z.enum(["demo", "claude"]).nullable().optional(),
+              projectId: z.string().nullable().optional(),
+            })
             .parse(payload ?? {});
+          const project = projectId ?? playground.id;
+          if (project !== playground.id && !folders.some((folder) => folder.id === project)) {
+            throw failure("ARD-AGT-001");
+          }
           made += 1;
-          const session = sessionNamed(
-            `session-${made}`,
-            null,
-            playground.id,
-            agent ?? newSessionAgent,
-          );
+          const session = sessionNamed(`session-${made}`, null, project, agent ?? newSessionAgent);
           sessions.push(session);
           return summaryOf(session);
         }
@@ -243,6 +248,20 @@ export function startSessionsRust({
           if (archives.includes(id)) archives.splice(archives.indexOf(id), 1);
           for (const other of sessions) if (other.linkedFrom === id) other.linkedFrom = null;
           return null;
+        }
+        case "set_session_project": {
+          const { id, projectId } = z
+            .object({ id: z.string(), projectId: z.string() })
+            .parse(payload);
+          const session = find(id);
+          if (session.turns.length > 0) throw failure("ARD-AGT-014");
+          session.projectId = projectId;
+          return null;
+        }
+        case "pick_folder": {
+          if (pickedFolder === null) return null;
+          if (!folders.some((folder) => folder.id === pickedFolder.id)) folders.push(pickedFolder);
+          return pickedFolder;
         }
         case "trust_project": {
           const { projectId } = z.object({ projectId: z.string() }).parse(payload);

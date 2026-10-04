@@ -16,11 +16,13 @@ import { useRepliesStore } from "@/state/replies";
 import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
+import { ProjectMenu } from "./ProjectMenu";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
 import { SessionLinks } from "./SessionLinks";
 import { SessionMenu } from "./SessionMenu";
 import { TrustDialog } from "./TrustDialog";
 import { TurnView } from "./TurnView";
+import { useOpenFolder } from "./useOpenFolder";
 import { useSendMessage } from "./useSendMessage";
 
 /** How close to the end the person must be for new text to keep the end in view. */
@@ -43,6 +45,7 @@ export function SessionView({ id }: { id: string }) {
   const { data: list = noSessions } = useQuery(sessionListQuery);
   const queryClient = useQueryClient();
   const send = useSendMessage();
+  const openFolder = useOpenFolder();
   const transcript = useRef<HTMLElement>(null);
   const stuck = useRef(true);
   /** Where the view was last held at the end. Only a scroll above it is the person leaving the end. */
@@ -177,6 +180,18 @@ export function SessionView({ id }: { id: string }) {
         showErrorToast(toAppError(failure));
       });
   };
+  // And so can its project (ADR 0039).
+  const chooseProject = (projectId: string) => {
+    commands
+      .setSessionProject(id, projectId)
+      .then(async () => {
+        await queryClient.invalidateQueries({ queryKey: sessionQuery(id).queryKey });
+        await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
+      })
+      .catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      });
+  };
   const context =
     count === 0 && session.archivedAt === null ? (
       <>
@@ -184,7 +199,16 @@ export function SessionView({ id }: { id: string }) {
         <span aria-hidden className="px-1">
           ·
         </span>
-        <span className="truncate">{projectName}</span>
+        <ProjectMenu
+          projectId={session.projectId}
+          projects={list.projects.map((listing) => listing.project)}
+          onChoose={chooseProject}
+          onOpenFolder={() => {
+            void openFolder().then((opened) => {
+              if (opened) chooseProject(opened.id);
+            });
+          }}
+        />
       </>
     ) : (
       t("sessions.context", { agent: agentName, project: projectName })

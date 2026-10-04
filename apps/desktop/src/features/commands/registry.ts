@@ -4,6 +4,7 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   CommandIcon,
+  FolderOpenIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
   KeyboardIcon,
@@ -31,6 +32,7 @@ export type CommandId =
   | "palette.open"
   | "session.new"
   | "session.newLinked"
+  | "folder.open"
   | "reply.stop"
   | "session.rename"
   | "session.pin"
@@ -65,6 +67,7 @@ export interface CommandDefinition {
   labelKey:
     | "commands.paletteOpen"
     | "commands.sessionNew"
+    | "commands.folderOpen"
     | "commands.sessionNewLinked"
     | "commands.replyStop"
     | "commands.sessionRename"
@@ -116,6 +119,13 @@ export const commandDefinitions = [
     labelKey: "commands.sessionNew",
     icon: SquarePenIcon,
     shortcuts: ["Ctrl+N"],
+  },
+  {
+    id: "folder.open",
+    group: "session",
+    labelKey: "commands.folderOpen",
+    icon: FolderOpenIcon,
+    shortcuts: ["Ctrl+O"],
   },
   {
     id: "session.newLinked",

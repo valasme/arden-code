@@ -206,4 +206,42 @@ test.describe("Claude in the real app", () => {
       rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     }
   });
+
+  test("Ctrl+O opens a folder, and Claude works there once the folder is trusted", async () => {
+    const folder = mkdtempSync(path.join(tmpdir(), "arden-e2e-project-"));
+    const log = path.join(folder, "..", `${path.basename(folder)}-claude.log`);
+    const claude = claudeOnPath({ log });
+    const app = await launchApp({
+      env: { ...claude.env, ARDEN_CODE_FOLDER_DIALOG_ANSWER: folder },
+    });
+    try {
+      const { page } = app;
+      await expect(page.getByRole("main")).toBeVisible();
+      await page.keyboard.press("Control+O");
+      const name = path.basename(folder);
+      await expect(page.getByRole("button", { name: `Project: ${name}` })).toBeVisible();
+      await page.getByRole("button", { name: /^Agent: / }).click();
+      await page.getByRole("menuitemradio", { name: "Claude" }).click();
+      await say(page, "Hello in the folder");
+
+      const question = page.getByRole("alertdialog", { name: `Trust “${name}”?` });
+      await expect(question).toBeVisible();
+      await question.getByRole("button", { name: "Trust folder" }).click();
+
+      const session = page.getByRole("main", { name: "Session" });
+      await expect(session.getByText("You said: Hello in the folder")).toBeVisible({
+        timeout: 30_000,
+      });
+      const folders = readFileSync(log, "utf8")
+        .split("\n")
+        .filter((line) => line.startsWith("start "))
+        .map((line) => z.object({ folder: z.string() }).parse(JSON.parse(line.slice(6))).folder);
+      expect(folders.map((where) => where.toLowerCase())).toContain(folder.toLowerCase());
+    } finally {
+      app.kill();
+      claude.remove();
+      rmSync(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      rmSync(log, { force: true });
+    }
+  });
 });

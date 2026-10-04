@@ -34,6 +34,7 @@
     "archivedOpen": "Archived sessions",
     "focusNext": "Move to the next area",
     "focusPrevious": "Move to the previous area",
+    "folderOpen": "Open folder…",
     "inspectorToggle": "Toggle inspector",
     "messageBoxFocus": "Focus the message box",
     "navigateBack": "Back",
@@ -432,6 +433,10 @@
     "messages": "Messages",
     "new": "New session",
     "playground": "Playground",
+    "projectMenu": {
+      "label": "Project: {{project}}",
+      "openFolder": "Open folder…"
+    },
     "rename": {
       "description": "The name shows in the sidebar and at the top of the session.",
       "failed": "{{what}} ({{code}})",

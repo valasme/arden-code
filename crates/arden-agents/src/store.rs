@@ -743,6 +743,43 @@ impl SessionStore {
         Ok(())
     }
 
+    /// Moves a session that has had no message yet to another project (ADR 0039).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] or [`StoreError::UnknownProject`] when there is no
+    /// such session or project, [`StoreError::Archived`] when the session is archived,
+    /// [`StoreError::NotEmpty`] once it has had a message, and [`StoreError::NotSaved`] when the
+    /// change cannot be written.
+    pub fn set_project(&self, session_id: &str, project_id: &str) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let last_id = inner.last_id;
+        let Inner {
+            sessions,
+            database,
+            projects,
+            ..
+        } = &mut *inner;
+        if !projects.iter().any(|project| project.id == project_id) {
+            return Err(StoreError::UnknownProject);
+        }
+        let entry = find(sessions, session_id)?;
+        entry.load(database)?;
+        if entry.session.archived_at.is_some() {
+            return Err(StoreError::Archived);
+        }
+        if !entry.session.turns.is_empty() {
+            return Err(StoreError::NotEmpty);
+        }
+        let mut header = entry.header();
+        project_id.clone_into(&mut header.project_id);
+        database
+            .save_session(&header, entry.order, last_id)
+            .map_err(not_saved)?;
+        project_id.clone_into(&mut entry.session.project_id);
+        Ok(())
+    }
+
     /// Starts an empty session linked to another one (ADR 0036): in the same project, with the same
     /// agent, keeping a link back to it. Nothing is copied. An archived session can start one too.
     ///
@@ -1502,6 +1539,42 @@ mod tests {
         );
         assert_eq!(
             store.set_agent("session-99", AgentKind::Demo),
+            Err(StoreError::UnknownSession)
+        );
+    }
+
+    #[test]
+    fn an_empty_sessions_project_can_change_and_one_with_a_message_keeps_its_own() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let (session, project) = {
+            let store = store_in(&file);
+            let project = store.open_folder(folder.path()).expect("a project");
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .expect("a session");
+
+            store.set_project(&session.id, &project.id).expect("moved");
+            assert_eq!(
+                store.set_project(&session.id, "folder-99"),
+                Err(StoreError::UnknownProject)
+            );
+            (session.id, project.id)
+        };
+
+        let store = store_in(&file);
+        assert_eq!(
+            store.session(&session).expect("the session").project_id,
+            project,
+            "the move is kept"
+        );
+        store.start_turn(&session, "hi").expect("a turn");
+        assert_eq!(
+            store.set_project(&session, playground::PLAYGROUND_ID),
+            Err(StoreError::NotEmpty)
+        );
+        assert_eq!(
+            store.set_project("session-99", playground::PLAYGROUND_ID),
             Err(StoreError::UnknownSession)
         );
     }

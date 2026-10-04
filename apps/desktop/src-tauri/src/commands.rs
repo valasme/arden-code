@@ -188,6 +188,24 @@ pub(crate) enum FileKind {
     DiagnosticsToSave,
 }
 
+/// Asks the person for a folder. A debug build can be told the answer, so tests need no dialog.
+pub(crate) async fn choose_folder(app: &AppHandle) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    if let Some(answer) = std::env::var_os("ARDEN_CODE_FOLDER_DIALOG_ANSWER") {
+        return Some(PathBuf::from(answer));
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .blocking_pick_folder()
+            .and_then(|path| path.into_path().ok())
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
 /// Asks the person for a file. A debug build can be told the answer, so tests need no dialog.
 pub(crate) async fn choose_file(app: &AppHandle, kind: FileKind) -> Option<PathBuf> {
     #[cfg(debug_assertions)]

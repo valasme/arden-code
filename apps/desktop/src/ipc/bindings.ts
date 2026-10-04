@@ -381,18 +381,18 @@ export const commands = {
 	 */
 	deleteSession: (id: string) => __TAURI_INVOKE<null>("delete_session", { id }),
 	/**
-	 *  Starts an empty session in the Playground, with the agent given, or the one a new session
-	 *  takes (ADR 0039).
+	 *  Starts an empty session in a project, the Playground when none is given, with the agent given,
+	 *  or the one a new session there takes (ADR 0039).
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns an error when the Playground does not exist, or the session cannot be saved.
+	 *  Returns an error when the project does not exist, or the session cannot be saved.
 	 */
 	createSession: (agent: 
 /**  The built-in demonstration agent. */
 "demo" | 
 /**  Claude, through the person's own Claude Code (ADR 0038). */
-"claude" | null) => __TAURI_INVOKE<SessionSummary>("create_session", { agent }),
+"claude" | null, projectId: string | null) => __TAURI_INVOKE<SessionSummary>("create_session", { agent, projectId }),
 	/**
 	 *  Starts an empty session linked to another one, in its project and with its agent (ADR 0036).
 	 * 
@@ -470,6 +470,36 @@ export const commands = {
 	 *  change cannot be saved.
 	 */
 	setSessionAgent: (id: string, agent: AgentKind) => __TAURI_INVOKE<null>("set_session_agent", { id, agent }),
+	/**
+	 *  Moves a session that has had no message yet to another project (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session or project, the session is archived or has had a
+	 *  message, or the change cannot be saved.
+	 */
+	setSessionProject: (id: string, projectId: string) => __TAURI_INVOKE<null>("set_session_project", { id, projectId }),
+	/**
+	 *  Asks the person for a folder with Windows' dialog, and adds it as a project (ADR 0039). Nothing
+	 *  when they cancel. A folder opened before is the same project.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when the project cannot be saved.
+	 */
+	pickFolder: () => __TAURI_INVOKE<{
+	id: string,
+	kind: ProjectKind,
+	/**  The folder's name. */
+	name: string,
+	/**  The folder's full path. */
+	path: string,
+	/**
+	 *  Whether the person trusts the folder, so Claude may work in it (ADR 0039): Claude Code runs
+	 *  a project's own hooks, MCP servers and environment. The Playground is always trusted.
+	 */
+	trusted: boolean,
+} | null>("pick_folder"),
 	/**
 	 *  The agent a new session in a project would have, the Playground when none is given (ADR 0039).
 	 * 
