@@ -12,8 +12,8 @@ use super::launch::{Conversation, LaunchError};
 use super::script::{Scripted, Step, handshake};
 use crate::driver::Answer;
 use crate::model::{
-    AgentKind, ApprovalAction, ApprovalState, Item, Question, QuestionAnswer, QuestionOption,
-    QuestionState, ToolStatus, Turn, TurnEvent, TurnStatus,
+    AgentKind, ApprovalAction, ApprovalState, FileChangeKind, Item, Question, QuestionAnswer,
+    QuestionOption, QuestionState, ToolStatus, Turn, TurnEvent, TurnStatus,
 };
 use crate::playground;
 use crate::store::{SessionStore, StoreError};
@@ -205,6 +205,125 @@ fn a_tool_call_shows_what_claude_asked_for_and_ends_with_what_the_tool_answered(
                 Some("error[E0601]: `main` function not found".to_owned())
             ),
         ]
+    );
+}
+
+/// What a tool answered, with Claude Code's own account of what it did.
+fn tool_result_with(tool_use_id: &str, content: &str, outcome: &Value) -> Step {
+    Step::Play(json!({
+        "type": "user",
+        "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": tool_use_id, "content": content }] },
+        "parent_tool_use_id": null,
+        "session_id": "c1",
+        "tool_use_result": outcome
+    }))
+}
+
+#[test]
+fn files_claude_edits_and_writes_show_as_file_changes_with_the_lines_added_and_removed() {
+    let main = r"C:\Projects\demo\src\main.rs";
+    let notes = r"C:\Projects\demo\NOTES.md";
+    let readme = r"C:\Projects\demo\README.md";
+    let mut script = handshake();
+    script.extend([
+        message("Tidy up"),
+        assistant("msg_1", &json!([{ "type": "tool_use", "id": "toolu_e", "name": "Edit", "input": { "file_path": main, "old_string": "a", "new_string": "b" } }])),
+        tool_result_with(
+            "toolu_e",
+            "The file was updated.",
+            &json!({
+                "filePath": main,
+                "oldString": "a",
+                "newString": "b",
+                "structuredPatch": [
+                    { "oldStart": 1, "oldLines": 3, "newStart": 1, "newLines": 4, "lines": [" fn main() {", "-    a();", "+    b();", "+    c();", " }"] },
+                    { "oldStart": 9, "oldLines": 1, "newStart": 10, "newLines": 0, "lines": ["-// old"] }
+                ]
+            }),
+        ),
+        assistant("msg_2", &json!([{ "type": "tool_use", "id": "toolu_c", "name": "Write", "input": { "file_path": notes, "content": "one\ntwo\nthree\n" } }])),
+        tool_result_with(
+            "toolu_c",
+            "File created.",
+            &json!({ "type": "create", "filePath": notes, "content": "one\ntwo\nthree\n", "structuredPatch": [] }),
+        ),
+        assistant("msg_3", &json!([{ "type": "tool_use", "id": "toolu_u", "name": "Write", "input": { "file_path": readme, "content": "# Demo\nNew\n" } }])),
+        tool_result_with(
+            "toolu_u",
+            "File updated.",
+            &json!({
+                "type": "update",
+                "filePath": readme,
+                "content": "# Demo\nNew\n",
+                "structuredPatch": [{ "oldStart": 1, "oldLines": 2, "newStart": 1, "newLines": 2, "lines": [" # Demo", "-Old", "+New"] }]
+            }),
+        ),
+        success("Tidied."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "Tidy up");
+
+    scripted.assert_followed();
+    let turn = turn(&store, &session, 0);
+    let changes: Vec<(String, FileChangeKind, u32, u32)> = turn
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::FileChange {
+                path,
+                change,
+                added,
+                removed,
+                ..
+            } => Some((path.clone(), *change, *added, *removed)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        changes,
+        vec![
+            (r"src\main.rs".to_owned(), FileChangeKind::Modified, 2, 2),
+            ("NOTES.md".to_owned(), FileChangeKind::Created, 3, 0),
+            ("README.md".to_owned(), FileChangeKind::Modified, 1, 1),
+        ]
+    );
+    let edit = turn
+        .items
+        .iter()
+        .position(|item| matches!(item, Item::ToolCall { name, .. } if name == "Edit"))
+        .expect("the edit's tool call");
+    assert!(
+        matches!(&turn.items[edit + 1], Item::FileChange { path, .. } if path == r"src\main.rs"),
+        "the change follows its tool call: {:#?}",
+        turn.items
+    );
+}
+
+#[test]
+fn a_failed_edit_changes_no_file() {
+    let main = r"C:\Projects\demo\src\main.rs";
+    let mut script = handshake();
+    script.extend([
+        message("Edit it"),
+        assistant("msg_1", &json!([{ "type": "tool_use", "id": "toolu_e", "name": "Edit", "input": { "file_path": main, "old_string": "a", "new_string": "b" } }])),
+        tool_result("toolu_e", "String to replace not found in file.", true),
+        success("It did not work."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "Edit it");
+
+    scripted.assert_followed();
+    assert!(
+        !turn(&store, &session, 0)
+            .items
+            .iter()
+            .any(|item| matches!(item, Item::FileChange { .. }))
     );
 }
 

@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use super::protocol::{Block, Frame, StreamEvent, ToolResult};
 use super::question;
-use crate::model::{Item, ToolStatus, TurnEvent};
+use crate::model::{FileChangeKind, Item, ToolStatus, TurnEvent};
 
 /// The most characters of a tool's input shown on its line.
 const INPUT_LENGTH: usize = 200;
@@ -92,6 +92,56 @@ fn output_of(result: &ToolResult) -> String {
     cut(&kept, OUTPUT_LENGTH)
 }
 
+/// How many lines a patch adds and removes, from Claude Code's `structuredPatch`.
+fn counted(patch: &Value) -> (u32, u32) {
+    let lines = patch
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|hunk| hunk["lines"].as_array())
+        .flatten()
+        .filter_map(Value::as_str);
+    let (mut added, mut removed) = (0_u32, 0_u32);
+    for line in lines {
+        if line.starts_with('+') {
+            added = added.saturating_add(1);
+        } else if line.starts_with('-') {
+            removed = removed.saturating_add(1);
+        }
+    }
+    (added, removed)
+}
+
+/// The number of lines in a file's text.
+fn line_count(text: &str) -> u32 {
+    u32::try_from(text.lines().count()).unwrap_or(u32::MAX)
+}
+
+/// The file a tool created or changed, from Claude Code's own account of what it did: the path as
+/// it was given, created or modified, and the lines added and removed.
+fn file_change(tool: &str, outcome: &Value) -> Option<(String, FileChangeKind, u32, u32)> {
+    let path = |field: &str| outcome[field].as_str().map(str::to_owned);
+    match tool {
+        "Write" if outcome["type"] == "create" => {
+            let added = line_count(outcome["content"].as_str().unwrap_or_default());
+            Some((path("filePath")?, FileChangeKind::Created, added, 0))
+        }
+        "Write" | "Edit" | "MultiEdit" => {
+            let (added, removed) = counted(&outcome["structuredPatch"]);
+            Some((path("filePath")?, FileChangeKind::Modified, added, removed))
+        }
+        "NotebookEdit" if outcome["error"].is_null() => {
+            let added = if outcome["edit_mode"] == "delete" {
+                0
+            } else {
+                line_count(outcome["new_source"].as_str().unwrap_or_default())
+            };
+            Some((path("notebook_path")?, FileChangeKind::Modified, added, 0))
+        }
+        _ => None,
+    }
+}
+
 /// The reply to one message, as its frames arrive.
 pub struct Reply {
     turn_id: String,
@@ -102,8 +152,8 @@ pub struct Reply {
     streamed: HashMap<(String, u64), String>,
     /// How many blocks of each message have arrived complete.
     delivered: HashMap<String, u64>,
-    /// The item of each tool call, by Claude's id for it.
-    tools: HashMap<String, String>,
+    /// The item of each tool call and the tool's name, by Claude's id for it.
+    tools: HashMap<String, (String, String)>,
     /// Whether an error is shown already, so the result does not show a second one.
     failed: bool,
     ended: bool,
@@ -149,10 +199,49 @@ impl Reply {
     }
 
     /// The item of a tool call, the same however often it is seen.
-    fn tool_item(&mut self, tool_use_id: &str) -> String {
+    fn tool_item(&mut self, tool_use_id: &str, name: &str) -> String {
         let id = format!("{}-{tool_use_id}", self.turn_id);
-        self.tools.insert(tool_use_id.to_owned(), id.clone());
+        self.tools
+            .insert(tool_use_id.to_owned(), (id.clone(), name.to_owned()));
         id
+    }
+
+    /// What tools answered: each tool call ends, and a file a tool created or changed follows its
+    /// tool call.
+    fn on_tool_results(&self, results: &[ToolResult], outcome: Option<&Value>) -> Vec<TurnEvent> {
+        let mut events = Vec::new();
+        for result in results {
+            let Some((item_id, name)) = self.tools.get(&result.tool_use_id) else {
+                continue;
+            };
+            events.push(TurnEvent::ToolCallEnded {
+                turn_id: self.turn_id.clone(),
+                item_id: item_id.clone(),
+                status: if result.is_error {
+                    ToolStatus::Failed
+                } else {
+                    ToolStatus::Done
+                },
+                output: Some(output_of(result)),
+            });
+            // Claude Code's account belongs to the one tool a frame answers.
+            let changed = match outcome {
+                Some(outcome) if !result.is_error && results.len() == 1 => {
+                    file_change(name, outcome)
+                }
+                _ => None,
+            };
+            if let Some((path, change, added, removed)) = changed {
+                events.push(self.added(Item::FileChange {
+                    id: format!("{item_id}-file"),
+                    path: relative(&path, &self.folder),
+                    change,
+                    added,
+                    removed,
+                }));
+            }
+        }
+        events
     }
 
     fn tool_call(&self, id: String, name: &str, input: String) -> TurnEvent {
@@ -197,7 +286,7 @@ impl Reply {
                         name,
                         ..
                     } => {
-                        let item_id = self.tool_item(tool_use_id);
+                        let item_id = self.tool_item(tool_use_id, name);
                         self.streamed
                             .insert((self.message.clone(), *index), item_id.clone());
                         return vec![self.tool_call(item_id, name, String::new())];
@@ -264,7 +353,7 @@ impl Reply {
                     name,
                     input,
                 } => {
-                    let item_id = self.tool_item(tool_use_id);
+                    let item_id = self.tool_item(tool_use_id, name);
                     let line = summary(name, input, &self.folder);
                     events.push(self.tool_call(item_id, name, line));
                     continue;
@@ -291,24 +380,9 @@ impl Reply {
             } => self.on_assistant(message_id, blocks, error.as_deref()),
             Frame::ToolResults {
                 results,
+                outcome,
                 subagent: false,
-                ..
-            } => results
-                .iter()
-                .filter_map(|result| {
-                    let item_id = self.tools.get(&result.tool_use_id)?;
-                    Some(TurnEvent::ToolCallEnded {
-                        turn_id: self.turn_id.clone(),
-                        item_id: item_id.clone(),
-                        status: if result.is_error {
-                            ToolStatus::Failed
-                        } else {
-                            ToolStatus::Done
-                        },
-                        output: Some(output_of(result)),
-                    })
-                })
-                .collect(),
+            } => self.on_tool_results(results, outcome.as_ref()),
             Frame::Result { is_error, text } => {
                 self.ended = true;
                 let turn_id = self.turn_id.clone();
