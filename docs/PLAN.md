@@ -275,7 +275,7 @@ On a settings page the sidebar shows Back, the settings search and the tabs inst
 | Tab | Settings and actions (default in brackets) |
 |---|---|
 | General | On startup: restore last session [default] or start fresh · Regional format: follow Windows [default] or English (US) · Check for updates automatically [on] |
-| Appearance | Theme: system [default], light or dark · Zoom 80–200% [100%] · Follow Windows text size [on] · Code font size 11–20 px [13] · Code ligatures [off] · Reduce motion: follow Windows [default], on or off · Show status bar [on] |
+| Appearance | Theme: system [default], light or dark · Zoom 80–200% [100%] · Follow Windows text size [on] · Code font size 11–20 px [13] · Code ligatures [off] · Reduce motion: follow Windows [default], on or off · Smooth scrolling [on], after a restart · Show status bar [on] |
 | Keyboard | Every command with its shortcut · click to record a new shortcut · conflict warnings · reset one or all |
 | Notifications | Desktop notifications [on] · Send a test notification |
 | Agents | Install status, path and version for Claude Code and Codex, with an install link · for Claude Code, the minimum version and whether it is signed in · Look again |
