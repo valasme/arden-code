@@ -3,7 +3,7 @@ import { ArrowLeftIcon, ArrowRightIcon, MenuIcon, SearchIcon } from "lucide-reac
 import { type ComponentProps, type MouseEvent, type ReactNode, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { commands } from "@/ipc/bindings";
+import { commands, type PagePoint } from "@/ipc/bindings";
 import { reportFailure } from "@/lib/errorToasts";
 import { useSnapLayouts } from "@/lib/snapLayouts";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,7 @@ interface TitleBarProps {
  * Opens Windows' own window menu: with its top left corner at a point of the page, or, with none,
  * where Windows puts it for Alt+Space.
  */
-function showSystemMenu(at: { x: number; y: number } | null = null) {
+function showSystemMenu(at: PagePoint | null = null) {
   if (!isTauri()) return;
   commands.showSystemMenu(at).catch((error: unknown) => {
     reportFailure("Opening the window menu", error);

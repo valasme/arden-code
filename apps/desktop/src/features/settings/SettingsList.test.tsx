@@ -29,6 +29,7 @@ const places = {
   appearanceCodeFontSize: ["appearance", "codeFontSize"],
   appearanceCodeLigatures: ["appearance", "codeLigatures"],
   appearanceReduceMotion: ["appearance", "reduceMotion"],
+  appearanceSmoothScrolling: ["appearance", "smoothScrolling"],
   appearanceShowStatusBar: ["appearance", "showStatusBar"],
   layoutSidebarWidth: ["layout", "sidebarWidth"],
   layoutInspectorWidth: ["layout", "inspectorWidth"],
@@ -393,6 +394,34 @@ describe("Appearance → the switches and Reduce motion", () => {
         { change: { appearanceReduceMotion: "off" } },
       ]);
     });
+  });
+});
+
+describe("Appearance → Smooth scrolling", () => {
+  it("is on by default, right after Reduce motion", async () => {
+    startApp();
+    renderTab("appearance");
+
+    const smooth = await screen.findByRole("switch", { name: "Smooth scrolling" });
+    expect(smooth).toBeChecked();
+    const motion = screen.getByRole("radiogroup", { name: "Reduce motion" });
+    const rows = screen.getAllByRole("listitem");
+    const rowOf = (element: HTMLElement) => rows.findIndex((row) => row.contains(element));
+    expect(rowOf(smooth)).toBe(rowOf(motion) + 1);
+  });
+
+  it("is saved when turned off, and asks to restart, since the web engine reads it when it starts", async () => {
+    const calls = startApp();
+    const user = userEvent.setup();
+    renderTab("appearance");
+
+    await user.click(await screen.findByRole("switch", { name: "Smooth scrolling" }));
+
+    const dialog = await screen.findByRole("alertdialog", { name: "Restart Arden Code?" });
+    expect(
+      within(dialog).getByText("Smooth scrolling changes the next time Arden Code starts."),
+    ).toBeVisible();
+    expect(savedChange(calls)).toEqual({ change: { appearanceSmoothScrolling: false } });
   });
 });
 

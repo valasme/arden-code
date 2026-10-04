@@ -238,4 +238,36 @@ test.describe("Advanced settings in the real app", () => {
       }
     }),
   );
+
+  test(
+    "turning smooth scrolling off takes effect after a restart",
+    withFolder(async () => {
+      const app = await launchApp();
+      try {
+        await app.page.getByRole("link", { name: "Settings" }).click();
+        await app.page.getByRole("link", { name: "Appearance", exact: true }).click();
+        expect(webViewCommandLines(app.webViewProfile).join("\n")).not.toContain(
+          "--disable-smooth-scrolling",
+        );
+
+        await app.page.getByRole("switch", { name: "Smooth scrolling" }).click();
+        const question = app.page.getByRole("alertdialog", { name: "Restart Arden Code?" });
+        await expect(question).toBeVisible();
+        await question.getByRole("button", { name: "Restart now" }).click();
+
+        await expect
+          .poll(
+            () =>
+              webViewCommandLines(app.webViewProfile)
+                .join("\n")
+                .includes("--disable-smooth-scrolling"),
+            { timeout: 30_000 },
+          )
+          .toBe(true);
+      } finally {
+        killAllApps();
+        app.kill();
+      }
+    }),
+  );
 });
