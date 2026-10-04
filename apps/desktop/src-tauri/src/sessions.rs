@@ -33,6 +33,7 @@ fn app_error(error: StoreError) -> AppError {
         StoreError::Archived => AppError::new(ErrorCode::SessionArchived),
         StoreError::NotEmpty => AppError::new(ErrorCode::SessionNotEmpty),
         StoreError::NotWaiting => AppError::new(ErrorCode::RequestNotWaiting),
+        StoreError::NotTrusted => AppError::new(ErrorCode::ProjectNotTrusted),
         StoreError::NotSaved(reason) => {
             AppError::new(ErrorCode::SessionsNotSaved).with_details(reason)
         }
@@ -279,6 +280,19 @@ pub fn delete_session(
     sessions.delete(&id).map_err(app_error)?;
     claude.0.end(&id);
     tracing::info!(session = %id, "session deleted");
+    Ok(())
+}
+
+/// Remembers that the person trusts a project's folder, so Claude may work in it (ADR 0039).
+///
+/// # Errors
+///
+/// Returns an error when there is no such project, or the file cannot be written.
+#[tauri::command]
+#[specta::specta]
+pub fn trust_project(project_id: String, sessions: State<'_, Sessions>) -> Result<(), AppError> {
+    sessions.trust_project(&project_id).map_err(app_error)?;
+    tracing::info!(project = %project_id, "project trusted");
     Ok(())
 }
 

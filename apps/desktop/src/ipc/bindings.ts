@@ -429,6 +429,14 @@ export const commands = {
 	 */
 	stopReply: (sessionId: string) => __TAURI_INVOKE<null>("stop_reply", { sessionId }),
 	/**
+	 *  Remembers that the person trusts a project's folder, so Claude may work in it (ADR 0039).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such project, or the file cannot be written.
+	 */
+	trustProject: (projectId: string) => __TAURI_INVOKE<null>("trust_project", { projectId }),
+	/**
 	 *  Answers an approval request that waits in a session's running turn (ADR 0039).
 	 * 
 	 *  # Errors
@@ -720,6 +728,8 @@ export type ErrorCode =
 "ARD-AGT-014" | 
 /**  An approval request was answered when it no longer waited for an answer. */
 "ARD-AGT-015" | 
+/**  Claude was asked to work in a project whose folder the person has not trusted. */
+"ARD-AGT-016" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -859,6 +869,11 @@ export type Project = {
 	name: string,
 	/**  The folder's full path. */
 	path: string,
+	/**
+	 *  Whether the person trusts the folder, so Claude may work in it (ADR 0039): Claude Code runs
+	 *  a project's own hooks, MCP servers and environment. The Playground is always trusted.
+	 */
+	trusted: boolean,
 };
 
 /**  What a project is. Only the Playground exists in the foundation. */

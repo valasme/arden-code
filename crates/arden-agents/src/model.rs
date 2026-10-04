@@ -34,6 +34,9 @@ pub struct Project {
     pub name: String,
     /// The folder's full path.
     pub path: String,
+    /// Whether the person trusts the folder, so Claude may work in it (ADR 0039): Claude Code runs
+    /// a project's own hooks, MCP servers and environment. The Playground is always trusted.
+    pub trusted: bool,
 }
 
 /// How a tool call ended.

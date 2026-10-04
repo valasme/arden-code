@@ -95,6 +95,9 @@ pub enum ErrorCode {
     /// An approval request was answered when it no longer waited for an answer.
     #[serde(rename = "ARD-AGT-015")]
     RequestNotWaiting,
+    /// Claude was asked to work in a project whose folder the person has not trusted.
+    #[serde(rename = "ARD-AGT-016")]
+    ProjectNotTrusted,
     /// Programs cannot be started and supervised on this computer.
     #[serde(rename = "ARD-PROC-001")]
     ProcessSupervisor,
@@ -142,6 +145,7 @@ impl ErrorCode {
             Self::ClaudeCouldNotAnswer => "ARD-AGT-013",
             Self::SessionNotEmpty => "ARD-AGT-014",
             Self::RequestNotWaiting => "ARD-AGT-015",
+            Self::ProjectNotTrusted => "ARD-AGT-016",
             Self::ProcessSupervisor => "ARD-PROC-001",
             Self::UpdateInstall => "ARD-UPD-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",

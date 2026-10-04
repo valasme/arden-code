@@ -19,6 +19,7 @@ import { MessageBox } from "./MessageBox";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
 import { SessionLinks } from "./SessionLinks";
 import { SessionMenu } from "./SessionMenu";
+import { TrustDialog } from "./TrustDialog";
 import { TurnView } from "./TurnView";
 import { useSendMessage } from "./useSendMessage";
 
@@ -47,6 +48,11 @@ export function SessionView({ id }: { id: string }) {
   /** Where the view was last held at the end. Only a scroll above it is the person leaving the end. */
   const heldAt = useRef(0);
   const [atEnd, setAtEnd] = useState(true);
+  /** A message that waits for the person to trust the project's folder, and how to say what became of it. */
+  const [trusting, setTrusting] = useState<{
+    text: string;
+    sent: (sent: boolean) => void;
+  } | null>(null);
 
   const turns = session?.turns ?? [];
   const count = turns.length;
@@ -285,6 +291,12 @@ export function SessionView({ id }: { id: string }) {
           onSend={(text) => {
             stuck.current = true;
             setAtEnd(true);
+            // Claude first works in a folder only once the person trusts it (ADR 0039).
+            if (agent === "claude" && project?.kind === "folder" && !project.trusted) {
+              return new Promise<boolean>((sent) => {
+                setTrusting({ text, sent });
+              });
+            }
             void send(id, text);
             return true;
           }}
@@ -292,6 +304,30 @@ export function SessionView({ id }: { id: string }) {
       ) : (
         <ArchivedBar sessionId={id} />
       )}
+      {trusting && project ? (
+        <TrustDialog
+          name={project.name}
+          path={project.path}
+          onAnswer={(trusted) => {
+            setTrusting(null);
+            if (!trusted) {
+              trusting.sent(false);
+              return;
+            }
+            commands
+              .trustProject(project.id)
+              .then(async () => {
+                await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
+                trusting.sent(true);
+                await send(id, trusting.text);
+              })
+              .catch((failure: unknown) => {
+                showErrorToast(toAppError(failure));
+                trusting.sent(false);
+              });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

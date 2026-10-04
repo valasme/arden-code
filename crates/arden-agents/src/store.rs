@@ -37,6 +37,8 @@ pub enum StoreError {
     NotEmpty,
     /// The approval request that was answered no longer waits for an answer.
     NotWaiting,
+    /// Claude was asked to work in a project whose folder the person has not trusted (ADR 0039).
+    NotTrusted,
     /// The change could not be written to the file, so it was not made. Says why, for the logs.
     NotSaved(String),
     /// What the file holds could not be read. Says why, for the logs.
@@ -465,6 +467,7 @@ impl SessionStore {
             kind: ProjectKind::Folder,
             name,
             path,
+            trusted: false,
         };
         let (position, last_id) = (inner.projects.len(), inner.last_id);
         inner
@@ -473,6 +476,30 @@ impl SessionStore {
             .map_err(not_saved)?;
         inner.projects.push(project.clone());
         Ok(project)
+    }
+
+    /// Remembers that the person trusts a project's folder, so Claude may work in it (ADR 0039).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownProject`] when there is no such project, and
+    /// [`StoreError::NotSaved`] when it cannot be written.
+    pub fn trust_project(&self, project_id: &str) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let last_id = inner.last_id;
+        let project = inner
+            .projects
+            .iter_mut()
+            .find(|project| project.id == project_id)
+            .ok_or(StoreError::UnknownProject)?;
+        if project.trusted {
+            return Ok(());
+        }
+        project.trusted = true;
+        inner
+            .database
+            .save_trust(project_id, last_id)
+            .map_err(not_saved)
     }
 
     /// Remembers that a session was opened, so that it can be opened again at the next start.
@@ -761,12 +788,22 @@ impl SessionStore {
         let used = inner.next_number();
         let last_id = inner.last_id;
         let Inner {
-            sessions, database, ..
+            sessions,
+            database,
+            projects,
+            ..
         } = &mut *inner;
         let entry = find(sessions, session_id)?;
         entry.load(database)?;
         if entry.session.archived_at.is_some() {
             return Err(StoreError::Archived);
+        }
+        // Claude Code runs a project's own hooks, MCP servers and environment (ADR 0039).
+        let trusted = projects
+            .iter()
+            .any(|project| project.id == entry.session.project_id && project.trusted);
+        if entry.session.agent == AgentKind::Claude && !trusted {
+            return Err(StoreError::NotTrusted);
         }
         if entry
             .session
@@ -1795,7 +1832,49 @@ mod tests {
         let version: i64 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("the version");
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
+    }
+
+    #[test]
+    fn claude_works_in_a_folder_only_once_the_person_trusts_it_and_the_trust_is_kept() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let (project, claude) = {
+            let store = store_in(&file);
+            let project = store.open_folder(folder.path()).expect("a project");
+            assert!(!project.trusted, "a folder starts untrusted");
+            let claude = store
+                .create_session(&project.id, AgentKind::Claude)
+                .expect("a session");
+            let demo = store
+                .create_session(&project.id, AgentKind::Demo)
+                .expect("a session");
+
+            assert_eq!(
+                store.start_turn(&claude.id, "Hello").map(|_| ()),
+                Err(StoreError::NotTrusted)
+            );
+            assert!(
+                store.start_turn(&demo.id, "Hello").is_ok(),
+                "the Demo agent runs nothing of the project's"
+            );
+            store.trust_project(&project.id).expect("trusted");
+            (project.id, claude.id)
+        };
+
+        let store = store_in(&file);
+        let list = store.list();
+        assert!(
+            list.projects
+                .iter()
+                .any(|listing| listing.project.id == project && listing.project.trusted),
+            "{list:#?}"
+        );
+        assert!(store.start_turn(&claude, "Hello").is_ok());
+        assert_eq!(
+            store.trust_project("folder-unknown"),
+            Err(StoreError::UnknownProject)
+        );
     }
 
     #[test]

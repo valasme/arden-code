@@ -23,6 +23,7 @@ export const playground = {
   kind: "playground",
   name: "Playground",
   path: String.raw`C:\Users\Ada\AppData\Local\io.github.valasme.arden\playground`,
+  trusted: true,
 } as const;
 
 /** What a command that fails throws, as it reaches the UI through the isolation frame. */
@@ -63,8 +64,8 @@ export function sessionNamed(
 export const archivedAt = "2026-10-02T09:30:00Z";
 
 /** A folder opened as a project. */
-export function folderProject(id: string, name: string): Project {
-  return { id, kind: "folder", name, path: `C:\\Work\\${name}` };
+export function folderProject(id: string, name: string, trusted = false): Project {
+  return { id, kind: "folder", name, path: `C:\\Work\\${name}`, trusted };
 }
 
 interface Options {
@@ -95,9 +96,10 @@ export function startSessionsRust({
   sessionsNotice = null,
   sessions: kept = [],
   failing = {},
-  folders = [],
+  folders: opened = [],
   newSessionAgent = "demo",
 }: Options = {}) {
+  const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
   mockWindows("main");
   const sessions: Session[] = structuredClone(kept);
@@ -240,6 +242,13 @@ export function startSessionsRust({
           if (pins.includes(id)) pins.splice(pins.indexOf(id), 1);
           if (archives.includes(id)) archives.splice(archives.indexOf(id), 1);
           for (const other of sessions) if (other.linkedFrom === id) other.linkedFrom = null;
+          return null;
+        }
+        case "trust_project": {
+          const { projectId } = z.object({ projectId: z.string() }).parse(payload);
+          const project = folders.find((candidate) => candidate.id === projectId);
+          if (project) project.trusted = true;
+          else if (projectId !== playground.id) throw failure("ARD-AGT-001");
           return null;
         }
         case "answer_approval": {

@@ -148,6 +148,11 @@
       "what": "That request no longer waits for an answer.",
       "why": "The reply stopped, or Claude Code stopped asking, before the answer arrived."
     },
+    "ARD-AGT-016": {
+      "action": "Send the message again and choose Trust folder, if you trust what is in it.",
+      "what": "Claude cannot work in this folder until you trust it.",
+      "why": "Claude Code runs a project's own hooks, MCP servers and environment settings without asking."
+    },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
       "what": "Something unexpected went wrong inside Arden Code.",
@@ -437,6 +442,11 @@
     },
     "stopped": "The reply stopped.",
     "transcript": "Session",
+    "trust": {
+      "confirm": "Trust folder",
+      "description": "Claude Code runs a project's own hooks, MCP servers and environment settings without asking. Trust {{path}} only if you know what is in it. You are asked once for each folder.",
+      "title": "Trust “{{name}}”?"
+    },
     "untitled": "New session",
     "you": "You"
   },

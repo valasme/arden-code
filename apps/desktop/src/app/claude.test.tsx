@@ -8,7 +8,7 @@ import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
-import { sessionNamed, startSessionsRust } from "@/test/sessions";
+import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
 
@@ -215,6 +215,91 @@ describe("Claude's questions (ADR 0039)", () => {
     });
     expect(screen.getByText("Vue")).toBeVisible();
     expect(within(statusBar).getByText("Claude: replying")).toBeVisible();
+  });
+});
+
+/** A Claude session in a folder opened as a project, which the person may have trusted. */
+function claudeInAFolder(trusted = false) {
+  return startSessionsRust({
+    folders: [folderProject("folder-1", "demo", trusted)],
+    sessions: [sessionNamed("session-1", null, "folder-1", "claude")],
+  });
+}
+
+describe("Trusting a folder (ADR 0039)", () => {
+  it("asks before Claude first works in a folder, and Trust folder sends the message", async () => {
+    const user = userEvent.setup();
+    const rust = claudeInAFolder();
+    renderApp("/session/session-1");
+    const box = await screen.findByRole("textbox", { name: "Message" });
+
+    await user.type(box, "Fix the build{Enter}");
+
+    const question = await screen.findByRole("alertdialog", { name: "Trust “demo”?" });
+    expect(question.textContent).toContain("hooks, MCP servers and environment settings");
+    expect(question.textContent).toContain(String.raw`C:\Work\demo`);
+    expect(rust.sent()).toHaveLength(0);
+    await user.click(within(question).getByRole("button", { name: "Trust folder" }));
+
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+    expect(rust.callsTo("trust_project")).toEqual([{ projectId: "folder-1" }]);
+    expect(rust.callsTo("send_message")[0]).toMatchObject({ text: "Fix the build" });
+    expect(box).toHaveValue("");
+    expect(await screen.findByText("Claude is replying…")).toBeVisible();
+  });
+
+  it("keeps the message in the box when the question is cancelled, and asks again next time", async () => {
+    const user = userEvent.setup();
+    const rust = claudeInAFolder();
+    renderApp("/session/session-1");
+    const box = await screen.findByRole("textbox", { name: "Message" });
+    await user.type(box, "Fix the build{Enter}");
+    const question = await screen.findByRole("alertdialog", { name: "Trust “demo”?" });
+
+    await user.click(within(question).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(box).toHaveValue("Fix the build");
+    expect(box).toHaveFocus();
+    expect(rust.sent()).toHaveLength(0);
+    expect(rust.callsTo("trust_project")).toEqual([]);
+    await user.keyboard("{Enter}");
+    const again = await screen.findByRole("alertdialog", { name: "Trust “demo”?" });
+    await animationsDone(again);
+    expect(again).toBeVisible();
+  });
+
+  it("asks nothing in a folder that is trusted, or in the Playground", async () => {
+    const user = userEvent.setup();
+    const rust = claudeInAFolder(true);
+    renderApp("/session/session-1");
+
+    await user.type(
+      await screen.findByRole("textbox", { name: "Message" }),
+      "Fix the build{Enter}",
+    );
+
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("has no accessibility violations while it asks", async () => {
+    const user = userEvent.setup();
+    claudeInAFolder();
+    renderApp("/session/session-1");
+    await user.type(
+      await screen.findByRole("textbox", { name: "Message" }),
+      "Fix the build{Enter}",
+    );
+    await animationsDone(await screen.findByRole("alertdialog"));
+
+    await expectNoAccessibilityViolations(document.body);
   });
 });
 

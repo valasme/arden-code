@@ -12,7 +12,7 @@ use crate::model::{Item, Project, Session, Turn};
 
 /// The version of the tables, kept in SQLite's `user_version`. Each later version comes with the
 /// migration that brings the file up to it from the one before.
-const VERSION: i64 = 2;
+const VERSION: i64 = 3;
 
 /// The tables of version 1, which every file starts from.
 pub(crate) const TABLES: &str = "
@@ -62,6 +62,8 @@ const MIGRATIONS: &[&str] = &[
     // Version 2: the agent's own conversation for each session, to carry on after a restart
     // (ADR 0039).
     "ALTER TABLE sessions ADD COLUMN conversation TEXT;",
+    // Version 3: whether the person trusts each project's folder (ADR 0039).
+    "ALTER TABLE projects ADD COLUMN trusted INTEGER NOT NULL DEFAULT 0;",
 ];
 
 /// What went wrong with the file, in words for the logs.
@@ -152,9 +154,16 @@ fn put_project(
     position: usize,
 ) -> rusqlite::Result<()> {
     transaction.execute(
-        "INSERT INTO projects (id, kind, name, path, position) VALUES (?1, ?2, ?3, ?4, ?5)
+        "INSERT INTO projects (id, kind, name, path, position, trusted) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name, path = excluded.path",
-        params![project.id, name_of(project.kind)?, project.name, project.path, stored(position as u64)],
+        params![
+            project.id,
+            name_of(project.kind)?,
+            project.name,
+            project.path,
+            stored(position as u64),
+            project.trusted
+        ],
     )?;
     Ok(())
 }
@@ -302,9 +311,9 @@ impl Database {
         )?;
         transaction.commit()?;
 
-        let mut statement = self
-            .connection
-            .prepare("SELECT id, kind, name, path FROM projects ORDER BY position, rowid")?;
+        let mut statement = self.connection.prepare(
+            "SELECT id, kind, name, path, trusted FROM projects ORDER BY position, rowid",
+        )?;
         let projects = statement
             .query_map([], |row| {
                 Ok(Project {
@@ -312,6 +321,7 @@ impl Database {
                     kind: from_name(row.get(1)?)?,
                     name: row.get(2)?,
                     path: row.get(3)?,
+                    trusted: row.get(4)?,
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -476,6 +486,21 @@ impl Database {
             transaction.execute(
                 "UPDATE sessions SET conversation = ?2 WHERE id = ?1",
                 [session_id, conversation],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Remembers that the person trusts a project's folder.
+    ///
+    /// # Errors
+    ///
+    /// When the file cannot be written.
+    pub fn save_trust(&mut self, project_id: &str, last_id: u64) -> Result<(), DatabaseError> {
+        self.write(last_id, |transaction| {
+            transaction.execute(
+                "UPDATE projects SET trusted = 1 WHERE id = ?1",
+                [project_id],
             )?;
             Ok(())
         })
