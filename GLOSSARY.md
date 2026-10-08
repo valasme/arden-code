@@ -75,6 +75,10 @@ _Avoid_: engine, LLM
 How much an agent thinks before it answers in a session, from Low to Max, or Default to leave it to the agent CLI's own setting.
 _Avoid_: thinking budget, reasoning level
 
+**Slash command**:
+An action of an agent CLI, run by starting a message with a slash and its name, such as /compact. It is built into the agent CLI, or comes from the person's skills, plugins or MCP servers.
+_Avoid_: command (that is Arden Code's own action), skill
+
 **Vendor**:
 The company behind an agent: Anthropic for Claude, OpenAI for Codex.
 _Avoid_: provider

@@ -4,11 +4,19 @@
 
 use serde_json::{Value, json};
 
+use super::catalog::{SlashCommand, commands_in};
+
 /// A frame from Claude Code, as far as the driver cares.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Frame {
-    /// The session started (`system` / `init`), under this conversation id.
-    Init { session_id: String },
+    /// The session started (`system` / `init`), under this conversation id. It lists the commands
+    /// that only make sense in a terminal.
+    Init {
+        session_id: String,
+        terminal_commands: Vec<String>,
+    },
+    /// The slash commands, again, whole, because they changed (`system` / `commands_changed`).
+    CommandsChanged { commands: Vec<SlashCommand> },
     /// A piece of a message while it streams (`stream_event`). A subagent's pieces are marked.
     Stream { event: StreamEvent, subagent: bool },
     /// A complete message from Claude, or some of its blocks (`assistant`). Claude Code puts an
@@ -33,10 +41,18 @@ pub enum Frame {
     },
     /// Claude Code asks Arden Code something and waits for the answer (`control_request`).
     Request { id: String, request: Request },
-    /// Claude Code's answer to a request of Arden Code's (`control_response`).
-    Response { id: String, error: Option<String> },
+    /// Claude Code's answer to a request of Arden Code's (`control_response`), with what it
+    /// answered: the commands and models, for `initialize`.
+    Response {
+        id: String,
+        error: Option<String>,
+        answer: Value,
+    },
     /// Claude Code no longer waits for the answer to one of its requests.
     Cancel { id: String },
+    /// Claude Code left the conversation for a new one, as when a plan is accepted with its context
+    /// cleared (`conversation_reset`).
+    ConversationReset { new_id: String },
     /// A frame the driver does not use.
     Other,
 }
@@ -208,6 +224,13 @@ pub fn parse(line: &str) -> Option<Frame> {
     Some(match frame["type"].as_str() {
         Some("system") if frame["subtype"] == "init" => Frame::Init {
             session_id: text_of(&frame["session_id"]).unwrap_or_default(),
+            terminal_commands: frame["terminal_slash_commands"]
+                .as_array()
+                .map(|names| names.iter().filter_map(text_of).collect())
+                .unwrap_or_default(),
+        },
+        Some("system") if frame["subtype"] == "commands_changed" => Frame::CommandsChanged {
+            commands: commands_in(&frame["commands"]),
         },
         Some("stream_event") => Frame::Stream {
             event: stream_event(&frame["event"]),
@@ -234,8 +257,12 @@ pub fn parse(line: &str) -> Option<Frame> {
                 id: text_of(&response["request_id"]).unwrap_or_default(),
                 error: (response["subtype"] == "error")
                     .then(|| text_of(&response["error"]).unwrap_or_default()),
+                answer: response["response"].clone(),
             }
         }
+        Some("conversation_reset") => Frame::ConversationReset {
+            new_id: text_of(&frame["new_conversation_id"]).unwrap_or_default(),
+        },
         Some("control_cancel_request") => Frame::Cancel {
             id: text_of(&frame["request_id"]).unwrap_or_default(),
         },
@@ -329,14 +356,26 @@ mod tests {
             frames[2],
             Frame::Response {
                 id: "req_1".into(),
-                error: None
+                error: None,
+                answer: match &frames[2] {
+                    Frame::Response { answer, .. } => answer.clone(),
+                    other => panic!("not an answer: {other:?}"),
+                }
             }
         );
-        assert_eq!(
-            frames[3],
-            Frame::Init {
-                session_id: "00000000-0000-4000-8000-000000000002".into()
-            }
+        assert!(
+            matches!(&frames[2], Frame::Response { answer, .. } if answer["commands"].is_array() && answer["models"].is_array()),
+            "the answer to initialize carries the lists"
+        );
+        assert!(matches!(
+            &frames[3],
+            Frame::Init { session_id, terminal_commands }
+                if session_id == "00000000-0000-4000-8000-000000000002"
+                    && terminal_commands == &["doctor", "color", "focus", "reload-plugins"]
+        ));
+        assert!(
+            matches!(&frames[1], Frame::CommandsChanged { commands } if commands.len() == 49),
+            "the push of the commands"
         );
         assert_eq!(
             frames[5],
@@ -519,7 +558,8 @@ mod tests {
             parse(failed),
             Some(Frame::Response {
                 id: "arden-2".into(),
-                error: Some("no turn to interrupt".into())
+                error: Some("no turn to interrupt".into()),
+                answer: Value::Null
             })
         );
     }

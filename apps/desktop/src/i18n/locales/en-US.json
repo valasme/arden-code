@@ -431,7 +431,8 @@
     },
     "choiceMenu": {
       "default": "Default",
-      "defaultHint": "Claude Code's own setting"
+      "defaultHint": "Claude Code's own setting",
+      "unlisted": "Not in Claude Code's list"
     },
     "context": "{{agent}} · {{project}}",
     "delete": {
@@ -447,7 +448,9 @@
       "label": "Effort: {{effort}}",
       "low": "Low",
       "max": "Max",
-      "medium": "Medium"
+      "medium": "Medium",
+      "ultrathink": "Ultrathink",
+      "ultrathinkHint": "Think deeper on the next message"
     },
     "jumpToLatest": "Jump to latest",
     "links": {
@@ -470,6 +473,7 @@
       "fable": "Fable",
       "haiku": "Haiku",
       "label": "Model: {{model}}",
+      "older": "Older models",
       "opus": "Opus",
       "sonnet": "Sonnet"
     },
@@ -486,6 +490,21 @@
       "save": "Save",
       "title": "Rename session",
       "tooLong": "A name can have at most {{limit}} characters."
+    },
+    "slash": {
+      "count_one": "{{count}} slash command",
+      "count_other": "{{count}} slash commands",
+      "effortUsage": "Type /effort and low, medium, high, xhigh, max or auto.",
+      "label": "Slash commands",
+      "modelUsage": "Type /model and the name of a model, such as /model opus.",
+      "noModel": "Claude Code does not list a model called “{{name}}”. Choose one in the model menu.",
+      "none": "No slash command matches",
+      "renameLater": "A session can be renamed once it has a message.",
+      "source": {
+        "builtin": "Built in",
+        "mcp": "MCP",
+        "skill": "Skill"
+      }
     },
     "stopped": "The reply stopped.",
     "transcript": "Session",

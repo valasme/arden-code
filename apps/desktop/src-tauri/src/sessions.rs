@@ -6,11 +6,12 @@
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
+use arden_agents::claude::catalog::Catalog;
 use arden_agents::demo::DemoDriver;
 use arden_agents::driver::{AgentDriver, Answer};
 use arden_agents::model::{
-    AgentKind, ApprovalAction, ApprovalState, Effort, Item, Model, Project, QuestionAnswer,
-    QuestionState, Session, SessionList, SessionSummary, TurnEvent,
+    AgentKind, ApprovalAction, ApprovalState, Effort, Item, Model, Project, ProjectKind,
+    QuestionAnswer, QuestionState, Session, SessionList, SessionSummary, TurnEvent,
 };
 use arden_agents::playground::PLAYGROUND_ID;
 use arden_agents::store::{OpenProblem, SessionStore, StoreError};
@@ -146,6 +147,38 @@ pub fn agent_for_new_session(
     ))
 }
 
+/// The slash commands and models of the person's Claude Code, as it last said them (ADR 0042):
+/// nothing yet before it has been heard. When nothing is known and Claude Code is installed, one
+/// is started in the Playground, without a message, to hear them, and the page asks again.
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps)]
+#[tauri::command]
+#[specta::specta]
+pub fn claude_catalog(
+    claude: State<'_, crate::agents::Claude>,
+    sessions: State<'_, Sessions>,
+    detections: State<'_, crate::agents::Detections>,
+) -> Result<Catalog, AppError> {
+    let catalog = claude.0.catalog();
+    if catalog.is_empty() && detections.claude_installed() {
+        let playground = sessions
+            .list()
+            .projects
+            .into_iter()
+            .find(|listing| listing.project.kind == ProjectKind::Playground);
+        if let Some(listing) = playground {
+            let driver = std::sync::Arc::clone(&claude.0);
+            let folder = std::path::PathBuf::from(listing.project.path);
+            std::thread::spawn(move || driver.ensure_catalog(&folder));
+        }
+    }
+    Ok(catalog)
+}
+
 /// The model a new session in a project would take, the Playground when none is given (ADR 0041):
 /// that of the session the agent rule follows. None for the agent's own setting.
 ///
@@ -177,7 +210,7 @@ pub fn set_session_model(
     model: Option<Model>,
     sessions: State<'_, Sessions>,
 ) -> Result<(), AppError> {
-    sessions.set_model(&id, model).map_err(app_error)?;
+    sessions.set_model(&id, model.clone()).map_err(app_error)?;
     tracing::info!(session = %id, ?model, "the session's model changed");
     Ok(())
 }

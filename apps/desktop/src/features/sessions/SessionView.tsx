@@ -19,6 +19,7 @@ import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { useRepliesStore } from "@/state/replies";
+import { useSessionDialogsStore } from "@/state/sessionDialogs";
 
 import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
@@ -28,6 +29,10 @@ import { ModelMenu } from "./ModelMenu";
 import { ProjectMenu } from "./ProjectMenu";
 import { projectsByUse } from "./sessionList";
 import { useTrustGate } from "./useTrustGate";
+import { effortsFor } from "./claudeCatalog";
+import { useClaudeCatalog } from "./useClaudeCatalog";
+import { useHandledSlashCommands } from "./useHandledSlashCommands";
+import { useUltrathink } from "./ultrathink";
 import { useUnavailableAgents } from "./useUnavailableAgents";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
 import { SessionLinks } from "./SessionLinks";
@@ -65,12 +70,15 @@ export function SessionView({ id }: { id: string }) {
   const heldAt = useRef(0);
   const [atEnd, setAtEnd] = useState(true);
   const { gate, dialog: trustDialog } = useTrustGate();
+  const { ultrathink, setUltrathink, carrying } = useUltrathink();
 
   const turns = session?.turns ?? [];
   const count = turns.length;
   const lastTurn = turns.at(-1);
   const busy = turns.some((turn) => turn.status === "running");
   const agent = session?.agent ?? "demo";
+  const catalog = useClaudeCatalog(agent === "claude");
+  const runHandled = useHandledSlashCommands();
   const waiting = waitingRequest(lastTurn) !== undefined;
 
   // The virtualizer's functions cannot be memoized, so the compiler leaves this component alone.
@@ -198,6 +206,22 @@ export function SessionView({ id }: { id: string }) {
   const chooseEffort = (effort: Effort | null) => {
     change(commands.setSessionEffort(id, effort), false);
   };
+  // /rename names the session, and asks for a name when it is given none (ADR 0042).
+  const renameTo = (name: string) => {
+    if (name === "") {
+      useSessionDialogsStore.getState().rename(id);
+      return;
+    }
+    commands
+      .renameSession(id, name)
+      .then(async () => {
+        await queryClient.invalidateQueries({ queryKey: sessionQuery(id).queryKey });
+        await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
+      })
+      .catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      });
+  };
   const choices =
     count === 0 && session.archivedAt === null ? (
       <span className="flex min-w-0 items-center gap-1.5">
@@ -223,8 +247,20 @@ export function SessionView({ id }: { id: string }) {
       {choices}
       {agent === "claude" && session.archivedAt === null ? (
         <>
-          <ModelMenu model={session.model ?? null} disabled={busy} onChoose={chooseModel} />
-          <EffortMenu effort={session.effort ?? null} disabled={busy} onChoose={chooseEffort} />
+          <ModelMenu
+            model={session.model ?? null}
+            models={catalog.models}
+            disabled={busy}
+            onChoose={chooseModel}
+          />
+          <EffortMenu
+            effort={session.effort ?? null}
+            levels={effortsFor(catalog, session.model ?? null)}
+            disabled={busy}
+            ultrathink={ultrathink}
+            onUltrathink={setUltrathink}
+            onChoose={chooseEffort}
+          />
         </>
       ) : null}
     </span>
@@ -328,14 +364,31 @@ export function SessionView({ id }: { id: string }) {
           onStop={() => {
             run("reply.stop");
           }}
-          onSend={(text) => {
+          {...(agent === "claude"
+            ? { slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands } }
+            : {})}
+          onSend={carrying((text) => {
+            if (
+              agent === "claude" &&
+              runHandled(text, {
+                catalog,
+                chooseModel,
+                chooseEffort,
+                rename: renameTo,
+                clear: () => {
+                  run("session.new");
+                },
+              })
+            ) {
+              return true;
+            }
             stuck.current = true;
             setAtEnd(true);
             return gate(agent, project, () => {
               void send(id, text);
               return true;
             });
-          }}
+          })}
         />
       ) : (
         <ArchivedBar sessionId={id} />

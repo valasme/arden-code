@@ -100,6 +100,7 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::set_session_project,
         sessions::pick_folder,
         sessions::agent_for_new_session,
+        sessions::claude_catalog,
         agents::detect_agents,
         sessions::debug_fill_session,
         agents::debug_spawn_sleeper,
@@ -170,6 +171,7 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::set_session_project,
         sessions::pick_folder,
         sessions::agent_for_new_session,
+        sessions::claude_catalog,
         agents::detect_agents,
     ]
 }

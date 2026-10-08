@@ -115,7 +115,7 @@ impl Entry {
             pinned: session.pinned,
             archived_at: session.archived_at.clone(),
             linked_from: session.linked_from.clone(),
-            model: session.model,
+            model: session.model.clone(),
             effort: session.effort,
             turns: Vec::new(),
         }
@@ -123,7 +123,7 @@ impl Entry {
 
     fn choices(&self) -> Choices {
         Choices {
-            model: self.session.model,
+            model: self.session.model.clone(),
             effort: self.session.effort,
         }
     }
@@ -815,7 +815,7 @@ impl SessionStore {
     pub fn model_for_new_session(&self, project_id: &str) -> Option<Model> {
         self.lock()
             .latest_for(project_id)
-            .and_then(|entry| entry.session.model)
+            .and_then(|entry| entry.session.model.clone())
     }
 
     /// The effort a new session in a project takes, as [`Self::model_for_new_session`] does.
@@ -834,8 +834,11 @@ impl SessionStore {
     /// Returns [`StoreError::UnknownSession`] when there is no such session,
     /// [`StoreError::Archived`] when it is archived, [`StoreError::TurnRunning`] while a reply
     /// runs, and [`StoreError::NotSaved`] when the change cannot be written.
+    // Taken by value like the effort, which the page sends; the change is made twice, so it is
+    // cloned.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn set_model(&self, session_id: &str, model: Option<Model>) -> Result<(), StoreError> {
-        self.set_choice(session_id, |session| session.model = model)
+        self.set_choice(session_id, |session| session.model.clone_from(&model))
     }
 
     /// Changes the effort of a session, as [`Self::set_model`] changes its model.
@@ -3013,21 +3016,21 @@ mod tests {
                 "Default at first"
             );
             store
-                .set_model(&session.id, Some(Model::Opus))
+                .set_model(&session.id, Some(Model::new("opus")))
                 .expect("chosen");
             let turn = store.start_turn(&session.id, "hello").expect("a turn");
             store
                 .stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| true)
                 .expect("answered");
             store
-                .set_model(&session.id, Some(Model::Sonnet))
+                .set_model(&session.id, Some(Model::new("sonnet")))
                 .expect("changed after a message");
             session.id
         };
 
         assert_eq!(
             store_in(&file).session(&id).expect("the session").model,
-            Some(Model::Sonnet)
+            Some(Model::new("sonnet"))
         );
     }
 
@@ -3040,13 +3043,13 @@ mod tests {
         store.start_turn(&session.id, "hello").expect("a turn");
 
         assert_eq!(
-            store.set_model(&session.id, Some(Model::Opus)),
+            store.set_model(&session.id, Some(Model::new("opus"))),
             Err(StoreError::TurnRunning)
         );
         store.stop_turn(&session.id).expect("stopped");
         store.set_archived(&session.id, true).expect("archived");
         assert_eq!(
-            store.set_model(&session.id, Some(Model::Opus)),
+            store.set_model(&session.id, Some(Model::new("opus"))),
             Err(StoreError::Archived)
         );
         assert_eq!(
@@ -3062,7 +3065,7 @@ mod tests {
             .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
             .expect("a session");
         store
-            .set_model(&earlier.id, Some(Model::Opus))
+            .set_model(&earlier.id, Some(Model::new("opus")))
             .expect("chosen");
 
         let next = store
@@ -3074,7 +3077,7 @@ mod tests {
 
         assert_eq!(
             store.session(&next.id).expect("it").model,
-            Some(Model::Opus)
+            Some(Model::new("opus"))
         );
         assert_eq!(
             store.session(&other_agent.id).expect("it").model,
@@ -3091,20 +3094,23 @@ mod tests {
             .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
             .expect("a session");
         store
-            .set_model(&original.id, Some(Model::Haiku))
+            .set_model(&original.id, Some(Model::new("haiku")))
             .expect("chosen");
         store
             .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
             .expect("a later session");
         store
-            .set_model(&store.list().projects[0].sessions[0].id, Some(Model::Opus))
+            .set_model(
+                &store.list().projects[0].sessions[0].id,
+                Some(Model::new("opus")),
+            )
             .expect("chosen");
 
         let linked = store.create_linked_session(&original.id).expect("linked");
 
         assert_eq!(
             store.session(&linked.id).expect("it").model,
-            Some(Model::Haiku)
+            Some(Model::new("haiku"))
         );
     }
 

@@ -199,7 +199,7 @@ fn put_session(
             order.archived.map(stored),
             session.archived_at,
             session.linked_from,
-            session.model.map(name_of).transpose()?,
+            session.model.as_ref().map(name_of).transpose()?,
             session.effort.map(name_of).transpose()?,
         ],
     )?;

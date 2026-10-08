@@ -75,7 +75,11 @@ export function useShortcutsOf(id: CommandId): readonly string[] {
 
 /** Whether a dialog or a menu is on screen. */
 function overlayIsOpen(): boolean {
-  return document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]') !== null;
+  return (
+    document.querySelector(
+      '[role="dialog"], [role="alertdialog"], [role="menu"], [data-slash-menu]',
+    ) !== null
+  );
 }
 
 function findMessageBox(): HTMLElement | null {

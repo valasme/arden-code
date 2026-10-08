@@ -26,8 +26,12 @@ import { ProjectMenu } from "./ProjectMenu";
 import { latestProjectId, PLAYGROUND_ID, projectsByUse } from "./sessionList";
 import { useOpenFolder } from "./useOpenFolder";
 import { useSendMessage } from "./useSendMessage";
+import { effortsFor } from "./claudeCatalog";
+import { useClaudeCatalog } from "./useClaudeCatalog";
+import { useHandledSlashCommands } from "./useHandledSlashCommands";
 import { useStartSession } from "./useStartSession";
 import { useTrustGate } from "./useTrustGate";
+import { useUltrathink } from "./ultrathink";
 import { useUnavailableAgents } from "./useUnavailableAgents";
 
 function Hint({ command, label }: { command: CommandId; label: string }) {
@@ -60,6 +64,7 @@ export function Welcome() {
   const [chosenModel, setChosenModel] = useState<Model | null | undefined>(undefined);
   const [chosenEffort, setChosenEffort] = useState<Effort | null | undefined>(undefined);
   const { gate, dialog: trustDialog } = useTrustGate();
+  const { ultrathink, setUltrathink, carrying } = useUltrathink();
 
   const projectId = chosenProject ?? latestProjectId(list) ?? PLAYGROUND_ID;
   const project: Project | undefined = list.projects.find(
@@ -73,6 +78,8 @@ export function Welcome() {
   const model = chosenModel === undefined ? inheritedModel : chosenModel;
   const inheritedEffort = useQuery(effortForProjectQuery(projectId)).data ?? null;
   const effort = chosenEffort === undefined ? inheritedEffort : chosenEffort;
+  const catalog = useClaudeCatalog(agent === "claude");
+  const runHandled = useHandledSlashCommands();
 
   const start = async (text: string) => {
     const id = await startSession(agent, projectId);
@@ -119,13 +126,33 @@ export function Welcome() {
             />
             {agent === "claude" ? (
               <>
-                <ModelMenu model={model} onChoose={setChosenModel} />
-                <EffortMenu effort={effort} onChoose={setChosenEffort} />
+                <ModelMenu model={model} models={catalog.models} onChoose={setChosenModel} />
+                <EffortMenu
+                  effort={effort}
+                  levels={effortsFor(catalog, model)}
+                  ultrathink={ultrathink}
+                  onUltrathink={setUltrathink}
+                  onChoose={setChosenEffort}
+                />
               </>
             ) : null}
           </span>
         }
-        onSend={(text) => gate(agent, project, () => start(text))}
+        {...(agent === "claude"
+          ? { slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands } }
+          : {})}
+        onSend={carrying((text) => {
+          // There is no session yet to rename or clear (ADR 0042).
+          const ran =
+            agent === "claude" &&
+            runHandled(text, {
+              catalog,
+              chooseModel: setChosenModel,
+              chooseEffort: setChosenEffort,
+              clear: () => undefined,
+            });
+          return ran || gate(agent, project, () => start(text));
+        })}
         onStop={() => {}}
       />
       <ul className="flex flex-wrap justify-center gap-x-5 gap-y-2">

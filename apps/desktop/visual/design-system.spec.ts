@@ -9,7 +9,11 @@ const themes = [
 
 async function openDesignSystem(page: Page, search = "") {
   await page.goto(`/dev/design-system${search}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible();
+  // The first load of a cold dev server compiles the page and may reload it once, which on a slow
+  // runner takes longer than a test's usual 5 seconds.
+  await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible({
+    timeout: 30_000,
+  });
   await page.evaluate(() => document.fonts.ready);
   // The code sample is colored when its grammar has loaded, a moment after the page.
   await expect(
@@ -102,6 +106,18 @@ for (const { name, colorScheme, forcedColors } of themes) {
     await page.getByRole("button", { name: "Error", exact: true }).click();
 
     await expect(page.locator("[data-sonner-toast]")).toHaveScreenshot(`toast-${name}.png`);
+  });
+}
+
+for (const { name, colorScheme, forcedColors } of themes) {
+  test(`the message box's choices look right in ${name}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme, forcedColors });
+    await openDesignSystem(page);
+
+    // The whole page's screenshot is 1% tolerant: this one is of the four menus alone.
+    await expect(page.locator("[data-message-choices-sample]")).toHaveScreenshot(
+      `choices-${name}.png`,
+    );
   });
 }
 
