@@ -19,6 +19,7 @@ import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { useRepliesStore } from "@/state/replies";
+import { useSessionDialogsStore } from "@/state/sessionDialogs";
 
 import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
@@ -30,6 +31,7 @@ import { projectsByUse } from "./sessionList";
 import { useTrustGate } from "./useTrustGate";
 import { effortsFor } from "./claudeCatalog";
 import { useClaudeCatalog } from "./useClaudeCatalog";
+import { useLocalCommands } from "./useLocalCommands";
 import { useUltrathink } from "./ultrathink";
 import { useUnavailableAgents } from "./useUnavailableAgents";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
@@ -76,6 +78,7 @@ export function SessionView({ id }: { id: string }) {
   const busy = turns.some((turn) => turn.status === "running");
   const agent = session?.agent ?? "demo";
   const catalog = useClaudeCatalog(agent === "claude");
+  const runLocal = useLocalCommands();
   const waiting = waitingRequest(lastTurn) !== undefined;
 
   // The virtualizer's functions cannot be memoized, so the compiler leaves this component alone.
@@ -202,6 +205,22 @@ export function SessionView({ id }: { id: string }) {
   };
   const chooseEffort = (effort: Effort | null) => {
     change(commands.setSessionEffort(id, effort), false);
+  };
+  // /rename names the session, and asks for a name when it is given none (ADR 0042).
+  const renameTo = (name: string) => {
+    if (name === "") {
+      useSessionDialogsStore.getState().rename(id);
+      return;
+    }
+    commands
+      .renameSession(id, name)
+      .then(async () => {
+        await queryClient.invalidateQueries({ queryKey: sessionQuery(id).queryKey });
+        await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
+      })
+      .catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      });
   };
   const choices =
     count === 0 && session.archivedAt === null ? (
@@ -345,7 +364,24 @@ export function SessionView({ id }: { id: string }) {
           onStop={() => {
             run("reply.stop");
           }}
+          {...(agent === "claude"
+            ? { slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands } }
+            : {})}
           onSend={carrying((text) => {
+            if (
+              agent === "claude" &&
+              runLocal(text, {
+                catalog,
+                chooseModel,
+                chooseEffort,
+                rename: renameTo,
+                clear: () => {
+                  run("session.new");
+                },
+              })
+            ) {
+              return true;
+            }
             stuck.current = true;
             setAtEnd(true);
             return gate(agent, project, () => {

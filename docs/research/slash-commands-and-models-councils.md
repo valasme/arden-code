@@ -47,9 +47,9 @@ Arden Code; **(c)** reading the `.claude` folders.
 - **Product:** P4 Claude Code's own menu is the model: type `/`, filter, choose.
 - **Experience:** E1 it opens when the message starts with `/` and has no space yet, and filters by the typed letters
   against a name or an alias, from its start or from a word within it, ignoring `:`, `_` and `-`. E2 each row shows
-  `/name`, the argument hint, the description and the source (built in, the plugin's name, or MCP). E3 the message box is
-  a combobox, the list a listbox, the highlighted row is the active descendant, and the number of matches is announced
-  politely. E4 arrow keys move; Tab fills in `/name `; Enter fills it in when the command takes arguments and otherwise
+  `/name`, the argument hint, the description and the source (built in, the plugin's name, or MCP). E3 the message box stays a text box that controls a
+  listbox (a native combobox is not allowed on a text area), the highlighted row is its active descendant, and the number
+  of matches is announced politely. E4 arrow keys move; Tab fills in `/name `; Enter fills it in when the command takes arguments and otherwise
   sends it; Esc closes the list and keeps the text (and does not stop a reply). E5 an empty list says "No slash command
   matches". **E3 dissents:** Enter that sometimes fills and sometimes sends is not predictable. Settled: that is how
   Claude Code's menu behaves, and the hint shows which one a row is.

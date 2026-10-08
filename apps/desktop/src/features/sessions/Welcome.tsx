@@ -28,6 +28,7 @@ import { useOpenFolder } from "./useOpenFolder";
 import { useSendMessage } from "./useSendMessage";
 import { effortsFor } from "./claudeCatalog";
 import { useClaudeCatalog } from "./useClaudeCatalog";
+import { useLocalCommands } from "./useLocalCommands";
 import { useStartSession } from "./useStartSession";
 import { useTrustGate } from "./useTrustGate";
 import { useUltrathink } from "./ultrathink";
@@ -78,6 +79,7 @@ export function Welcome() {
   const inheritedEffort = useQuery(effortForProjectQuery(projectId)).data ?? null;
   const effort = chosenEffort === undefined ? inheritedEffort : chosenEffort;
   const catalog = useClaudeCatalog(agent === "claude");
+  const runLocal = useLocalCommands();
 
   const start = async (text: string) => {
     const id = await startSession(agent, projectId);
@@ -136,7 +138,21 @@ export function Welcome() {
             ) : null}
           </span>
         }
-        onSend={carrying((text) => gate(agent, project, () => start(text)))}
+        {...(agent === "claude"
+          ? { slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands } }
+          : {})}
+        onSend={carrying((text) => {
+          // There is no session yet to rename or clear (ADR 0042).
+          const ran =
+            agent === "claude" &&
+            runLocal(text, {
+              catalog,
+              chooseModel: setChosenModel,
+              chooseEffort: setChosenEffort,
+              clear: () => undefined,
+            });
+          return ran || gate(agent, project, () => start(text));
+        })}
         onStop={() => {}}
       />
       <ul className="flex flex-wrap justify-center gap-x-5 gap-y-2">
