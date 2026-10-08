@@ -1,4 +1,4 @@
-import { BotIcon } from "lucide-react";
+import { FlaskConicalIcon, SparkleIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -37,7 +37,7 @@ export function AgentMenu({ agent, unavailable = none, onChoose }: AgentMenuProp
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <ChoiceButton
-          icon={BotIcon}
+          icon={agent === "claude" ? SparkleIcon : FlaskConicalIcon}
           value={name}
           aria-label={t("sessions.agentMenu.label", { agent: name })}
         />

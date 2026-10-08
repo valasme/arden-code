@@ -22,7 +22,7 @@ export function ChoiceButton({
       className={cn("min-w-0 font-normal text-foreground", className)}
       {...props}
     >
-      <Icon aria-hidden className="size-3.5 text-muted-foreground" strokeWidth={1.5} />
+      <Icon aria-hidden className="size-4" strokeWidth={1.5} />
       <span className="truncate">{value}</span>
       <ChevronDownIcon aria-hidden className="size-3.5 text-muted-foreground" strokeWidth={1.5} />
     </Button>

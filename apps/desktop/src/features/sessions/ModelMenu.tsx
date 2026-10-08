@@ -1,4 +1,4 @@
-import { CpuIcon } from "lucide-react";
+import { BrainIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { Model } from "@/ipc/bindings";
@@ -26,7 +26,7 @@ export function ModelMenu({
 
   return (
     <ChoiceMenu
-      icon={CpuIcon}
+      icon={BrainIcon}
       label={(name) => t("sessions.modelMenu.label", { model: name })}
       options={models.map((value) => ({ value, name: t(`sessions.modelMenu.${value}`) }))}
       value={model}

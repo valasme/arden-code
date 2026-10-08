@@ -1,4 +1,4 @@
-import { GaugeIcon } from "lucide-react";
+import { ChartNoAxesColumnIncreasingIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { Effort } from "@/ipc/bindings";
@@ -26,7 +26,7 @@ export function EffortMenu({
 
   return (
     <ChoiceMenu
-      icon={GaugeIcon}
+      icon={ChartNoAxesColumnIncreasingIcon}
       label={(name) => t("sessions.effortMenu.label", { effort: name })}
       options={efforts.map((value) => ({ value, name: t(`sessions.effortMenu.${value}`) }))}
       value={effort}
