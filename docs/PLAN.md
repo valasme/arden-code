@@ -213,6 +213,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
   - One `claude` per session, started by its first message. It ends when the session is archived or deleted, when the app closes, or after 10 minutes with no turn and nothing heard.
   - Arden Code makes each session's conversation id (`--session-id`), and later starts carry it on (`--resume`).
   - Claude Code 2.1.223 or later. npm's `claude.cmd` is followed to the package's own `claude.exe`; untrusted text never reaches a `.cmd`.
+  - Its answer to `initialize` and its `commands_changed` frames list the slash commands and the models, with the efforts each takes ([ADR 0042](adr/0042-slash-commands-and-exact-models.md), [the research](research/claude-commands-and-models.md)). The model passed to `--model` is such a value, checked again before it is passed.
   - Claude Code's error output goes to the child's log; the conversation on its standard output does not.
 - **Raw mode (later):** an embedded terminal (ConPTY + xterm.js) running the vendor's own terminal UI.
 - **Deliberately not used:**
@@ -406,7 +407,11 @@ The decisions and the options turned down are in [ADR 0036](adr/0036-managing-se
 The decisions and the options turned down are in [ADR 0039](adr/0039-working-with-claude.md).
 
 - **Starting a session:** while a session is empty, the message box's lower line holds an agent menu and a project menu; the project menu ends with Open folder. New session (Ctrl+N) starts in the open session's project, or the Playground, with the agent of that project's latest session, else of the latest session anywhere, else Claude when Claude Code is installed, else the Demo agent. Open folder (Ctrl+O) adds a folder as a project and starts a session in it. Claude may work in the Playground.
-- **Choosing ([ADR 0041](adr/0041-choosing-how-a-session-starts.md)):** the agent, project, model and effort are outlined menus in the message box, on the welcome screen too, where the project starts as the latest session's. Model and effort (Default, or Fable, Opus, Sonnet, Haiku; Low to Max) are for Claude only, can change between messages, and are inherited by new and linked sessions.
+- **Choosing ([ADR 0041](adr/0041-choosing-how-a-session-starts.md), [ADR 0042](adr/0042-slash-commands-and-exact-models.md)):** the agent, project, model and effort are outlined menus in the message box, on the welcome screen too, where the project starts as the latest session's. Each has an icon that says what it chooses, at 16 px and the label's color. Model and effort are for Claude only, can change between messages, and are inherited by new and linked sessions.
+  - **Model:** Default (Claude Code's own setting), or any model Claude Code lists: the families first (Opus, Sonnet, Fable, Haiku), then the older versions under "Older models", by full id. A saved model Claude Code no longer lists is kept, shown as it is and marked. Until Claude Code has listed its models, the four families.
+  - **Effort:** Default, or the efforts the chosen model takes, Low to Max; a model with none shows only Default and the Ultrathink switch.
+  - **Ultrathink:** a switch at the end of the effort menu. The next message gets the word `ultrathink` at its end, once; Claude Code reasons more deeply on that turn only.
+- **Slash commands (ADR 0042):** a message of a Claude session that starts with `/` lists the slash commands Claude Code reports (its own, plugins', skills' and MCP prompts'), filtered as Claude Code's menu filters, with arrow keys, Tab (fill in), Enter (send a command with no arguments, else fill in) and Esc (close). The list comes from Claude Code's answer to `initialize` and its `commands_changed` frames; one Claude Code started in the Playground per start of Arden Code, with no message, hears them before a session has one. `/model`, `/effort`, `/rename` and `/clear` (also `/reset`, `/new`) are run by Arden Code, since they change what it holds; everything else is sent as typed.
 - **Trust:** before Claude first runs in a project, the person is asked once whether they trust it, because Claude Code then runs the project's own hooks, MCP servers and environment. Cancel keeps the message in the box. The Playground needs no trust.
 - **What a reply shows:** text and thinking as they stream, tool calls with their results, and file changes with the lines added and removed. A subagent's inner steps are not shown; its tool call is.
 - **Approval requests:** a card under the tool call says what Claude wants to do and shows the command, the file and its change, or the address. Allow, Always allow (only when Claude Code suggests a rule) and Deny, which stops the reply. Once answered, it folds to a line. Stop, archiving and deleting deny it.
@@ -524,7 +529,7 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
 
 ### 7.5 Icons
 
-Lucide icons are 16 px with a 1.5 stroke in the UI, and 20 px in the title bar. Every icon-only button has an accessible label.
+Lucide icons are 16 px with a 1.5 stroke in the UI, and 20 px in the title bar, at the color of the text beside them. Every icon-only button has an accessible label. The message box's menus use a sparkle for Claude (a flask for the Demo agent), a folder, a brain and rising bars; Ultrathink is a lightbulb.
 
 ## 8. Brand
 
