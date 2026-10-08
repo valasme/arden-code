@@ -3,10 +3,10 @@ import { toast } from "sonner";
 
 import type { Catalog, Effort, Model } from "@/ipc/bindings";
 
-import { parseLocalCommand, resolveEffort, resolveModel } from "./slashCommands";
+import { parseHandledSlashCommand, resolveEffort, resolveModel } from "./slashCommands";
 
 /** What the four slash commands that Arden Code runs itself act on (ADR 0042). */
-export interface LocalActions {
+export interface HandledActions {
   catalog: Catalog;
   chooseModel: (model: Model | null) => void;
   chooseEffort: (effort: Effort | null) => void;
@@ -22,11 +22,11 @@ export interface LocalActions {
  * Answers whether the message was one of them. What cannot be done, such as a model that Claude Code
  * does not list, is said in a notice.
  */
-export function useLocalCommands() {
+export function useHandledSlashCommands() {
   const { t } = useTranslation();
 
-  return (text: string, actions: LocalActions): boolean => {
-    const command = parseLocalCommand(text);
+  return (text: string, actions: HandledActions): boolean => {
+    const command = parseHandledSlashCommand(text);
     if (!command) return false;
     switch (command.kind) {
       case "model": {

@@ -7,7 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AgentKind, SlashCommand } from "@/ipc/bindings";
 import { cn } from "@/lib/utils";
 
-import { filterSlashCommands, menuQuery, sourceOf } from "./slashCommands";
+import { SlashCommandList, slashOptionId } from "./SlashCommandList";
+import { filterSlashCommands, menuQuery } from "./slashCommands";
 
 /** The key code some browsers report for a key that is part of an input method's composition. */
 const COMPOSING_KEY_CODE = 229;
@@ -88,13 +89,6 @@ export function MessageBox({
       : [];
   const listing = query !== null && dismissedAt !== text;
   const active = chosen.query === query ? Math.min(chosen.index, matches.length - 1) : 0;
-  // Each name has its own key, so the translations can be found and checked.
-  const sourceNames = {
-    builtin: t("sessions.slash.source.builtin"),
-    mcp: t("sessions.slash.source.mcp"),
-    skill: t("sessions.slash.source.skill"),
-  };
-  const optionId = (index: number) => `${listId}-${index}`;
   const fill = (command: SlashCommand) => {
     setText(`/${command.name} `);
     box.current?.focus();
@@ -150,63 +144,15 @@ export function MessageBox({
         className="relative mx-auto flex max-w-[45rem] flex-col border border-input bg-background"
       >
         {listing ? (
-          <ul
+          <SlashCommandList
             id={listId}
-            data-slash-menu
-            // The list a text box controls, which a native select cannot be.
-            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/no-noninteractive-element-to-interactive-role
-            role="listbox"
-            aria-label={t("sessions.slash.label")}
-            className="absolute inset-x-0 bottom-full z-10 max-h-64 overflow-auto border border-input bg-popover py-1 text-popover-foreground"
-          >
-            {matches.length === 0 ? (
-              <li role="presentation" className="px-3 py-1.5 text-xs text-muted-foreground">
-                {t("sessions.slash.none")}
-              </li>
-            ) : (
-              matches.map((command, index) => {
-                const source = sourceOf(command);
-                return (
-                  <li
-                    key={command.name}
-                    id={optionId(index)}
-                    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/no-noninteractive-element-to-interactive-role
-                    role="option"
-                    aria-selected={index === active}
-                    className={cn(
-                      "flex cursor-pointer flex-col gap-0.5 px-3 py-1.5 text-sm",
-                      index === active && "bg-accent text-accent-foreground",
-                    )}
-                    onMouseDown={(event) => {
-                      // The box keeps the focus.
-                      event.preventDefault();
-                      take(command);
-                    }}
-                    onMouseMove={() => {
-                      setChosen({ query: query ?? "", index });
-                    }}
-                  >
-                    <span className="flex items-baseline gap-2">
-                      <span className="font-mono text-xs">/{command.name}</span>
-                      {command.argumentHint ? (
-                        <span className="truncate font-mono text-xs text-muted-foreground">
-                          {command.argumentHint}
-                        </span>
-                      ) : null}
-                      <span className="ms-auto shrink-0 text-xs text-muted-foreground">
-                        {source.kind === "plugin" ? source.name : sourceNames[source.kind]}
-                      </span>
-                    </span>
-                    {command.description ? (
-                      <span className="line-clamp-2 text-xs text-muted-foreground">
-                        {command.description}
-                      </span>
-                    ) : null}
-                  </li>
-                );
-              })
-            )}
-          </ul>
+            matches={matches}
+            active={active}
+            onTake={take}
+            onHover={(index) => {
+              setChosen({ query: query ?? "", index });
+            }}
+          />
         ) : null}
         <Textarea
           ref={box}
@@ -226,7 +172,7 @@ export function MessageBox({
                 "aria-autocomplete": "list" as const,
                 "aria-controls": listing ? listId : undefined,
                 "aria-activedescendant":
-                  listing && matches.length > 0 ? optionId(active) : undefined,
+                  listing && matches.length > 0 ? slashOptionId(listId, active) : undefined,
               }
             : {})}
         />

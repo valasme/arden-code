@@ -66,12 +66,12 @@ export function sourceOf(command: SlashCommand): Source {
 }
 
 /** What Arden Code runs itself instead of sending it to Claude Code (ADR 0042). */
-export interface LocalCommand {
+export interface HandledSlashCommand {
   kind: "model" | "effort" | "rename" | "clear";
   argument: string;
 }
 
-const local: Record<string, LocalCommand["kind"]> = {
+const local: Record<string, HandledSlashCommand["kind"]> = {
   model: "model",
   effort: "effort",
   rename: "rename",
@@ -81,7 +81,7 @@ const local: Record<string, LocalCommand["kind"]> = {
 };
 
 /** The command a message is, when Arden Code runs it itself. */
-export function parseLocalCommand(text: string): LocalCommand | null {
+export function parseHandledSlashCommand(text: string): HandledSlashCommand | null {
   const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text.trim());
   const kind = match?.[1] ? local[match[1].toLowerCase()] : undefined;
   if (!kind) return null;

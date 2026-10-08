@@ -3,7 +3,7 @@ import type { Catalog, ModelOption, SlashCommand } from "@/ipc/bindings";
 import {
   filterSlashCommands,
   menuQuery,
-  parseLocalCommand,
+  parseHandledSlashCommand,
   resolveEffort,
   resolveModel,
   sourceOf,
@@ -119,29 +119,32 @@ describe("sourceOf", () => {
   });
 });
 
-describe("parseLocalCommand", () => {
+describe("parseHandledSlashCommand", () => {
   it("knows the four commands Arden Code runs itself, and their aliases", () => {
-    expect(parseLocalCommand("/model opus")).toEqual({ kind: "model", argument: "opus" });
-    expect(parseLocalCommand("/effort high")).toEqual({ kind: "effort", argument: "high" });
-    expect(parseLocalCommand("/rename A new name")).toEqual({
+    expect(parseHandledSlashCommand("/model opus")).toEqual({ kind: "model", argument: "opus" });
+    expect(parseHandledSlashCommand("/effort high")).toEqual({ kind: "effort", argument: "high" });
+    expect(parseHandledSlashCommand("/rename A new name")).toEqual({
       kind: "rename",
       argument: "A new name",
     });
     for (const text of ["/clear", "/reset", "/new"]) {
-      expect(parseLocalCommand(text)).toEqual({ kind: "clear", argument: "" });
+      expect(parseHandledSlashCommand(text)).toEqual({ kind: "clear", argument: "" });
     }
   });
 
   it("trims the argument and ignores the case of the name", () => {
-    expect(parseLocalCommand("/MODEL   sonnet  ")).toEqual({ kind: "model", argument: "sonnet" });
-    expect(parseLocalCommand("/model")).toEqual({ kind: "model", argument: "" });
+    expect(parseHandledSlashCommand("/MODEL   sonnet  ")).toEqual({
+      kind: "model",
+      argument: "sonnet",
+    });
+    expect(parseHandledSlashCommand("/model")).toEqual({ kind: "model", argument: "" });
   });
 
   it("is nothing for another command or for text", () => {
-    expect(parseLocalCommand("/compact")).toBeNull();
-    expect(parseLocalCommand("/models")).toBeNull();
-    expect(parseLocalCommand("model opus")).toBeNull();
-    expect(parseLocalCommand("/mattpocock-skills:tdd")).toBeNull();
+    expect(parseHandledSlashCommand("/compact")).toBeNull();
+    expect(parseHandledSlashCommand("/models")).toBeNull();
+    expect(parseHandledSlashCommand("model opus")).toBeNull();
+    expect(parseHandledSlashCommand("/mattpocock-skills:tdd")).toBeNull();
   });
 });
 

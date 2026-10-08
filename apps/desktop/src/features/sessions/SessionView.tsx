@@ -31,7 +31,7 @@ import { projectsByUse } from "./sessionList";
 import { useTrustGate } from "./useTrustGate";
 import { effortsFor } from "./claudeCatalog";
 import { useClaudeCatalog } from "./useClaudeCatalog";
-import { useLocalCommands } from "./useLocalCommands";
+import { useHandledSlashCommands } from "./useHandledSlashCommands";
 import { useUltrathink } from "./ultrathink";
 import { useUnavailableAgents } from "./useUnavailableAgents";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
@@ -78,7 +78,7 @@ export function SessionView({ id }: { id: string }) {
   const busy = turns.some((turn) => turn.status === "running");
   const agent = session?.agent ?? "demo";
   const catalog = useClaudeCatalog(agent === "claude");
-  const runLocal = useLocalCommands();
+  const runHandled = useHandledSlashCommands();
   const waiting = waitingRequest(lastTurn) !== undefined;
 
   // The virtualizer's functions cannot be memoized, so the compiler leaves this component alone.
@@ -370,7 +370,7 @@ export function SessionView({ id }: { id: string }) {
           onSend={carrying((text) => {
             if (
               agent === "claude" &&
-              runLocal(text, {
+              runHandled(text, {
                 catalog,
                 chooseModel,
                 chooseEffort,
