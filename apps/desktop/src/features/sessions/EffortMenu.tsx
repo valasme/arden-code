@@ -1,6 +1,7 @@
-import { ChartNoAxesColumnIncreasingIcon } from "lucide-react";
+import { ChartNoAxesColumnIncreasingIcon, LightbulbIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { DropdownMenuCheckboxItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import type { Effort } from "@/ipc/bindings";
 
 import { ChoiceMenu } from "./ChoiceMenu";
@@ -15,11 +16,16 @@ const efforts = ["low", "medium", "high", "extraHigh", "max"] as const satisfies
 export function EffortMenu({
   effort,
   disabled = false,
+  ultrathink,
+  onUltrathink,
   onChoose,
 }: {
   /** The session's effort, or null for Default. */
   effort: Effort | null;
   disabled?: boolean;
+  /** Whether the next message carries the word ultrathink (ADR 0042). */
+  ultrathink: boolean;
+  onUltrathink: (on: boolean) => void;
   onChoose: (effort: Effort | null) => void;
 }) {
   const { t } = useTranslation();
@@ -32,6 +38,27 @@ export function EffortMenu({
       value={effort}
       disabled={disabled}
       onChoose={onChoose}
+      extra={
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuCheckboxItem
+            checked={ultrathink}
+            // The menu stays open, so the switch can be seen to change.
+            onSelect={(event) => {
+              event.preventDefault();
+            }}
+            onCheckedChange={onUltrathink}
+          >
+            <LightbulbIcon aria-hidden strokeWidth={1.5} />
+            <span className="flex flex-col">
+              <span>{t("sessions.effortMenu.ultrathink")}</span>
+              <span className="text-xs text-muted-foreground">
+                {t("sessions.effortMenu.ultrathinkHint")}
+              </span>
+            </span>
+          </DropdownMenuCheckboxItem>
+        </>
+      }
     />
   );
 }

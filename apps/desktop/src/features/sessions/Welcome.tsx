@@ -28,6 +28,7 @@ import { useOpenFolder } from "./useOpenFolder";
 import { useSendMessage } from "./useSendMessage";
 import { useStartSession } from "./useStartSession";
 import { useTrustGate } from "./useTrustGate";
+import { useUltrathink } from "./ultrathink";
 import { useUnavailableAgents } from "./useUnavailableAgents";
 
 function Hint({ command, label }: { command: CommandId; label: string }) {
@@ -60,6 +61,7 @@ export function Welcome() {
   const [chosenModel, setChosenModel] = useState<Model | null | undefined>(undefined);
   const [chosenEffort, setChosenEffort] = useState<Effort | null | undefined>(undefined);
   const { gate, dialog: trustDialog } = useTrustGate();
+  const { ultrathink, setUltrathink, carrying } = useUltrathink();
 
   const projectId = chosenProject ?? latestProjectId(list) ?? PLAYGROUND_ID;
   const project: Project | undefined = list.projects.find(
@@ -120,12 +122,17 @@ export function Welcome() {
             {agent === "claude" ? (
               <>
                 <ModelMenu model={model} onChoose={setChosenModel} />
-                <EffortMenu effort={effort} onChoose={setChosenEffort} />
+                <EffortMenu
+                  effort={effort}
+                  ultrathink={ultrathink}
+                  onUltrathink={setUltrathink}
+                  onChoose={setChosenEffort}
+                />
               </>
             ) : null}
           </span>
         }
-        onSend={(text) => gate(agent, project, () => start(text))}
+        onSend={carrying((text) => gate(agent, project, () => start(text)))}
         onStop={() => {}}
       />
       <ul className="flex flex-wrap justify-center gap-x-5 gap-y-2">

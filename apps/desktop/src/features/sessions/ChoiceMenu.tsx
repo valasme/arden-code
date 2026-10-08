@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -25,6 +26,8 @@ interface ChoiceMenuProps<Value extends string> {
   /** While a reply runs, the choice waits. */
   disabled?: boolean;
   onChoose: (value: Value | null) => void;
+  /** More of the menu, after the choices. */
+  extra?: ReactNode;
 }
 
 /**
@@ -38,6 +41,7 @@ export function ChoiceMenu<Value extends string>({
   value,
   disabled = false,
   onChoose,
+  extra,
 }: ChoiceMenuProps<Value>) {
   const { t } = useTranslation();
   const name =
@@ -69,6 +73,7 @@ export function ChoiceMenu<Value extends string>({
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
+        {extra}
       </DropdownMenuContent>
     </DropdownMenu>
   );

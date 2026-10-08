@@ -28,6 +28,7 @@ import { ModelMenu } from "./ModelMenu";
 import { ProjectMenu } from "./ProjectMenu";
 import { projectsByUse } from "./sessionList";
 import { useTrustGate } from "./useTrustGate";
+import { useUltrathink } from "./ultrathink";
 import { useUnavailableAgents } from "./useUnavailableAgents";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
 import { SessionLinks } from "./SessionLinks";
@@ -65,6 +66,7 @@ export function SessionView({ id }: { id: string }) {
   const heldAt = useRef(0);
   const [atEnd, setAtEnd] = useState(true);
   const { gate, dialog: trustDialog } = useTrustGate();
+  const { ultrathink, setUltrathink, carrying } = useUltrathink();
 
   const turns = session?.turns ?? [];
   const count = turns.length;
@@ -224,7 +226,13 @@ export function SessionView({ id }: { id: string }) {
       {agent === "claude" && session.archivedAt === null ? (
         <>
           <ModelMenu model={session.model ?? null} disabled={busy} onChoose={chooseModel} />
-          <EffortMenu effort={session.effort ?? null} disabled={busy} onChoose={chooseEffort} />
+          <EffortMenu
+            effort={session.effort ?? null}
+            disabled={busy}
+            ultrathink={ultrathink}
+            onUltrathink={setUltrathink}
+            onChoose={chooseEffort}
+          />
         </>
       ) : null}
     </span>
@@ -328,14 +336,14 @@ export function SessionView({ id }: { id: string }) {
           onStop={() => {
             run("reply.stop");
           }}
-          onSend={(text) => {
+          onSend={carrying((text) => {
             stuck.current = true;
             setAtEnd(true);
             return gate(agent, project, () => {
               void send(id, text);
               return true;
             });
-          }}
+          })}
         />
       ) : (
         <ArchivedBar sessionId={id} />

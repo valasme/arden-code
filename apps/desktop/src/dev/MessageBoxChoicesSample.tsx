@@ -37,7 +37,7 @@ export function MessageBoxChoicesSample() {
           onOpenFolder={() => {}}
         />
         <ModelMenu model="opus" onChoose={() => {}} />
-        <EffortMenu effort={null} onChoose={() => {}} />
+        <EffortMenu effort={null} ultrathink={false} onUltrathink={() => {}} onChoose={() => {}} />
       </div>
     </div>
   );

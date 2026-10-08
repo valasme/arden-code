@@ -135,3 +135,24 @@ describe("Choosing the agent and the project on the welcome screen", () => {
     await expectNoAccessibilityViolations(document.body);
   });
 });
+
+describe("Ultrathink on the welcome screen", () => {
+  it("adds the word to the next message only, and turns itself off", async () => {
+    const { rust, user } = await welcome();
+    await choose(user, "Agent: Demo agent", /^Claude/);
+    await screen.findByRole("heading", { level: 1, name: "What should Claude work on?" });
+
+    await user.click(await within(await main()).findByRole("button", { name: /^Effort/ }));
+    const menu = await screen.findByRole("menu");
+    await animationsDone(menu);
+    await user.click(within(menu).getByRole("menuitemcheckbox", { name: /Ultrathink/ }));
+    // The menu stays open to show the switch change; Escape closes it.
+    await user.keyboard("{Escape}");
+    await user.type(within(await main()).getByRole("textbox", { name: "Message" }), "Hello{Enter}");
+
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+    expect(rust.sent()[0]?.payload).toMatchObject({ text: "Hello ultrathink" });
+  });
+});

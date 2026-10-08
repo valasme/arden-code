@@ -447,7 +447,9 @@
       "label": "Effort: {{effort}}",
       "low": "Low",
       "max": "Max",
-      "medium": "Medium"
+      "medium": "Medium",
+      "ultrathink": "Ultrathink",
+      "ultrathinkHint": "Think deeper on the next message"
     },
     "jumpToLatest": "Jump to latest",
     "links": {
