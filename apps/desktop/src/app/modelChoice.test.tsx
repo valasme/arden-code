@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
 
-import type { Session } from "@/ipc/bindings";
+import type { Catalog, Session } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
@@ -144,5 +144,127 @@ describe("Choosing the model (ADR 0041)", () => {
     ]);
     const order = rust.calls.map((call) => call.command);
     expect(order.indexOf("set_session_model")).toBeLessThan(order.indexOf("send_message"));
+  });
+});
+
+const catalog: Catalog = {
+  commands: [],
+  terminalCommands: [],
+  models: [
+    {
+      value: "default",
+      displayName: "Default (recommended)",
+      description: "Sonnet 5.5",
+      resolvedModel: "claude-sonnet-5-5",
+      efforts: ["low", "medium", "high", "extraHigh", "max"],
+    },
+    {
+      value: "opus",
+      displayName: "Opus 5.5",
+      description: "For complex work",
+      resolvedModel: "claude-opus-5-5",
+      efforts: ["low", "medium", "high", "extraHigh", "max"],
+    },
+    {
+      value: "haiku",
+      displayName: "Haiku 4.5",
+      description: "Fastest for quick answers",
+      resolvedModel: null,
+      efforts: [],
+    },
+    {
+      value: "claude-opus-4-6",
+      displayName: "Opus 4.6",
+      description: "Best for everyday, complex tasks",
+      resolvedModel: null,
+      efforts: ["low", "medium", "high", "max"],
+    },
+  ],
+};
+
+describe("Choosing any model Claude Code lists (ADR 0042)", () => {
+  it("lists the models Claude Code says it has, the older ones under a heading", async () => {
+    const user = userEvent.setup();
+    startSessionsRust({ sessions: [answered()], catalog });
+    renderApp("/session/session-1");
+
+    await user.click(await screen.findByRole("button", { name: "Model: Default" }));
+    const menu = await screen.findByRole("menu");
+    await animationsDone(menu);
+
+    expect(
+      within(menu)
+        .getAllByRole("menuitemradio")
+        .map((item) => item.querySelector("[data-name]")?.textContent),
+    ).toEqual(["Default", "Opus 5.5", "Haiku 4.5", "Opus 4.6"]);
+    expect(within(menu).getByText("Older models")).toBeVisible();
+    expect(within(menu).getByRole("menuitemradio", { name: /Opus 5\.5/ })).toHaveTextContent(
+      "For complex work",
+    );
+  });
+
+  it("keeps the full id of an older model as the session's model", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({ sessions: [answered()], catalog });
+    renderApp("/session/session-1");
+
+    await user.click(await screen.findByRole("button", { name: "Model: Default" }));
+    const menu = await screen.findByRole("menu");
+    await animationsDone(menu);
+    await user.click(within(menu).getByRole("menuitemradio", { name: /^Opus 4\.6/ }));
+
+    expect(rust.callsTo("set_session_model")).toEqual([
+      { id: "session-1", model: "claude-opus-4-6" },
+    ]);
+    expect(await screen.findByRole("button", { name: "Model: Opus 4.6" })).toBeVisible();
+  });
+
+  it("offers the efforts of the chosen model only, and none of them for a model with no effort", async () => {
+    const user = userEvent.setup();
+    startSessionsRust({
+      sessions: [{ ...answered(), model: "claude-opus-4-6" }],
+      catalog,
+    });
+    renderApp("/session/session-1");
+
+    await user.click(await screen.findByRole("button", { name: "Effort: Default" }));
+    const menu = await screen.findByRole("menu");
+    await animationsDone(menu);
+
+    expect(
+      within(menu)
+        .getAllByRole("menuitemradio")
+        .map((item) => item.querySelector("[data-name]")?.textContent),
+    ).toEqual(["Default", "Low", "Medium", "High", "Max"]);
+  });
+
+  it("shows a saved model that Claude Code no longer lists, as it is, and marks it", async () => {
+    const user = userEvent.setup();
+    startSessionsRust({ sessions: [{ ...answered(), model: "claude-opus-3" }], catalog });
+    renderApp("/session/session-1");
+
+    await user.click(await screen.findByRole("button", { name: "Model: claude-opus-3" }));
+    const menu = await screen.findByRole("menu");
+    await animationsDone(menu);
+
+    expect(within(menu).getByRole("menuitemradio", { name: /claude-opus-3/ })).toHaveTextContent(
+      "Not in Claude Code's list",
+    );
+  });
+
+  it("offers the four families until Claude Code has said its models", async () => {
+    const user = userEvent.setup();
+    startSessionsRust({ sessions: [answered()] });
+    renderApp("/session/session-1");
+
+    await user.click(await screen.findByRole("button", { name: "Model: Default" }));
+    const menu = await screen.findByRole("menu");
+    await animationsDone(menu);
+
+    expect(
+      within(menu)
+        .getAllByRole("menuitemradio")
+        .map((item) => item.querySelector("[data-name]")?.textContent),
+    ).toEqual(["Default", "Fable", "Opus", "Sonnet", "Haiku"]);
   });
 });

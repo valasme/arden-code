@@ -1139,7 +1139,7 @@ fn claude_code_starts_with_the_session_s_model_and_keeps_running_while_it_stays(
     let store = store();
     let session = claude_session(&store);
     store
-        .set_model(&session, Some(Model::Opus))
+        .set_model(&session, Some(Model::new("opus")))
         .expect("chosen");
 
     send(&store, &driver, &session, "First");
@@ -1148,7 +1148,7 @@ fn claude_code_starts_with_the_session_s_model_and_keeps_running_while_it_stays(
     scripted.assert_followed();
     let starts = scripted.starts.lock().expect("starts");
     assert_eq!(starts.len(), 1, "the same Claude Code answers both");
-    assert_eq!(starts[0].model, Some(Model::Opus));
+    assert_eq!(starts[0].model, Some(Model::new("opus")));
 }
 
 #[test]
@@ -1186,7 +1186,7 @@ fn a_new_model_starts_claude_code_again_in_the_same_conversation() {
 
     send(&store, &driver, &session, "First");
     store
-        .set_model(&session, Some(Model::Sonnet))
+        .set_model(&session, Some(Model::new("sonnet")))
         .expect("changed");
     send(&store, &driver, &session, "Second");
 
@@ -1194,8 +1194,11 @@ fn a_new_model_starts_claude_code_again_in_the_same_conversation() {
     assert_eq!(turn(&store, &session, 1).status, TurnStatus::Done);
     let starts = scripted.starts.lock().expect("starts");
     assert_eq!(
-        starts.iter().map(|start| start.model).collect::<Vec<_>>(),
-        [None, Some(Model::Sonnet)]
+        starts
+            .iter()
+            .map(|start| start.model.clone())
+            .collect::<Vec<_>>(),
+        [None, Some(Model::new("sonnet"))]
     );
     let [Conversation::New(first), Conversation::Resume(second)] =
         [&starts[0].conversation, &starts[1].conversation].map(Clone::clone)
@@ -1542,4 +1545,127 @@ fn a_stop_that_comes_after_claude_finished_does_not_stop_the_next_reply() {
 
     scripted.assert_followed();
     assert_eq!(turn(&store, &session, 1).status, TurnStatus::Done);
+}
+
+/// The steps of a start in which Claude Code answers `initialize` with its commands and models.
+fn handshake_listing(commands: &Value, models: &Value) -> Vec<Step> {
+    vec![
+        Step::Expect(json!({ "type": "control_request", "request": { "subtype": "initialize" } })),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "response": { "commands": commands, "models": models } }
+        })),
+    ]
+}
+
+fn listed_commands() -> Value {
+    json!([
+        { "name": "compact", "description": "Free up context", "argumentHint": "", "builtin": true },
+        { "name": "mattpocock-skills:tdd", "description": "TDD", "argumentHint": "", "aliases": ["tdd"] }
+    ])
+}
+
+fn listed_models() -> Value {
+    json!([
+        { "value": "opus", "displayName": "Opus 5.5", "description": "d", "supportsEffort": true, "supportedEffortLevels": ["low", "high"] },
+        { "value": "claude-opus-4-8", "displayName": "Opus 4.8", "description": "older" }
+    ])
+}
+
+#[test]
+fn the_driver_keeps_the_commands_and_models_claude_code_lists_and_the_commands_it_lists_again() {
+    let mut script = handshake_listing(&listed_commands(), &listed_models());
+    script.extend([
+        message("Hello"),
+        Step::Play(json!({
+            "type": "system", "subtype": "commands_changed", "session_id": "c1",
+            "commands": [{ "name": "compact", "description": "Free up context", "argumentHint": "", "builtin": true }]
+        })),
+        Step::Play(json!({
+            "type": "system", "subtype": "init", "session_id": "c1",
+            "terminal_slash_commands": ["doctor", "color"]
+        })),
+        success("Hi."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+    assert!(
+        driver.catalog().is_empty(),
+        "nothing is known before Claude Code has said it"
+    );
+
+    send(&store, &driver, &session, "Hello");
+
+    scripted.assert_followed();
+    let catalog = driver.catalog();
+    assert_eq!(
+        catalog
+            .commands
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect::<Vec<_>>(),
+        ["compact"],
+        "the later list replaces the first"
+    );
+    assert_eq!(
+        catalog
+            .models
+            .iter()
+            .map(|m| m.value.as_str())
+            .collect::<Vec<_>>(),
+        ["opus", "claude-opus-4-8"]
+    );
+    assert_eq!(catalog.terminal_commands, ["doctor", "color"]);
+}
+
+#[test]
+fn a_new_claude_code_started_to_hear_the_lists_sends_no_message_and_is_let_go() {
+    let mut script = handshake_listing(&listed_commands(), &listed_models());
+    script.push(Step::Play(json!({
+        "type": "system", "subtype": "commands_changed", "session_id": "c1",
+        "commands": [{ "name": "compact", "description": "", "argumentHint": "" }, { "name": "tdd", "description": "", "argumentHint": "" }, { "name": "loop", "description": "", "argumentHint": "" }]
+    })));
+    let (scripted, driver) = claude(vec![Ok(script)]);
+
+    let catalog = driver.warm_with(Path::new(FOLDER), Duration::from_millis(150));
+
+    scripted.assert_followed();
+    assert_eq!(
+        catalog.commands.len(),
+        3,
+        "the push that came after the answer was heard"
+    );
+    assert_eq!(catalog.models.len(), 2);
+    let written = scripted.written.lock().expect("written");
+    assert!(
+        written.iter().all(|frame| frame["type"] != "user"),
+        "no message was sent: {written:?}"
+    );
+    assert_eq!(scripted.starts.lock().expect("starts").len(), 1);
+}
+
+#[test]
+fn the_lists_are_heard_once_and_not_while_they_are_being_heard() {
+    let script = handshake_listing(&listed_commands(), &listed_models());
+    let (scripted, driver) = claude(vec![Ok(script)]);
+
+    driver.ensure_catalog_with(Path::new(FOLDER), Duration::from_millis(100));
+    driver.ensure_catalog_with(Path::new(FOLDER), Duration::from_millis(100));
+
+    scripted.assert_followed();
+    assert_eq!(
+        scripted.starts.lock().expect("starts").len(),
+        1,
+        "the second call found the lists"
+    );
+}
+
+#[test]
+fn without_claude_code_the_lists_stay_empty() {
+    let (_scripted, driver) = claude(vec![Err(LaunchError::NotInstalled)]);
+
+    let catalog = driver.warm_with(Path::new(FOLDER), Duration::from_millis(50));
+
+    assert!(catalog.is_empty());
 }

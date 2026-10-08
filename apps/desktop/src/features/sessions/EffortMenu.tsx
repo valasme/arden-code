@@ -4,17 +4,17 @@ import { useTranslation } from "react-i18next";
 import { DropdownMenuCheckboxItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import type { Effort } from "@/ipc/bindings";
 
+import { allEfforts } from "./claudeCatalog";
 import { ChoiceMenu } from "./ChoiceMenu";
-
-/** How much Claude can think, in the order the menu lists them. */
-const efforts = ["low", "medium", "high", "extraHigh", "max"] as const satisfies readonly Effort[];
 
 /**
  * The effort of a Claude session, beside its model (ADR 0041): Default, which is Claude Code's own
- * setting, or Low to Max. It can change between messages.
+ * setting, or the efforts the model takes, Low to Max (ADR 0042). It can change between messages.
+ * It ends with the Ultrathink switch, for the next message.
  */
 export function EffortMenu({
   effort,
+  levels = allEfforts,
   disabled = false,
   ultrathink,
   onUltrathink,
@@ -22,6 +22,8 @@ export function EffortMenu({
 }: {
   /** The session's effort, or null for Default. */
   effort: Effort | null;
+  /** The efforts the session's model takes. None for a model that has no effort. */
+  levels?: readonly Effort[];
   disabled?: boolean;
   /** Whether the next message carries the word ultrathink (ADR 0042). */
   ultrathink: boolean;
@@ -29,12 +31,24 @@ export function EffortMenu({
   onChoose: (effort: Effort | null) => void;
 }) {
   const { t } = useTranslation();
+  // Each name has its own key, so the translations can be found and checked.
+  const names: Record<Effort, string> = {
+    low: t("sessions.effortMenu.low"),
+    medium: t("sessions.effortMenu.medium"),
+    high: t("sessions.effortMenu.high"),
+    extraHigh: t("sessions.effortMenu.extraHigh"),
+    max: t("sessions.effortMenu.max"),
+  };
 
   return (
     <ChoiceMenu
       icon={ChartNoAxesColumnIncreasingIcon}
       label={(name) => t("sessions.effortMenu.label", { effort: name })}
-      options={efforts.map((value) => ({ value, name: t(`sessions.effortMenu.${value}`) }))}
+      // A chosen effort that the model does not take stays visible: Claude Code runs the highest
+      // effort at or below it.
+      options={allEfforts
+        .filter((value) => levels.includes(value) || value === effort)
+        .map((value) => ({ value, name: names[value] }))}
       value={effort}
       disabled={disabled}
       onChoose={onChoose}

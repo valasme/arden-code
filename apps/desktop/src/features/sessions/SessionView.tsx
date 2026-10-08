@@ -28,6 +28,8 @@ import { ModelMenu } from "./ModelMenu";
 import { ProjectMenu } from "./ProjectMenu";
 import { projectsByUse } from "./sessionList";
 import { useTrustGate } from "./useTrustGate";
+import { effortsFor } from "./claudeCatalog";
+import { useClaudeCatalog } from "./useClaudeCatalog";
 import { useUltrathink } from "./ultrathink";
 import { useUnavailableAgents } from "./useUnavailableAgents";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
@@ -73,6 +75,7 @@ export function SessionView({ id }: { id: string }) {
   const lastTurn = turns.at(-1);
   const busy = turns.some((turn) => turn.status === "running");
   const agent = session?.agent ?? "demo";
+  const catalog = useClaudeCatalog(agent === "claude");
   const waiting = waitingRequest(lastTurn) !== undefined;
 
   // The virtualizer's functions cannot be memoized, so the compiler leaves this component alone.
@@ -225,9 +228,15 @@ export function SessionView({ id }: { id: string }) {
       {choices}
       {agent === "claude" && session.archivedAt === null ? (
         <>
-          <ModelMenu model={session.model ?? null} disabled={busy} onChoose={chooseModel} />
+          <ModelMenu
+            model={session.model ?? null}
+            models={catalog.models}
+            disabled={busy}
+            onChoose={chooseModel}
+          />
           <EffortMenu
             effort={session.effort ?? null}
+            levels={effortsFor(catalog, session.model ?? null)}
             disabled={busy}
             ultrathink={ultrathink}
             onUltrathink={setUltrathink}

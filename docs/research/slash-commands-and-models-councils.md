@@ -70,8 +70,7 @@ Arden Code; **(c)** reading the `.claude` folders.
 **Verdict:** Arden Code handles four commands itself and does not send them: `/model x` and `/effort x` set the menu
 (`/effort auto` and `/model default` mean Default); `/rename` renames the session, opening the Rename dialog with no
 name; `/clear`, `/reset` and `/new` start a new session as New session does, and leave the session as it was. Every other
-command goes to Claude Code. A `conversation_reset` frame from Claude Code (for example when a plan is accepted with the
-context cleared) makes the driver remember the new conversation's id, and the reply says a new conversation started.
+command goes to Claude Code.
 
 ### Q5. Which models
 
@@ -123,7 +122,8 @@ or later is installed.
 |---|---|---|
 | 8 | The list before any session's Claude Code has started | A1, R3: Arden Code starts one Claude Code in the Playground (always trusted), once per start, only to hear its answer to `initialize` and the lists it then pushes, and ends it. No message is sent, so no API call is made. Every running Claude Code also keeps the lists current. D5: commands that belong to a project appear once Claude has run in it. |
 | 9 | Commands the menu hides | E5: names that start with `__`, `workflow-launch-exec`, and the commands `system/init` lists as bound to the terminal (`doctor`, `color`, `focus` and `reload-plugins` until Claude Code says otherwise). |
-| 10 | Effort levels and models | R2: the effort menu lists the levels the chosen model supports, from the list (Opus 4.6 has no Extra high); a model with none, such as Haiku 4.5, has the menu disabled. A chosen level the model lacks is left as it is: Claude Code runs the highest level at or below it. Default's row follows the Default model's levels. |
+| 10 | Effort levels and models | R2: the effort menu lists the levels the chosen model supports, from the list (Opus 4.6 has no Extra high); a model with none, such as Haiku 4.5, shows only Default and the Ultrathink switch. A chosen level the model lacks is left as it is: Claude Code runs the highest level at or below it. Default's row follows the Default model's levels. |
 | 11 | `/compact` | D5: sent as typed; Claude Code's own answer is what the reply shows. No special handling. |
 | 12 | The sessions file | A2: no change. The model column already holds text. |
-| 13 | Branches and tickets | D1, D2: one branch, one pull request, one commit for each of the five tickets: icons, Ultrathink, models, slash-command menu, then the documents. |
+| 13 | Branches and tickets | D1, D2: one branch and one pull request, with one commit for the documents and one for each ticket: icons, Ultrathink, models, slash-command menu. |
+| 14 | `conversation_reset` | D5: left for later. Since `/clear` is handled by Arden Code, only a plan accepted with its context cleared can send it. |

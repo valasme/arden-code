@@ -23,11 +23,11 @@ weighed each choice.
   start with `__`, internal workflow commands and commands bound to the terminal are left out.
 - **Arden Code runs four commands itself:** `/model`, `/effort`, `/rename`, and `/clear` with its aliases `/reset` and
   `/new`. They change what the session holds; sent to Claude Code they would change only its running process. Everything
-  else is sent as typed. A `conversation_reset` from Claude Code makes the driver remember the new conversation.
+  else is sent as typed.
 - **The model is the value Claude Code lists** (an alias or a full id), never typed text, checked again before it is
   passed as an argument. This replaces ADR 0041's four names. Older models appear under "Older models". The sessions file
   needs no change: the column holds text, and the old aliases are valid values.
-- **The effort menu follows the model:** the levels it supports, disabled for a model with none.
+- **The effort menu follows the model:** the levels it supports; a model with none shows only Default and Ultrathink.
 - **Ultrathink** is a switch in the effort menu that adds the word `ultrathink` to the next message, once. Nothing is
   saved. Ultracode is not offered.
 - **The icons** say what they choose and are 16 px at the label's color.

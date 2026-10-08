@@ -183,10 +183,15 @@ fn arguments(start: &Start) -> Vec<Arg> {
         Arg::Literal("--permission-mode"),
         Arg::Literal("default"),
     ];
-    // The alias is Arden Code's own text, from its list of models, never typed by anyone.
-    if let Some(model) = start.model {
-        arguments.push(Arg::Literal("--model"));
-        arguments.push(Arg::Literal(model.alias()));
+    // The value comes from Claude Code's own list of models, but it was kept in a file and
+    // handed over by the page, so it is checked again before it is passed (ADR 0042).
+    if let Some(model) = &start.model {
+        if model.is_safe() {
+            arguments.push(Arg::Literal("--model"));
+            arguments.push(Arg::Untrusted(model.as_str().to_owned()));
+        } else {
+            tracing::warn!("a model that is not a model name was not passed to Claude Code");
+        }
     }
     if let Some(effort) = start.effort {
         arguments.push(Arg::Literal("--effort"));
@@ -282,8 +287,43 @@ mod tests {
     }
 
     #[test]
+    fn a_full_model_id_from_claude_codes_list_is_passed_as_it_is() {
+        for id in [
+            "claude-opus-4-8",
+            "claude-fable-5-1[1m]",
+            "claude-haiku-4-5-20251001",
+        ] {
+            let arguments = texts(&start(Some(Model::new(id))));
+            let at = arguments
+                .iter()
+                .position(|text| text == "--model")
+                .expect("--model");
+            assert_eq!(arguments[at + 1], id);
+        }
+    }
+
+    #[test]
+    fn a_value_that_is_not_a_model_name_is_never_passed() {
+        for text in [
+            "",
+            "opus --dangerously-skip-permissions",
+            "a&b",
+            "x\"y",
+            "opus
+max",
+            &"m".repeat(65),
+        ] {
+            let arguments = texts(&start(Some(Model::new(text))));
+            assert!(
+                !arguments.contains(&"--model".to_owned()),
+                "{text:?} was passed"
+            );
+        }
+    }
+
+    #[test]
     fn a_chosen_model_is_passed_by_its_alias_and_default_passes_none() {
-        let chosen = texts(&start(Some(Model::Opus)));
+        let chosen = texts(&start(Some(Model::new("opus"))));
         let at = chosen
             .iter()
             .position(|text| text == "--model")
@@ -292,9 +332,9 @@ mod tests {
 
         assert!(!texts(&start(None)).contains(&"--model".to_owned()));
         for (model, alias) in [
-            (Model::Fable, "fable"),
-            (Model::Sonnet, "sonnet"),
-            (Model::Haiku, "haiku"),
+            (Model::new("fable"), "fable"),
+            (Model::new("sonnet"), "sonnet"),
+            (Model::new("haiku"), "haiku"),
         ] {
             assert!(texts(&start(Some(model))).contains(&alias.to_owned()));
         }

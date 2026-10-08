@@ -5,6 +5,7 @@ import { z } from "zod";
 import type {
   AgentKind,
   AppError,
+  Catalog,
   Effort,
   ErrorCode,
   Model,
@@ -91,6 +92,8 @@ interface Options {
   newSessionEffort?: Effort | null;
   /** The folder the person picks in Windows' dialog, or null when they cancel. */
   pickedFolder?: Project | null;
+  /** What Claude Code says it can do (ADR 0042). Nothing, until it has been heard. */
+  catalog?: Catalog;
 }
 
 /**
@@ -108,6 +111,7 @@ export function startSessionsRust({
   newSessionAgent = "demo",
   newSessionModel = null,
   newSessionEffort = null,
+  catalog = { commands: [], models: [], terminalCommands: [] },
   pickedFolder = null,
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
@@ -209,6 +213,9 @@ export function startSessionsRust({
         case "model_for_new_session": {
           return newSessionModel;
         }
+        case "claude_catalog": {
+          return structuredClone(catalog);
+        }
         case "effort_for_new_session": {
           return newSessionEffort;
         }
@@ -229,7 +236,7 @@ export function startSessionsRust({
           const { id, model } = z
             .object({
               id: z.string(),
-              model: z.enum(["fable", "opus", "sonnet", "haiku"]).nullable(),
+              model: z.string().nullable(),
             })
             .parse(payload);
           const session = find(id);

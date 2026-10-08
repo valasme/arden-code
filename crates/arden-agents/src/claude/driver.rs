@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use arden_core::error::ErrorCode;
 
 use super::approval;
+use super::catalog::Catalog;
 use super::launch::{Connection, Conversation, LaunchError, Launcher, Start};
 use super::locate::MINIMUM_VERSION;
 use super::protocol::{self, Frame, Request};
@@ -24,6 +25,11 @@ use crate::model::{
     ApprovalState, Choices, Item, QuestionAnswer, QuestionState, StatusKind, TurnEvent,
 };
 
+/// How long a Claude Code started only to list its commands and models goes unheard before its
+/// lists are taken as complete: it pushes the commands again as plugins and skills load.
+const LIST_SETTLE: Duration = Duration::from_millis(2500);
+/// The longest a Claude Code started only to list its commands and models is kept.
+const LIST_LIMIT: Duration = Duration::from_secs(12);
 /// How long a new Claude Code has to answer `initialize`: it may be starting MCP servers.
 const HANDSHAKE_PATIENCE: Duration = Duration::from_secs(60);
 /// How long a stopped reply has to send its last frame before its Claude Code is started again.
@@ -66,6 +72,7 @@ enum Event {
 fn kind_of(frame: &Frame) -> &'static str {
     match frame {
         Frame::Init { .. } => "init",
+        Frame::CommandsChanged { .. } => "commands changed",
         Frame::Stream { .. } => "stream",
         Frame::Assistant { .. } => "assistant",
         Frame::ToolResults { .. } => "tool results",
@@ -98,7 +105,12 @@ struct Live {
 
 impl Live {
     /// Starts reading what Claude Code writes, on a thread of its own.
-    fn begin(connection: Connection, session_id: &str, start: &Start) -> Self {
+    fn begin(
+        connection: Connection,
+        session_id: &str,
+        start: &Start,
+        catalog: Arc<Mutex<Catalog>>,
+    ) -> Self {
         let conversation = &start.conversation;
         let (sender, events) = mpsc::channel();
         let reader = sender.clone();
@@ -113,6 +125,25 @@ impl Live {
                 match protocol::parse(&line) {
                     Some(frame) => {
                         tracing::debug!(%session, frame = kind_of(&frame), "a frame from Claude Code");
+                        // What Claude Code says it can do is kept for every session, at once: no
+                        // reply needs to be running to hear it (ADR 0042).
+                        match &frame {
+                            Frame::Response { answer, .. } => {
+                                lock(&catalog).absorb_initialize(answer);
+                            }
+                            Frame::CommandsChanged { commands } => {
+                                lock(&catalog).replace_commands(commands.clone());
+                                continue;
+                            }
+                            Frame::Init {
+                                terminal_commands, ..
+                            } if !terminal_commands.is_empty() => {
+                                lock(&catalog)
+                                    .terminal_commands
+                                    .clone_from(terminal_commands);
+                            }
+                            _ => {}
+                        }
                         if reader.send(Event::Frame(frame)).is_err() {
                             return;
                         }
@@ -136,7 +167,7 @@ impl Live {
             },
             remembered: AtomicBool::new(matches!(conversation, Conversation::Resume(_))),
             choices: Choices {
-                model: start.model,
+                model: start.model.clone(),
                 effort: start.effort,
             },
             heard,
@@ -246,6 +277,10 @@ pub struct ClaudeDriver {
     launcher: Arc<dyn Launcher>,
     live: Arc<Running>,
     requests: AtomicU64,
+    /// What Claude Code last said it can do, from any of its Claude Codes (ADR 0042).
+    catalog: Arc<Mutex<Catalog>>,
+    /// Whether a Claude Code started only to list its commands and models is running.
+    listing: AtomicBool,
 }
 
 /// Marks a session's Claude Code as used by a reply until the reply ends.
@@ -275,7 +310,70 @@ impl ClaudeDriver {
             launcher,
             live,
             requests: AtomicU64::new(0),
+            catalog: Arc::new(Mutex::new(Catalog::default())),
+            listing: AtomicBool::new(false),
         }
+    }
+
+    /// The slash commands and models Claude Code last said it has: nothing until one of its Claude
+    /// Codes has been heard.
+    #[must_use]
+    pub fn catalog(&self) -> Catalog {
+        lock(&self.catalog).clone()
+    }
+
+    /// Hears Claude Code's commands and models when no Claude Code has said them yet, and does
+    /// nothing when they are known, or another call is listening (ADR 0042). Blocks while it
+    /// listens, so the app calls it on a thread of its own.
+    pub fn ensure_catalog(&self, folder: &Path) {
+        self.ensure_catalog_with(folder, LIST_SETTLE);
+    }
+
+    /// [`Self::ensure_catalog`], with the time without news after which the lists are complete.
+    pub fn ensure_catalog_with(&self, folder: &Path, settle: Duration) {
+        if !lock(&self.catalog).is_empty() || self.listing.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        self.warm_with(folder, settle);
+        self.listing.store(false, Ordering::Release);
+    }
+
+    /// Starts a Claude Code in a folder only to hear its commands and models, with no message and
+    /// so no call to the model, and lets it go once it has been quiet for `settle`.
+    pub fn warm_with(&self, folder: &Path, settle: Duration) -> Catalog {
+        let start = Start {
+            folder: folder.to_path_buf(),
+            conversation: Conversation::New(uuid::Uuid::new_v4().to_string()),
+            model: None,
+            effort: None,
+        };
+        let Ok(connection) = self.launcher.launch(&start) else {
+            return self.catalog();
+        };
+        let live = Live::begin(connection, "listing", &start, Arc::clone(&self.catalog));
+        let id = self.next_request();
+        if live.write(&protocol::initialize(&id)).is_err() {
+            return self.catalog();
+        }
+        let started = Instant::now();
+        let answered = {
+            let events = lock(&live.events);
+            loop {
+                match events.recv_timeout(HANDSHAKE_PATIENCE.saturating_sub(started.elapsed())) {
+                    Ok(Event::Frame(Frame::Response { id: answered, .. })) if answered == id => {
+                        break true;
+                    }
+                    Ok(Event::Ended) | Err(_) => break false,
+                    Ok(_) => {}
+                }
+            }
+        };
+        // More of the commands arrive as plugins load: wait until it has been quiet for a while.
+        while answered && started.elapsed() < LIST_LIMIT && lock(&live.heard).elapsed() < settle {
+            thread::sleep(Duration::from_millis(25));
+        }
+        drop(live);
+        self.catalog()
     }
 
     /// A new id for a request of Arden Code's.
@@ -316,7 +414,7 @@ impl ClaudeDriver {
             session_id,
             folder,
             Conversation::Resume(saved.to_owned()),
-            choices,
+            choices.clone(),
         ) {
             Ok(live) => Ok((live, false)),
             // Claude Code ends at once when it has no such conversation.
@@ -344,7 +442,12 @@ impl ClaudeDriver {
             effort: choices.effort,
         };
         let connection = self.launcher.launch(&start).map_err(Problem::Launch)?;
-        let live = Arc::new(Live::begin(connection, session_id, &start));
+        let live = Arc::new(Live::begin(
+            connection,
+            session_id,
+            &start,
+            Arc::clone(&self.catalog),
+        ));
         let id = self.next_request();
         live.write(&protocol::initialize(&id)).map_err(|error| {
             Problem::Stopped(format!("Claude Code could not be written to: {error}"))
@@ -357,6 +460,7 @@ impl ClaudeDriver {
                     Ok(Event::Frame(Frame::Response {
                         id: answered,
                         error,
+                        ..
                     })) if answered == id => {
                         if let Some(error) = error {
                             return Err(Problem::NotUnderstood(format!(
@@ -405,7 +509,7 @@ impl ClaudeDriver {
         saved: Option<&str>,
         choices: Choices,
     ) -> Result<(Arc<Live>, bool), Problem> {
-        let (live, lost) = self.live(session_id, folder, saved, choices)?;
+        let (live, lost) = self.live(session_id, folder, saved, choices.clone())?;
         let deadline = Instant::now() + DRAIN_PATIENCE;
         {
             let events = lock(&live.events);

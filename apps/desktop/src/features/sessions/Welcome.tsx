@@ -26,6 +26,8 @@ import { ProjectMenu } from "./ProjectMenu";
 import { latestProjectId, PLAYGROUND_ID, projectsByUse } from "./sessionList";
 import { useOpenFolder } from "./useOpenFolder";
 import { useSendMessage } from "./useSendMessage";
+import { effortsFor } from "./claudeCatalog";
+import { useClaudeCatalog } from "./useClaudeCatalog";
 import { useStartSession } from "./useStartSession";
 import { useTrustGate } from "./useTrustGate";
 import { useUltrathink } from "./ultrathink";
@@ -75,6 +77,7 @@ export function Welcome() {
   const model = chosenModel === undefined ? inheritedModel : chosenModel;
   const inheritedEffort = useQuery(effortForProjectQuery(projectId)).data ?? null;
   const effort = chosenEffort === undefined ? inheritedEffort : chosenEffort;
+  const catalog = useClaudeCatalog(agent === "claude");
 
   const start = async (text: string) => {
     const id = await startSession(agent, projectId);
@@ -121,9 +124,10 @@ export function Welcome() {
             />
             {agent === "claude" ? (
               <>
-                <ModelMenu model={model} onChoose={setChosenModel} />
+                <ModelMenu model={model} models={catalog.models} onChoose={setChosenModel} />
                 <EffortMenu
                   effort={effort}
+                  levels={effortsFor(catalog, model)}
                   ultrathink={ultrathink}
                   onUltrathink={setUltrathink}
                   onChoose={setChosenEffort}

@@ -6,6 +6,7 @@ import { defaultSettings } from "@/ipc/defaults.gen";
 import { fallbackSystemPreferences } from "@/features/settings/systemPreferences";
 
 import {
+  type Catalog,
   type Effort,
   type Model,
   type AgentKind,
@@ -101,6 +102,28 @@ export const effortForProjectQuery = (projectId: string) =>
       isTauri() ? commands.effortForNewSession(projectId) : Promise.resolve(null),
     staleTime: Number.POSITIVE_INFINITY,
   });
+
+/** How often Rust is asked for Claude Code's commands and models while it has none (ADR 0042). */
+const CATALOG_RETRY_MS = 1500;
+/** How many times it is asked again: Claude Code may not be installed. */
+const CATALOG_RETRIES = 20;
+
+/**
+ * What Claude Code says it can do: its slash commands and models (ADR 0042). Rust has them once a
+ * Claude Code has been heard, so until then the page asks again, a few times.
+ */
+export const claudeCatalogQuery = queryOptions({
+  queryKey: ["claude-catalog"],
+  queryFn: (): Promise<Catalog> =>
+    isTauri()
+      ? commands.claudeCatalog()
+      : Promise.resolve({ commands: [], models: [], terminalCommands: [] }),
+  staleTime: Number.POSITIVE_INFINITY,
+  refetchInterval: (query) => {
+    const known = (query.state.data?.commands.length ?? 0) + (query.state.data?.models.length ?? 0);
+    return known > 0 || query.state.dataUpdateCount > CATALOG_RETRIES ? false : CATALOG_RETRY_MS;
+  },
+});
 
 /** The agent a new session in a project takes (ADR 0039), for the welcome screen's choice. */
 export const agentForProjectQuery = (projectId: string) =>

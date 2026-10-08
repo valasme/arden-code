@@ -431,7 +431,8 @@
     },
     "choiceMenu": {
       "default": "Default",
-      "defaultHint": "Claude Code's own setting"
+      "defaultHint": "Claude Code's own setting",
+      "unlisted": "Not in Claude Code's list"
     },
     "context": "{{agent}} · {{project}}",
     "delete": {
@@ -472,6 +473,7 @@
       "fable": "Fable",
       "haiku": "Haiku",
       "label": "Model: {{model}}",
+      "older": "Older models",
       "opus": "Opus",
       "sonnet": "Sonnet"
     },

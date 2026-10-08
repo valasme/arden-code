@@ -14,27 +14,41 @@ pub enum AgentKind {
     Claude,
 }
 
-/// The model Claude works with in a session, chosen by the alias Claude Code takes, which always
-/// means the latest of its family (ADR 0041). No choice leaves it to Claude Code's own setting.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub enum Model {
-    Fable,
-    Opus,
-    Sonnet,
-    Haiku,
-}
+/// The model Claude works with in a session: the value Claude Code lists for it, an alias such as
+/// `opus`, which means the latest of its family, or a full id such as `claude-opus-4-8` (ADR 0042).
+/// No choice leaves it to Claude Code's own setting.
+///
+/// It is text that is passed to a program as an argument, so it is checked again before that
+/// ([`Model::is_safe`]), however it came here.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+#[serde(transparent)]
+pub struct Model(String);
 
 impl Model {
-    /// The alias Claude Code takes for it, as in `--model opus`.
+    /// The longest model value that is passed on.
+    const LONGEST: usize = 64;
+
     #[must_use]
-    pub fn alias(self) -> &'static str {
-        match self {
-            Self::Fable => "fable",
-            Self::Opus => "opus",
-            Self::Sonnet => "sonnet",
-            Self::Haiku => "haiku",
-        }
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    /// The text Claude Code takes after `--model`.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Whether it may be passed to Claude Code: letters, digits and `.`, `-`, `_`, `[` and `]`
+    /// only, and not too long. Claude Code's own values, such as `claude-fable-5-1[1m]`, pass.
+    #[must_use]
+    pub fn is_safe(&self) -> bool {
+        !self.0.is_empty()
+            && self.0.len() <= Self::LONGEST
+            && self
+                .0
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '[' | ']'))
     }
 }
 
@@ -66,7 +80,7 @@ impl Effort {
 
 /// What a session's agent works with apart from its conversation: its model and its effort, each
 /// none for the agent's own setting (ADR 0041).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Choices {
     pub model: Option<Model>,
     pub effort: Option<Effort>,

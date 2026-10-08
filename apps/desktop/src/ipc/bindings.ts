@@ -494,7 +494,7 @@ export const commands = {
 	 *  Returns an error when there is no such session, it is archived, a reply is running, or the
 	 *  change cannot be saved.
 	 */
-	setSessionModel: (id: string, model: "fable" | "opus" | "sonnet" | "haiku" | null) => __TAURI_INVOKE<null>("set_session_model", { id, model }),
+	setSessionModel: (id: string, model: string | null) => __TAURI_INVOKE<null>("set_session_model", { id, model }),
 	/**
 	 *  The model a new session in a project would take, the Playground when none is given (ADR 0041):
 	 *  that of the session the agent rule follows. None for the agent's own setting.
@@ -503,7 +503,7 @@ export const commands = {
 	 * 
 	 *  Never fails today; it returns a `Result` like every command.
 	 */
-	modelForNewSession: (projectId: string | null) => __TAURI_INVOKE<"fable" | "opus" | "sonnet" | "haiku" | null>("model_for_new_session", { projectId }),
+	modelForNewSession: (projectId: string | null) => __TAURI_INVOKE<string | null>("model_for_new_session", { projectId }),
 	/**
 	 *  Changes how much a session's agent thinks, none for its own setting (ADR 0041). It applies from
 	 *  the next message.
@@ -561,6 +561,16 @@ export const commands = {
 	 *  Never fails today; it returns a `Result` like every command.
 	 */
 	agentForNewSession: (projectId: string | null) => __TAURI_INVOKE<AgentKind>("agent_for_new_session", { projectId }),
+	/**
+	 *  The slash commands and models of the person's Claude Code, as it last said them (ADR 0042):
+	 *  nothing yet before it has been heard. When nothing is known and Claude Code is installed, one
+	 *  is started in the Playground, without a message, to hear them, and the page asks again.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	claudeCatalog: () => __TAURI_INVOKE<Catalog>("claude_catalog"),
 	/**
 	 *  What was found about the Claude Code and Codex programs: where they are, which version, and
 	 *  whether Claude Code is signed in. It changes nothing. What was found is kept; `fresh` looks
@@ -718,6 +728,14 @@ export type ApprovalState =
 "denied" | 
 /**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
 "cancelled";
+
+/**  The slash commands and models of the person's Claude Code, as it last said them. */
+export type Catalog = {
+	commands: SlashCommand[],
+	models: ModelOption[],
+	/**  The names of the commands that only make sense in a terminal, as Claude Code lists them. */
+	terminalCommands: string[],
+};
 
 /**  What a check found, for the person who asked for it. */
 export type CheckResult = 
@@ -954,10 +972,26 @@ export type MaximizeButtonChanged = {
 export type MaximizeButtonLook = "normal" | "hover" | "pressed";
 
 /**
- *  The model Claude works with in a session, chosen by the alias Claude Code takes, which always
- *  means the latest of its family (ADR 0041). No choice leaves it to Claude Code's own setting.
+ *  The model Claude works with in a session: the value Claude Code lists for it, an alias such as
+ *  `opus`, which means the latest of its family, or a full id such as `claude-opus-4-8` (ADR 0042).
+ *  No choice leaves it to Claude Code's own setting.
+ * 
+ *  It is text that is passed to a program as an argument, so it is checked again before that
+ *  ([`Model::is_safe`]), however it came here.
  */
-export type Model = "fable" | "opus" | "sonnet" | "haiku";
+export type Model = string;
+
+/**  A model Claude Code can work with. */
+export type ModelOption = {
+	/**  What `--model` takes: an alias such as `opus`, or a full id such as `claude-opus-4-8`. */
+	value: string,
+	displayName: string,
+	description: string,
+	/**  The full id an alias stands for. */
+	resolvedModel: string | null,
+	/**  The efforts it takes, in order. None for a model that has no effort. */
+	efforts: Effort[],
+};
 
 /**  Whether Arden Code may show Windows notifications. */
 export type Notifications = {
@@ -1152,6 +1186,19 @@ export type SettingsChanged = {
 	settings: Settings,
 	/**  Set when the file could not be used and the defaults took over (`ARD-SET-002`). */
 	notice: AppError | null,
+};
+
+/**  An action Claude Code runs when a message starts with a slash and its name. */
+export type SlashCommand = {
+	/**  Without the slash. A plugin's commands are named `plugin:name`. */
+	name: string,
+	description: string,
+	/**  What follows the name, such as `<low|medium|high>`. Empty when it takes nothing. */
+	argumentHint: string,
+	/**  Other names that run it. */
+	aliases: string[],
+	/**  Whether it is Claude Code's own, not a skill, a plugin's or an MCP server's. */
+	builtin: boolean,
 };
 
 /**  A moment in a reply that is not text, shown as a line of its own. */

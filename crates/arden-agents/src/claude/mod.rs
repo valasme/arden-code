@@ -2,6 +2,7 @@
 //! (`claude`) and speaks its protocol over its input and output.
 
 mod approval;
+pub mod catalog;
 pub mod driver;
 pub mod launch;
 pub mod locate;
