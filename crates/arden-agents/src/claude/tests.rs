@@ -1686,3 +1686,41 @@ fn a_claude_code_that_lists_nothing_is_not_asked_again_and_again() {
     );
     assert!(driver.catalog().is_empty());
 }
+
+#[test]
+fn a_new_conversation_that_claude_code_starts_is_the_one_carried_on_after_a_restart() {
+    let mut first = handshake();
+    first.extend([
+        message("Accept the plan"),
+        Step::Play(json!({
+            "type": "conversation_reset", "new_conversation_id": "11111111-1111-4111-8111-111111111111",
+            "trigger": "plan_mode_exit", "session_id": "c1"
+        })),
+        success("Done."),
+    ]);
+    let mut second = handshake();
+    second.extend([message("Go on"), success("Going on.")]);
+    let (scripted, driver) = claude(vec![Ok(first), Ok(second)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "Accept the plan");
+    driver.end(&session);
+    send(&store, &driver, &session, "Go on");
+
+    scripted.assert_followed();
+    assert!(
+        turn(&store, &session, 0).items.iter().any(|item| matches!(
+            item,
+            Item::Status {
+                kind: StatusKind::NewConversation,
+                ..
+            }
+        )),
+        "the reply says a new conversation started"
+    );
+    assert_eq!(
+        conversations(&scripted)[1],
+        Conversation::Resume("11111111-1111-4111-8111-111111111111".into())
+    );
+}

@@ -50,6 +50,9 @@ pub enum Frame {
     },
     /// Claude Code no longer waits for the answer to one of its requests.
     Cancel { id: String },
+    /// Claude Code left the conversation for a new one, as when a plan is accepted with its context
+    /// cleared (`conversation_reset`).
+    ConversationReset { new_id: String },
     /// A frame the driver does not use.
     Other,
 }
@@ -257,6 +260,9 @@ pub fn parse(line: &str) -> Option<Frame> {
                 answer: response["response"].clone(),
             }
         }
+        Some("conversation_reset") => Frame::ConversationReset {
+            new_id: text_of(&frame["new_conversation_id"]).unwrap_or_default(),
+        },
         Some("control_cancel_request") => Frame::Cancel {
             id: text_of(&frame["request_id"]).unwrap_or_default(),
         },

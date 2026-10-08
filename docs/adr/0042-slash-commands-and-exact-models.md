@@ -23,7 +23,8 @@ weighed each choice.
   start with `__`, internal workflow commands and commands bound to the terminal are left out.
 - **Arden Code runs four commands itself:** `/model`, `/effort`, `/rename`, and `/clear` with its aliases `/reset` and
   `/new`. They change what the session holds; sent to Claude Code they would change only its running process. Everything
-  else is sent as typed.
+  else is sent as typed. A `conversation_reset` from Claude Code makes the driver carry on the new conversation, and the
+  reply says a new conversation started.
 - **The model is the value Claude Code lists** (an alias or a full id), never typed text, checked again before it is
   passed as an argument. This replaces ADR 0041's four names. Older models appear under "Older models". The sessions file
   needs no change: the column holds text, and the old aliases are valid values.

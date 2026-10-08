@@ -80,6 +80,7 @@ fn kind_of(frame: &Frame) -> &'static str {
         Frame::Request { .. } => "request",
         Frame::Response { .. } => "response",
         Frame::Cancel { .. } => "cancel",
+        Frame::ConversationReset { .. } => "conversation reset",
         Frame::Other => "other",
     }
 }
@@ -93,7 +94,7 @@ struct Live {
     /// How many stopped replies have not sent their result yet: their late frames come first.
     owed: AtomicUsize,
     /// The conversation it carries on, and whether the session remembers it already.
-    conversation: String,
+    conversation: Mutex<String>,
     /// The model and effort it was started with: others need another Claude Code (ADR 0041).
     choices: Choices,
     remembered: AtomicBool,
@@ -162,10 +163,10 @@ impl Live {
             sender,
             process: Mutex::new(connection.process),
             owed: AtomicUsize::new(0),
-            conversation: match conversation {
+            conversation: Mutex::new(match conversation {
                 Conversation::New(id) | Conversation::Resume(id) => id.clone(),
                 Conversation::Listing => String::new(),
-            },
+            }),
             remembered: AtomicBool::new(matches!(conversation, Conversation::Resume(_))),
             choices: Choices {
                 model: start.model.clone(),
@@ -539,7 +540,7 @@ impl ClaudeDriver {
                         let saved = live
                             .remembered
                             .load(Ordering::Acquire)
-                            .then(|| live.conversation.clone());
+                            .then(|| lock(&live.conversation).clone());
                         drop(live);
                         return self.live(session_id, folder, saved.as_deref(), choices);
                     }
@@ -753,7 +754,20 @@ impl Answering<'_> {
         if matches!(frame, Frame::Result { .. })
             && !self.live.remembered.swap(true, Ordering::AcqRel)
         {
-            (self.remember)(&self.live.conversation);
+            (self.remember)(&lock(&self.live.conversation));
+        }
+        // Claude Code moved to a new conversation: that is the one to carry on, once it answers
+        // in it, and the reply says so.
+        if let Frame::ConversationReset { new_id } = frame
+            && !new_id.is_empty()
+        {
+            lock(&self.live.conversation).clone_from(new_id);
+            self.live.remembered.store(false, Ordering::Release);
+            let event = self.added(Item::Status {
+                id: format!("{}-new-conversation-{new_id}", self.turn_id),
+                kind: StatusKind::NewConversation,
+            });
+            return self.show(event, emit);
         }
         for event in self.reply.on(frame) {
             if self.show(event, emit) == Next::Over {

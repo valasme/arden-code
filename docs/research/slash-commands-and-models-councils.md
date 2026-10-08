@@ -126,4 +126,4 @@ or later is installed.
 | 11 | `/compact` | D5: sent as typed; Claude Code's own answer is what the reply shows. No special handling. |
 | 12 | The sessions file | A2: no change. The model column already holds text. |
 | 13 | Branches and tickets | D1, D2: one branch and one pull request, with one commit for the documents and one for each ticket: icons, Ultrathink, models, slash-command menu. |
-| 14 | `conversation_reset` | D5: left for later. Since `/clear` is handled by Arden Code, only a plan accepted with its context cleared can send it. |
+| 14 | `conversation_reset` | A1, R5: when Claude Code leaves the conversation for a new one (a plan accepted with its context cleared), the driver carries on the new conversation's id from then on, and the reply says a new conversation started. |
