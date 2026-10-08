@@ -194,8 +194,11 @@ test.describe("Claude in the real app", () => {
         .map((line) => line.trim())
         .filter((line) => line.startsWith("start "))
         .map((line) => started.parse(JSON.parse(line.slice("start ".length))).args);
-      // The starts of a conversation, not the look at Claude Code's version.
-      const conversations = starts.filter((args) => args.includes("-p"));
+      // The starts of a conversation, not the look at Claude Code's version, and not the one that
+      // only lists what Claude Code can do (ADR 0042).
+      const conversations = starts.filter(
+        (args) => args.includes("-p") && !args.includes("--no-session-persistence"),
+      );
       expect(conversations).toHaveLength(2);
       const [fresh, resumed] = conversations;
       const id = fresh?.[fresh.indexOf("--session-id") + 1];
@@ -271,6 +274,92 @@ test.describe("Claude in the real app", () => {
       app.kill();
       claude.remove();
       rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    }
+  });
+
+  test("a slash lists Claude Code's slash commands, and Tab fills one in", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      await claudeSession(page);
+      const box = page.getByRole("textbox", { name: "Message" });
+
+      // Claude Code says its commands when a Claude Code has been started only to hear them.
+      await box.fill("/gre");
+      const greet = page.getByRole("option", { name: /stand-in-skill:greet/u });
+      await expect(greet).toBeVisible({ timeout: 30_000 });
+      await box.press("Tab");
+      await expect(box).toHaveValue("/stand-in-skill:greet ");
+
+      await box.fill("/comp");
+      await expect(page.getByRole("option", { name: /\/compact/u })).toBeVisible();
+      await box.press("Escape");
+      await expect(page.getByRole("listbox")).toBeHidden();
+      await expect(box).toHaveValue("/comp");
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
+
+  test("an older model that Claude Code lists is chosen by its full id and passed to it", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
+    const log = path.join(dataDir, "claude.log");
+    const claude = claudeOnPath({ log });
+    const app = await launchApp({ dataDir, env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+
+      await page.getByRole("button", { name: /^Model: / }).click();
+      const older = page.getByRole("menuitemradio", { name: /Stand-in 1/u });
+      await expect(older).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText("Older models")).toBeVisible();
+      await older.click();
+      await expect(page.getByRole("button", { name: "Model: Stand-in 1" })).toBeVisible();
+      await say(page, "Hello with an older model");
+      await expect(session.getByText("You said: Hello with an older model")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      const conversation = readFileSync(log, "utf8")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("start "))
+        .map((line) => started.parse(JSON.parse(line.slice("start ".length))).args)
+        .find((args) => args.includes("-p") && !args.includes("--no-session-persistence"));
+      expect(conversation?.[(conversation?.indexOf("--model") ?? -2) + 1]).toBe(
+        "claude-stand-in-1",
+      );
+    } finally {
+      app.kill();
+      claude.remove();
+      rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    }
+  });
+
+  test("/model is run by Arden Code, and not sent to Claude Code", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+      // The models are known once Claude Code has said them: the menu lists them.
+      await page.getByRole("button", { name: /^Model: / }).click();
+      await expect(page.getByRole("menuitemradio", { name: /Stand-in Small/u })).toBeVisible({
+        timeout: 30_000,
+      });
+      await page.keyboard.press("Escape");
+      const box = page.getByRole("textbox", { name: "Message" });
+      await box.fill("/model stand-in-small");
+      await box.press("Enter");
+
+      await expect(page.getByRole("button", { name: "Model: Stand-in Small" })).toBeVisible();
+      await expect(session.getByText("You said:")).toBeHidden();
+    } finally {
+      app.kill();
+      claude.remove();
     }
   });
 });

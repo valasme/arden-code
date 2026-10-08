@@ -48,6 +48,8 @@ pub enum Conversation {
     New(String),
     /// The conversation with this id, carried on.
     Resume(String),
+    /// None: a Claude Code started only to hear what it can do, which keeps nothing (ADR 0042).
+    Listing,
 }
 
 /// What a new `claude` is started with.
@@ -206,6 +208,7 @@ fn arguments(start: &Start) -> Vec<Arg> {
             arguments.push(Arg::Literal("--resume"));
             arguments.push(Arg::Untrusted(id.clone()));
         }
+        Conversation::Listing => arguments.push(Arg::Literal("--no-session-persistence")),
     }
     arguments
 }
@@ -284,6 +287,18 @@ mod tests {
             assert_eq!(chosen[at + 1], word);
         }
         assert!(!with(None).contains(&"--effort".to_owned()));
+    }
+
+    #[test]
+    fn a_claude_code_started_only_to_list_keeps_no_conversation() {
+        let arguments = texts(&Start {
+            conversation: Conversation::Listing,
+            ..start(None)
+        });
+
+        assert!(arguments.contains(&"--no-session-persistence".to_owned()));
+        assert!(!arguments.contains(&"--session-id".to_owned()));
+        assert!(!arguments.contains(&"--resume".to_owned()));
     }
 
     #[test]

@@ -97,6 +97,24 @@ fn respond(request: &Value, response: &Value) {
     }));
 }
 
+/// What the stand-in says it can do, in its answer to `initialize`: a few slash commands and two
+/// models, as Claude Code lists them (ADR 0042).
+fn listing() -> Value {
+    json!({
+        "commands": [
+            { "name": "compact", "description": "Free up context by summarizing the conversation so far", "argumentHint": "<optional custom summarization instructions>", "builtin": true },
+            { "name": "context", "description": "Show current context usage", "argumentHint": "", "builtin": true },
+            { "name": "stand-in-skill:greet", "description": "(stand-in-skill) Greets the person.", "argumentHint": "", "aliases": ["greet"] }
+        ],
+        "models": [
+            { "value": "default", "displayName": "Default (recommended)", "description": "The stand-in's own model", "supportsEffort": true, "supportedEffortLevels": ["low", "medium", "high"] },
+            { "value": "stand-in-large", "displayName": "Stand-in Large", "description": "The larger stand-in", "supportsEffort": true, "supportedEffortLevels": ["low", "medium", "high"] },
+            { "value": "stand-in-small", "displayName": "Stand-in Small", "description": "The smaller stand-in" },
+            { "value": "claude-stand-in-1", "displayName": "Stand-in 1", "description": "An older stand-in", "supportsEffort": true, "supportedEffortLevels": ["low"] }
+        ]
+    })
+}
+
 /// A conversation over the stand-in's input and output.
 struct Conversation {
     settings: Settings,
@@ -134,6 +152,9 @@ impl Conversation {
     fn run(&mut self) {
         while let Some(frame) = self.next() {
             match frame["type"].as_str() {
+                Some("control_request") if frame["request"]["subtype"] == "initialize" => {
+                    respond(&frame, &listing());
+                }
                 Some("control_request") => respond(&frame, &json!({})),
                 Some("user") => {
                     let text = frame["message"]["content"]
@@ -146,7 +167,9 @@ impl Conversation {
             }
         }
         // Arden Code closed the input: the conversation is over.
-        log(&self.settings, "end");
+        // A Claude Code started only to list what it can do keeps no conversation.
+        let listing = std::env::args().any(|argument| argument == "--no-session-persistence");
+        log(&self.settings, if listing { "end listing" } else { "end" });
     }
 
     fn stream(&self, event: &Value) {

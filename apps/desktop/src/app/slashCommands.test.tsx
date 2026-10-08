@@ -278,4 +278,27 @@ describe("The slash commands that Arden Code runs itself (ADR 0042)", () => {
     });
     expect(rust.sent()).toHaveLength(0);
   });
+
+  it("leaves the Ultrathink switch on for the next message, as a command takes no word", async () => {
+    const { rust, user, box } = await open();
+    await user.click(screen.getByRole("button", { name: /^Effort/ }));
+    const menu = await screen.findByRole("menu");
+    await animationsDone(menu);
+    await user.click(within(menu).getByRole("menuitemcheckbox", { name: /Ultrathink/ }));
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+
+    await user.type(box, "/effort max{Enter}");
+    await waitFor(() => {
+      expect(rust.callsTo("set_session_effort")).toHaveLength(1);
+    });
+    await user.type(box, "Hello{Enter}");
+
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+    expect(rust.sent()[0]?.payload).toMatchObject({ text: "Hello ultrathink" });
+  });
 });

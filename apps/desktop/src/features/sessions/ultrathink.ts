@@ -26,7 +26,8 @@ export function useUltrathink() {
     (text: string): boolean | Promise<boolean> => {
       const sent = send(ultrathink ? withUltrathink(text) : text);
       void Promise.resolve(sent).then((done) => {
-        if (done) setUltrathink(false);
+        // A slash command takes no word, so it leaves the switch for the next message.
+        if (done && !text.startsWith("/")) setUltrathink(false);
       });
       return sent;
     };

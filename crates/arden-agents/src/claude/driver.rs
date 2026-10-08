@@ -164,6 +164,7 @@ impl Live {
             owed: AtomicUsize::new(0),
             conversation: match conversation {
                 Conversation::New(id) | Conversation::Resume(id) => id.clone(),
+                Conversation::Listing => String::new(),
             },
             remembered: AtomicBool::new(matches!(conversation, Conversation::Resume(_))),
             choices: Choices {
@@ -279,7 +280,8 @@ pub struct ClaudeDriver {
     requests: AtomicU64,
     /// What Claude Code last said it can do, from any of its Claude Codes (ADR 0042).
     catalog: Arc<Mutex<Catalog>>,
-    /// Whether a Claude Code started only to list its commands and models is running.
+    /// Whether a Claude Code was started only to list its commands and models, which is done once
+    /// for each start of Arden Code: a Claude Code that lists nothing is not asked again and again.
     listing: AtomicBool,
 }
 
@@ -323,8 +325,8 @@ impl ClaudeDriver {
     }
 
     /// Hears Claude Code's commands and models when no Claude Code has said them yet, and does
-    /// nothing when they are known, or another call is listening (ADR 0042). Blocks while it
-    /// listens, so the app calls it on a thread of its own.
+    /// nothing when they are known, or this was done before (ADR 0042). Blocks while it listens, so
+    /// the app calls it on a thread of its own.
     pub fn ensure_catalog(&self, folder: &Path) {
         self.ensure_catalog_with(folder, LIST_SETTLE);
     }
@@ -335,7 +337,6 @@ impl ClaudeDriver {
             return;
         }
         self.warm_with(folder, settle);
-        self.listing.store(false, Ordering::Release);
     }
 
     /// Starts a Claude Code in a folder only to hear its commands and models, with no message and
@@ -343,7 +344,7 @@ impl ClaudeDriver {
     pub fn warm_with(&self, folder: &Path, settle: Duration) -> Catalog {
         let start = Start {
             folder: folder.to_path_buf(),
-            conversation: Conversation::New(uuid::Uuid::new_v4().to_string()),
+            conversation: Conversation::Listing,
             model: None,
             effort: None,
         };

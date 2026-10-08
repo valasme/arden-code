@@ -1669,3 +1669,20 @@ fn without_claude_code_the_lists_stay_empty() {
 
     assert!(catalog.is_empty());
 }
+
+#[test]
+fn a_claude_code_that_lists_nothing_is_not_asked_again_and_again() {
+    let script = handshake();
+    let (scripted, driver) = claude(vec![Ok(script), Ok(handshake())]);
+
+    driver.ensure_catalog_with(Path::new(FOLDER), Duration::from_millis(50));
+    driver.ensure_catalog_with(Path::new(FOLDER), Duration::from_millis(50));
+    driver.ensure_catalog_with(Path::new(FOLDER), Duration::from_millis(50));
+
+    assert_eq!(
+        scripted.starts.lock().expect("starts").len(),
+        1,
+        "once for each start of Arden Code"
+    );
+    assert!(driver.catalog().is_empty());
+}
