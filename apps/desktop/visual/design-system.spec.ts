@@ -9,7 +9,11 @@ const themes = [
 
 async function openDesignSystem(page: Page, search = "") {
   await page.goto(`/dev/design-system${search}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible();
+  // The first load of a cold dev server compiles the page and may reload it once, which on a slow
+  // runner takes longer than a test's usual 5 seconds.
+  await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible({
+    timeout: 30_000,
+  });
   await page.evaluate(() => document.fonts.ready);
   // The code sample is colored when its grammar has loaded, a moment after the page.
   await expect(
