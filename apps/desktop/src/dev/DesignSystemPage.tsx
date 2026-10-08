@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { applyTheme, type ThemeMode } from "@/lib/theme";
 
+import { MessageBoxChoicesSample } from "./MessageBoxChoicesSample";
 import { SessionItemsSample } from "./SessionItemsSample";
 import { colorTokens, textSamples, typeScale } from "./tokens";
 
@@ -299,6 +300,13 @@ export function DesignSystemPage({
           Session items
         </h2>
         <SessionItemsSample />
+      </section>
+
+      <section aria-labelledby="ds-choices" className="flex flex-col gap-4">
+        <h2 id="ds-choices" className="text-lg font-semibold">
+          Message box choices
+        </h2>
+        <MessageBoxChoicesSample />
       </section>
 
       <section aria-labelledby="ds-brand" className="flex flex-col gap-4">

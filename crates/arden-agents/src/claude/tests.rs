@@ -13,8 +13,9 @@ use super::launch::{Conversation, LaunchError};
 use super::script::{Scripted, Step, handshake};
 use crate::driver::{AgentDriver, Answer};
 use crate::model::{
-    AgentKind, ApprovalAction, ApprovalState, FileChangeKind, Item, Question, QuestionAnswer,
-    QuestionOption, QuestionState, StatusKind, ToolStatus, Turn, TurnEvent, TurnStatus,
+    AgentKind, ApprovalAction, ApprovalState, Effort, FileChangeKind, Item, Model, Question,
+    QuestionAnswer, QuestionOption, QuestionState, StatusKind, ToolStatus, Turn, TurnEvent,
+    TurnStatus,
 };
 use crate::playground;
 use crate::store::{SessionStore, StoreError};
@@ -1128,6 +1129,80 @@ fn conversations(scripted: &Scripted) -> Vec<Conversation> {
         .iter()
         .map(|start| start.conversation.clone())
         .collect()
+}
+
+#[test]
+fn claude_code_starts_with_the_session_s_model_and_keeps_running_while_it_stays() {
+    let mut script = answers("First", "One.");
+    script.extend([message("Second"), success("Two.")]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+    store
+        .set_model(&session, Some(Model::Opus))
+        .expect("chosen");
+
+    send(&store, &driver, &session, "First");
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    let starts = scripted.starts.lock().expect("starts");
+    assert_eq!(starts.len(), 1, "the same Claude Code answers both");
+    assert_eq!(starts[0].model, Some(Model::Opus));
+}
+
+#[test]
+fn a_new_effort_starts_claude_code_again_with_it() {
+    let (scripted, driver) = claude(vec![
+        Ok(answers("First", "One.")),
+        Ok(answers("Second", "Two.")),
+    ]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "First");
+    store
+        .set_effort(&session, Some(Effort::Max))
+        .expect("changed");
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    let starts = scripted.starts.lock().expect("starts");
+    assert_eq!(
+        starts.iter().map(|start| start.effort).collect::<Vec<_>>(),
+        [None, Some(Effort::Max)]
+    );
+    assert!(matches!(starts[1].conversation, Conversation::Resume(_)));
+}
+
+#[test]
+fn a_new_model_starts_claude_code_again_in_the_same_conversation() {
+    let (scripted, driver) = claude(vec![
+        Ok(answers("First", "One.")),
+        Ok(answers("Second", "Two.")),
+    ]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "First");
+    store
+        .set_model(&session, Some(Model::Sonnet))
+        .expect("changed");
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    assert_eq!(turn(&store, &session, 1).status, TurnStatus::Done);
+    let starts = scripted.starts.lock().expect("starts");
+    assert_eq!(
+        starts.iter().map(|start| start.model).collect::<Vec<_>>(),
+        [None, Some(Model::Sonnet)]
+    );
+    let [Conversation::New(first), Conversation::Resume(second)] =
+        [&starts[0].conversation, &starts[1].conversation].map(Clone::clone)
+    else {
+        panic!("a new conversation, then the same one carried on");
+    };
+    assert_eq!(first, second);
 }
 
 #[test]

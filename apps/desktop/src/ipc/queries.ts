@@ -5,7 +5,14 @@ import { defaultSettings } from "@/ipc/defaults.gen";
 
 import { fallbackSystemPreferences } from "@/features/settings/systemPreferences";
 
-import { type AgentKind, commands, type SessionList, type UpdateStatus } from "./bindings";
+import {
+  type Effort,
+  type Model,
+  type AgentKind,
+  commands,
+  type SessionList,
+  type UpdateStatus,
+} from "./bindings";
 
 /** The product name and version. They never change while the app runs. */
 export const appInfoQuery = queryOptions({
@@ -76,6 +83,33 @@ export const newSessionAgentQuery = queryOptions({
     isTauri() ? commands.agentForNewSession(null) : Promise.resolve("demo"),
   staleTime: Number.POSITIVE_INFINITY,
 });
+
+/** The model a new session in a project takes (ADR 0041), null for the agent's own setting. */
+export const modelForProjectQuery = (projectId: string) =>
+  queryOptions({
+    queryKey: [...newSessionAgentQuery.queryKey, projectId, "model"],
+    queryFn: (): Promise<Model | null> =>
+      isTauri() ? commands.modelForNewSession(projectId) : Promise.resolve(null),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+/** The effort a new session in a project takes (ADR 0041), null for the agent's own setting. */
+export const effortForProjectQuery = (projectId: string) =>
+  queryOptions({
+    queryKey: [...newSessionAgentQuery.queryKey, projectId, "effort"],
+    queryFn: (): Promise<Effort | null> =>
+      isTauri() ? commands.effortForNewSession(projectId) : Promise.resolve(null),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+/** The agent a new session in a project takes (ADR 0039), for the welcome screen's choice. */
+export const agentForProjectQuery = (projectId: string) =>
+  queryOptions({
+    queryKey: [...newSessionAgentQuery.queryKey, projectId],
+    queryFn: (): Promise<AgentKind> =>
+      isTauri() ? commands.agentForNewSession(projectId) : Promise.resolve("demo"),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 
 /**
  * One session with its turns. While a reply streams the cache is updated from the channel, so it

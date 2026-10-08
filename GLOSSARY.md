@@ -67,6 +67,14 @@ _Avoid_: model, bot, AI, assistant
 The built-in agent that produces realistic but fake replies, used before real agents are integrated.
 _Avoid_: mock agent, fake agent
 
+**Model**:
+The version of an agent's underlying AI that a session works with, such as Opus or Sonnet for Claude, or Default to leave it to the agent CLI's own setting.
+_Avoid_: engine, LLM
+
+**Effort**:
+How much an agent thinks before it answers in a session, from Low to Max, or Default to leave it to the agent CLI's own setting.
+_Avoid_: thinking budget, reasoning level
+
 **Vendor**:
 The company behind an agent: Anthropic for Claude, OpenAI for Codex.
 _Avoid_: provider

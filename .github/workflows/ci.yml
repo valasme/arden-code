@@ -98,6 +98,16 @@ jobs:
         run: |
           Get-Process | Where-Object { $_.ProcessName -match "arden|webview2" } | Format-Table Id, ProcessName, MainWindowTitle
 
+      # A test that times out says only that; the page as it stood is in its error context.
+      - name: Keep what the failed tests saw
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: apps/desktop/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
   audit:
     name: Audit
     runs-on: ubuntu-latest

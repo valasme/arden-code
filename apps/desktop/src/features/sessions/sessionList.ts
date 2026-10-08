@@ -1,5 +1,8 @@
-import type { SessionList, SessionSummary } from "@/ipc/bindings";
+import type { Project, SessionList, SessionSummary } from "@/ipc/bindings";
 import { matchesSearch } from "@/lib/search";
+
+/** The Playground's id, as Rust gives it, for when the session list has not come yet. */
+export const PLAYGROUND_ID = "playground";
 
 /** Every session in the list, whichever part of the sidebar lists it. */
 export function allSessions(list: SessionList): SessionSummary[] {
@@ -57,4 +60,32 @@ export function paletteSessions(
   const matching = (session: PaletteSession) =>
     matchesSearch({ label: session.name, description: session.project }, query);
   return { recent: current.filter(matching), archived: entries(list.archived).filter(matching) };
+}
+
+/**
+ * Every project, as the project menu lists them (councils Q2): the Playground first, then the
+ * folders whose sessions were used last, then folders with none, in the order they were opened.
+ */
+export function projectsByUse(list: SessionList): Project[] {
+  const latest = new Map<string, string>();
+  for (const session of allSessions(list)) {
+    const known = latest.get(session.projectId);
+    if (known === undefined || session.updatedAt > known) {
+      latest.set(session.projectId, session.updatedAt);
+    }
+  }
+  const projects = list.projects.map(({ project }) => project);
+  const lastUsed = (project: Project) => latest.get(project.id) ?? "";
+  return [
+    ...projects.filter((project) => project.kind === "playground"),
+    ...projects
+      .filter((project) => project.kind !== "playground")
+      .toSorted((a, b) => lastUsed(b).localeCompare(lastUsed(a))),
+  ];
+}
+
+/** The project of the session used last, archived ones aside, if there is one. */
+export function latestProjectId(list: SessionList): string | undefined {
+  const current = [...list.pinned, ...list.projects.flatMap(({ sessions }) => sessions)];
+  return current.toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.projectId;
 }

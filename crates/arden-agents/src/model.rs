@@ -14,6 +14,64 @@ pub enum AgentKind {
     Claude,
 }
 
+/// The model Claude works with in a session, chosen by the alias Claude Code takes, which always
+/// means the latest of its family (ADR 0041). No choice leaves it to Claude Code's own setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum Model {
+    Fable,
+    Opus,
+    Sonnet,
+    Haiku,
+}
+
+impl Model {
+    /// The alias Claude Code takes for it, as in `--model opus`.
+    #[must_use]
+    pub fn alias(self) -> &'static str {
+        match self {
+            Self::Fable => "fable",
+            Self::Opus => "opus",
+            Self::Sonnet => "sonnet",
+            Self::Haiku => "haiku",
+        }
+    }
+}
+
+/// How much Claude thinks before it answers in a session, as Claude Code's `--effort` takes it
+/// (ADR 0041). No choice leaves it to Claude Code's own setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum Effort {
+    Low,
+    Medium,
+    High,
+    ExtraHigh,
+    Max,
+}
+
+impl Effort {
+    /// The word Claude Code takes for it, as in `--effort xhigh`.
+    #[must_use]
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::ExtraHigh => "xhigh",
+            Self::Max => "max",
+        }
+    }
+}
+
+/// What a session's agent works with apart from its conversation: its model and its effort, each
+/// none for the agent's own setting (ADR 0041).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Choices {
+    pub model: Option<Model>,
+    pub effort: Option<Effort>,
+}
+
 /// What a project is. Only the Playground exists in the foundation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -373,6 +431,12 @@ pub struct Session {
     pub archived_at: Option<String>,
     /// The session it was started from, while that one exists: a linked session (ADR 0036).
     pub linked_from: Option<String>,
+    /// The model the agent works with, or none for the agent's own setting (ADR 0041).
+    #[serde(default)]
+    pub model: Option<Model>,
+    /// How much the agent thinks, or none for the agent's own setting (ADR 0041).
+    #[serde(default)]
+    pub effort: Option<Effort>,
     pub turns: Vec<Turn>,
 }
 

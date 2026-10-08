@@ -411,7 +411,8 @@
       "unpin": "Unpin"
     },
     "agentMenu": {
-      "label": "Agent: {{agent}}"
+      "label": "Agent: {{agent}}",
+      "notInstalled": "Not installed"
     },
     "announce": {
       "done": "Reply finished.",
@@ -428,6 +429,10 @@
       "unarchive": "Unarchive",
       "undo": "Undo"
     },
+    "choiceMenu": {
+      "default": "Default",
+      "defaultHint": "Claude Code's own setting"
+    },
     "context": "{{agent}} · {{project}}",
     "delete": {
       "claude": "Claude Code keeps its own copy of the conversation in its folder.",
@@ -436,6 +441,14 @@
       "title": "Delete this session?"
     },
     "deleted": "Session deleted",
+    "effortMenu": {
+      "extraHigh": "Extra high",
+      "high": "High",
+      "label": "Effort: {{effort}}",
+      "low": "Low",
+      "max": "Max",
+      "medium": "Medium"
+    },
     "jumpToLatest": "Jump to latest",
     "links": {
       "from": "Linked from",
@@ -453,6 +466,13 @@
       "stopShort": "Stop"
     },
     "messages": "Messages",
+    "modelMenu": {
+      "fable": "Fable",
+      "haiku": "Haiku",
+      "label": "Model: {{model}}",
+      "opus": "Opus",
+      "sonnet": "Sonnet"
+    },
     "new": "New session",
     "playground": "Playground",
     "projectMenu": {

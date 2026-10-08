@@ -6,7 +6,14 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
-import { type AgentKind, type Answer, commands, type QuestionAnswer } from "@/ipc/bindings";
+import {
+  type Effort,
+  type Model,
+  type AgentKind,
+  type Answer,
+  commands,
+  type QuestionAnswer,
+} from "@/ipc/bindings";
 import { noSessions, sessionListQuery, sessionQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
@@ -16,11 +23,15 @@ import { useRepliesStore } from "@/state/replies";
 import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
+import { EffortMenu } from "./EffortMenu";
+import { ModelMenu } from "./ModelMenu";
 import { ProjectMenu } from "./ProjectMenu";
+import { projectsByUse } from "./sessionList";
+import { useTrustGate } from "./useTrustGate";
+import { useUnavailableAgents } from "./useUnavailableAgents";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
 import { SessionLinks } from "./SessionLinks";
 import { SessionMenu } from "./SessionMenu";
-import { TrustDialog } from "./TrustDialog";
 import { TurnView } from "./TurnView";
 import { useOpenFolder } from "./useOpenFolder";
 import { useSendMessage } from "./useSendMessage";
@@ -47,16 +58,13 @@ export function SessionView({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const send = useSendMessage();
   const openFolder = useOpenFolder();
+  const unavailable = useUnavailableAgents();
   const transcript = useRef<HTMLElement>(null);
   const stuck = useRef(true);
   /** Where the view was last held at the end. Only a scroll above it is the person leaving the end. */
   const heldAt = useRef(0);
   const [atEnd, setAtEnd] = useState(true);
-  /** A message that waits for the person to trust the project's folder, and how to say what became of it. */
-  const [trusting, setTrusting] = useState<{
-    text: string;
-    sent: (sent: boolean) => void;
-  } | null>(null);
+  const { gate, dialog: trustDialog } = useTrustGate();
 
   const turns = session?.turns ?? [];
   const count = turns.length;
@@ -165,40 +173,38 @@ export function SessionView({ id }: { id: string }) {
       ? t("sessions.playground")
       : project.name;
   const agentName = t(`agents.${agent}.name`);
-  // While the session has had no message, its agent can still change (ADR 0039).
+  /** Makes a change to the session, then reads it again, and the sidebar's list when it moved. */
+  const change = (made: Promise<null>, listToo: boolean) => {
+    made
+      .then(async () => {
+        await queryClient.invalidateQueries({ queryKey: sessionQuery(id).queryKey });
+        if (listToo) await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
+      })
+      .catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      });
+  };
+  // While the session has had no message, its agent and project can still change (ADR 0039).
   const chooseAgent = (chosen: AgentKind) => {
-    commands
-      .setSessionAgent(id, chosen)
-      .then(async () => {
-        await queryClient.invalidateQueries({ queryKey: sessionQuery(id).queryKey });
-        await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
-      })
-      .catch((failure: unknown) => {
-        showErrorToast(toAppError(failure));
-      });
+    change(commands.setSessionAgent(id, chosen), true);
   };
-  // And so can its project (ADR 0039).
   const chooseProject = (projectId: string) => {
-    commands
-      .setSessionProject(id, projectId)
-      .then(async () => {
-        await queryClient.invalidateQueries({ queryKey: sessionQuery(id).queryKey });
-        await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
-      })
-      .catch((failure: unknown) => {
-        showErrorToast(toAppError(failure));
-      });
+    change(commands.setSessionProject(id, projectId), true);
   };
-  const context =
+  // The model and effort can change between messages, for Claude only (ADR 0041).
+  const chooseModel = (model: Model | null) => {
+    change(commands.setSessionModel(id, model), false);
+  };
+  const chooseEffort = (effort: Effort | null) => {
+    change(commands.setSessionEffort(id, effort), false);
+  };
+  const choices =
     count === 0 && session.archivedAt === null ? (
-      <>
-        <AgentMenu agent={agent} onChoose={chooseAgent} />
-        <span aria-hidden className="px-1">
-          ·
-        </span>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <AgentMenu agent={agent} unavailable={unavailable} onChoose={chooseAgent} />
         <ProjectMenu
           projectId={session.projectId}
-          projects={list.projects.map((listing) => listing.project)}
+          projects={projectsByUse(list)}
           onChoose={chooseProject}
           onOpenFolder={() => {
             void openFolder().then((opened) => {
@@ -206,10 +212,23 @@ export function SessionView({ id }: { id: string }) {
             });
           }}
         />
-      </>
+      </span>
     ) : (
-      t("sessions.context", { agent: agentName, project: projectName })
+      <span className="truncate">
+        {t("sessions.context", { agent: agentName, project: projectName })}
+      </span>
     );
+  const context = (
+    <span className="flex min-w-0 items-center gap-1.5">
+      {choices}
+      {agent === "claude" && session.archivedAt === null ? (
+        <>
+          <ModelMenu model={session.model ?? null} disabled={busy} onChoose={chooseModel} />
+          <EffortMenu effort={session.effort ?? null} disabled={busy} onChoose={chooseEffort} />
+        </>
+      ) : null}
+    </span>
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -312,43 +331,16 @@ export function SessionView({ id }: { id: string }) {
           onSend={(text) => {
             stuck.current = true;
             setAtEnd(true);
-            // Claude first works in a folder only once the person trusts it (ADR 0039).
-            if (agent === "claude" && project?.kind === "folder" && !project.trusted) {
-              return new Promise<boolean>((sent) => {
-                setTrusting({ text, sent });
-              });
-            }
-            void send(id, text);
-            return true;
+            return gate(agent, project, () => {
+              void send(id, text);
+              return true;
+            });
           }}
         />
       ) : (
         <ArchivedBar sessionId={id} />
       )}
-      {trusting && project ? (
-        <TrustDialog
-          name={project.name}
-          path={project.path}
-          onAnswer={(trusted) => {
-            setTrusting(null);
-            if (!trusted) {
-              trusting.sent(false);
-              return;
-            }
-            commands
-              .trustProject(project.id)
-              .then(async () => {
-                await queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey });
-                trusting.sent(true);
-                await send(id, trusting.text);
-              })
-              .catch((failure: unknown) => {
-                showErrorToast(toAppError(failure));
-                trusting.sent(false);
-              });
-          }}
-        />
-      ) : null}
+      {trustDialog}
     </div>
   );
 }
