@@ -83,6 +83,10 @@ _Avoid_: command (that is Arden Code's own action), skill
 The company behind an agent: Anthropic for Claude, OpenAI for Codex.
 _Avoid_: provider
 
+**Usage limit**:
+How much of an agent the person's plan allows within a window of time, such as the 5-hour limit or the weekly limit, as the agent CLI reports it.
+_Avoid_: quota, rate limit, usage (alone)
+
 **Agent CLI**:
 A vendor's own command-line program through which Arden Code runs an agent: Claude Code (`claude`) for Claude, Codex (`codex`) for Codex. It owns the user's sign-in.
 _Avoid_: SDK, backend

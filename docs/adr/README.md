@@ -50,3 +50,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0040](0040-finding-sessions-and-removing-projects.md) | Finding sessions in the command palette, and removing a project | Accepted |
 | [0041](0041-choosing-how-a-session-starts.md) | Choosing how a session starts: agent, project, model and effort | Accepted |
 | [0042](0042-slash-commands-and-exact-models.md) | Slash commands, exact models and Ultrathink | Accepted |
+| [0043](0043-usage-limits.md) | Usage limits | Accepted |
