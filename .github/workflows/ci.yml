@@ -89,13 +89,6 @@ jobs:
       - name: End-to-end test against the real app
         run: pnpm test:e2e
 
-      # Temporary: new and changed end-to-end tests run 10 times before they are merged
-      # (CLAUDE.md), and the Claude tests 3 times in the order that showed the Ctrl+O race.
-      - name: The new and changed end-to-end tests, 10 times
-        run: |
-          pnpm --filter @arden/desktop exec playwright test e2e/claude.spec.ts -g "usage limits|Ctrl.O opens a folder" --repeat-each 10 --retries 0
-          pnpm --filter @arden/desktop exec playwright test e2e/claude.spec.ts --repeat-each 3 --retries 0
-
       - name: Performance against the plan's targets, on the release build
         run: pnpm --filter @arden/desktop test:perf
 
