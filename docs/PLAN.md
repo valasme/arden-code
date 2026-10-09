@@ -214,6 +214,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
   - Arden Code makes each session's conversation id (`--session-id`), and later starts carry it on (`--resume`).
   - Claude Code 2.1.223 or later. npm's `claude.cmd` is followed to the package's own `claude.exe`; untrusted text never reaches a `.cmd`.
   - Its answer to `initialize` and its `commands_changed` frames list the slash commands and the models, with the efforts each takes ([ADR 0042](adr/0042-slash-commands-and-exact-models.md), [the research](research/claude-commands-and-models.md)). The model passed to `--model` is such a value, checked again before it is passed.
+  - Its `get_usage` answers and `rate_limit_event` frames report the person's 5-hour and weekly limits ([ADR 0043](adr/0043-usage-limits.md), [the research](research/usage-limits.md)). `get_usage` is experimental, so an error or an unknown shape only hides the figures.
   - Claude Code's error output goes to the child's log; the conversation on its standard output does not.
 - **Raw mode (later):** an embedded terminal (ConPTY + xterm.js) running the vendor's own terminal UI.
 - **Deliberately not used:**
@@ -243,7 +244,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 │ Archived         │      │                       │        │                     │
 │ Settings    ^,   │      └ message box ──────────┘        │                     │
 ├──────────────────┴───────────────────────────────────────┴─────────────────────┤
-└ Status bar: what the agent is doing · update status · version                    ┘
+└ Status bar: what the agent is doing · usage limits · update status · version     ┘
 ```
 
 - **Panes:** the sidebar and the inspector can be collapsed and resized. Their sizes are remembered.
@@ -279,7 +280,7 @@ On a settings page the sidebar shows Back, the settings search and the tabs inst
 | Appearance | Theme: system [default], light or dark · Zoom 80–200% [100%] · Follow Windows text size [on] · Code font size 11–20 px [13] · Code ligatures [off] · Reduce motion: follow Windows [default], on or off · Smooth scrolling [on], after a restart · Show status bar [on] |
 | Keyboard | Every command with its shortcut · click to record a new shortcut · conflict warnings · reset one or all |
 | Notifications | Desktop notifications [on] · Send a test notification |
-| Agents | Install status, path and version for Claude Code and Codex, with an install link · for Claude Code, the minimum version and whether it is signed in · Look again |
+| Agents | Install status, path and version for Claude Code and Codex, with an install link · for Claude Code, the minimum version, whether it is signed in, and its usage limits with their reset times · Show usage limits [on] · Look again |
 | Advanced | Log level [info] · View logs · Open logs folder · Export diagnostics · Developer mode [off], which enables F12 dev tools · Use native title bar [off] · Hardware acceleration [on]; turning it off works around GPU glitches and needs a restart · Open `settings.json` · Export or import settings · Reset settings · Reset Arden Code |
 | About | Logo, version, build (commit and date), Windows and WebView2 versions · Copy system info · Check for updates · Release notes · Report a bug · Privacy ("Arden Code collects nothing") · MIT license · Open-source licenses · "Not affiliated with Anthropic or OpenAI" |
 
@@ -417,6 +418,7 @@ The decisions and the options turned down are in [ADR 0039](adr/0039-working-wit
 - **Approval requests:** a card under the tool call says what Claude wants to do and shows the command, the file and its change, or the address. Allow, Always allow (only when Claude Code suggests a rule) and Deny, which stops the reply. Once answered, it folds to a line. Stop, archiving and deleting deny it.
 - **Questions:** a card with each question's options (radio buttons, or check boxes when several may be chosen), an Other field, and Send answers. Stop cancels it.
 - **While Claude waits:** the request is announced, the status bar says Claude is waiting for an answer, and a notification is sent when the window is not focused.
+- **Usage limits ([ADR 0043](adr/0043-usage-limits.md)):** the status bar shows the 5-hour and weekly limits Claude Code reports, as "5-hour 42% · Weekly 18%", whatever session is open. From 80%, or Claude Code's warning, a figure is emphasized; at the limit it says when the window resets. Settings → Agents shows both with their reset times. Arden Code asks Claude Code at start, when a Claude reply ends, on Look again, and on focus when the figures are more than 5 minutes old, never more than once a minute. Nothing shows for an API key, a cloud provider or a signed-out Claude Code. Show usage limits [on] turns both the asking and the showing off.
 - **When Claude cannot start:** the reply says why, with a code, and what to do: install Claude Code, run `claude update`, or sign in with `claude` and `/login` in a terminal. Arden Code never offers a sign-in of its own.
 
 ## 7. Visual design
@@ -665,6 +667,7 @@ Every row is measured by CI on the release build, and the ones that can fail the
 - **Sessions stay on this computer,** in the local data folder. They are never part of a diagnostics bundle.
 - **Logs never leave the machine.** "Export diagnostics" creates a local zip, and you decide whether to share it.
 - **Redaction:** logs strip the user folder path, tokens and email addresses.
+- **Usage limits:** when Arden Code asks Claude Code for the person's usage limits, Claude Code asks Anthropic with its own sign-in. Arden Code reads only the percentages and reset times, keeps them in memory, and never sees a token. Show usage limits turns this off.
 - **Claude Code keeps its own transcripts** in its own folder. Arden Code never reads or changes Claude Code's files, settings or credentials, and Claude Code's standard output (the conversation) is not copied to the logs.
 
 ## 14. Diagnostics and error handling

@@ -141,6 +141,23 @@ impl Default for Notifications {
     }
 }
 
+/// How Arden Code works with the agents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Agents {
+    /// Ask Claude Code for the 5-hour and weekly usage limits, and show them (ADR 0043). With this
+    /// off, Arden Code neither asks nor shows.
+    pub show_usage_limits: bool,
+}
+
+impl Default for Agents {
+    fn default() -> Self {
+        Self {
+            show_usage_limits: true,
+        }
+    }
+}
+
 /// How wide the side panels were left.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(rename_all = "camelCase")]
@@ -253,6 +270,7 @@ pub struct Settings {
     pub appearance: Appearance,
     pub layout: Layout,
     pub notifications: Notifications,
+    pub agents: Agents,
     pub keyboard: Keyboard,
     pub advanced: Advanced,
 }
@@ -265,6 +283,7 @@ impl Default for Settings {
             appearance: Appearance::default(),
             layout: Layout::default(),
             notifications: Notifications::default(),
+            agents: Agents::default(),
             keyboard: Keyboard::default(),
             advanced: Advanced::default(),
         }
@@ -289,6 +308,7 @@ pub enum SettingChange {
     LayoutSidebarWidth(u16),
     LayoutInspectorWidth(u16),
     NotificationsDesktop(bool),
+    AgentsShowUsageLimits(bool),
     AdvancedLogLevel(LogLevel),
     AdvancedDeveloperMode(bool),
     AdvancedNativeTitleBar(bool),
@@ -313,6 +333,7 @@ pub enum SettingKey {
     LayoutSidebarWidth,
     LayoutInspectorWidth,
     NotificationsDesktop,
+    AgentsShowUsageLimits,
     AdvancedLogLevel,
     AdvancedDeveloperMode,
     AdvancedNativeTitleBar,
@@ -321,7 +342,7 @@ pub enum SettingKey {
 
 impl SettingKey {
     /// Every setting.
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 19] = [
         Self::GeneralOnStartup,
         Self::GeneralCheckForUpdates,
         Self::GeneralRegionalFormat,
@@ -336,6 +357,7 @@ impl SettingKey {
         Self::LayoutSidebarWidth,
         Self::LayoutInspectorWidth,
         Self::NotificationsDesktop,
+        Self::AgentsShowUsageLimits,
         Self::AdvancedLogLevel,
         Self::AdvancedDeveloperMode,
         Self::AdvancedNativeTitleBar,
@@ -368,6 +390,7 @@ impl Settings {
             SettingChange::LayoutSidebarWidth(value) => self.layout.sidebar_width = value,
             SettingChange::LayoutInspectorWidth(value) => self.layout.inspector_width = value,
             SettingChange::NotificationsDesktop(value) => self.notifications.desktop = value,
+            SettingChange::AgentsShowUsageLimits(value) => self.agents.show_usage_limits = value,
             SettingChange::AdvancedLogLevel(value) => self.advanced.log_level = value,
             SettingChange::AdvancedDeveloperMode(value) => self.advanced.developer_mode = value,
             SettingChange::AdvancedNativeTitleBar(value) => self.advanced.native_title_bar = value,
@@ -444,6 +467,9 @@ impl Settings {
             SettingKey::NotificationsDesktop => {
                 self.notifications.desktop = defaults.notifications.desktop;
             }
+            SettingKey::AgentsShowUsageLimits => {
+                self.agents.show_usage_limits = defaults.agents.show_usage_limits;
+            }
             SettingKey::AdvancedLogLevel => self.advanced.log_level = defaults.advanced.log_level,
             SettingKey::AdvancedDeveloperMode => {
                 self.advanced.developer_mode = defaults.advanced.developer_mode;
@@ -502,6 +528,7 @@ mod tests {
         assert!(settings.appearance.smooth_scrolling);
         assert!(settings.appearance.show_status_bar);
         assert!(settings.notifications.desktop);
+        assert!(settings.agents.show_usage_limits);
         assert_eq!(settings.advanced.log_level, LogLevel::Info);
         assert!(!settings.advanced.developer_mode);
         assert!(!settings.advanced.native_title_bar);
@@ -533,6 +560,7 @@ mod tests {
                 },
                 "layout": { "sidebarWidth": 260, "inspectorWidth": 320 },
                 "notifications": { "desktop": true },
+                "agents": { "showUsageLimits": true },
                 "keyboard": { "shortcuts": {} },
                 "advanced": {
                     "logLevel": "info",
@@ -574,11 +602,13 @@ mod tests {
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
         settings.apply(SettingChange::NotificationsDesktop(false));
+        settings.apply(SettingChange::AgentsShowUsageLimits(false));
         settings.apply(SettingChange::AdvancedLogLevel(LogLevel::Debug));
         settings.apply(SettingChange::AdvancedDeveloperMode(true));
         settings.apply(SettingChange::AdvancedNativeTitleBar(true));
         settings.apply(SettingChange::AdvancedHardwareAcceleration(false));
 
+        assert!(!settings.agents.show_usage_limits);
         assert_eq!(settings.advanced.log_level, LogLevel::Debug);
         assert!(settings.advanced.developer_mode);
         assert!(settings.advanced.native_title_bar);
@@ -649,6 +679,7 @@ mod tests {
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
         settings.apply(SettingChange::NotificationsDesktop(false));
+        settings.apply(SettingChange::AgentsShowUsageLimits(false));
         settings.apply(SettingChange::AdvancedLogLevel(LogLevel::Debug));
         settings.apply(SettingChange::AdvancedDeveloperMode(true));
         settings.apply(SettingChange::AdvancedNativeTitleBar(true));
@@ -806,7 +837,7 @@ mod tests {
     #[test]
     fn unknown_keys_are_ignored_so_a_schema_reference_or_a_future_setting_does_no_harm() {
         let settings: Settings = serde_json::from_str(
-            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","smoothScrolling":true,"showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"notifications":{"desktop":true},"keyboard":{"shortcuts":{}},"advanced":{"logLevel":"info","developerMode":false,"nativeTitleBar":false,"hardwareAcceleration":true},"extra":1}"#,
+            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","smoothScrolling":true,"showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"notifications":{"desktop":true},"agents":{"showUsageLimits":true},"keyboard":{"shortcuts":{}},"advanced":{"logLevel":"info","developerMode":false,"nativeTitleBar":false,"hardwareAcceleration":true},"extra":1}"#,
         )
         .unwrap();
 

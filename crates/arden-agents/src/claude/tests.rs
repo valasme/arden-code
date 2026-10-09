@@ -19,6 +19,7 @@ use crate::model::{
 };
 use crate::playground;
 use crate::store::{SessionStore, StoreError};
+use crate::usage::{UsageReport, UsageStatus, UsageWindow, UsageWindowKind};
 
 const FOLDER: &str = r"C:\Projects\demo";
 
@@ -1723,4 +1724,421 @@ fn a_new_conversation_that_claude_code_starts_is_the_one_carried_on_after_a_rest
         conversations(&scripted)[1],
         Conversation::Resume("11111111-1111-4111-8111-111111111111".into())
     );
+}
+
+/// The driver's `get_usage`, as Claude Code expects it (ADR 0043).
+fn asks_for_usage() -> Step {
+    Step::Expect(json!({
+        "type": "control_request",
+        "request": { "subtype": "get_usage", "skip_behaviors": true }
+    }))
+}
+
+/// Claude Code's answer to `get_usage`.
+fn usage_answer(answer: &Value) -> Step {
+    Step::Answer(
+        json!({ "type": "control_response", "response": { "subtype": "success", "response": answer } }),
+    )
+}
+
+/// A Claude plan 42% into its 5-hour limit and 18% into its weekly one.
+fn plan_usage() -> Value {
+    json!({
+        "session": { "total_cost_usd": 0 },
+        "subscription_type": "max",
+        "rate_limits_available": true,
+        "rate_limits": {
+            "five_hour": { "utilization": 42.4, "resets_at": "2026-10-09T15:10:00+00:00" },
+            "seven_day": { "utilization": 18, "resets_at": "2026-10-13T09:00:00+00:00" },
+            "seven_day_opus": { "utilization": 3, "resets_at": "2026-10-13T09:00:00+00:00" },
+            "model_scoped": []
+        },
+        "behaviors": null
+    })
+}
+
+fn window(kind: UsageWindowKind, percent: u32, resets_at: Option<&str>) -> UsageWindow {
+    UsageWindow {
+        kind,
+        percent,
+        resets_at: resets_at.map(str::to_owned),
+        status: UsageStatus::Allowed,
+    }
+}
+
+fn asking_claude(scripts: Vec<Result<Vec<Step>, LaunchError>>) -> (Arc<Scripted>, ClaudeDriver) {
+    let (scripted, driver) = claude(scripts);
+    driver.ask_for_usage(true);
+    (scripted, driver)
+}
+
+#[test]
+fn a_claude_code_started_to_ask_reports_the_5_hour_and_weekly_limits_and_no_message_is_sent() {
+    let mut script = handshake();
+    script.extend([asks_for_usage(), usage_answer(&plan_usage())]);
+    let (scripted, driver) = asking_claude(vec![Ok(script)]);
+    assert_eq!(driver.usage_limits().report, UsageReport::Unknown);
+
+    let limits = driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    scripted.assert_followed();
+    assert_eq!(limits.report, UsageReport::Reported);
+    assert_eq!(
+        limits.windows,
+        [
+            window(
+                UsageWindowKind::FiveHour,
+                42,
+                Some("2026-10-09T15:10:00+00:00")
+            ),
+            window(
+                UsageWindowKind::Weekly,
+                18,
+                Some("2026-10-13T09:00:00+00:00")
+            ),
+        ],
+        "only the two windows, in whole percentages"
+    );
+    assert_eq!(driver.usage_limits(), limits, "the driver keeps them");
+    let written = scripted.written.lock().expect("written");
+    assert!(
+        written.iter().all(|frame| frame["type"] != "user"),
+        "no message was sent: {written:?}"
+    );
+}
+
+#[test]
+fn signed_out_claude_code_reports_no_usage_limits_for_this_sign_in() {
+    let recorded: Value =
+        serde_json::from_str(include_str!("fixtures/get-usage-signed-out-2.1.295.json"))
+            .expect("the recorded answer");
+    let mut script = handshake();
+    script.extend([
+        asks_for_usage(),
+        usage_answer(&recorded["response"]["response"]),
+    ]);
+    let (scripted, driver) = asking_claude(vec![Ok(script)]);
+
+    let limits = driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    scripted.assert_followed();
+    assert_eq!(limits.report, UsageReport::NotForThisSignIn);
+    assert!(limits.windows.is_empty());
+}
+
+#[test]
+fn a_claude_code_that_does_not_know_get_usage_is_reported_as_not_supported() {
+    let mut script = handshake();
+    script.extend([
+        asks_for_usage(),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "error", "error": "Unknown control request subtype: get_usage" }
+        })),
+    ]);
+    let (scripted, driver) = asking_claude(vec![Ok(script)]);
+
+    let limits = driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    scripted.assert_followed();
+    assert_eq!(limits.report, UsageReport::Unsupported);
+    assert!(limits.windows.is_empty());
+}
+
+#[test]
+fn an_answer_of_an_unknown_shape_shows_only_what_it_can_read() {
+    let mut script = handshake();
+    script.extend([
+        asks_for_usage(),
+        usage_answer(&json!({
+            "rate_limits_available": true,
+            "rate_limits": {
+                "five_hour": { "utilization": null, "resets_at": null },
+                "seven_day": { "utilization": "lots", "resets_at": 7 },
+                "something_new": { "utilization": 99 }
+            }
+        })),
+    ]);
+    let (scripted, driver) = asking_claude(vec![Ok(script)]);
+
+    let limits = driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    scripted.assert_followed();
+    assert_eq!(limits.report, UsageReport::Reported);
+    assert!(
+        limits.windows.is_empty(),
+        "a window with no percentage is left out: {limits:?}"
+    );
+}
+
+#[test]
+fn a_driver_that_is_not_to_ask_for_usage_starts_nothing() {
+    let (scripted, driver) = claude(vec![Ok(handshake())]);
+
+    let limits = driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    assert_eq!(limits.report, UsageReport::Unknown);
+    assert!(scripted.starts.lock().expect("starts").is_empty());
+}
+
+#[test]
+fn without_claude_code_the_usage_limits_stay_unknown() {
+    let (_scripted, driver) = asking_claude(vec![Err(LaunchError::NotInstalled)]);
+
+    let limits = driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    assert_eq!(limits.report, UsageReport::Unknown);
+}
+
+#[test]
+fn the_app_hears_the_usage_limits_when_they_change() {
+    let mut script = handshake();
+    script.extend([asks_for_usage(), usage_answer(&plan_usage())]);
+    let (scripted, driver) = asking_claude(vec![Ok(script)]);
+    let heard = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let hearing = Arc::clone(&heard);
+    driver.on_usage_limits(Arc::new(move |limits| {
+        hearing.lock().expect("heard").push(limits.clone());
+    }));
+
+    driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    scripted.assert_followed();
+    let heard = heard.lock().expect("heard");
+    assert_eq!(heard.len(), 1);
+    assert_eq!(heard[0].report, UsageReport::Reported);
+}
+
+#[test]
+fn usage_limits_are_not_asked_for_twice_within_a_minute() {
+    let mut script = handshake();
+    script.extend([asks_for_usage(), usage_answer(&plan_usage())]);
+    let (scripted, driver) = asking_claude(vec![Ok(script), Ok(handshake())]);
+
+    driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+    driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    scripted.assert_followed();
+    assert_eq!(scripted.starts.lock().expect("starts").len(), 1);
+}
+
+/// Waits until the driver's usage limits pass `test`, for answers that come in on their own.
+fn until_usage(driver: &ClaudeDriver, test: impl Fn(&crate::usage::UsageLimits) -> bool) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !test(&driver.usage_limits()) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the usage limits never changed: {:?}",
+            driver.usage_limits()
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// Claude Code's `rate_limit_event`, as it sends one during a turn.
+fn rate_limit(info: &Value) -> Step {
+    Step::Play(
+        json!({ "type": "rate_limit_event", "rate_limit_info": info, "uuid": "u1", "session_id": "c1" }),
+    )
+}
+
+#[test]
+fn when_a_claude_reply_ends_its_claude_code_is_asked_for_the_usage_limits() {
+    let mut script = handshake();
+    script.extend([
+        message("Hello"),
+        success("Hi."),
+        asks_for_usage(),
+        usage_answer(&plan_usage()),
+    ]);
+    let (scripted, driver) = asking_claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "Hello");
+
+    until_usage(&driver, |limits| limits.report == UsageReport::Reported);
+    scripted.assert_followed();
+    assert_eq!(
+        scripted.starts.lock().expect("starts").len(),
+        1,
+        "the session's own Claude Code was asked"
+    );
+}
+
+#[test]
+fn a_rate_limit_event_updates_the_window_it_names_and_says_when_it_is_near_its_limit() {
+    let mut script = handshake();
+    script.extend([
+        message("Hello"),
+        rate_limit(&json!({
+            "status": "allowed_warning", "rateLimitType": "five_hour",
+            "utilization": 0.912, "resetsAt": 1_791_558_600
+        })),
+        success("Hi."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "Hello");
+
+    until_usage(&driver, |limits| !limits.windows.is_empty());
+    scripted.assert_followed();
+    let limits = driver.usage_limits();
+    assert_eq!(limits.report, UsageReport::Reported);
+    assert_eq!(
+        limits.windows,
+        [UsageWindow {
+            kind: UsageWindowKind::FiveHour,
+            percent: 91,
+            resets_at: Some("2026-10-09T15:10:00Z".into()),
+            status: UsageStatus::Warning,
+        }]
+    );
+}
+
+#[test]
+fn a_refused_window_is_at_its_limit_and_other_windows_stay_as_they_were() {
+    let mut listening = handshake();
+    listening.extend([asks_for_usage(), usage_answer(&plan_usage())]);
+    let mut script = handshake();
+    script.extend([
+        message("Hello"),
+        rate_limit(&json!({ "status": "rejected", "rateLimitType": "seven_day", "resetsAt": 1_791_882_000 })),
+        rate_limit(&json!({ "status": "allowed", "rateLimitType": "seven_day_opus", "utilization": 0.5 })),
+        rate_limit(&json!({ "status": "allowed" })),
+        success("Hi."),
+    ]);
+    let (scripted, driver) = asking_claude(vec![Ok(listening), Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+    driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    send(&store, &driver, &session, "Hello");
+
+    until_usage(&driver, |limits| {
+        limits
+            .windows
+            .iter()
+            .any(|window| window.status == UsageStatus::Rejected)
+    });
+    scripted.assert_followed();
+    assert_eq!(
+        driver.usage_limits().windows,
+        [
+            window(
+                UsageWindowKind::FiveHour,
+                42,
+                Some("2026-10-09T15:10:00+00:00")
+            ),
+            UsageWindow {
+                kind: UsageWindowKind::Weekly,
+                percent: 100,
+                resets_at: Some("2026-10-13T09:00:00Z".into()),
+                status: UsageStatus::Rejected,
+            },
+        ],
+        "per-model windows and frames that name no window change nothing"
+    );
+}
+
+#[test]
+fn asking_again_uses_a_claude_code_that_is_running_and_has_nothing_to_do() {
+    let mut newer = plan_usage();
+    newer["rate_limits"]["five_hour"]["utilization"] = json!(57);
+    let mut script = handshake();
+    script.extend([
+        message("Hello"),
+        success("Hi."),
+        asks_for_usage(),
+        usage_answer(&plan_usage()),
+        asks_for_usage(),
+        usage_answer(&newer),
+    ]);
+    let (scripted, driver) = asking_claude(vec![Ok(script)]);
+    let driver = driver.with_usage_floor(Duration::ZERO);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "Hello");
+    until_usage(&driver, |limits| limits.report == UsageReport::Reported);
+
+    driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    until_usage(&driver, |limits| {
+        limits.windows.first().is_some_and(|w| w.percent == 57)
+    });
+    scripted.assert_followed();
+    assert_eq!(scripted.starts.lock().expect("starts").len(), 1);
+}
+
+#[test]
+fn usage_limits_younger_than_asked_for_are_not_asked_for_again() {
+    let mut script = handshake();
+    script.extend([asks_for_usage(), usage_answer(&plan_usage())]);
+    let (scripted, driver) = asking_claude(vec![Ok(script), Ok(handshake())]);
+    let driver = driver.with_usage_floor(Duration::ZERO);
+
+    driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+    driver.refresh_usage(Path::new(FOLDER), Duration::from_mins(5));
+
+    scripted.assert_followed();
+    assert_eq!(scripted.starts.lock().expect("starts").len(), 1);
+}
+
+#[test]
+fn a_claude_code_that_cannot_answer_get_usage_keeps_what_its_rate_limit_events_said() {
+    let mut script = handshake();
+    script.extend([
+        message("Hello"),
+        rate_limit(&json!({ "status": "allowed", "rateLimitType": "five_hour", "utilization": 0.3 })),
+        success("Hi."),
+        asks_for_usage(),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "error", "error": "Unknown control request subtype: get_usage" }
+        })),
+        rate_limit(&json!({ "status": "allowed", "rateLimitType": "seven_day", "utilization": 0.1 })),
+    ]);
+    let (scripted, driver) = asking_claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "Hello");
+
+    until_usage(&driver, |limits| limits.windows.len() == 2);
+    scripted.assert_followed();
+    let limits = driver.usage_limits();
+    assert_eq!(limits.report, UsageReport::Reported);
+    assert_eq!(
+        limits
+            .windows
+            .iter()
+            .map(|window| (window.kind, window.percent))
+            .collect::<Vec<_>>(),
+        [
+            (UsageWindowKind::FiveHour, 30),
+            (UsageWindowKind::Weekly, 10)
+        ],
+        "the error took nothing away"
+    );
+}
+
+#[test]
+fn a_claude_code_started_only_to_ask_for_usage_leaves_the_lists_to_the_one_that_hears_them() {
+    let mut asking = handshake_listing(&listed_commands(), &listed_models());
+    asking.extend([asks_for_usage(), usage_answer(&plan_usage())]);
+    let listing = handshake_listing(&listed_commands(), &listed_models());
+    let (scripted, driver) = asking_claude(vec![Ok(asking), Ok(listing)]);
+
+    driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    assert!(
+        driver.catalog().is_empty(),
+        "it left before the commands that plugins push could arrive"
+    );
+    driver.ensure_catalog_with(Path::new(FOLDER), Duration::from_millis(100));
+    scripted.assert_followed();
+    assert_eq!(scripted.starts.lock().expect("starts").len(), 2);
+    assert_eq!(driver.catalog().models.len(), 2);
 }

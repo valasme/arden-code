@@ -71,6 +71,7 @@ test.describe("settings in the real app", () => {
         },
         layout: { sidebarWidth: 260, inspectorWidth: 320 },
         notifications: { desktop: true },
+        agents: { showUsageLimits: true },
         keyboard: { shortcuts: {} },
         advanced: {
           developerMode: false,

@@ -5,6 +5,7 @@ import { RouterProvider, type RouterHistory } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { Toaster } from "@/components/Toaster";
+import { UsageLimitsSync } from "@/features/agents/UsageLimitsSync";
 import { CrashRecovery } from "@/features/diagnostics/CrashRecovery";
 import { WebEngineNotice } from "@/features/diagnostics/WebEngineNotice";
 import { SettingsSync } from "@/features/settings/SettingsSync";
@@ -50,6 +51,7 @@ export function App({ history, initialSettings, initialSystemPreferences }: AppP
         <SettingsSync />
         <SystemPreferencesSync />
         <UpdateSync />
+        <UsageLimitsSync />
         <WebEngineNotice />
         <ResetNotice />
         <AppearanceFromSettings />

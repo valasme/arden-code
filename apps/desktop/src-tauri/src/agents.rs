@@ -1,12 +1,16 @@
 //! The commands for the agent programs: finding out which are installed.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 
 use arden_agents::claude::driver::ClaudeDriver;
 use arden_agents::claude::launch::{Connection, LaunchError, Launcher, ProgramLauncher, Start};
 use arden_agents::detect::{self, AgentCli, Detection};
+use arden_agents::usage::UsageLimits;
 use arden_core::error::{AppError, ErrorCode};
 use arden_process::supervisor::Supervisor;
+use arden_settings::service::SettingsService;
 use tauri::{AppHandle, Manager, State};
 use tauri_specta::Event;
 
@@ -35,6 +39,59 @@ impl Claude {
         };
         Self(Arc::new(ClaudeDriver::new(launcher)))
     }
+
+    /// Tells the page each time the person's usage limits change, and asks for them while Show
+    /// usage limits is on, asking again at once when it is turned back on (ADR 0043).
+    pub fn report_usage_to(&self, app: &AppHandle, settings: &SettingsService) {
+        let page = app.clone();
+        self.0
+            .on_usage_limits(Arc::new(move |limits: &UsageLimits| {
+                let _ = UsageLimitsChanged {
+                    limits: limits.clone(),
+                }
+                .emit(&page);
+            }));
+        let shown = settings.get().agents.show_usage_limits;
+        self.0.ask_for_usage(shown);
+        let driver = Arc::clone(&self.0);
+        let app = app.clone();
+        let was_shown = AtomicBool::new(shown);
+        settings.subscribe(move |settings, _| {
+            let shown = settings.agents.show_usage_limits;
+            driver.ask_for_usage(shown);
+            if shown && !was_shown.swap(shown, Ordering::AcqRel) {
+                refresh_usage(&app, Duration::ZERO);
+            } else {
+                was_shown.store(shown, Ordering::Release);
+            }
+        });
+    }
+}
+
+/// Tells the page that Claude Code reported new usage limits (ADR 0043).
+#[derive(Debug, Clone, serde::Serialize, specta::Type, tauri_specta::Event)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageLimitsChanged {
+    pub limits: UsageLimits,
+}
+
+/// How old the usage limits may be when the window comes back into focus before Claude Code is
+/// asked again (ADR 0043).
+const FOCUS_REFRESH: Duration = Duration::from_mins(5);
+
+/// Asks Claude Code for the person's usage limits on a thread of its own, from the Playground,
+/// unless it was asked within the last minute or answered within `older_than`. The page hears the
+/// answer through [`UsageLimitsChanged`].
+fn refresh_usage(app: &AppHandle, older_than: Duration) {
+    let driver = Arc::clone(&app.state::<Claude>().0);
+    let Some(folder) =
+        crate::sessions::playground_folder(&app.state::<crate::sessions::Sessions>())
+    else {
+        return;
+    };
+    std::thread::spawn(move || {
+        driver.refresh_usage(&folder, older_than);
+    });
 }
 
 /// Starts nothing: programs cannot be supervised on this computer (`ARD-PROC-001`).
@@ -100,7 +157,11 @@ pub fn detect_after_start(app: &AppHandle) {
         match look(supervisor).await {
             Ok(found) => {
                 app.state::<Detections>().keep(found.clone());
+                let claude_installed = app.state::<Detections>().claude_installed();
                 let _ = AgentsDetected { detections: found }.emit(&app);
+                if claude_installed {
+                    refresh_usage(&app, Duration::ZERO);
+                }
             }
             Err(error) => tracing::warn!(
                 code = error.code.as_str(),
@@ -132,6 +193,43 @@ pub async fn detect_agents(
     let found = look(programs.supervisor()?).await?;
     detections.keep(found.clone());
     Ok(found)
+}
+
+/// The person's usage limits, as Claude Code last reported them (ADR 0043): unknown until it has
+/// been asked.
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps, clippy::needless_pass_by_value)]
+#[tauri::command]
+#[specta::specta]
+pub fn usage_limits(claude: State<'_, Claude>) -> Result<UsageLimits, AppError> {
+    Ok(claude.0.usage_limits())
+}
+
+/// Asks Claude Code for the person's usage limits again (ADR 0043): on Look again, or, with
+/// `on_focus`, when the window comes back into focus and they are more than 5 minutes old. Never
+/// more than once a minute. The answer comes as [`UsageLimitsChanged`].
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps, clippy::needless_pass_by_value)]
+#[tauri::command]
+#[specta::specta]
+pub fn refresh_usage_limits(on_focus: bool, app: AppHandle) -> Result<(), AppError> {
+    refresh_usage(
+        &app,
+        if on_focus {
+            FOCUS_REFRESH
+        } else {
+            Duration::ZERO
+        },
+    );
+    Ok(())
 }
 
 /// Starts a program that runs for a minute, in the job, and returns its process number. Tests use it

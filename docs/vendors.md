@@ -27,6 +27,10 @@ page and the [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/over
 - It never signs in, never offers a sign-in, and never reads, stores or passes on a token. The person signs in in
   their own terminal, with `claude` and `/login`; the usage is theirs, under their own agreement with Anthropic. The
   environment, an API key included, passes to `claude` without Arden Code reading it.
+- It shows the 5-hour and weekly limits the person's own Claude Code reports about their own plan (ADR 0043), checked
+  against the terms on 2026-10-09. The terms bar products from offering Claude.ai usage limits, that is, letting people
+  spend a plan through them; Arden Code offers no plan of its own, asks only its own Claude Code, and never sees a
+  token. Check this line again before a release.
 - It ships nothing of Anthropic's: no SDK and no copy of Claude Code.
 - The agent is called **Claude**. **Claude Code** names the program, in plain sentences. There is no Anthropic logo or
   brand color in the app (ADR 0003), and About says Arden Code is not affiliated with Anthropic or OpenAI.

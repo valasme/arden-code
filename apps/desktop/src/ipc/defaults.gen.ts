@@ -25,6 +25,9 @@ export const defaultSettings: Settings = {
   "notifications": {
     "desktop": true
   },
+  "agents": {
+    "showUsageLimits": true
+  },
   "keyboard": {
     "shortcuts": {}
   },

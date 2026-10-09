@@ -81,6 +81,12 @@ function applyChange(settings: Settings, change: SettingChange): Settings {
       notifications: { ...settings.notifications, desktop: change.notificationsDesktop },
     };
   }
+  if (change.agentsShowUsageLimits !== undefined) {
+    return {
+      ...settings,
+      agents: { ...settings.agents, showUsageLimits: change.agentsShowUsageLimits },
+    };
+  }
   if (change.advancedLogLevel !== undefined) {
     return { ...settings, advanced: { ...advanced, logLevel: change.advancedLogLevel } };
   }

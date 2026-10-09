@@ -5,8 +5,9 @@ import userEvent from "@testing-library/user-event";
 import { z } from "zod";
 
 import { Toaster } from "@/components/Toaster";
-import type { Detection } from "@/ipc/bindings";
+import type { Detection, UsageLimits } from "@/ipc/bindings";
 import { expectNoAccessibilityViolations } from "@/test/axe";
+import { settingsWith } from "@/test/settings";
 
 import { AgentsTab } from "./AgentsTab";
 
@@ -34,7 +35,19 @@ const codex: Detection = {
   installUrl: "https://github.com/openai/codex",
 };
 
-function startApp(detections: Detection[] | "fail" = [claude, codex]) {
+const planLimits: UsageLimits = {
+  report: "reported",
+  windows: [
+    { kind: "fiveHour", percent: 42, resetsAt: "2099-10-09T15:10:00Z", status: "allowed" },
+    { kind: "weekly", percent: 18, resetsAt: "2099-10-13T09:00:00Z", status: "allowed" },
+  ],
+};
+
+function startApp(
+  detections: Detection[] | "fail" = [claude, codex],
+  usage: UsageLimits = { report: "unknown", windows: [] },
+  showUsageLimits = true,
+) {
   Object.assign(globalThis, { isTauri: true });
   const calls: { command: string; payload: unknown }[] = [];
   mockIPC(
@@ -50,6 +63,8 @@ function startApp(detections: Detection[] | "fail" = [claude, codex]) {
         }
         return detections;
       }
+      if (command === "usage_limits") return usage;
+      if (command === "get_settings") return settingsWith({ agents: { showUsageLimits } });
       return null;
     },
     { shouldMockEvents: true },
@@ -227,6 +242,81 @@ describe("Settings → Agents", () => {
           .filter((call) => call.command === "detect_agents")
           .map((call) => z.object({ fresh: z.boolean() }).parse(call.payload).fresh),
       ).toEqual([false, true]);
+    });
+  });
+
+  it("shows the 5-hour and weekly limits Claude Code reports, with when they reset", async () => {
+    startApp([claude, codex], planLimits);
+    renderTab();
+
+    const agent = await screen.findByRole("region", { name: "Claude Code" });
+
+    expect(await within(agent).findByText("5-hour limit")).toBeVisible();
+    expect(within(agent).getByText(/^42% · resets /u)).toBeVisible();
+    expect(within(agent).getByText("Weekly limit")).toBeVisible();
+    expect(within(agent).getByText(/^18% · resets /u)).toBeVisible();
+  });
+
+  it("says when Claude Code reports no usage limits for this sign-in", async () => {
+    startApp([claude, codex], { report: "notForThisSignIn", windows: [] });
+    renderTab();
+
+    const agent = await screen.findByRole("region", { name: "Claude Code" });
+
+    expect(
+      await within(agent).findByText("Claude Code reports no usage limits for this sign-in."),
+    ).toBeVisible();
+    expect(within(agent).queryByText("5-hour limit")).toBeNull();
+  });
+
+  it("says to update Claude Code when it cannot report usage limits", async () => {
+    startApp([claude, codex], { report: "unsupported", windows: [] });
+    renderTab();
+
+    const agent = await screen.findByRole("region", { name: "Claude Code" });
+
+    expect(await within(agent).findByText("Update Claude Code to see usage limits.")).toBeVisible();
+  });
+
+  it("shows nothing about usage limits before Claude Code has reported them", async () => {
+    startApp();
+    renderTab();
+
+    const agent = await screen.findByRole("region", { name: "Claude Code" });
+
+    expect(within(agent).queryByText("Usage limits")).toBeNull();
+    expect(within(agent).queryByText("5-hour limit")).toBeNull();
+  });
+
+  it("has a switch for the usage limits, on by default", async () => {
+    startApp();
+    renderTab();
+
+    expect(await screen.findByRole("switch", { name: "Show usage limits" })).toBeChecked();
+  });
+
+  it("shows no usage limits when Show usage limits is off", async () => {
+    startApp([claude, codex], planLimits, false);
+    renderTab();
+
+    const agent = await screen.findByRole("region", { name: "Claude Code" });
+    expect(await screen.findByRole("switch", { name: "Show usage limits" })).not.toBeChecked();
+
+    expect(within(agent).queryByText("5-hour limit")).toBeNull();
+    expect(within(agent).queryByText("Weekly limit")).toBeNull();
+  });
+
+  it("asks Claude Code for the usage limits again on Look again", async () => {
+    const calls = startApp();
+    const user = userEvent.setup();
+    renderTab();
+    await screen.findByRole("region", { name: "Codex" });
+
+    await user.click(screen.getByRole("button", { name: "Look again" }));
+
+    await waitFor(() => {
+      const asked = calls.filter((call) => call.command === "refresh_usage_limits");
+      expect(asked.map((call) => call.payload)).toEqual([{ onFocus: false }]);
     });
   });
 

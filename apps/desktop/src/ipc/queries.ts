@@ -13,6 +13,7 @@ import {
   commands,
   type SessionList,
   type UpdateStatus,
+  type UsageLimits,
 } from "./bindings";
 
 /** The product name and version. They never change while the app runs. */
@@ -153,6 +154,17 @@ export const agentsQuery = queryOptions({
   queryFn: () => (isTauri() ? commands.detectAgents(false) : []),
   staleTime: 0,
   gcTime: 0,
+});
+
+/**
+ * The person's usage limits, as Claude Code last reported them (ADR 0043). Rust announces each
+ * change, so they are never fetched again on their own.
+ */
+export const usageLimitsQuery = queryOptions({
+  queryKey: ["usage-limits"],
+  queryFn: (): Promise<UsageLimits> =>
+    isTauri() ? commands.usageLimits() : Promise.resolve({ report: "unknown", windows: [] }),
+  staleTime: Number.POSITIVE_INFINITY,
 });
 
 /** Where the update is. Rust announces every change, so it is never fetched again on its own. */

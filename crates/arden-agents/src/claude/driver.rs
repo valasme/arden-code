@@ -20,10 +20,12 @@ use super::locate::MINIMUM_VERSION;
 use super::protocol::{self, Frame, Request};
 use super::question;
 use super::reply::Reply;
+use super::usage::{self, USAGE_REQUEST, Usage};
 use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
 use crate::model::{
     ApprovalState, Choices, Item, QuestionAnswer, QuestionState, StatusKind, TurnEvent,
 };
+use crate::usage::UsageLimits;
 
 /// How long a Claude Code started only to list its commands and models goes unheard before its
 /// lists are taken as complete: it pushes the commands again as plugins and skills load.
@@ -32,6 +34,10 @@ const LIST_SETTLE: Duration = Duration::from_millis(2500);
 const LIST_LIMIT: Duration = Duration::from_secs(12);
 /// How long a new Claude Code has to answer `initialize`: it may be starting MCP servers.
 const HANDSHAKE_PATIENCE: Duration = Duration::from_secs(60);
+/// The least time between two requests for the usage limits, whatever asks (ADR 0043).
+const USAGE_FLOOR: Duration = Duration::from_mins(1);
+/// How long a Claude Code started only to ask for the usage limits has to answer.
+const USAGE_PATIENCE: Duration = Duration::from_secs(20);
 /// How long a stopped reply has to send its last frame before its Claude Code is started again.
 const DRAIN_PATIENCE: Duration = Duration::from_secs(30);
 /// How long a session's Claude Code is kept with no reply running and nothing heard from it.
@@ -81,6 +87,7 @@ fn kind_of(frame: &Frame) -> &'static str {
         Frame::Response { .. } => "response",
         Frame::Cancel { .. } => "cancel",
         Frame::ConversationReset { .. } => "conversation reset",
+        Frame::RateLimit(_) => "rate limit",
         Frame::Other => "other",
     }
 }
@@ -110,7 +117,8 @@ impl Live {
         connection: Connection,
         session_id: &str,
         start: &Start,
-        catalog: Arc<Mutex<Catalog>>,
+        catalog: Option<Arc<Mutex<Catalog>>>,
+        usage: Arc<Usage>,
     ) -> Self {
         let conversation = &start.conversation;
         let (sender, events) = mpsc::channel();
@@ -129,17 +137,33 @@ impl Live {
                         // What Claude Code says it can do is kept for every session, at once: no
                         // reply needs to be running to hear it (ADR 0042).
                         match &frame {
+                            // The usage limits too (ADR 0043).
+                            Frame::Response { id, error, answer }
+                                if id.starts_with(USAGE_REQUEST) =>
+                            {
+                                usage.answer(usage::limits_in(error.as_deref(), answer));
+                            }
                             Frame::Response { answer, .. } => {
-                                lock(&catalog).absorb_initialize(answer);
+                                if let Some(catalog) = &catalog {
+                                    lock(catalog).absorb_initialize(answer);
+                                }
                             }
                             Frame::CommandsChanged { commands } => {
-                                lock(&catalog).replace_commands(commands.clone());
+                                if let Some(catalog) = &catalog {
+                                    lock(catalog).replace_commands(commands.clone());
+                                }
+                                continue;
+                            }
+                            Frame::RateLimit(info) => {
+                                usage.hear_rate_limit(info);
                                 continue;
                             }
                             Frame::Init {
                                 terminal_commands, ..
-                            } if !terminal_commands.is_empty() => {
-                                lock(&catalog)
+                            } if !terminal_commands.is_empty()
+                                && let Some(catalog) = &catalog =>
+                            {
+                                lock(catalog)
                                     .terminal_commands
                                     .clone_from(terminal_commands);
                             }
@@ -174,6 +198,21 @@ impl Live {
             },
             heard,
             busy: AtomicBool::new(false),
+        }
+    }
+
+    /// Waits for Claude Code's answer to the request `id`, and says whether it came.
+    fn wait_for_answer(&self, id: &str, patience: Duration) -> bool {
+        let deadline = Instant::now() + patience;
+        let events = lock(&self.events);
+        loop {
+            match events.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                Ok(Event::Frame(Frame::Response { id: answered, .. })) if answered == id => {
+                    return true;
+                }
+                Ok(Event::Ended) | Err(_) => return false,
+                Ok(_) => {}
+            }
         }
     }
 
@@ -284,6 +323,10 @@ pub struct ClaudeDriver {
     /// Whether a Claude Code was started only to list its commands and models, which is done once
     /// for each start of Arden Code: a Claude Code that lists nothing is not asked again and again.
     listing: AtomicBool,
+    /// The usage limits Claude Code last reported (ADR 0043).
+    usage: Arc<Usage>,
+    /// The least time between two requests for them.
+    usage_floor: Duration,
 }
 
 /// Marks a session's Claude Code as used by a reply until the reply ends.
@@ -315,7 +358,17 @@ impl ClaudeDriver {
             requests: AtomicU64::new(0),
             catalog: Arc::new(Mutex::new(Catalog::default())),
             listing: AtomicBool::new(false),
+            usage: Arc::new(Usage::default()),
+            usage_floor: USAGE_FLOOR,
         }
+    }
+
+    /// The driver, with another least time between two requests for the usage limits.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn with_usage_floor(mut self, floor: Duration) -> Self {
+        self.usage_floor = floor;
+        self
     }
 
     /// The slash commands and models Claude Code last said it has: nothing until one of its Claude
@@ -343,39 +396,92 @@ impl ClaudeDriver {
     /// Starts a Claude Code in a folder only to hear its commands and models, with no message and
     /// so no call to the model, and lets it go once it has been quiet for `settle`.
     pub fn warm_with(&self, folder: &Path, settle: Duration) -> Catalog {
+        let started = Instant::now();
+        let Some(live) = self.listen(folder, true) else {
+            return self.catalog();
+        };
+        // More of the commands arrive as plugins load: wait until it has been quiet for a while.
+        while started.elapsed() < LIST_LIMIT && lock(&live.heard).elapsed() < settle {
+            thread::sleep(Duration::from_millis(25));
+        }
+        drop(live);
+        self.catalog()
+    }
+
+    /// Starts a Claude Code in a folder with no conversation and no message, so no call to the
+    /// model, and waits for its answer to `initialize`. Nothing when it cannot start or answer. Only
+    /// one that `hears_lists` keeps the commands and models it says: one that leaves at once would
+    /// keep them before plugins push theirs.
+    fn listen(&self, folder: &Path, hears_lists: bool) -> Option<Live> {
         let start = Start {
             folder: folder.to_path_buf(),
             conversation: Conversation::Listing,
             model: None,
             effort: None,
         };
-        let Ok(connection) = self.launcher.launch(&start) else {
-            return self.catalog();
-        };
-        let live = Live::begin(connection, "listing", &start, Arc::clone(&self.catalog));
+        let connection = self.launcher.launch(&start).ok()?;
+        let live = Live::begin(
+            connection,
+            "listing",
+            &start,
+            hears_lists.then(|| Arc::clone(&self.catalog)),
+            Arc::clone(&self.usage),
+        );
         let id = self.next_request();
-        if live.write(&protocol::initialize(&id)).is_err() {
-            return self.catalog();
+        live.write(&protocol::initialize(&id)).ok()?;
+        live.wait_for_answer(&id, HANDSHAKE_PATIENCE)
+            .then_some(live)
+    }
+
+    /// Whether Arden Code asks Claude Code for the person's usage limits: Show usage limits
+    /// (ADR 0043). Until it is told to, it does not.
+    pub fn ask_for_usage(&self, asking: bool) {
+        self.usage.ask(asking);
+    }
+
+    /// The person's usage limits, as Claude Code last reported them.
+    #[must_use]
+    pub fn usage_limits(&self) -> UsageLimits {
+        self.usage.limits()
+    }
+
+    /// Hears the usage limits each time they change.
+    pub fn on_usage_limits(&self, listener: usage::Listener) {
+        self.usage.listen(listener);
+    }
+
+    /// Asks Claude Code for the person's usage limits, unless Arden Code is not to ask, asked
+    /// within the last minute, or has an answer younger than `older_than` (ADR 0043). A session's
+    /// Claude Code that is running with nothing to do is asked, and answers on its own time; with
+    /// none, a Claude Code is started in the folder only to ask, and let go once it has answered.
+    /// Blocks while it asks, so the app calls it on a thread of its own.
+    pub fn refresh_usage(&self, folder: &Path, older_than: Duration) -> UsageLimits {
+        if !self.usage.may_ask(self.usage_floor, older_than) {
+            return self.usage_limits();
         }
-        let started = Instant::now();
-        let answered = {
-            let events = lock(&live.events);
-            loop {
-                match events.recv_timeout(HANDSHAKE_PATIENCE.saturating_sub(started.elapsed())) {
-                    Ok(Event::Frame(Frame::Response { id: answered, .. })) if answered == id => {
-                        break true;
-                    }
-                    Ok(Event::Ended) | Err(_) => break false,
-                    Ok(_) => {}
-                }
+        let idle = lock(&self.live)
+            .values()
+            .find(|live| !live.busy.load(Ordering::Acquire))
+            .map(Arc::clone);
+        if let Some(live) = idle {
+            let _ = live.write(&protocol::get_usage(&self.next_usage_request()));
+            return self.usage_limits();
+        }
+        if let Some(live) = self.listen(folder, false) {
+            let id = self.next_usage_request();
+            if live.write(&protocol::get_usage(&id)).is_ok() {
+                live.wait_for_answer(&id, USAGE_PATIENCE);
             }
-        };
-        // More of the commands arrive as plugins load: wait until it has been quiet for a while.
-        while answered && started.elapsed() < LIST_LIMIT && lock(&live.heard).elapsed() < settle {
-            thread::sleep(Duration::from_millis(25));
         }
-        drop(live);
-        self.catalog()
+        self.usage_limits()
+    }
+
+    /// A new id for a request for the usage limits, which the reader knows by its start.
+    fn next_usage_request(&self) -> String {
+        format!(
+            "{USAGE_REQUEST}{}",
+            self.requests.fetch_add(1, Ordering::Relaxed) + 1
+        )
     }
 
     /// A new id for a request of Arden Code's.
@@ -448,7 +554,8 @@ impl ClaudeDriver {
             connection,
             session_id,
             &start,
-            Arc::clone(&self.catalog),
+            Some(Arc::clone(&self.catalog)),
+            Arc::clone(&self.usage),
         ));
         let id = self.next_request();
         live.write(&protocol::initialize(&id)).map_err(|error| {
@@ -886,7 +993,13 @@ impl AgentDriver for ClaudeDriver {
             };
             match turn.on(event, emit) {
                 Next::Continue => {}
-                Next::Over => return,
+                Next::Over => {
+                    // The reply used some of the person's usage limits (ADR 0043).
+                    if self.usage.may_ask(self.usage_floor, Duration::ZERO) {
+                        let _ = live.write(&protocol::get_usage(&self.next_usage_request()));
+                    }
+                    return;
+                }
                 Next::Ended => {
                     drop(events);
                     self.forget(session_id);

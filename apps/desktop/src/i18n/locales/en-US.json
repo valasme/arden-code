@@ -650,11 +650,24 @@
       "notFound": "{{name}} was not found. Install it, then look again.",
       "notInstalled": "Not installed",
       "path": "Location",
+      "showUsageLimits": {
+        "description": "Ask Claude Code for your 5-hour and weekly limits, and show them in the status bar and here. Claude Code asks Anthropic with your own sign-in.",
+        "label": "Show usage limits"
+      },
       "signedIn": "Signed in",
       "signedOut": "Not signed in",
       "tooOld": "This version is too old for Arden Code. Run claude update in a terminal, then look again.",
       "update": "How to update",
       "updateLabel": "How to update {{name}}",
+      "usage": {
+        "fiveHour": "5-hour limit",
+        "label": "Usage limits",
+        "notForThisSignIn": "Claude Code reports no usage limits for this sign-in.",
+        "percent": "{{percent}}%",
+        "percentAndReset": "{{percent}}% · resets {{time}}",
+        "unsupported": "Update Claude Code to see usage limits.",
+        "weekly": "Weekly limit"
+      },
       "version": "Version",
       "versionUnknown": "Unknown"
     },
@@ -798,6 +811,15 @@
     "replying": "{{agent}}: replying",
     "updateDownloading": "Downloading an update…",
     "updateReady": "Update ready: restart",
+    "usage": {
+      "fiveHour": "5-hour {{percent}}%",
+      "fiveHourReached": "5-hour limit reached",
+      "fiveHourReachedResets": "5-hour limit reached, resets {{time}}",
+      "label": "Usage limits",
+      "weekly": "Weekly {{percent}}%",
+      "weeklyReached": "Weekly limit reached",
+      "weeklyReachedResets": "Weekly limit reached, resets {{time}}"
+    },
     "version": "Version {{version}}",
     "waiting": "{{agent}}: waiting for your answer"
   },
