@@ -117,7 +117,7 @@ impl Live {
         connection: Connection,
         session_id: &str,
         start: &Start,
-        catalog: Arc<Mutex<Catalog>>,
+        catalog: Option<Arc<Mutex<Catalog>>>,
         usage: Arc<Usage>,
     ) -> Self {
         let conversation = &start.conversation;
@@ -144,10 +144,14 @@ impl Live {
                                 usage.answer(usage::limits_in(error.as_deref(), answer));
                             }
                             Frame::Response { answer, .. } => {
-                                lock(&catalog).absorb_initialize(answer);
+                                if let Some(catalog) = &catalog {
+                                    lock(catalog).absorb_initialize(answer);
+                                }
                             }
                             Frame::CommandsChanged { commands } => {
-                                lock(&catalog).replace_commands(commands.clone());
+                                if let Some(catalog) = &catalog {
+                                    lock(catalog).replace_commands(commands.clone());
+                                }
                                 continue;
                             }
                             Frame::RateLimit(info) => {
@@ -156,8 +160,10 @@ impl Live {
                             }
                             Frame::Init {
                                 terminal_commands, ..
-                            } if !terminal_commands.is_empty() => {
-                                lock(&catalog)
+                            } if !terminal_commands.is_empty()
+                                && let Some(catalog) = &catalog =>
+                            {
+                                lock(catalog)
                                     .terminal_commands
                                     .clone_from(terminal_commands);
                             }
@@ -391,7 +397,7 @@ impl ClaudeDriver {
     /// so no call to the model, and lets it go once it has been quiet for `settle`.
     pub fn warm_with(&self, folder: &Path, settle: Duration) -> Catalog {
         let started = Instant::now();
-        let Some(live) = self.listen(folder) else {
+        let Some(live) = self.listen(folder, true) else {
             return self.catalog();
         };
         // More of the commands arrive as plugins load: wait until it has been quiet for a while.
@@ -403,8 +409,10 @@ impl ClaudeDriver {
     }
 
     /// Starts a Claude Code in a folder with no conversation and no message, so no call to the
-    /// model, and waits for its answer to `initialize`. Nothing when it cannot start or answer.
-    fn listen(&self, folder: &Path) -> Option<Live> {
+    /// model, and waits for its answer to `initialize`. Nothing when it cannot start or answer. Only
+    /// one that `hears_lists` keeps the commands and models it says: one that leaves at once would
+    /// keep them before plugins push theirs.
+    fn listen(&self, folder: &Path, hears_lists: bool) -> Option<Live> {
         let start = Start {
             folder: folder.to_path_buf(),
             conversation: Conversation::Listing,
@@ -416,7 +424,7 @@ impl ClaudeDriver {
             connection,
             "listing",
             &start,
-            Arc::clone(&self.catalog),
+            hears_lists.then(|| Arc::clone(&self.catalog)),
             Arc::clone(&self.usage),
         );
         let id = self.next_request();
@@ -459,7 +467,7 @@ impl ClaudeDriver {
             let _ = live.write(&protocol::get_usage(&self.next_usage_request()));
             return self.usage_limits();
         }
-        if let Some(live) = self.listen(folder) {
+        if let Some(live) = self.listen(folder, false) {
             let id = self.next_usage_request();
             if live.write(&protocol::get_usage(&id)).is_ok() {
                 live.wait_for_answer(&id, USAGE_PATIENCE);
@@ -546,7 +554,7 @@ impl ClaudeDriver {
             connection,
             session_id,
             &start,
-            Arc::clone(&self.catalog),
+            Some(Arc::clone(&self.catalog)),
             Arc::clone(&self.usage),
         ));
         let id = self.next_request();

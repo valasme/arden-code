@@ -2123,3 +2123,22 @@ fn a_claude_code_that_cannot_answer_get_usage_keeps_what_its_rate_limit_events_s
         "the error took nothing away"
     );
 }
+
+#[test]
+fn a_claude_code_started_only_to_ask_for_usage_leaves_the_lists_to_the_one_that_hears_them() {
+    let mut asking = handshake_listing(&listed_commands(), &listed_models());
+    asking.extend([asks_for_usage(), usage_answer(&plan_usage())]);
+    let listing = handshake_listing(&listed_commands(), &listed_models());
+    let (scripted, driver) = asking_claude(vec![Ok(asking), Ok(listing)]);
+
+    driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
+
+    assert!(
+        driver.catalog().is_empty(),
+        "it left before the commands that plugins push could arrive"
+    );
+    driver.ensure_catalog_with(Path::new(FOLDER), Duration::from_millis(100));
+    scripted.assert_followed();
+    assert_eq!(scripted.starts.lock().expect("starts").len(), 2);
+    assert_eq!(driver.catalog().models.len(), 2);
+}
