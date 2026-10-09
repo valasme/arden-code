@@ -34,6 +34,7 @@ const places = {
   layoutSidebarWidth: ["layout", "sidebarWidth"],
   layoutInspectorWidth: ["layout", "inspectorWidth"],
   notificationsDesktop: ["notifications", "desktop"],
+  agentsShowUsageLimits: ["agents", "showUsageLimits"],
   advancedLogLevel: ["advanced", "logLevel"],
   advancedDeveloperMode: ["advanced", "developerMode"],
   advancedNativeTitleBar: ["advanced", "nativeTitleBar"],

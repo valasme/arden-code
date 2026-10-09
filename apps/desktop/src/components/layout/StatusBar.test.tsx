@@ -20,7 +20,7 @@ import "@/styles/global.css";
 
 const unknown: UsageLimits = { report: "unknown", windows: [] };
 
-function startApp(status: UpdateStatus, usage: UsageLimits = unknown) {
+function startApp(status: UpdateStatus, usage: UsageLimits = unknown, showUsageLimits = true) {
   Object.assign(globalThis, { isTauri: true });
   const calls: string[] = [];
   mockIPC(
@@ -29,7 +29,7 @@ function startApp(status: UpdateStatus, usage: UsageLimits = unknown) {
       if (command === "app_info") {
         return { name: "Arden Code", version: "0.1.0", commit: "x", buildDate: "x" };
       }
-      if (command === "get_settings") return settingsWith();
+      if (command === "get_settings") return settingsWith({ agents: { showUsageLimits } });
       if (command === "get_update_status") return status;
       if (command === "usage_limits") return usage;
       return null;
@@ -172,6 +172,14 @@ describe("The status bar and the usage limits", () => {
     await screen.findByText("Version 0.1.0");
     expect(screen.queryByText(/5-hour/u)).toBeNull();
     expect(screen.queryByText(/Weekly/u)).toBeNull();
+  });
+
+  it("shows nothing when Show usage limits is off", async () => {
+    startApp({ state: "idle" }, plan, false);
+    renderBar();
+
+    await screen.findByText("Version 0.1.0");
+    expect(screen.queryByText("5-hour 42%")).toBeNull();
   });
 
   it("emphasizes a window from 80%", async () => {

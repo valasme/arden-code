@@ -357,7 +357,7 @@ fn manage_programs(app: &tauri::App, paths: &AppPaths) {
         }
     };
     let claude = agents::Claude::with(supervisor.as_ref());
-    claude.report_usage_to(app.handle());
+    claude.report_usage_to(app.handle(), &app.state::<SettingsService>());
     app.manage(claude);
     app.manage(agents::Programs(supervisor));
     app.manage(agents::Detections::default());

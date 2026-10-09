@@ -6,6 +6,7 @@ interface Overrides {
   appearance?: Partial<Settings["appearance"]>;
   layout?: Partial<Settings["layout"]>;
   notifications?: Partial<Settings["notifications"]>;
+  agents?: Partial<Settings["agents"]>;
   keyboard?: Partial<Settings["keyboard"]>;
   advanced?: Partial<Settings["advanced"]>;
 }
@@ -16,6 +17,7 @@ export function settingsWith({
   appearance,
   layout,
   notifications,
+  agents,
   keyboard,
   advanced,
 }: Overrides = {}): Settings {
@@ -25,6 +27,7 @@ export function settingsWith({
     appearance: { ...defaultSettings.appearance, ...appearance },
     layout: { ...defaultSettings.layout, ...layout },
     notifications: { ...defaultSettings.notifications, ...notifications },
+    agents: { ...defaultSettings.agents, ...agents },
     keyboard: { ...defaultSettings.keyboard, ...keyboard },
     advanced: { ...defaultSettings.advanced, ...advanced },
   };

@@ -650,6 +650,10 @@
       "notFound": "{{name}} was not found. Install it, then look again.",
       "notInstalled": "Not installed",
       "path": "Location",
+      "showUsageLimits": {
+        "description": "Ask Claude Code for your 5-hour and weekly limits, and show them in the status bar and here. Claude Code asks Anthropic with your own sign-in.",
+        "label": "Show usage limits"
+      },
       "signedIn": "Signed in",
       "signedOut": "Not signed in",
       "tooOld": "This version is too old for Arden Code. Run claude update in a terminal, then look again.",

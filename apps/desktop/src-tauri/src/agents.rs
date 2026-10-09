@@ -1,5 +1,6 @@
 //! The commands for the agent programs: finding out which are installed.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -9,6 +10,7 @@ use arden_agents::detect::{self, AgentCli, Detection};
 use arden_agents::usage::UsageLimits;
 use arden_core::error::{AppError, ErrorCode};
 use arden_process::supervisor::Supervisor;
+use arden_settings::service::SettingsService;
 use tauri::{AppHandle, Manager, State};
 use tauri_specta::Event;
 
@@ -38,18 +40,31 @@ impl Claude {
         Self(Arc::new(ClaudeDriver::new(launcher)))
     }
 
-    /// Asks for the person's usage limits from now on, and tells the page each time they change
-    /// (ADR 0043).
-    pub fn report_usage_to(&self, app: &AppHandle) {
-        let app = app.clone();
+    /// Tells the page each time the person's usage limits change, and asks for them while Show
+    /// usage limits is on, asking again at once when it is turned back on (ADR 0043).
+    pub fn report_usage_to(&self, app: &AppHandle, settings: &SettingsService) {
+        let page = app.clone();
         self.0
             .on_usage_limits(Arc::new(move |limits: &UsageLimits| {
                 let _ = UsageLimitsChanged {
                     limits: limits.clone(),
                 }
-                .emit(&app);
+                .emit(&page);
             }));
-        self.0.ask_for_usage(true);
+        let shown = settings.get().agents.show_usage_limits;
+        self.0.ask_for_usage(shown);
+        let driver = Arc::clone(&self.0);
+        let app = app.clone();
+        let was_shown = AtomicBool::new(shown);
+        settings.subscribe(move |settings, _| {
+            let shown = settings.agents.show_usage_limits;
+            driver.ask_for_usage(shown);
+            if shown && !was_shown.swap(shown, Ordering::AcqRel) {
+                refresh_usage(&app, Duration::ZERO);
+            } else {
+                was_shown.store(shown, Ordering::Release);
+            }
+        });
     }
 }
 

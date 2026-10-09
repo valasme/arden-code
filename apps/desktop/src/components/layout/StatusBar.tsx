@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { levelOf, shownWindows } from "@/features/agents/usageLimits";
 import { useUsageLimits } from "@/features/agents/useUsageLimits";
 import { useFormatters } from "@/features/settings/useFormatters";
+import { useSettings } from "@/features/settings/useSettings";
 import { commands, type UsageWindow } from "@/ipc/bindings";
 import { appInfoQuery, updateStatusQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
@@ -44,8 +45,9 @@ function UsageFigure({ window, now }: { window: UsageWindow; now: Date }) {
 function UsageFigures() {
   const { t } = useTranslation();
   const now = new Date();
+  const shown = useSettings().agents.showUsageLimits;
   const windows = shownWindows(useUsageLimits(), now);
-  if (windows.length === 0) return null;
+  if (!shown || windows.length === 0) return null;
   return (
     <span className="flex min-w-0 items-center gap-1.5 truncate">
       <span className="sr-only">{t("statusBar.usage.label")}</span>

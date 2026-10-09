@@ -7,6 +7,7 @@ import { z } from "zod";
 import { Toaster } from "@/components/Toaster";
 import type { Detection, UsageLimits } from "@/ipc/bindings";
 import { expectNoAccessibilityViolations } from "@/test/axe";
+import { settingsWith } from "@/test/settings";
 
 import { AgentsTab } from "./AgentsTab";
 
@@ -45,6 +46,7 @@ const planLimits: UsageLimits = {
 function startApp(
   detections: Detection[] | "fail" = [claude, codex],
   usage: UsageLimits = { report: "unknown", windows: [] },
+  showUsageLimits = true,
 ) {
   Object.assign(globalThis, { isTauri: true });
   const calls: { command: string; payload: unknown }[] = [];
@@ -62,6 +64,7 @@ function startApp(
         return detections;
       }
       if (command === "usage_limits") return usage;
+      if (command === "get_settings") return settingsWith({ agents: { showUsageLimits } });
       return null;
     },
     { shouldMockEvents: true },
@@ -283,6 +286,24 @@ describe("Settings → Agents", () => {
 
     expect(within(agent).queryByText("Usage limits")).toBeNull();
     expect(within(agent).queryByText("5-hour limit")).toBeNull();
+  });
+
+  it("has a switch for the usage limits, on by default", async () => {
+    startApp();
+    renderTab();
+
+    expect(await screen.findByRole("switch", { name: "Show usage limits" })).toBeChecked();
+  });
+
+  it("shows no usage limits when Show usage limits is off", async () => {
+    startApp([claude, codex], planLimits, false);
+    renderTab();
+
+    const agent = await screen.findByRole("region", { name: "Claude Code" });
+    expect(await screen.findByRole("switch", { name: "Show usage limits" })).not.toBeChecked();
+
+    expect(within(agent).queryByText("5-hour limit")).toBeNull();
+    expect(within(agent).queryByText("Weekly limit")).toBeNull();
   });
 
   it("asks Claude Code for the usage limits again on Look again", async () => {

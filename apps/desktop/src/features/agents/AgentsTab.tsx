@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
+import { SettingsList } from "@/features/settings/SettingsList";
 import { useFormatters } from "@/features/settings/useFormatters";
+import { useSettings } from "@/features/settings/useSettings";
 import { commands, type Detection } from "@/ipc/bindings";
 import { agentsQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
@@ -48,8 +50,10 @@ function UsageRows() {
   const { t } = useTranslation();
   const formatters = useFormatters();
   const limits = useUsageLimits();
+  const shown = useSettings().agents.showUsageLimits;
   const now = new Date();
 
+  if (!shown) return null;
   if (limits.report === "notForThisSignIn" || limits.report === "unsupported") {
     return (
       <div className="flex gap-2 py-0.5">
@@ -192,6 +196,9 @@ export function AgentsTab() {
           ))}
         </div>
       ) : null}
+      <div className="mt-4">
+        <SettingsList tab="agents" />
+      </div>
       <div className="pt-4">
         <Button variant="outline" disabled={isFetching || looking} onClick={lookAgain}>
           {t("settings.agents.lookAgain")}

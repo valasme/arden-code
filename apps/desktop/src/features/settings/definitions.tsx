@@ -339,6 +339,23 @@ export const settingDefinitions: readonly SettingDefinition[] = [
     ),
   },
   {
+    id: "show-usage-limits",
+    tab: "agents",
+    key: "agentsShowUsageLimits",
+    labelKey: "settings.agents.showUsageLimits.label",
+    descriptionKey: "settings.agents.showUsageLimits.description",
+    isDefault: (settings) => settings.agents.showUsageLimits === same.agents.showUsageLimits,
+    Control: ({ id, settings, change }) => (
+      <ToggleControl
+        id={id}
+        checked={settings.agents.showUsageLimits}
+        onChange={(checked) => {
+          change.mutate({ agentsShowUsageLimits: checked });
+        }}
+      />
+    ),
+  },
+  {
     id: "developer-mode",
     tab: "advanced",
     key: "advancedDeveloperMode",
