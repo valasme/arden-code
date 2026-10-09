@@ -5,7 +5,7 @@ import path from "node:path";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 
-import { expect, launchApp, pathKey, pathWithoutAgents, test } from "./fixtures";
+import { expect, launchApp, logText, pathKey, pathWithoutAgents, test } from "./fixtures";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..", "..");
 /** The workspace's stand-in for Claude Code (ADR 0038), built with the app. */
@@ -242,34 +242,54 @@ test.describe("Claude in the real app", () => {
     const app = await launchApp({
       env: { ...claude.env, ARDEN_CODE_FOLDER_DIALOG_ANSWER: folder },
     });
+    // Temporary: when each step ends, to find what takes the test's whole time.
+    const began = Date.now();
+    const mark = (step: string) => {
+      console.log(`[ctrl+o] ${Date.now() - began} ms: ${step}`);
+    };
     try {
       const { page } = app;
       await expect(page.getByRole("main")).toBeVisible();
+      mark("main visible");
       await page.keyboard.press("Control+O");
       const name = path.basename(folder);
       await expect(page.getByRole("button", { name: `Project: ${name}` })).toBeVisible();
+      mark("project shown");
       await page.getByRole("button", { name: /^Agent: / }).click();
       await page.getByRole("menuitemradio", { name: "Claude" }).click();
       await say(page, "Hello in the folder");
+      mark("said");
 
       const question = page.getByRole("alertdialog", { name: `Trust “${name}”?` });
       await expect(question).toBeVisible();
       await question.getByRole("button", { name: "Trust folder" }).click();
+      mark("trusted");
 
       const session = page.getByRole("main", { name: "Session" });
       await expect(session.getByText("You said: Hello in the folder")).toBeVisible({
         timeout: 30_000,
       });
+      mark("reply shown");
       const folders = readFileSync(log, "utf8")
         .split("\n")
         .filter((line) => line.startsWith("start "))
         .map((line) => z.object({ folder: z.string() }).parse(JSON.parse(line.slice(6))).folder);
       expect(folders.map((where) => where.toLowerCase())).toContain(folder.toLowerCase());
+    } catch (error) {
+      mark(`failed: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+      console.log(`[ctrl+o] app log:\n${logText(app.dataDir).split("\n").slice(-40).join("\n")}`);
+      console.log(`[ctrl+o] stand-in log:\n${readFileSync(log, "utf8")}`);
+      throw error;
     } finally {
+      mark("cleaning up");
       app.kill();
+      mark("app killed");
       claude.remove();
+      mark("stand-in removed");
       rmSync(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      mark("folder removed");
       rmSync(log, { force: true });
+      mark("log removed");
     }
   });
 
