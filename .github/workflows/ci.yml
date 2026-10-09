@@ -89,6 +89,10 @@ jobs:
       - name: End-to-end test against the real app
         run: pnpm test:e2e
 
+      # Temporary: a new end-to-end test runs 10 times before it is merged (CLAUDE.md).
+      - name: The usage limits test, 10 times
+        run: pnpm --filter @arden/desktop exec playwright test e2e/claude.spec.ts -g "usage limits" --repeat-each 10 --retries 0
+
       - name: Performance against the plan's targets, on the release build
         run: pnpm --filter @arden/desktop test:perf
 
