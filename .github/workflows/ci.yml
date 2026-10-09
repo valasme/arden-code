@@ -86,6 +86,19 @@ jobs:
           $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
           if (Test-Path $key) { "WebView2 runtime $((Get-ItemProperty $key).pv)" } else { "WebView2 runtime is NOT installed" }
 
+      # Temporary: why the Ctrl+O test times out on this branch.
+      - name: The Ctrl+O test alone, first
+        continue-on-error: true
+        run: |
+          pnpm build:debug
+          pnpm --filter @arden/desktop exec playwright test e2e/claude.spec.ts -g "Ctrl.O opens a folder" --retries 0
+
+      - name: What the Ctrl+O test saw
+        if: always()
+        shell: pwsh
+        run: |
+          Get-ChildItem apps/desktop/test-results -Recurse -Filter error-context.md -ErrorAction SilentlyContinue | ForEach-Object { "=== $($_.FullName)"; Get-Content $_.FullName }
+
       - name: End-to-end test against the real app
         run: pnpm test:e2e
 
