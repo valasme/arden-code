@@ -2085,3 +2085,41 @@ fn usage_limits_younger_than_asked_for_are_not_asked_for_again() {
     scripted.assert_followed();
     assert_eq!(scripted.starts.lock().expect("starts").len(), 1);
 }
+
+#[test]
+fn a_claude_code_that_cannot_answer_get_usage_keeps_what_its_rate_limit_events_said() {
+    let mut script = handshake();
+    script.extend([
+        message("Hello"),
+        rate_limit(&json!({ "status": "allowed", "rateLimitType": "five_hour", "utilization": 0.3 })),
+        success("Hi."),
+        asks_for_usage(),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "error", "error": "Unknown control request subtype: get_usage" }
+        })),
+        rate_limit(&json!({ "status": "allowed", "rateLimitType": "seven_day", "utilization": 0.1 })),
+    ]);
+    let (scripted, driver) = asking_claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "Hello");
+
+    until_usage(&driver, |limits| limits.windows.len() == 2);
+    scripted.assert_followed();
+    let limits = driver.usage_limits();
+    assert_eq!(limits.report, UsageReport::Reported);
+    assert_eq!(
+        limits
+            .windows
+            .iter()
+            .map(|window| (window.kind, window.percent))
+            .collect::<Vec<_>>(),
+        [
+            (UsageWindowKind::FiveHour, 30),
+            (UsageWindowKind::Weekly, 10)
+        ],
+        "the error took nothing away"
+    );
+}

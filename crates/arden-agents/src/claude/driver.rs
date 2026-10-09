@@ -151,7 +151,7 @@ impl Live {
                                 continue;
                             }
                             Frame::RateLimit(info) => {
-                                usage.learn(info);
+                                usage.hear_rate_limit(info);
                                 continue;
                             }
                             Frame::Init {
@@ -358,8 +358,9 @@ impl ClaudeDriver {
     }
 
     /// The driver, with another least time between two requests for the usage limits.
+    #[cfg(test)]
     #[must_use]
-    pub fn with_usage_floor(mut self, floor: Duration) -> Self {
+    pub(crate) fn with_usage_floor(mut self, floor: Duration) -> Self {
         self.usage_floor = floor;
         self
     }

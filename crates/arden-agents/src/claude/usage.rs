@@ -168,14 +168,20 @@ impl Usage {
         true
     }
 
-    /// Keeps the usage limits Claude Code answered with.
+    /// Keeps the usage limits Claude Code answered with. A Claude Code that cannot answer takes
+    /// nothing away from what its `rate_limit_event`s said.
     pub fn answer(&self, limits: UsageLimits) {
         *lock(&self.answered) = Some(Instant::now());
+        if limits.report == UsageReport::Unsupported
+            && self.limits().report == UsageReport::Reported
+        {
+            return;
+        }
         self.keep(limits);
     }
 
     /// Keeps what a `rate_limit_event` says about the window it names.
-    pub fn learn(&self, info: &Value) {
+    pub fn hear_rate_limit(&self, info: &Value) {
         self.keep(with_rate_limit(self.limits(), info));
     }
 

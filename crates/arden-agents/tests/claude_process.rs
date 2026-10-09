@@ -6,12 +6,14 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use arden_agents::claude::driver::ClaudeDriver;
 use arden_agents::claude::launch::ProgramLauncher;
 use arden_agents::model::{AgentKind, Item, Turn, TurnStatus};
 use arden_agents::playground;
 use arden_agents::store::SessionStore;
+use arden_agents::usage::{UsageReport, UsageWindowKind};
 use arden_core::error::ErrorCode;
 use arden_process::supervisor::Supervisor;
 use serde_json::{Value, json};
@@ -135,4 +137,76 @@ fn no_claude_on_path_is_not_installed() {
             ..
         }]
     ));
+}
+
+/// A Claude driver that starts `claude` from `bin`, or from the `PATH` with none, and asks for the
+/// usage limits (ADR 0043).
+fn asking_driver(bin: Option<&Path>) -> (ClaudeDriver, tempfile::TempDir) {
+    let logs = tempfile::tempdir().expect("a folder");
+    let supervisor = Arc::new(Supervisor::new(logs.path()).expect("a supervisor"));
+    let launcher = match bin {
+        Some(bin) => ProgramLauncher::with_search_path(supervisor, bin.as_os_str().to_owned()),
+        None => ProgramLauncher::new(supervisor),
+    };
+    let driver = ClaudeDriver::new(Arc::new(launcher));
+    driver.ask_for_usage(true);
+    (driver, logs)
+}
+
+#[test]
+fn the_usage_limits_come_from_a_real_process_started_only_to_ask() {
+    let project = tempfile::tempdir().expect("a folder");
+    let bin = claude_on_path(&json!({
+        "usage": {
+            "rate_limits_available": true,
+            "rate_limits": {
+                "five_hour": { "utilization": 42, "resets_at": "2099-10-09T15:10:00+00:00" },
+                "seven_day": { "utilization": 18, "resets_at": "2099-10-13T09:00:00+00:00" }
+            }
+        }
+    }));
+    let (driver, _logs) = asking_driver(Some(bin.path()));
+
+    let limits = driver.refresh_usage(project.path(), Duration::ZERO);
+
+    assert_eq!(limits.report, UsageReport::Reported);
+    assert_eq!(
+        limits
+            .windows
+            .iter()
+            .map(|window| (window.kind, window.percent))
+            .collect::<Vec<_>>(),
+        [
+            (UsageWindowKind::FiveHour, 42),
+            (UsageWindowKind::Weekly, 18)
+        ]
+    );
+}
+
+/// Run by the maintainer, with `cargo test -p arden-agents --test claude_process -- --ignored`:
+/// the person's own signed-in `claude` on the `PATH` answers `get_usage`, and one message shows
+/// whether a `rate_limit_event` carries a percentage on an ordinary turn (ADR 0043). The message is
+/// a real call to the model. Arden Code never signs in.
+#[test]
+#[ignore = "needs a real, signed-in claude on the PATH, and sends it one message"]
+fn a_real_signed_in_claude_code_reports_its_usage_limits() {
+    let project = tempfile::tempdir().expect("a folder");
+    let (driver, _logs) = asking_driver(None);
+
+    let asked = driver.refresh_usage(project.path(), Duration::ZERO);
+    println!("get_usage: {asked:#?}");
+    assert_ne!(asked.report, UsageReport::Unknown, "claude answered");
+
+    let store = SessionStore::new(vec![playground::describe(project.path())]);
+    let session = store
+        .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+        .expect("a session");
+    let turn = store
+        .start_turn(&session.id, "Say hi, in one word.")
+        .expect("a turn");
+    store
+        .stream_reply(&driver, &session.id, &turn, |_| true)
+        .expect("saved");
+    std::thread::sleep(Duration::from_secs(5));
+    println!("after a turn: {:#?}", driver.usage_limits());
 }
