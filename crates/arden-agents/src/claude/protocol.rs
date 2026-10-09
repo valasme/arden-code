@@ -53,6 +53,9 @@ pub enum Frame {
     /// Claude Code left the conversation for a new one, as when a plan is accepted with its context
     /// cleared (`conversation_reset`).
     ConversationReset { new_id: String },
+    /// What Claude Code learned about the person's usage limits during a turn
+    /// (`rate_limit_event`): its `rate_limit_info`, as it was sent (ADR 0043).
+    RateLimit(Value),
     /// A frame the driver does not use.
     Other,
 }
@@ -263,6 +266,7 @@ pub fn parse(line: &str) -> Option<Frame> {
         Some("conversation_reset") => Frame::ConversationReset {
             new_id: text_of(&frame["new_conversation_id"]).unwrap_or_default(),
         },
+        Some("rate_limit_event") => Frame::RateLimit(frame["rate_limit_info"].clone()),
         Some("control_cancel_request") => Frame::Cancel {
             id: text_of(&frame["request_id"]).unwrap_or_default(),
         },
@@ -576,13 +580,26 @@ mod tests {
 
     #[test]
     fn skips_what_it_does_not_know_and_refuses_what_is_not_json() {
-        assert_eq!(
-            parse(r#"{"type":"rate_limit_event","x":1}"#),
-            Some(Frame::Other)
-        );
+        assert_eq!(parse(r#"{"type":"auth_status","x":1}"#), Some(Frame::Other));
         assert_eq!(parse(r#"{"no_type":true}"#), Some(Frame::Other));
         assert_eq!(parse("Warning: something on stdout"), None);
         assert_eq!(parse(""), None);
+    }
+
+    #[test]
+    fn reads_what_claude_code_learned_about_the_usage_limits() {
+        assert_eq!(
+            parse(
+                r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"five_hour"},"uuid":"u","session_id":"s"}"#
+            ),
+            Some(Frame::RateLimit(
+                json!({ "status": "allowed", "rateLimitType": "five_hour" })
+            ))
+        );
+        assert_eq!(
+            value(&get_usage("arden-usage-3")),
+            json!({ "type": "control_request", "request_id": "arden-usage-3", "request": { "subtype": "get_usage", "skip_behaviors": true } })
+        );
     }
 
     fn value(line: &str) -> Value {

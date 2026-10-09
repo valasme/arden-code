@@ -6,6 +6,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 use crate::usage::{UsageLimits, UsageReport, UsageStatus, UsageWindow, UsageWindowKind};
 
@@ -64,6 +66,61 @@ pub fn limits_in(error: Option<&str>, answer: &Value) -> UsageLimits {
     }
 }
 
+/// The usage limits, with what a `rate_limit_event` says about the window it names: its percentage
+/// when it has one, its reset time, and whether Claude Code warns or refuses. A refused window is at
+/// its limit. Per-model and overage windows, and a frame that names no window, change nothing.
+fn with_rate_limit(mut limits: UsageLimits, info: &Value) -> UsageLimits {
+    let Some(kind) = WINDOWS
+        .iter()
+        .find(|(name, _)| info["rateLimitType"] == *name)
+        .map(|(_, kind)| *kind)
+    else {
+        return limits;
+    };
+    let status = match info["status"].as_str() {
+        Some("allowed_warning") => UsageStatus::Warning,
+        Some("rejected") => UsageStatus::Rejected,
+        _ => UsageStatus::Allowed,
+    };
+    let known = limits.windows.iter().position(|window| window.kind == kind);
+    let percent = info["utilization"]
+        .as_f64()
+        .map(|fraction| whole(fraction * 100.0))
+        .or_else(|| known.map(|at| limits.windows[at].percent))
+        .map(|percent| {
+            if status == UsageStatus::Rejected {
+                percent.max(100)
+            } else {
+                percent
+            }
+        })
+        .or((status == UsageStatus::Rejected).then_some(100));
+    let Some(percent) = percent else {
+        return limits;
+    };
+    let resets_at = info["resetsAt"]
+        .as_i64()
+        .and_then(|seconds| OffsetDateTime::from_unix_timestamp(seconds).ok())
+        .and_then(|moment| moment.format(&Rfc3339).ok())
+        .or_else(|| known.and_then(|at| limits.windows[at].resets_at.clone()));
+    let window = UsageWindow {
+        kind,
+        percent,
+        resets_at,
+        status,
+    };
+    if let Some(at) = known {
+        limits.windows[at] = window;
+    } else {
+        limits.windows.push(window);
+        limits
+            .windows
+            .sort_by_key(|window| window.kind != UsageWindowKind::FiveHour);
+    }
+    limits.report = UsageReport::Reported;
+    limits
+}
+
 /// Hears new usage limits.
 pub type Listener = Arc<dyn Fn(&UsageLimits) + Send + Sync>;
 
@@ -115,6 +172,11 @@ impl Usage {
     pub fn answer(&self, limits: UsageLimits) {
         *lock(&self.answered) = Some(Instant::now());
         self.keep(limits);
+    }
+
+    /// Keeps what a `rate_limit_event` says about the window it names.
+    pub fn learn(&self, info: &Value) {
+        self.keep(with_rate_limit(self.limits(), info));
     }
 
     /// Keeps new usage limits, and tells the listener when they changed.

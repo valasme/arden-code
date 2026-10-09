@@ -87,6 +87,7 @@ fn kind_of(frame: &Frame) -> &'static str {
         Frame::Response { .. } => "response",
         Frame::Cancel { .. } => "cancel",
         Frame::ConversationReset { .. } => "conversation reset",
+        Frame::RateLimit(_) => "rate limit",
         Frame::Other => "other",
     }
 }
@@ -147,6 +148,10 @@ impl Live {
                             }
                             Frame::CommandsChanged { commands } => {
                                 lock(&catalog).replace_commands(commands.clone());
+                                continue;
+                            }
+                            Frame::RateLimit(info) => {
+                                usage.learn(info);
                                 continue;
                             }
                             Frame::Init {
@@ -314,6 +319,8 @@ pub struct ClaudeDriver {
     listing: AtomicBool,
     /// The usage limits Claude Code last reported (ADR 0043).
     usage: Arc<Usage>,
+    /// The least time between two requests for them.
+    usage_floor: Duration,
 }
 
 /// Marks a session's Claude Code as used by a reply until the reply ends.
@@ -346,7 +353,15 @@ impl ClaudeDriver {
             catalog: Arc::new(Mutex::new(Catalog::default())),
             listing: AtomicBool::new(false),
             usage: Arc::new(Usage::default()),
+            usage_floor: USAGE_FLOOR,
         }
+    }
+
+    /// The driver, with another least time between two requests for the usage limits.
+    #[must_use]
+    pub fn with_usage_floor(mut self, floor: Duration) -> Self {
+        self.usage_floor = floor;
+        self
     }
 
     /// The slash commands and models Claude Code last said it has: nothing until one of its Claude
@@ -427,11 +442,20 @@ impl ClaudeDriver {
     }
 
     /// Asks Claude Code for the person's usage limits, unless Arden Code is not to ask, asked
-    /// within the last minute, or has an answer younger than `older_than` (ADR 0043). A Claude
-    /// Code is started in the folder only to ask, and let go once it has answered. Blocks while it
-    /// asks, so the app calls it on a thread of its own.
+    /// within the last minute, or has an answer younger than `older_than` (ADR 0043). A session's
+    /// Claude Code that is running with nothing to do is asked, and answers on its own time; with
+    /// none, a Claude Code is started in the folder only to ask, and let go once it has answered.
+    /// Blocks while it asks, so the app calls it on a thread of its own.
     pub fn refresh_usage(&self, folder: &Path, older_than: Duration) -> UsageLimits {
-        if !self.usage.may_ask(USAGE_FLOOR, older_than) {
+        if !self.usage.may_ask(self.usage_floor, older_than) {
+            return self.usage_limits();
+        }
+        let idle = lock(&self.live)
+            .values()
+            .find(|live| !live.busy.load(Ordering::Acquire))
+            .map(Arc::clone);
+        if let Some(live) = idle {
+            let _ = live.write(&protocol::get_usage(&self.next_usage_request()));
             return self.usage_limits();
         }
         if let Some(live) = self.listen(folder) {
@@ -960,7 +984,13 @@ impl AgentDriver for ClaudeDriver {
             };
             match turn.on(event, emit) {
                 Next::Continue => {}
-                Next::Over => return,
+                Next::Over => {
+                    // The reply used some of the person's usage limits (ADR 0043).
+                    if self.usage.may_ask(self.usage_floor, Duration::ZERO) {
+                        let _ = live.write(&protocol::get_usage(&self.next_usage_request()));
+                    }
+                    return;
+                }
                 Next::Ended => {
                     drop(events);
                     self.forget(session_id);
