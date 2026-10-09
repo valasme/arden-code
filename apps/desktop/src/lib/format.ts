@@ -56,6 +56,21 @@ export function createFormatters(locale: string) {
         ...(timeZone && { timeZone }),
       }).format(value),
     number: (value: number) => number.format(value),
+    /**
+     * When a usage limit resets (ADR 0043): the time when it is today, such as 15:10, else the
+     * weekday and the time, such as Tue 09:00.
+     */
+    resetTime: (value: Date, now: Date = new Date(), timeZone?: string) => {
+      const zone = timeZone ? { timeZone } : {};
+      const dayOf = new Intl.DateTimeFormat(locale, { ...dateOptions, ...zone });
+      const today = dayOf.format(value) === dayOf.format(now);
+      return new Intl.DateTimeFormat(locale, {
+        ...(today ? {} : { weekday: "short" }),
+        hour: "numeric",
+        minute: "2-digit",
+        ...zone,
+      }).format(value);
+    },
     /** How long ago (or how far ahead) `value` is from `now`: "5 minutes ago". */
     relativeTime: (value: Date, now: Date = new Date()) => {
       const { value: amount, unit } = unitFor(value.getTime() - now.getTime());

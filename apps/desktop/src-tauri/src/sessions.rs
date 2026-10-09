@@ -164,19 +164,25 @@ pub fn claude_catalog(
     detections: State<'_, crate::agents::Detections>,
 ) -> Result<Catalog, AppError> {
     let catalog = claude.0.catalog();
-    if catalog.is_empty() && detections.claude_installed() {
-        let playground = sessions
-            .list()
-            .projects
-            .into_iter()
-            .find(|listing| listing.project.kind == ProjectKind::Playground);
-        if let Some(listing) = playground {
-            let driver = std::sync::Arc::clone(&claude.0);
-            let folder = std::path::PathBuf::from(listing.project.path);
-            std::thread::spawn(move || driver.ensure_catalog(&folder));
-        }
+    if catalog.is_empty()
+        && detections.claude_installed()
+        && let Some(folder) = playground_folder(&sessions)
+    {
+        let driver = std::sync::Arc::clone(&claude.0);
+        std::thread::spawn(move || driver.ensure_catalog(&folder));
     }
     Ok(catalog)
+}
+
+/// The Playground's folder, where Claude Code is started when no session needs it, such as to hear
+/// what it can do or to ask for the usage limits.
+pub fn playground_folder(sessions: &Sessions) -> Option<std::path::PathBuf> {
+    sessions
+        .list()
+        .projects
+        .into_iter()
+        .find(|listing| listing.project.kind == ProjectKind::Playground)
+        .map(|listing| std::path::PathBuf::from(listing.project.path))
 }
 
 /// The model a new session in a project would take, the Playground when none is given (ADR 0041):

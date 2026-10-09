@@ -288,6 +288,16 @@ pub fn initialize(id: &str) -> String {
     control_request(id, &json!({ "subtype": "initialize", "hooks": null }))
 }
 
+/// Asks for the person's usage limits, without the scan of local transcripts that only `/usage`
+/// shows (ADR 0043).
+#[must_use]
+pub fn get_usage(id: &str) -> String {
+    control_request(
+        id,
+        &json!({ "subtype": "get_usage", "skip_behaviors": true }),
+    )
+}
+
 /// Stops the turn that is running.
 #[must_use]
 pub fn interrupt(id: &str) -> String {

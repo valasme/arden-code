@@ -655,6 +655,15 @@
       "tooOld": "This version is too old for Arden Code. Run claude update in a terminal, then look again.",
       "update": "How to update",
       "updateLabel": "How to update {{name}}",
+      "usage": {
+        "fiveHour": "5-hour limit",
+        "label": "Usage limits",
+        "notForThisSignIn": "Claude Code reports no usage limits for this sign-in.",
+        "percent": "{{percent}}%",
+        "percentAndReset": "{{percent}}% · resets {{time}}",
+        "unsupported": "Update Claude Code to see usage limits.",
+        "weekly": "Weekly limit"
+      },
       "version": "Version",
       "versionUnknown": "Unknown"
     },

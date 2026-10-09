@@ -583,6 +583,25 @@ export const commands = {
 	 */
 	detectAgents: (fresh: boolean) => __TAURI_INVOKE<Detection[]>("detect_agents", { fresh }),
 	/**
+	 *  The person's usage limits, as Claude Code last reported them (ADR 0043): unknown until it has
+	 *  been asked.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	usageLimits: () => __TAURI_INVOKE<UsageLimits>("usage_limits"),
+	/**
+	 *  Asks Claude Code for the person's usage limits again (ADR 0043): on Look again, or, with
+	 *  `on_focus`, when the window comes back into focus and they are more than 5 minutes old. Never
+	 *  more than once a minute. The answer comes as [`UsageLimitsChanged`].
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	refreshUsageLimits: (onFocus: boolean) => __TAURI_INVOKE<null>("refresh_usage_limits", { onFocus }),
+	/**
 	 *  Makes a session with `count` finished turns, to test long conversations. Debug builds only.
 	 * 
 	 *  # Errors
@@ -627,6 +646,7 @@ export const events = {
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	systemPreferencesChanged: makeEvent<SystemPreferencesChanged>("system-preferences-changed"),
 	updateStatusChanged: makeEvent<UpdateStatusChanged>("update-status-changed"),
+	usageLimitsChanged: makeEvent<UsageLimitsChanged>("usage-limits-changed"),
 };
 
 /* Types */
@@ -1299,6 +1319,53 @@ export type UpdateStatus =
 export type UpdateStatusChanged = {
 	status: UpdateStatus,
 };
+
+/**  The person's usage limits, as the agent CLI last reported them. Kept in memory only. */
+export type UsageLimits = {
+	report: UsageReport,
+	/**  The 5-hour limit, then the weekly limit, each when known. */
+	windows: UsageWindow[],
+};
+
+/**  Tells the page that Claude Code reported new usage limits (ADR 0043). */
+export type UsageLimitsChanged = {
+	limits: UsageLimits,
+};
+
+/**  What the agent CLI said about the person's usage limits as a whole. */
+export type UsageReport = 
+/**  Not asked yet, or no answer yet. */
+"unknown" | 
+/**  The windows are what it reported. */
+"reported" | 
+/**  The sign-in has no plan limits: an API key, a cloud provider, or signed out. */
+"notForThisSignIn" | 
+/**  This version of the agent CLI cannot report them. */
+"unsupported";
+
+/**  What the agent CLI last said about a window, beside its percentage. */
+export type UsageStatus = "allowed" | 
+/**  Near the limit, as the agent CLI judges it. */
+"warning" | 
+/**  At the limit: replies are refused until the window resets. */
+"rejected";
+
+/**  One window of a plan's usage limits. */
+export type UsageWindow = {
+	kind: UsageWindowKind,
+	/**  How much of the window is used, in whole percent. It can pass 100. */
+	percent: number,
+	/**  When the window resets, in RFC 3339, when the agent CLI said. */
+	resetsAt: string | null,
+	status: UsageStatus,
+};
+
+/**  Which window a usage limit covers. */
+export type UsageWindowKind = 
+/**  The 5-hour limit. */
+"fiveHour" | 
+/**  The weekly limit. */
+"weekly";
 
 /* Tauri Specta runtime */
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;

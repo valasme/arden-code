@@ -3,8 +3,8 @@
 //! chosen by what the message says. It never talks to Anthropic.
 //!
 //! Its settings are in `stand-in.json` beside it, when there is one: the `version` it says, whether
-//! it is `signedIn`, and a `log` file where it writes how it was started (its arguments and its
-//! folder) and every line it reads.
+//! it is `signedIn`, the `usage` it answers `get_usage` with (ADR 0043), and a `log` file where it
+//! writes how it was started (its arguments and its folder) and every line it reads.
 
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
@@ -18,6 +18,8 @@ use serde_json::{Value, json};
 struct Settings {
     version: String,
     signed_in: bool,
+    /// The answer to `get_usage`: by default, no plan limits, as for an API key.
+    usage: Value,
     log: Option<PathBuf>,
 }
 
@@ -32,6 +34,12 @@ fn settings() -> Settings {
     Settings {
         version: written["version"].as_str().unwrap_or("2.1.286").to_owned(),
         signed_in: written["signedIn"].as_bool().unwrap_or(true),
+        usage: match &written["usage"] {
+            Value::Null => {
+                json!({ "subscription_type": null, "rate_limits_available": false, "rate_limits": null })
+            }
+            usage => usage.clone(),
+        },
         log: written["log"].as_str().map(PathBuf::from),
     }
 }
@@ -154,6 +162,9 @@ impl Conversation {
             match frame["type"].as_str() {
                 Some("control_request") if frame["request"]["subtype"] == "initialize" => {
                     respond(&frame, &listing());
+                }
+                Some("control_request") if frame["request"]["subtype"] == "get_usage" => {
+                    respond(&frame, &self.settings.usage);
                 }
                 Some("control_request") => respond(&frame, &json!({})),
                 Some("user") => {

@@ -102,6 +102,8 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::agent_for_new_session,
         sessions::claude_catalog,
         agents::detect_agents,
+        agents::usage_limits,
+        agents::refresh_usage_limits,
         sessions::debug_fill_session,
         agents::debug_spawn_sleeper,
         diagnostics::debug_fail,
@@ -173,6 +175,8 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::agent_for_new_session,
         sessions::claude_catalog,
         agents::detect_agents,
+        agents::usage_limits,
+        agents::refresh_usage_limits,
     ]
 }
 
@@ -193,7 +197,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         updates::UpdateStatusChanged,
         sessions::SessionRequested,
         sessions::ReplyNotSaved,
-        agents::AgentsDetected
+        agents::AgentsDetected,
+        agents::UsageLimitsChanged
     ])
 }
 
@@ -351,7 +356,9 @@ fn manage_programs(app: &tauri::App, paths: &AppPaths) {
             None
         }
     };
-    app.manage(agents::Claude::with(supervisor.as_ref()));
+    let claude = agents::Claude::with(supervisor.as_ref());
+    claude.report_usage_to(app.handle());
+    app.manage(claude);
     app.manage(agents::Programs(supervisor));
     app.manage(agents::Detections::default());
     agents::detect_after_start(app.handle());

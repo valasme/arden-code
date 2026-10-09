@@ -13,3 +13,4 @@ pub mod driver;
 pub mod model;
 pub mod playground;
 pub mod store;
+pub mod usage;

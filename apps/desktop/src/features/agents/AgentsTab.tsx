@@ -4,10 +4,14 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
+import { useFormatters } from "@/features/settings/useFormatters";
 import { commands, type Detection } from "@/ipc/bindings";
 import { agentsQuery } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
+
+import { shownWindows } from "./usageLimits";
+import { useUsageLimits } from "./useUsageLimits";
 
 /**
  * A button to the agent's page, saying how to install it when it is missing or how to update it
@@ -34,6 +38,41 @@ function NextStep({ agent, name }: { agent: Detection; name: string }) {
       </Button>
     </div>
   );
+}
+
+/**
+ * The 5-hour and weekly limits Claude Code reports, with when each resets, or why there are none
+ * (ADR 0043). Nothing before Claude Code has answered.
+ */
+function UsageRows() {
+  const { t } = useTranslation();
+  const formatters = useFormatters();
+  const limits = useUsageLimits();
+  const now = new Date();
+
+  if (limits.report === "notForThisSignIn" || limits.report === "unsupported") {
+    return (
+      <div className="flex gap-2 py-0.5">
+        <dt className="w-20 shrink-0 text-muted-foreground">{t("settings.agents.usage.label")}</dt>
+        <dd>{t(`settings.agents.usage.${limits.report}`)}</dd>
+      </div>
+    );
+  }
+  return shownWindows(limits, now).map((window) => (
+    <div key={window.kind} className="flex gap-2 py-0.5">
+      <dt className="w-20 shrink-0 text-muted-foreground">
+        {t(`settings.agents.usage.${window.kind}`)}
+      </dt>
+      <dd className="tabular-nums">
+        {window.resetsAt === null
+          ? t("settings.agents.usage.percent", { percent: window.percent })
+          : t("settings.agents.usage.percentAndReset", {
+              percent: window.percent,
+              time: formatters.resetTime(new Date(window.resetsAt), now),
+            })}
+      </dd>
+    </div>
+  ));
 }
 
 function AgentRow({ agent }: { agent: Detection }) {
@@ -79,6 +118,7 @@ function AgentRow({ agent }: { agent: Detection }) {
               </dd>
             </div>
           )}
+          {agent.cli === "claude" ? <UsageRows /> : null}
           <div className="flex gap-2 py-0.5">
             <dt className="w-20 shrink-0 text-muted-foreground">{t("settings.agents.path")}</dt>
             <dd className="min-w-0 break-all">
@@ -126,6 +166,10 @@ export function AgentsTab() {
       .finally(() => {
         setLooking(false);
       });
+    // The usage limits too, which Claude Code is asked for afresh (ADR 0043).
+    commands.refreshUsageLimits(false).catch((failure: unknown) => {
+      showErrorToast(toAppError(failure));
+    });
   };
 
   return (

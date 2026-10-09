@@ -72,3 +72,22 @@ describe("relative times", () => {
     expect(createFormatters("en-US").relativeTime(later, now)).toBe("in 2 hours");
   });
 });
+
+describe("reset times", () => {
+  it("are a time when they fall today, and a weekday and a time when they fall later", () => {
+    const formatters = createFormatters("en-US");
+    const today = new Date(Date.UTC(2026, 8, 30, 15, 10));
+    const tuesday = new Date(Date.UTC(2026, 9, 6, 9, 0));
+
+    expect(formatters.resetTime(today, now, "UTC")).toBe("3:10 PM");
+    expect(formatters.resetTime(tuesday, now, "UTC")).toBe("Tue 9:00 AM");
+  });
+
+  it("follow the regional format", () => {
+    const formatters = createFormatters("de-DE");
+    const tuesday = new Date(Date.UTC(2026, 9, 6, 9, 0));
+
+    expect(formatters.resetTime(new Date(Date.UTC(2026, 8, 30, 15, 10)), now, "UTC")).toBe("15:10");
+    expect(formatters.resetTime(tuesday, now, "UTC")).toBe("Di., 09:00");
+  });
+});

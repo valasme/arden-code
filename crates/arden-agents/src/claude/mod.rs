@@ -9,6 +9,7 @@ pub mod locate;
 pub mod protocol;
 mod question;
 mod reply;
+pub mod usage;
 
 #[cfg(test)]
 mod script;
