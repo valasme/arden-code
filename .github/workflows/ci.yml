@@ -87,13 +87,13 @@ jobs:
           if (Test-Path $key) { "WebView2 runtime $((Get-ItemProperty $key).pv)" } else { "WebView2 runtime is NOT installed" }
 
       # Temporary: why the Ctrl+O test times out on this branch.
-      - name: The Ctrl+O test alone, first
+      - name: The Claude tests in order, first
         continue-on-error: true
         run: |
           pnpm build:debug
-          pnpm --filter @arden/desktop exec playwright test e2e/claude.spec.ts -g "Ctrl.O opens a folder" --retries 0
+          pnpm --filter @arden/desktop exec playwright test e2e/claude.spec.ts --retries 0 --repeat-each 2
 
-      - name: What the Ctrl+O test saw
+      - name: What the Claude tests saw
         if: always()
         shell: pwsh
         run: |
@@ -103,6 +103,12 @@ jobs:
         run: pnpm test:e2e
 
       # Temporary: a new end-to-end test runs 10 times before it is merged (CLAUDE.md).
+      - name: What the end-to-end tests saw
+        if: always()
+        shell: pwsh
+        run: |
+          Get-ChildItem apps/desktop/test-results -Recurse -Filter error-context.md -ErrorAction SilentlyContinue | ForEach-Object { "=== $($_.FullName)"; Get-Content $_.FullName }
+
       - name: The usage limits test, 10 times
         run: pnpm --filter @arden/desktop exec playwright test e2e/claude.spec.ts -g "usage limits" --repeat-each 10 --retries 0
 
