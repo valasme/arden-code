@@ -161,6 +161,31 @@ test.describe("Claude in the real app", () => {
     }
   });
 
+  test("the status bar shows the usage limits Claude Code reports", async () => {
+    const claude = claudeOnPath({
+      usage: {
+        subscription_type: "max",
+        rate_limits_available: true,
+        rate_limits: {
+          five_hour: { utilization: 42, resets_at: "2099-10-09T15:10:00+00:00" },
+          seven_day: { utilization: 18, resets_at: "2099-10-13T09:00:00+00:00" },
+        },
+      },
+    });
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const bar = page.locator('[data-area="statusbar"]');
+
+      // Asked once Arden Code has found Claude Code after it started, with no session open.
+      await expect(bar.getByText("5-hour 42%")).toBeVisible({ timeout: 30_000 });
+      await expect(bar.getByText("Weekly 18%")).toBeVisible();
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
+
   test("a Claude session carries on its conversation after Arden Code restarts", async () => {
     const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
     const log = path.join(dataDir, "claude-starts.log");

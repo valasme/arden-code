@@ -31,6 +31,7 @@ export default defineConfig({
       "sessions.announce.*",
       "sessions.actions.*",
       "settings.agents.names.*",
+      "statusBar.usage.*",
     ],
   },
   lint: { ignore },

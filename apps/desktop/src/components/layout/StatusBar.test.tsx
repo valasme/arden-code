@@ -9,7 +9,7 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import type { UpdateStatus } from "@/ipc/bindings";
+import type { UpdateStatus, UsageLimits, UsageWindow } from "@/ipc/bindings";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 import { useRepliesStore } from "@/state/replies";
 import { settingsWith } from "@/test/settings";
@@ -18,7 +18,9 @@ import { StatusBar } from "./StatusBar";
 
 import "@/styles/global.css";
 
-function startApp(status: UpdateStatus) {
+const unknown: UsageLimits = { report: "unknown", windows: [] };
+
+function startApp(status: UpdateStatus, usage: UsageLimits = unknown) {
   Object.assign(globalThis, { isTauri: true });
   const calls: string[] = [];
   mockIPC(
@@ -29,6 +31,7 @@ function startApp(status: UpdateStatus) {
       }
       if (command === "get_settings") return settingsWith();
       if (command === "get_update_status") return status;
+      if (command === "usage_limits") return usage;
       return null;
     },
     { shouldMockEvents: true },
@@ -135,5 +138,67 @@ describe("The status bar and the open session", () => {
 
     await screen.findByText("Version 0.1.0");
     expect(screen.queryByText("Demo agent: replying")).toBeNull();
+  });
+});
+
+function window(overrides: Partial<UsageWindow> = {}): UsageWindow {
+  return {
+    kind: "fiveHour",
+    percent: 42,
+    resetsAt: "2099-10-09T15:10:00Z",
+    status: "allowed",
+    ...overrides,
+  };
+}
+
+const plan: UsageLimits = {
+  report: "reported",
+  windows: [window(), window({ kind: "weekly", percent: 18, resetsAt: "2099-10-13T09:00:00Z" })],
+};
+
+describe("The status bar and the usage limits", () => {
+  it("shows the 5-hour and weekly limits Claude Code reports", async () => {
+    startApp({ state: "idle" }, plan);
+    renderBar();
+
+    expect(await screen.findByText("5-hour 42%")).toBeVisible();
+    expect(screen.getByText("Weekly 18%")).toBeVisible();
+  });
+
+  it("shows nothing when Claude Code reports no usage limits", async () => {
+    startApp({ state: "idle" }, { report: "notForThisSignIn", windows: [] });
+    renderBar();
+
+    await screen.findByText("Version 0.1.0");
+    expect(screen.queryByText(/5-hour/u)).toBeNull();
+    expect(screen.queryByText(/Weekly/u)).toBeNull();
+  });
+
+  it("emphasizes a window from 80%", async () => {
+    startApp({ state: "idle" }, { report: "reported", windows: [window({ percent: 86 })] });
+    renderBar();
+
+    const figure = await screen.findByText("5-hour 86%");
+
+    expect(figure).toHaveAttribute("data-level", "near");
+    expect(figure).toHaveClass("text-foreground");
+  });
+
+  it("says when a window at its limit resets", async () => {
+    startApp(
+      { state: "idle" },
+      { report: "reported", windows: [window({ percent: 100, status: "rejected" })] },
+    );
+    renderBar();
+
+    expect(await screen.findByText(/^5-hour limit reached, resets /u)).toBeVisible();
+  });
+
+  it("has no accessibility violations while it shows them", async () => {
+    startApp({ state: "idle" }, plan);
+    const { container } = renderBar();
+    await screen.findByText("5-hour 42%");
+
+    await expectNoAccessibilityViolations(container);
   });
 });
