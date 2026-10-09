@@ -255,9 +255,14 @@ test.describe("Claude in the real app", () => {
       const name = path.basename(folder);
       await expect(page.getByRole("button", { name: `Project: ${name}` })).toBeVisible();
       mark("project shown");
-      await page.getByRole("button", { name: /^Agent: / }).click();
-      await page.getByRole("menuitemradio", { name: "Claude" }).click();
-      await say(page, "Hello in the folder");
+      await page.getByRole("button", { name: /^Agent: / }).click({ timeout: 10_000 });
+      mark("agent menu opened");
+      await page.getByRole("menuitemradio", { name: "Claude" }).click({ timeout: 10_000 });
+      mark("Claude chosen");
+      const box = page.getByRole("textbox", { name: "Message" });
+      await box.fill("Hello in the folder", { timeout: 10_000 });
+      mark("filled");
+      await box.press("Enter", { timeout: 10_000 });
       mark("said");
 
       const question = page.getByRole("alertdialog", { name: `Trust “${name}”?` });
@@ -276,7 +281,16 @@ test.describe("Claude in the real app", () => {
         .map((line) => z.object({ folder: z.string() }).parse(JSON.parse(line.slice(6))).folder);
       expect(folders.map((where) => where.toLowerCase())).toContain(folder.toLowerCase());
     } catch (error) {
-      mark(`failed: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+      mark(`failed: ${error instanceof Error ? error.message.slice(0, 1500) : String(error)}`);
+      const snapshot = await Promise.race([
+        app.page.locator("body").ariaSnapshot(),
+        new Promise<string>((resolve) => {
+          setTimeout(() => {
+            resolve("(the page did not answer within 5 s)");
+          }, 5000);
+        }),
+      ]).catch((failure: unknown) => String(failure));
+      console.log(`[ctrl+o] page:\n${snapshot}`);
       console.log(`[ctrl+o] app log:\n${logText(app.dataDir).split("\n").slice(-40).join("\n")}`);
       console.log(`[ctrl+o] stand-in log:\n${readFileSync(log, "utf8")}`);
       throw error;

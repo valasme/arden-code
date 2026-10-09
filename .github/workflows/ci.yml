@@ -91,7 +91,7 @@ jobs:
         continue-on-error: true
         run: |
           pnpm build:debug
-          pnpm --filter @arden/desktop exec playwright test e2e/claude.spec.ts --retries 0 --repeat-each 3
+          pnpm --filter @arden/desktop exec playwright test e2e/claude.spec.ts --retries 0
 
       - name: What the Claude tests saw
         if: always()
