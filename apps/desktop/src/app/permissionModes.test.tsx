@@ -7,7 +7,7 @@ import { page } from "vitest/browser";
 import type { AppError, Session } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
-import { animationsDone } from "@/test/animations";
+import { animationsDone, menuClosed } from "@/test/animations";
 import { sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -38,7 +38,7 @@ async function choose(user: ReturnType<typeof userEvent.setup>, button: string, 
   const menu = await screen.findByRole("menu");
   await animationsDone(menu);
   await user.click(within(menu).getByRole("menuitemradio", { name: item }));
-  await screen.findByRole("main");
+  await menuClosed();
 }
 
 beforeEach(async () => {
@@ -100,6 +100,31 @@ describe("Choosing the permission mode (ADR 0044)", () => {
     expect(
       await screen.findByRole("button", { name: "Permission mode: Bypass permissions" }),
     ).toBeVisible();
+  });
+
+  it("moves to the next mode with Ctrl+Shift+M", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({ sessions: [{ ...answered(), permissionMode: "auto" }] });
+    renderApp("/session/session-1");
+    await screen.findByRole("button", { name: "Permission mode: Auto" });
+
+    await user.keyboard("{Control>}{Shift>}m{/Shift}{/Control}");
+
+    expect(rust.callsTo("set_session_permission_mode")).toEqual([
+      { id: "session-1", mode: "manual" },
+    ]);
+    expect(await screen.findByRole("button", { name: "Permission mode: Manual" })).toBeVisible();
+  });
+
+  it("has no next mode outside a Claude session", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({ sessions: [answered("demo")] });
+    renderApp("/session/session-1");
+    await screen.findByRole("heading", { level: 1, name: "Fix the build" });
+
+    await user.keyboard("{Control>}{Shift>}m{/Shift}{/Control}");
+
+    expect(rust.callsTo("set_session_permission_mode")).toEqual([]);
   });
 
   it("is not offered for a Demo agent session", async () => {

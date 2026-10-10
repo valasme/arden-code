@@ -6,7 +6,7 @@ import { page } from "vitest/browser";
 import type { Catalog, Session } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
-import { animationsDone } from "@/test/animations";
+import { animationsDone, menuClosed } from "@/test/animations";
 import { sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -37,7 +37,7 @@ async function choose(user: ReturnType<typeof userEvent.setup>, button: string, 
   const menu = await screen.findByRole("menu");
   await animationsDone(menu);
   await user.click(within(menu).getByRole("menuitemradio", { name: item }));
-  await screen.findByRole("main");
+  await menuClosed();
 }
 
 beforeEach(async () => {

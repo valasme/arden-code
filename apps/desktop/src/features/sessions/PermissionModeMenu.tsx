@@ -1,5 +1,5 @@
 import { ShieldIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -25,11 +25,21 @@ export const permissionModes: readonly PermissionMode[] = [
 ];
 
 /**
+ * The mode after `mode`, for the Next permission mode command (ADR 0044): in the menu's order,
+ * Bypass permissions only when Settings allows it, then Manual again.
+ */
+export function nextPermissionMode(mode: PermissionMode, bypassAllowed: boolean): PermissionMode {
+  const offered = permissionModes.filter((value) => value !== "bypassPermissions" || bypassAllowed);
+  return offered[(offered.indexOf(mode) + 1) % offered.length] ?? "manual";
+}
+
+/**
  * How far a Claude session's agent may go without asking (ADR 0044), after the effort: Manual,
  * Accept edits, Plan, Auto and Bypass permissions, each saying what it does, chosen by its digit
  * while the menu is open. Unlike the model, it can change while a reply runs: Claude Code takes it
  * at once. Bypass permissions stays unavailable until Settings → Agents allows it, and the button
- * takes the destructive color while the session is in it.
+ * takes the destructive color while the session is in it. A new mode is said politely, whoever
+ * changed it: the person, the Next permission mode command, or Claude Code.
  */
 export function PermissionModeMenu({
   mode,
@@ -60,57 +70,71 @@ export function PermissionModeMenu({
       ? t("sessions.permissionModeMenu.bypassPermissionsHint")
       : t("sessions.permissionModeMenu.bypassPermissionsOff"),
   };
+  // Said when the mode changes, not when the menu first shows.
+  const [said, setSaid] = useState("");
+  const shown = useRef(mode);
+  const label = t("sessions.permissionModeMenu.label", { mode: names[mode] });
+  useEffect(() => {
+    if (shown.current === mode) return;
+    shown.current = mode;
+    setSaid(label);
+  }, [mode, label]);
   const available = (value: PermissionMode) => value !== "bypassPermissions" || bypassAllowed;
   const choose = (value: PermissionMode) => {
     if (value !== mode && available(value)) onChoose(value);
   };
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <ChoiceButton
-          icon={ShieldIcon}
-          value={names[mode]}
-          aria-label={t("sessions.permissionModeMenu.label", { mode: names[mode] })}
-          className={
-            mode === "bypassPermissions"
-              ? "border-destructive/50 text-destructive hover:text-destructive"
-              : undefined
-          }
-        />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className="w-auto max-w-[28rem] min-w-48"
-        onKeyDown={(event) => {
-          const picked = permissionModes[Number(event.key) - 1];
-          if (picked === undefined || !available(picked)) return;
-          event.preventDefault();
-          setOpen(false);
-          choose(picked);
-        }}
-      >
-        <DropdownMenuLabel className="text-xs text-muted-foreground">
-          {t("sessions.permissionModeMenu.heading")}
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={mode}
-          onValueChange={(picked) => {
-            const value = permissionModes.find((known) => known === picked);
-            if (value) choose(value);
+    <>
+      <output aria-live="polite" aria-atomic="true" className="sr-only">
+        {said}
+      </output>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <ChoiceButton
+            icon={ShieldIcon}
+            value={names[mode]}
+            aria-label={label}
+            className={
+              mode === "bypassPermissions"
+                ? "border-destructive/50 text-destructive hover:text-destructive"
+                : undefined
+            }
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="w-auto max-w-[28rem] min-w-48"
+          onKeyDown={(event) => {
+            const picked = permissionModes[Number(event.key) - 1];
+            if (picked === undefined || !available(picked)) return;
+            event.preventDefault();
+            setOpen(false);
+            choose(picked);
           }}
         >
-          {permissionModes.map((value, index) => (
-            <DropdownMenuRadioItem key={value} value={value} disabled={!available(value)}>
-              <span className="flex min-w-0 flex-col">
-                <span data-name>{names[value]}</span>
-                <span className="text-xs text-muted-foreground">{hints[value]}</span>
-              </span>
-              <DropdownMenuShortcut>{index + 1}</DropdownMenuShortcut>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuLabel className="text-xs text-muted-foreground">
+            {t("sessions.permissionModeMenu.heading")}
+          </DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={mode}
+            onValueChange={(picked) => {
+              const value = permissionModes.find((known) => known === picked);
+              if (value) choose(value);
+            }}
+          >
+            {permissionModes.map((value, index) => (
+              <DropdownMenuRadioItem key={value} value={value} disabled={!available(value)}>
+                <span className="flex min-w-0 flex-col">
+                  <span data-name>{names[value]}</span>
+                  <span className="text-xs text-muted-foreground">{hints[value]}</span>
+                </span>
+                <DropdownMenuShortcut>{index + 1}</DropdownMenuShortcut>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }

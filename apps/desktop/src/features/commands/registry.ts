@@ -16,6 +16,7 @@ import {
   PencilIcon,
   PinIcon,
   PinOffIcon,
+  ShieldIcon,
   RotateCcwIcon,
   SettingsIcon,
   SquareIcon,
@@ -34,6 +35,7 @@ export type CommandId =
   | "session.newLinked"
   | "folder.open"
   | "reply.stop"
+  | "permissionMode.next"
   | "session.rename"
   | "session.pin"
   | "session.unpin"
@@ -70,6 +72,7 @@ export interface CommandDefinition {
     | "commands.folderOpen"
     | "commands.sessionNewLinked"
     | "commands.replyStop"
+    | "commands.permissionModeNext"
     | "commands.sessionRename"
     | "commands.sessionPin"
     | "commands.sessionUnpin"
@@ -140,6 +143,13 @@ export const commandDefinitions = [
     labelKey: "commands.replyStop",
     icon: SquareIcon,
     shortcuts: ["Escape"],
+  },
+  {
+    id: "permissionMode.next",
+    group: "session",
+    labelKey: "commands.permissionModeNext",
+    icon: ShieldIcon,
+    shortcuts: ["Ctrl+Shift+M"],
   },
   {
     id: "session.rename",

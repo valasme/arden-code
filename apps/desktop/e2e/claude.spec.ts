@@ -247,6 +247,10 @@ test.describe("Claude in the real app", () => {
         timeout: 30_000,
       });
 
+      // Next permission mode, from the keyboard (ADR 0044).
+      await page.keyboard.press("Control+Shift+M");
+      await expect(page.getByRole("button", { name: "Permission mode: Plan" })).toBeVisible();
+
       const conversations = readFileSync(log, "utf8")
         .split("\n")
         .map((line) => line.trim())

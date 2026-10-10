@@ -118,6 +118,7 @@ describe("the groups", () => {
     "session.newLinked": "session",
     "folder.open": "session",
     "reply.stop": "session",
+    "permissionMode.next": "session",
     "session.rename": "session",
     "session.pin": "session",
     "session.unpin": "session",

@@ -5,7 +5,7 @@ import type { PermissionMode } from "@/ipc/bindings";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 
-import { PermissionModeMenu } from "./PermissionModeMenu";
+import { nextPermissionMode, PermissionModeMenu } from "./PermissionModeMenu";
 
 import "@/styles/global.css";
 
@@ -30,7 +30,48 @@ async function openMenu(user: ReturnType<typeof userEvent.setup>, name: string) 
   return menu;
 }
 
+/** Five steps through the modes from Manual. */
+function through(allowed: boolean) {
+  const seen: PermissionMode[] = ["manual"];
+  for (let step = 0; step < 5; step += 1) {
+    seen.push(nextPermissionMode(seen.at(-1) ?? "manual", allowed));
+  }
+  return seen;
+}
+
+describe("nextPermissionMode", () => {
+  it("moves through the modes in order, Bypass permissions only when allowed", () => {
+    expect(through(false)).toEqual([
+      "manual",
+      "acceptEdits",
+      "plan",
+      "auto",
+      "manual",
+      "acceptEdits",
+    ]);
+    expect(through(true)).toEqual([
+      "manual",
+      "acceptEdits",
+      "plan",
+      "auto",
+      "bypassPermissions",
+      "manual",
+    ]);
+    expect(nextPermissionMode("bypassPermissions", false)).toBe("manual");
+  });
+});
+
 describe("PermissionModeMenu", () => {
+  it("says a new mode politely, and nothing when it first shows", () => {
+    const { rerender } = render(<PermissionModeMenu mode="manual" onChoose={() => undefined} />);
+    const said = document.querySelector("output[aria-live=polite]");
+    expect(said).toHaveTextContent("");
+
+    rerender(<PermissionModeMenu mode="plan" onChoose={() => undefined} />);
+
+    expect(said).toHaveTextContent("Permission mode: Plan");
+  });
+
   it("lists the five modes in order, each saying what it does, and answers the pick", async () => {
     const user = userEvent.setup();
     const { chosen } = renderMenu("manual");
