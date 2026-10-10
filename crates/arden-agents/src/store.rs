@@ -12,9 +12,9 @@ use time::format_description::well_known::Rfc3339;
 use crate::database::{Database, DatabaseError, Order};
 use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
 use crate::model::{
-    AgentKind, ApprovalState, Choices, Effort, Item, Model, Project, ProjectKind, ProjectListing,
-    QuestionAnswer, QuestionState, Session, SessionList, SessionSummary, Turn, TurnEvent,
-    TurnStatus,
+    AgentKind, ApprovalState, Choices, Effort, Item, Model, PermissionMode, Project, ProjectKind,
+    ProjectListing, QuestionAnswer, QuestionState, Session, SessionList, SessionSummary, Turn,
+    TurnEvent, TurnStatus,
 };
 
 /// How many characters of the first message become the session's title.
@@ -40,6 +40,8 @@ pub enum StoreError {
     NotWaiting,
     /// Claude was asked to work in a project whose folder the person has not trusted (ADR 0039).
     NotTrusted,
+    /// Bypass permissions was chosen while the setting that allows it is off (ADR 0044).
+    BypassNotAllowed,
     /// The Playground was to be removed. It always stays, since a new session starts there.
     Playground,
     /// The change could not be written to the file, so it was not made. Says why, for the logs.
@@ -118,6 +120,7 @@ impl Entry {
             model: session.model.clone(),
             effort: session.effort,
             context_window: session.context_window.clone(),
+            permission_mode: session.permission_mode,
             turns: Vec::new(),
         }
     }
@@ -201,6 +204,8 @@ struct Inner {
     controls: HashMap<String, Sender<Control>>,
     /// The session that was opened last, to open again at the next start.
     last_open: Option<String>,
+    /// Whether the person allows Bypass permissions, in Settings (ADR 0044). Off until they do.
+    bypass_allowed: bool,
     database: Database,
 }
 
@@ -236,6 +241,26 @@ impl Inner {
         latest(true).or_else(|| latest(false))
     }
 
+    /// Saves a session's permission mode. Answers whether it changed.
+    fn keep_permission_mode(
+        &mut self,
+        session_id: &str,
+        mode: PermissionMode,
+    ) -> Result<bool, StoreError> {
+        let last_id = self.last_id;
+        let entry = find(&mut self.sessions, session_id)?;
+        if entry.session.permission_mode == mode {
+            return Ok(false);
+        }
+        let mut header = entry.header();
+        header.permission_mode = mode;
+        self.database
+            .save_session(&header, entry.order, last_id)
+            .map_err(not_saved)?;
+        entry.session.permission_mode = mode;
+        Ok(true)
+    }
+
     /// Starts an empty session in a project, linked to the session it was started from, if any.
     fn create_session(
         &mut self,
@@ -255,6 +280,9 @@ impl Inner {
                 .filter(|entry| entry.session.agent == agent),
         };
         let Choices { model, effort } = source.map(Entry::choices).unwrap_or_default();
+        let permission_mode = source
+            .map(|entry| entry.session.permission_mode.inherited())
+            .unwrap_or_default();
         let now = now_utc();
         let entry = Entry {
             session: Session {
@@ -270,6 +298,7 @@ impl Inner {
                 model,
                 effort,
                 context_window: None,
+                permission_mode,
                 turns: Vec::new(),
             },
             loaded: true,
@@ -358,6 +387,7 @@ impl SessionStore {
                 stopping: HashSet::new(),
                 controls: HashMap::new(),
                 last_open,
+                bypass_allowed: false,
                 database,
             }),
         }
@@ -852,6 +882,62 @@ impl SessionStore {
         self.set_choice(session_id, |session| session.effort = effort)
     }
 
+    /// The permission mode a new session in a project takes (ADR 0044): that of the session the
+    /// agent rule follows, except Bypass permissions, which no session passes on. Manual when there
+    /// is no session at all.
+    #[must_use]
+    pub fn permission_mode_for_new_session(&self, project_id: &str) -> PermissionMode {
+        self.lock()
+            .latest_for(project_id)
+            .map(|entry| entry.session.permission_mode.inherited())
+            .unwrap_or_default()
+    }
+
+    /// Changes the permission mode of a session the person chose (ADR 0044). Unlike its model, it
+    /// can change while a reply runs: the agent takes it at once.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session,
+    /// [`StoreError::Archived`] when it is archived, [`StoreError::BypassNotAllowed`] for Bypass
+    /// permissions while Settings does not allow it, and [`StoreError::NotSaved`] when the change
+    /// cannot be written.
+    pub fn set_permission_mode(
+        &self,
+        session_id: &str,
+        mode: PermissionMode,
+    ) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        if mode == PermissionMode::BypassPermissions && !inner.bypass_allowed {
+            return Err(StoreError::BypassNotAllowed);
+        }
+        let entry = find(&mut inner.sessions, session_id)?;
+        if entry.session.archived_at.is_some() {
+            return Err(StoreError::Archived);
+        }
+        inner.keep_permission_mode(session_id, mode).map(|_| ())
+    }
+
+    /// Keeps the permission mode a session's agent says it is in, such as Plan when Claude enters
+    /// it by itself (ADR 0044). Answers whether it changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotSaved`] when the change cannot be written.
+    pub fn follow_permission_mode(
+        &self,
+        session_id: &str,
+        mode: PermissionMode,
+    ) -> Result<bool, StoreError> {
+        self.lock().keep_permission_mode(session_id, mode)
+    }
+
+    /// Lets Bypass permissions be chosen, or not, as Settings says (ADR 0044).
+    pub fn allow_bypass_permissions(&self, allowed: bool) {
+        self.lock().bypass_allowed = allowed;
+    }
+
     /// Changes what a session's agent works with, between messages (ADR 0041).
     fn set_choice(
         &self,
@@ -1305,7 +1391,7 @@ impl SessionStore {
         let mut ended = false;
         let mut saved = Ok(());
         let (sender, controls) = mpsc::channel();
-        let (folder, conversation, choices) = {
+        let (folder, conversation, choices, permission_mode) = {
             let mut inner = self.lock();
             inner.controls.insert(turn.id.clone(), sender);
             let entry = inner
@@ -1325,6 +1411,9 @@ impl SessionStore {
                 folder,
                 entry.and_then(|entry| entry.conversation.clone()),
                 entry.map(Entry::choices).unwrap_or_default(),
+                entry
+                    .map(|entry| entry.session.permission_mode)
+                    .unwrap_or_default(),
             )
         };
         let remember = |id: &str| {
@@ -1339,6 +1428,7 @@ impl SessionStore {
             folder: &folder,
             conversation: conversation.as_deref(),
             choices,
+            permission_mode,
             remember: &remember,
             controls,
         };
@@ -2094,7 +2184,7 @@ mod tests {
         let version: i64 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("the version");
-        assert_eq!(version, 6);
+        assert_eq!(version, 7);
     }
 
     #[test]
@@ -3163,6 +3253,150 @@ mod tests {
             "another agent starts on its Default"
         );
         assert_eq!(store.model_for_new_session(playground::PLAYGROUND_ID), None);
+    }
+
+    #[test]
+    fn a_session_starts_in_manual_and_keeps_the_permission_mode_chosen_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .expect("a session");
+            assert_eq!(
+                store.session(&session.id).expect("it").permission_mode,
+                PermissionMode::Manual
+            );
+            store
+                .set_permission_mode(&session.id, PermissionMode::AcceptEdits)
+                .expect("chosen");
+            session.id
+        };
+
+        assert_eq!(
+            store_in(&file)
+                .session(&id)
+                .expect("the session")
+                .permission_mode,
+            PermissionMode::AcceptEdits
+        );
+    }
+
+    #[test]
+    fn the_permission_mode_can_change_while_a_reply_runs_but_not_in_an_archived_session() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        store.start_turn(&session.id, "hello").expect("a turn");
+
+        store
+            .set_permission_mode(&session.id, PermissionMode::Plan)
+            .expect("changed during the reply");
+        assert_eq!(
+            store.session(&session.id).expect("it").permission_mode,
+            PermissionMode::Plan
+        );
+        store.stop_turn(&session.id).expect("stopped");
+        store.set_archived(&session.id, true).expect("archived");
+        assert_eq!(
+            store.set_permission_mode(&session.id, PermissionMode::Auto),
+            Err(StoreError::Archived)
+        );
+    }
+
+    #[test]
+    fn bypass_permissions_is_refused_while_it_is_not_allowed() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+
+        assert_eq!(
+            store.set_permission_mode(&session.id, PermissionMode::BypassPermissions),
+            Err(StoreError::BypassNotAllowed)
+        );
+        assert_eq!(
+            store.session(&session.id).expect("it").permission_mode,
+            PermissionMode::Manual
+        );
+    }
+
+    #[test]
+    fn a_new_session_takes_the_permission_mode_of_the_project_s_latest_session_but_never_bypass() {
+        let store = store();
+        let first = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        store
+            .set_permission_mode(&first.id, PermissionMode::Plan)
+            .expect("chosen");
+
+        assert_eq!(
+            store.permission_mode_for_new_session(playground::PLAYGROUND_ID),
+            PermissionMode::Plan
+        );
+        let second = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a later session");
+        assert_eq!(
+            store.session(&second.id).expect("it").permission_mode,
+            PermissionMode::Plan
+        );
+
+        // Claude Code can report Bypass permissions, but no session inherits it.
+        store
+            .follow_permission_mode(&second.id, PermissionMode::BypassPermissions)
+            .expect("followed");
+        assert_eq!(
+            store.permission_mode_for_new_session(playground::PLAYGROUND_ID),
+            PermissionMode::Manual
+        );
+        let third = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a third session");
+        assert_eq!(
+            store.session(&third.id).expect("it").permission_mode,
+            PermissionMode::Manual
+        );
+        let linked = store.create_linked_session(&second.id).expect("linked");
+        assert_eq!(
+            store.session(&linked.id).expect("it").permission_mode,
+            PermissionMode::Manual
+        );
+    }
+
+    #[test]
+    fn a_mode_the_agent_reports_is_kept_and_saying_it_again_changes_nothing() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .expect("a session");
+            store.start_turn(&session.id, "plan it").expect("a turn");
+
+            assert_eq!(
+                store.follow_permission_mode(&session.id, PermissionMode::Plan),
+                Ok(true),
+                "followed during the reply"
+            );
+            assert_eq!(
+                store.follow_permission_mode(&session.id, PermissionMode::Plan),
+                Ok(false)
+            );
+            session.id
+        };
+
+        assert_eq!(
+            store_in(&file)
+                .session(&id)
+                .expect("the session")
+                .permission_mode,
+            PermissionMode::Plan
+        );
     }
 
     #[test]

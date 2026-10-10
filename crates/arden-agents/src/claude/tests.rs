@@ -11,11 +11,11 @@ use serde_json::{Value, json};
 use super::driver::ClaudeDriver;
 use super::launch::{Conversation, LaunchError};
 use super::script::{Scripted, Step, handshake};
-use crate::driver::{AgentDriver, Answer};
+use crate::driver::{AgentDriver, Answer, SessionChange};
 use crate::model::{
-    AgentKind, ApprovalAction, ApprovalState, Effort, FileChangeKind, Item, Model, Question,
-    QuestionAnswer, QuestionOption, QuestionState, StatusKind, ToolStatus, Turn, TurnEvent,
-    TurnStatus,
+    AgentKind, ApprovalAction, ApprovalState, Effort, FileChangeKind, Item, Model, PermissionMode,
+    Question, QuestionAnswer, QuestionOption, QuestionState, StatusKind, ToolStatus, Turn,
+    TurnEvent, TurnStatus,
 };
 use crate::playground;
 use crate::store::{SessionStore, StoreError};
@@ -2243,4 +2243,207 @@ fn a_claude_code_that_cannot_report_its_context_window_leaves_the_reply_as_it_wa
             .all(|event| !matches!(event, TurnEvent::ContextWindowChanged { .. })),
         "{events:?}"
     );
+}
+
+/// The driver's `set_permission_mode`, as Claude Code expects it (ADR 0044).
+fn sets_permission_mode(mode: &str) -> Step {
+    Step::Expect(json!({
+        "type": "control_request",
+        "request": { "subtype": "set_permission_mode", "mode": mode }
+    }))
+}
+
+/// Claude Code's report of the mode it is in, as it sends one after every change.
+fn status(mode: &str) -> Step {
+    Step::Play(json!({
+        "type": "system", "subtype": "status", "status": null, "permissionMode": mode, "session_id": "c1"
+    }))
+}
+
+/// What the driver says about sessions outside their replies' items, as it says it.
+fn hear_changes(driver: &ClaudeDriver) -> Arc<std::sync::Mutex<Vec<(String, SessionChange)>>> {
+    let heard = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let hearing = Arc::clone(&heard);
+    driver.on_session_changes(Arc::new(move |session: &str, change: SessionChange| {
+        hearing
+            .lock()
+            .expect("heard")
+            .push((session.to_owned(), change));
+    }));
+    heard
+}
+
+/// Waits until the driver has said `change` about `session`.
+fn until_heard(
+    heard: &std::sync::Mutex<Vec<(String, SessionChange)>>,
+    session: &str,
+    change: &SessionChange,
+) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if heard
+            .lock()
+            .expect("heard")
+            .iter()
+            .any(|(about, said)| about == session && said == change)
+        {
+            return;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "never heard {change:?}: {:?}",
+            heard.lock().expect("heard")
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn claude_code_starts_in_the_session_s_permission_mode() {
+    let (scripted, driver) = claude(vec![Ok(answers("Hello", "Hi."))]);
+    let store = store();
+    let session = claude_session(&store);
+    store
+        .set_permission_mode(&session, PermissionMode::AcceptEdits)
+        .expect("chosen");
+
+    send(&store, &driver, &session, "Hello");
+
+    scripted.assert_followed();
+    let starts = scripted.starts.lock().expect("starts");
+    assert_eq!(starts[0].permission_mode, PermissionMode::AcceptEdits);
+}
+
+#[test]
+fn a_new_permission_mode_goes_to_the_running_claude_code_at_once_and_is_heard_back() {
+    let mut script = answers("Hello", "Hi.");
+    script.extend([
+        asks_for_context(),
+        sets_permission_mode("plan"),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "response": { "mode": "plan" } }
+        })),
+        status("plan"),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "Hello");
+
+    driver.set_permission_mode(&session, PermissionMode::Plan);
+
+    until_heard(
+        &heard,
+        &session,
+        &SessionChange::PermissionMode(PermissionMode::Plan),
+    );
+    scripted.assert_followed();
+    assert_eq!(
+        scripted.starts.lock().expect("starts").len(),
+        1,
+        "no new Claude Code"
+    );
+}
+
+#[test]
+fn a_permission_mode_claude_code_refuses_leaves_the_one_it_is_in() {
+    let mut script = answers("Hello", "Hi.");
+    script.extend([
+        asks_for_context(),
+        sets_permission_mode("auto"),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "error", "error": "Auto mode is not available for this account" }
+        })),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "Hello");
+
+    driver.set_permission_mode(&session, PermissionMode::Auto);
+
+    until_heard(
+        &heard,
+        &session,
+        &SessionChange::PermissionModeRefused {
+            kept: PermissionMode::Manual,
+            reason: "Auto mode is not available for this account".into(),
+        },
+    );
+    scripted.assert_followed();
+}
+
+#[test]
+fn a_permission_mode_claude_code_takes_itself_during_a_reply_is_heard() {
+    let mut script = handshake();
+    script.extend([message("Plan it"), status("plan"), success("Planned.")]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "Plan it");
+
+    until_heard(
+        &heard,
+        &session,
+        &SessionChange::PermissionMode(PermissionMode::Plan),
+    );
+    scripted.assert_followed();
+}
+
+#[test]
+fn the_mode_claude_code_says_it_started_in_is_followed_when_it_is_not_the_one_asked_for() {
+    let mut script = vec![
+        Step::Expect(json!({ "type": "control_request", "request": { "subtype": "initialize" } })),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "response": { "commands": [], "current_permission_mode": "default" } }
+        })),
+    ];
+    script.extend([message("Hello"), success("Hi.")]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let store = store();
+    let session = claude_session(&store);
+    store
+        .set_permission_mode(&session, PermissionMode::Auto)
+        .expect("chosen");
+
+    send(&store, &driver, &session, "Hello");
+
+    until_heard(
+        &heard,
+        &session,
+        &SessionChange::PermissionMode(PermissionMode::Manual),
+    );
+    scripted.assert_followed();
+}
+
+#[test]
+fn a_reply_brings_a_running_claude_code_to_the_session_s_permission_mode_first() {
+    let mut script = answers("First", "One.");
+    script.extend([
+        asks_for_context(),
+        sets_permission_mode("acceptEdits"),
+        message("Second"),
+        success("Two."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "First");
+    // Changed where the driver did not hear it, as when nothing was running to tell.
+    store
+        .set_permission_mode(&session, PermissionMode::AcceptEdits)
+        .expect("chosen");
+
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    assert_eq!(scripted.starts.lock().expect("starts").len(), 1);
 }

@@ -12,7 +12,7 @@ use crate::model::{Item, Project, Session, Turn, TurnStatus};
 
 /// The version of the tables, kept in SQLite's `user_version`. Each later version comes with the
 /// migration that brings the file up to it from the one before.
-const VERSION: i64 = 6;
+const VERSION: i64 = 7;
 
 /// The tables of version 1, which every file starts from.
 pub(crate) const TABLES: &str = "
@@ -70,6 +70,8 @@ const MIGRATIONS: &[&str] = &[
     "ALTER TABLE sessions ADD COLUMN effort TEXT;",
     // Version 6: how full each session's context window is, as its agent last reported (ADR 0044).
     "ALTER TABLE sessions ADD COLUMN context_window TEXT;",
+    // Version 7: how freely each session's agent may act before it asks, none for Manual (ADR 0044).
+    "ALTER TABLE sessions ADD COLUMN permission_mode TEXT;",
 ];
 
 /// What went wrong with the file, in words for the logs.
@@ -188,14 +190,15 @@ fn put_session(
 ) -> rusqlite::Result<()> {
     transaction.execute(
         "INSERT INTO sessions (id, project_id, agent, title, created_at, updated_at, used, pinned,
-             archived, archived_at, linked_from, model, effort, context_window)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+             archived, archived_at, linked_from, model, effort, context_window, permission_mode)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
          ON CONFLICT (id) DO UPDATE SET project_id = excluded.project_id, agent = excluded.agent,
              title = excluded.title, updated_at = excluded.updated_at,
              used = excluded.used, pinned = excluded.pinned, archived = excluded.archived,
              archived_at = excluded.archived_at, linked_from = excluded.linked_from,
              model = excluded.model, effort = excluded.effort,
-             context_window = excluded.context_window",
+             context_window = excluded.context_window,
+             permission_mode = excluded.permission_mode",
         params![
             session.id,
             session.project_id,
@@ -211,6 +214,7 @@ fn put_session(
             session.model.as_ref().map(name_of).transpose()?,
             session.effort.map(name_of).transpose()?,
             session.context_window.as_ref().map(json_of).transpose()?,
+            name_of(session.permission_mode)?,
         ],
     )?;
     Ok(())
@@ -345,7 +349,8 @@ impl Database {
 
         let mut statement = self.connection.prepare(
             "SELECT id, project_id, agent, title, created_at, updated_at, used, pinned, archived,
-                archived_at, linked_from, conversation, model, effort, context_window
+                archived_at, linked_from, conversation, model, effort, context_window,
+                permission_mode
              FROM sessions ORDER BY rowid",
         )?;
         let sessions = statement
@@ -379,6 +384,11 @@ impl Database {
                         context_window: row
                             .get::<_, Option<String>>(14)?
                             .and_then(|text| serde_json::from_str(&text).ok()),
+                        // A mode this version does not know is read as Manual, which asks.
+                        permission_mode: row
+                            .get::<_, Option<String>>(15)?
+                            .and_then(|name| from_name(name).ok())
+                            .unwrap_or_default(),
                         turns: Vec::new(),
                     },
                     order,

@@ -1,12 +1,13 @@
 //! The interface every agent implements (ADR 0017, ADR 0038).
 
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::model::{Choices, QuestionAnswer, TurnEvent};
+use crate::model::{Choices, PermissionMode, QuestionAnswer, TurnEvent};
 
 /// Whether the driver should carry on after an event, or stop because nobody is listening.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,11 +54,29 @@ pub struct ReplyRequest<'a> {
     pub conversation: Option<&'a str>,
     /// The model and effort the session works with (ADR 0041).
     pub choices: Choices,
+    /// How freely the agent may act before it asks (ADR 0044).
+    pub permission_mode: PermissionMode,
     /// Remembers the agent's own conversation for the session, once it has answered in it.
     pub remember: &'a dyn Fn(&str),
     /// What the person does while the reply runs. It closes when the reply has ended.
     pub controls: Receiver<Control>,
 }
+
+/// What an agent says about a session outside the items of its replies (ADR 0044).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionChange {
+    /// The permission mode the agent now applies, whoever changed it.
+    PermissionMode(PermissionMode),
+    /// The agent refused a permission mode, and kept the one it is in.
+    PermissionModeRefused {
+        kept: PermissionMode,
+        /// The agent's own words, for the details.
+        reason: String,
+    },
+}
+
+/// Hears what an agent says about a session, by the session's id, from whichever thread hears it.
+pub type SessionListener = Arc<dyn Fn(&str, SessionChange) + Send + Sync>;
 
 /// An agent that answers messages. Claude implements this beside the Demo agent, and Codex will.
 pub trait AgentDriver: Send + Sync {

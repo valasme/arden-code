@@ -4,7 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useEffectEvent } from "react";
 
 import { commands, events } from "@/ipc/bindings";
-import { agentsQuery, newSessionAgentQuery, sessionListQuery } from "@/ipc/queries";
+import { agentsQuery, newSessionAgentQuery, sessionListQuery, sessionQuery } from "@/ipc/queries";
 import { showNoticeToast } from "@/lib/errorToasts";
 import { useTauriListener } from "@/lib/useTauriListener";
 
@@ -38,6 +38,18 @@ export function SessionsSync() {
     events.agentsDetected.listen(({ payload }) => {
       queryClient.setQueryData(agentsQuery.queryKey, payload.detections);
       queryClient.invalidateQueries({ queryKey: newSessionAgentQuery.queryKey }).catch(() => {});
+    }),
+  );
+
+  // A session's permission mode changed outside the page: Claude entered Plan by itself, or Claude
+  // Code refused the mode chosen and kept its own, which the notice explains (ADR 0044).
+  useTauriListener(() =>
+    events.sessionChanged.listen(({ payload }) => {
+      queryClient.setQueryData(sessionQuery(payload.sessionId).queryKey, (session) =>
+        session ? { ...session, permissionMode: payload.permissionMode } : session,
+      );
+      queryClient.invalidateQueries({ queryKey: newSessionAgentQuery.queryKey }).catch(() => {});
+      if (payload.notice) showNoticeToast(payload.notice);
     }),
   );
 

@@ -22,9 +22,12 @@ use super::protocol::{self, Frame, Request};
 use super::question;
 use super::reply::Reply;
 use super::usage::{self, USAGE_REQUEST, Usage};
-use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
+use crate::driver::{
+    AgentDriver, Answer, Control, Flow, ReplyRequest, SessionChange, SessionListener,
+};
 use crate::model::{
-    ApprovalState, Choices, Item, QuestionAnswer, QuestionState, StatusKind, TurnEvent,
+    ApprovalState, Choices, Item, PermissionMode, QuestionAnswer, QuestionState, StatusKind,
+    TurnEvent,
 };
 use crate::usage::UsageLimits;
 
@@ -50,6 +53,9 @@ const IDLE_END: Duration = Duration::from_mins(10);
 const IDLE_LOOK: Duration = Duration::from_secs(30);
 /// How long a Claude Code whose input was closed has to end before it is ended.
 const ENDING_PATIENCE: Duration = Duration::from_millis(500);
+/// The start of the ids of Arden Code's requests for a permission mode, which the reader knows
+/// them by (ADR 0044).
+const MODE_REQUEST: &str = "arden-mode-";
 /// What Claude is told when its questions cannot be read, so they cannot be shown.
 const UNREADABLE_QUESTIONS: &str =
     "Arden Code could not read these questions, so the person did not see them.";
@@ -92,7 +98,45 @@ fn kind_of(frame: &Frame) -> &'static str {
         Frame::Cancel { .. } => "cancel",
         Frame::ConversationReset { .. } => "conversation reset",
         Frame::RateLimit(_) => "rate limit",
+        Frame::Status { .. } => "status",
         Frame::Other => "other",
+    }
+}
+
+/// Who hears what the driver says about sessions: one listener, once the app has given it.
+type Listening = Arc<Mutex<Option<SessionListener>>>;
+
+/// The permission mode a Claude Code applies, and the ones it was asked for and has not answered
+/// (ADR 0044).
+struct Modes {
+    /// As it was started in, or last said.
+    applied: Mutex<PermissionMode>,
+    /// By the id of the request.
+    asked: Mutex<HashMap<String, PermissionMode>>,
+}
+
+impl Modes {
+    /// Hears Claude Code's answer to a request for a mode: one it refused leaves the mode it
+    /// applies, and is told with its reason.
+    fn answered(&self, id: &str, error: Option<&str>) -> Option<SessionChange> {
+        let asked = lock(&self.asked).remove(id)?;
+        match error {
+            None => {
+                *lock(&self.applied) = asked;
+                None
+            }
+            Some(reason) => Some(SessionChange::PermissionModeRefused {
+                kept: *lock(&self.applied),
+                reason: reason.to_owned(),
+            }),
+        }
+    }
+
+    /// Hears the mode Claude Code says it applies, whoever changed it.
+    fn reported(&self, name: &str) -> Option<SessionChange> {
+        let mode = PermissionMode::from_claude_name(name)?;
+        *lock(&self.applied) = mode;
+        Some(SessionChange::PermissionMode(mode))
     }
 }
 
@@ -113,6 +157,7 @@ struct Live {
     heard: Arc<Mutex<Instant>>,
     /// Whether a reply is using it, which keeps it however long the reply takes.
     busy: AtomicBool,
+    modes: Arc<Modes>,
 }
 
 impl Live {
@@ -123,6 +168,7 @@ impl Live {
         start: &Start,
         catalog: Option<Arc<Mutex<Catalog>>>,
         usage: Arc<Usage>,
+        listening: Option<Listening>,
     ) -> Self {
         let conversation = &start.conversation;
         let (sender, events) = mpsc::channel();
@@ -131,6 +177,19 @@ impl Live {
         let output = connection.output;
         let heard = Arc::new(Mutex::new(Instant::now()));
         let hearing = Arc::clone(&heard);
+        let modes = Arc::new(Modes {
+            applied: Mutex::new(start.permission_mode),
+            asked: Mutex::new(HashMap::new()),
+        });
+        let moding = Arc::clone(&modes);
+        let tell = move |session: &str, change: Option<SessionChange>| {
+            let listener = listening
+                .as_ref()
+                .and_then(|listening| lock(listening).clone());
+            if let (Some(change), Some(listener)) = (change, listener) {
+                listener(session, change);
+            }
+        };
         thread::spawn(move || {
             for line in BufReader::new(output).lines() {
                 let Ok(line) = line else { break };
@@ -146,6 +205,18 @@ impl Live {
                                 if id.starts_with(USAGE_REQUEST) =>
                             {
                                 usage.answer(usage::limits_in(error.as_deref(), answer));
+                            }
+                            // What becomes of a permission mode is told at once, during a reply or
+                            // not (ADR 0044).
+                            Frame::Response { id, error, .. } if id.starts_with(MODE_REQUEST) => {
+                                tell(&session, moding.answered(id, error.as_deref()));
+                                continue;
+                            }
+                            Frame::Status { permission_mode } => {
+                                if let Some(name) = permission_mode {
+                                    tell(&session, moding.reported(name));
+                                }
+                                continue;
                             }
                             Frame::Response { answer, .. } => {
                                 if let Some(catalog) = &catalog {
@@ -202,6 +273,7 @@ impl Live {
             },
             heard,
             busy: AtomicBool::new(false),
+            modes,
         }
     }
 
@@ -333,6 +405,8 @@ pub struct ClaudeDriver {
     usage_floor: Duration,
     /// How long a reply's Claude Code has to report its context window once the reply has ended.
     context_patience: Duration,
+    /// Who hears what Claude Code says about its session outside its replies (ADR 0044).
+    listening: Listening,
 }
 
 /// Marks a session's Claude Code as used by a reply until the reply ends.
@@ -367,6 +441,7 @@ impl ClaudeDriver {
             usage: Arc::new(Usage::default()),
             usage_floor: USAGE_FLOOR,
             context_patience: CONTEXT_PATIENCE,
+            listening: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -433,6 +508,7 @@ impl ClaudeDriver {
             conversation: Conversation::Listing,
             model: None,
             effort: None,
+            permission_mode: PermissionMode::default(),
         };
         let connection = self.launcher.launch(&start).ok()?;
         let live = Live::begin(
@@ -441,6 +517,7 @@ impl ClaudeDriver {
             &start,
             hears_lists.then(|| Arc::clone(&self.catalog)),
             Arc::clone(&self.usage),
+            None,
         );
         let id = self.next_request();
         live.write(&protocol::initialize(&id)).ok()?;
@@ -458,6 +535,35 @@ impl ClaudeDriver {
     #[must_use]
     pub fn usage_limits(&self) -> UsageLimits {
         self.usage.limits()
+    }
+
+    /// Hears what Claude Code says about a session outside its replies: the permission mode it
+    /// applies, whoever changed it, and a mode it refused (ADR 0044).
+    pub fn on_session_changes(&self, listener: SessionListener) {
+        *lock(&self.listening) = Some(listener);
+    }
+
+    /// Asks a session's running Claude Code to apply a permission mode at once, during a reply or
+    /// not (ADR 0044). What becomes of it is told to [`Self::on_session_changes`]. A session with
+    /// no Claude Code running takes its mode when its next one starts.
+    pub fn set_permission_mode(&self, session_id: &str, mode: PermissionMode) {
+        let running = lock(&self.live).get(session_id).map(Arc::clone);
+        if let Some(live) = running {
+            self.ask_for_mode(&live, mode);
+        }
+    }
+
+    /// Asks a Claude Code for a permission mode, unless it applies it already.
+    fn ask_for_mode(&self, live: &Live, mode: PermissionMode) {
+        if *lock(&live.modes.applied) == mode {
+            return;
+        }
+        let id = format!(
+            "{MODE_REQUEST}{}",
+            self.requests.fetch_add(1, Ordering::Relaxed) + 1
+        );
+        lock(&live.modes.asked).insert(id.clone(), mode);
+        let _ = live.write(&protocol::set_permission_mode(&id, mode.claude_name()));
     }
 
     /// Hears the usage limits each time they change.
@@ -565,11 +671,14 @@ impl ClaudeDriver {
         folder: &Path,
         saved: Option<&str>,
         choices: Choices,
+        mode: PermissionMode,
     ) -> Result<(Arc<Live>, bool), Problem> {
         let running = lock(&self.live).get(session_id).map(Arc::clone);
         if let Some(live) = running {
             if live.choices == choices {
                 live.busy.store(true, Ordering::Release);
+                // The mode changes without a new Claude Code (ADR 0044).
+                self.ask_for_mode(&live, mode);
                 return Ok((live, false));
             }
             // Started with another model or effort: it is ended, and the conversation carries on
@@ -579,7 +688,7 @@ impl ClaudeDriver {
         let fresh = || Conversation::New(uuid::Uuid::new_v4().to_string());
         let Some(saved) = saved else {
             return self
-                .start(session_id, folder, fresh(), choices)
+                .start(session_id, folder, fresh(), choices, mode)
                 .map(|live| (live, false));
         };
         match self.start(
@@ -587,12 +696,13 @@ impl ClaudeDriver {
             folder,
             Conversation::Resume(saved.to_owned()),
             choices.clone(),
+            mode,
         ) {
             Ok(live) => Ok((live, false)),
             // Claude Code ends at once when it has no such conversation.
             Err(Problem::Stopped(why)) => {
                 tracing::warn!(session = %session_id, %why, "Claude Code did not carry on the conversation, so a new one starts");
-                self.start(session_id, folder, fresh(), choices)
+                self.start(session_id, folder, fresh(), choices, mode)
                     .map(|live| (live, true))
             }
             Err(problem) => Err(problem),
@@ -606,12 +716,14 @@ impl ClaudeDriver {
         folder: &Path,
         conversation: Conversation,
         choices: Choices,
+        mode: PermissionMode,
     ) -> Result<Arc<Live>, Problem> {
         let start = Start {
             folder: folder.to_path_buf(),
             conversation,
             model: choices.model,
             effort: choices.effort,
+            permission_mode: mode,
         };
         let connection = self.launcher.launch(&start).map_err(Problem::Launch)?;
         let live = Arc::new(Live::begin(
@@ -620,6 +732,7 @@ impl ClaudeDriver {
             &start,
             Some(Arc::clone(&self.catalog)),
             Arc::clone(&self.usage),
+            Some(Arc::clone(&self.listening)),
         ));
         let id = self.next_request();
         live.write(&protocol::initialize(&id)).map_err(|error| {
@@ -633,12 +746,21 @@ impl ClaudeDriver {
                     Ok(Event::Frame(Frame::Response {
                         id: answered,
                         error,
-                        ..
+                        answer,
                     })) if answered == id => {
                         if let Some(error) = error {
                             return Err(Problem::NotUnderstood(format!(
                                 "Claude Code refused to start the conversation: {error}"
                             )));
+                        }
+                        // It may not apply the mode it was started in, such as Auto where the
+                        // account has no Auto (ADR 0044).
+                        if let Some(name) = answer["current_permission_mode"].as_str()
+                            && PermissionMode::from_claude_name(name) != Some(mode)
+                            && let Some(change) = live.modes.reported(name)
+                            && let Some(listener) = lock(&self.listening).clone()
+                        {
+                            listener(session_id, change);
                         }
                         break;
                     }
@@ -681,8 +803,9 @@ impl ClaudeDriver {
         folder: &Path,
         saved: Option<&str>,
         choices: Choices,
+        mode: PermissionMode,
     ) -> Result<(Arc<Live>, bool), Problem> {
-        let (live, lost) = self.live(session_id, folder, saved, choices.clone())?;
+        let (live, lost) = self.live(session_id, folder, saved, choices.clone(), mode)?;
         let deadline = Instant::now() + DRAIN_PATIENCE;
         {
             let events = lock(&live.events);
@@ -713,7 +836,7 @@ impl ClaudeDriver {
                             .load(Ordering::Acquire)
                             .then(|| lock(&live.conversation).clone());
                         drop(live);
-                        return self.live(session_id, folder, saved.as_deref(), choices);
+                        return self.live(session_id, folder, saved.as_deref(), choices, mode);
                     }
                 }
             }
@@ -994,6 +1117,7 @@ impl AgentDriver for ClaudeDriver {
             request.folder,
             request.conversation,
             request.choices,
+            request.permission_mode,
         );
         let (live, lost) = match settled {
             Ok(settled) => settled,

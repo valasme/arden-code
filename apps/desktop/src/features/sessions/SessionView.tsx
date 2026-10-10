@@ -9,6 +9,7 @@ import { useCommands } from "@/features/commands/CommandsProvider";
 import {
   type Effort,
   type Model,
+  type PermissionMode,
   type AgentKind,
   type Answer,
   commands,
@@ -28,6 +29,7 @@ import { MessageBox } from "./MessageBox";
 import { EffortMenu } from "./EffortMenu";
 import { Figures } from "./Figures";
 import { ModelMenu } from "./ModelMenu";
+import { PermissionModeMenu } from "./PermissionModeMenu";
 import { ProjectMenu } from "./ProjectMenu";
 import { projectsByUse } from "./sessionList";
 import { useTrustGate } from "./useTrustGate";
@@ -208,6 +210,10 @@ export function SessionView({ id }: { id: string }) {
   const chooseEffort = (effort: Effort | null) => {
     change(commands.setSessionEffort(id, effort), false);
   };
+  // The permission mode changes at once, also while a reply runs (ADR 0044).
+  const chooseMode = (mode: PermissionMode) => {
+    change(commands.setSessionPermissionMode(id, mode), false);
+  };
   // /rename names the session, and asks for a name when it is given none (ADR 0042).
   const renameTo = (name: string) => {
     if (name === "") {
@@ -259,6 +265,7 @@ export function SessionView({ id }: { id: string }) {
             onUltrathink={setUltrathink}
             onChoose={chooseEffort}
           />
+          <PermissionModeMenu mode={session.permissionMode ?? "manual"} onChoose={chooseMode} />
         </>
       ) : null}
     </>

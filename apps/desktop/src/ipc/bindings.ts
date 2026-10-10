@@ -525,6 +525,25 @@ export const commands = {
 	 */
 	effortForNewSession: (projectId: string | null) => __TAURI_INVOKE<"low" | "medium" | "high" | "extraHigh" | "max" | null>("effort_for_new_session", { projectId }),
 	/**
+	 *  Changes how far a session's agent may go without asking (ADR 0044), also while a reply runs: a
+	 *  running Claude Code takes it at once, and says so through [`SessionChanged`].
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, it is archived, Bypass permissions is chosen
+	 *  while Settings does not allow it, or the change cannot be saved.
+	 */
+	setSessionPermissionMode: (id: string, mode: PermissionMode) => __TAURI_INVOKE<null>("set_session_permission_mode", { id, mode }),
+	/**
+	 *  The permission mode a new session in a project would take, the Playground when none is given
+	 *  (ADR 0044): that of the session the agent rule follows, except Bypass permissions.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	permissionModeForNewSession: (projectId: string | null) => __TAURI_INVOKE<PermissionMode>("permission_mode_for_new_session", { projectId }),
+	/**
 	 *  Moves a session that has had no message yet to another project (ADR 0039).
 	 * 
 	 *  # Errors
@@ -643,6 +662,7 @@ export const events = {
 	agentsDetected: makeEvent<AgentsDetected>("agents-detected"),
 	maximizeButtonChanged: makeEvent<MaximizeButtonChanged>("maximize-button-changed"),
 	replyNotSaved: makeEvent<ReplyNotSaved>("reply-not-saved"),
+	sessionChanged: makeEvent<SessionChanged>("session-changed"),
 	sessionRequested: makeEvent<SessionRequested>("session-requested"),
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	systemPreferencesChanged: makeEvent<SystemPreferencesChanged>("system-preferences-changed"),
@@ -918,6 +938,10 @@ export type ErrorCode =
 "ARD-AGT-016" | 
 /**  The Playground was to be removed; it always stays. */
 "ARD-AGT-017" | 
+/**  The agent refused the permission mode chosen, and kept the one it was in. */
+"ARD-AGT-018" | 
+/**  Bypass permissions was chosen while Settings does not allow it. */
+"ARD-AGT-019" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -1077,6 +1101,22 @@ export type PagePoint = {
 	y: number | null,
 };
 
+/**
+ *  How freely an agent may act in a session before it asks the person (ADR 0044). A session starts
+ *  in Manual.
+ */
+export type PermissionMode = 
+/**  Asks before it edits files or runs commands. */
+"manual" | 
+/**  Edits files without asking, and asks before commands. */
+"acceptEdits" | 
+/**  Explores and plans, and changes nothing until the person approves. */
+"plan" | 
+/**  A classifier approves or denies actions instead of asking the person. */
+"auto" | 
+/**  Never asks: every action runs. */
+"bypassPermissions";
+
 /**  A folder on disk where agents work. */
 export type Project = {
 	id: string,
@@ -1193,7 +1233,20 @@ export type Session = {
 	effort?: Effort | null,
 	/**  How full the agent's context window is, as it last reported, or none until it has (ADR 0044). */
 	contextWindow?: ContextWindow | null,
+	/**  How freely the agent may act before it asks (ADR 0044). */
+	permissionMode?: PermissionMode,
 	turns: Turn[],
+};
+
+/**
+ *  Tells the page that a session's permission mode changed outside its commands, such as when
+ *  Claude enters Plan by itself, or Claude Code refused a mode, with why (ADR 0044).
+ */
+export type SessionChanged = {
+	sessionId: string,
+	permissionMode: PermissionMode,
+	/**  What to tell the person, when the change is not the one they chose. */
+	notice: AppError | null,
 };
 
 /**  The sessions as the sidebar lists them. */

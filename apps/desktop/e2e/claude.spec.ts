@@ -219,6 +219,50 @@ test.describe("Claude in the real app", () => {
     }
   });
 
+  test("Claude Code starts in the permission mode chosen, and takes another at once", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
+    const log = path.join(dataDir, "claude.log");
+    const claude = claudeOnPath({ log });
+    const app = await launchApp({ dataDir, env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+
+      await page.getByRole("button", { name: "Permission mode: Manual" }).click();
+      await page.getByRole("menuitemradio", { name: /^Plan/u }).click();
+      await expect(page.getByRole("button", { name: "Permission mode: Plan" })).toBeVisible();
+      await say(page, "Which mode are you in?");
+      await expect(session.getByText("The permission mode is plan.")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      // The running Claude Code takes the new mode without starting again (ADR 0044).
+      await page.getByRole("button", { name: "Permission mode: Plan" }).click();
+      await page.keyboard.press("2");
+      await expect(
+        page.getByRole("button", { name: "Permission mode: Accept edits" }),
+      ).toBeVisible();
+      await say(page, "Which mode now?");
+      await expect(session.getByText("The permission mode is acceptEdits.")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      const conversations = readFileSync(log, "utf8")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("start "))
+        .map((line) => started.parse(JSON.parse(line.slice("start ".length))).args)
+        .filter((args) => args.includes("-p") && !args.includes("--no-session-persistence"));
+      expect(conversations).toHaveLength(1);
+      const [first] = conversations;
+      expect(first?.[(first?.indexOf("--permission-mode") ?? -2) + 1]).toBe("plan");
+    } finally {
+      app.kill();
+      claude.remove();
+      rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    }
+  });
+
   test("a Claude session carries on its conversation after Arden Code restarts", async () => {
     const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
     const log = path.join(dataDir, "claude-starts.log");

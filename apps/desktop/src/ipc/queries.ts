@@ -8,6 +8,7 @@ import { fallbackSystemPreferences } from "@/features/settings/systemPreferences
 import {
   type Catalog,
   type Effort,
+  type PermissionMode,
   type Model,
   type AgentKind,
   commands,
@@ -101,6 +102,17 @@ export const effortForProjectQuery = (projectId: string) =>
     queryKey: [...newSessionAgentQuery.queryKey, projectId, "effort"],
     queryFn: (): Promise<Effort | null> =>
       isTauri() ? commands.effortForNewSession(projectId) : Promise.resolve(null),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+/** The permission mode a new session in a project takes (ADR 0044): never Bypass permissions. */
+export const permissionModeForProjectQuery = (projectId: string) =>
+  queryOptions({
+    queryKey: [...newSessionAgentQuery.queryKey, projectId, "permissionMode"],
+    queryFn: (): Promise<PermissionMode> =>
+      isTauri()
+        ? commands.permissionModeForNewSession(projectId)
+        : Promise.resolve<PermissionMode>("manual"),
     staleTime: Number.POSITIVE_INFINITY,
   });
 

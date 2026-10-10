@@ -159,6 +159,16 @@
       "what": "The Playground cannot be removed.",
       "why": "New sessions start in the Playground, so it always stays."
     },
+    "ARD-AGT-018": {
+      "action": "Choose another permission mode, or check what your Claude Code allows.",
+      "what": "Claude Code did not change the permission mode.",
+      "why": "Claude Code refused it, such as when a mode is not available for your account. Its own words are under this message."
+    },
+    "ARD-AGT-019": {
+      "action": "Turn on Allow Bypass permissions in Settings → Agents first, if you accept the risk.",
+      "what": "Bypass permissions is turned off.",
+      "why": "In Bypass permissions, the agent runs every action without asking, so it has to be allowed in Settings."
+    },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
       "what": "Something unexpected went wrong inside Arden Code.",
@@ -499,6 +509,20 @@
       "sonnet": "Sonnet"
     },
     "new": "New session",
+    "permissionModeMenu": {
+      "acceptEdits": "Accept edits",
+      "acceptEditsHint": "Edits files without asking, and asks before commands",
+      "auto": "Auto",
+      "autoHint": "A classifier approves or denies actions instead of asking you",
+      "bypassPermissions": "Bypass permissions",
+      "bypassPermissionsHint": "Runs every action without asking",
+      "bypassPermissionsOff": "Turn on in Settings → Agents",
+      "label": "Permission mode: {{mode}}",
+      "manual": "Manual",
+      "manualHint": "Asks before it edits files or runs commands",
+      "plan": "Plan",
+      "planHint": "Explores and plans, and changes nothing until you approve"
+    },
     "playground": "Playground",
     "projectMenu": {
       "label": "Project: {{project}}",

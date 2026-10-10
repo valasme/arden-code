@@ -7,6 +7,8 @@ use std::time::Duration;
 use arden_agents::claude::driver::ClaudeDriver;
 use arden_agents::claude::launch::{Connection, LaunchError, Launcher, ProgramLauncher, Start};
 use arden_agents::detect::{self, AgentCli, Detection};
+use arden_agents::driver::SessionChange;
+use arden_agents::store::SessionStore;
 use arden_agents::usage::UsageLimits;
 use arden_core::error::{AppError, ErrorCode};
 use arden_process::supervisor::Supervisor;
@@ -65,6 +67,42 @@ impl Claude {
                 was_shown.store(shown, Ordering::Release);
             }
         });
+    }
+}
+
+impl Claude {
+    /// Keeps the permission mode each session's Claude Code says it applies, and tells the page
+    /// when it changed, or when Claude Code refused the one chosen (ADR 0044).
+    pub fn report_session_changes_to(&self, app: &AppHandle, sessions: &Arc<SessionStore>) {
+        let page = app.clone();
+        let sessions = Arc::clone(sessions);
+        self.0
+            .on_session_changes(Arc::new(move |session: &str, change: SessionChange| {
+                let (mode, notice) = match change {
+                    SessionChange::PermissionMode(mode) => (mode, None),
+                    SessionChange::PermissionModeRefused { kept, reason } => {
+                        tracing::warn!(session = %session, %reason, "Claude Code refused the permission mode");
+                        (
+                            kept,
+                            Some(AppError::new(ErrorCode::PermissionModeRefused).with_details(reason)),
+                        )
+                    }
+                };
+                match sessions.follow_permission_mode(session, mode) {
+                    Ok(changed) if changed || notice.is_some() => {
+                        let _ = crate::sessions::SessionChanged {
+                            session_id: session.to_owned(),
+                            permission_mode: mode,
+                            notice,
+                        }
+                        .emit(&page);
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        tracing::warn!(session = %session, ?error, "the permission mode Claude Code reported was not kept");
+                    }
+                }
+            }));
     }
 }
 

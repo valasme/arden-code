@@ -9,6 +9,7 @@ import type {
   Effort,
   ErrorCode,
   Model,
+  PermissionMode,
   Project,
   Session,
   SessionList,
@@ -60,6 +61,7 @@ export function sessionNamed(
     pinned: false,
     archivedAt: null,
     linkedFrom: null,
+    permissionMode: "manual",
     turns: [],
   };
 }
@@ -91,6 +93,8 @@ interface Options {
   newSessionModel?: Model | null;
   /** The effort a new session takes (ADR 0041), null for the agent's own setting. */
   newSessionEffort?: Effort | null;
+  /** The permission mode a new session takes (ADR 0044). */
+  newSessionPermissionMode?: PermissionMode;
   /** The folder the person picks in Windows' dialog, or null when they cancel. */
   pickedFolder?: Project | null;
   /** What Claude Code says it can do (ADR 0042). Nothing, until it has been heard. */
@@ -114,6 +118,7 @@ export function startSessionsRust({
   newSessionAgent = "demo",
   newSessionModel = null,
   newSessionEffort = null,
+  newSessionPermissionMode = "manual",
   catalog = { commands: [], models: [], terminalCommands: [] },
   pickedFolder = null,
   usageLimits = { report: "unknown", windows: [] },
@@ -191,7 +196,10 @@ export function startSessionsRust({
             throw failure("ARD-AGT-001");
           }
           made += 1;
-          const session = sessionNamed(`session-${made}`, null, project, agent ?? newSessionAgent);
+          const session = {
+            ...sessionNamed(`session-${made}`, null, project, agent ?? newSessionAgent),
+            permissionMode: newSessionPermissionMode,
+          };
           sessions.push(session);
           return summaryOf(session);
         }
@@ -225,6 +233,23 @@ export function startSessionsRust({
         }
         case "effort_for_new_session": {
           return newSessionEffort;
+        }
+        case "permission_mode_for_new_session": {
+          return newSessionPermissionMode;
+        }
+        case "set_session_permission_mode": {
+          const { id, mode } = z
+            .object({
+              id: z.string(),
+              mode: z.enum(["manual", "acceptEdits", "plan", "auto", "bypassPermissions"]),
+            })
+            .parse(payload);
+          const session = find(id);
+          if (session.archivedAt !== null) throw failure("ARD-AGT-005");
+          if (mode === "bypassPermissions") throw failure("ARD-AGT-019");
+          // Unlike the model, it changes while a reply runs (ADR 0044).
+          session.permissionMode = mode;
+          return null;
         }
         case "set_session_effort": {
           const { id, effort } = z
@@ -413,6 +438,10 @@ export function startSessionsRust({
       calls.filter((call) => call.command === command).map((call) => call.payload),
     sent: () => calls.filter((call) => call.command === "send_message"),
     stops: () => calls.filter((call) => call.command === "stop_reply"),
+    /** Changes a session's permission mode as Rust does when Claude Code reports another. */
+    followPermissionMode(id: string, mode: PermissionMode) {
+      find(id).permissionMode = mode;
+    },
     /** Streams an event of the reply, as Rust would through the channel. */
     emit(event: TurnEvent) {
       if (!channel || replying === undefined) throw new Error("no message was sent yet");

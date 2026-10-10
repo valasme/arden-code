@@ -222,6 +222,7 @@ mod tests {
             folder: std::path::Path::new(r"C:Playground"),
             conversation: None,
             choices: crate::model::Choices::default(),
+            permission_mode: crate::model::PermissionMode::default(),
             remember: &|_| {},
             controls,
         }

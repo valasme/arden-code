@@ -101,6 +101,12 @@ pub enum ErrorCode {
     /// The Playground was to be removed; it always stays.
     #[serde(rename = "ARD-AGT-017")]
     PlaygroundStays,
+    /// The agent refused the permission mode chosen, and kept the one it was in.
+    #[serde(rename = "ARD-AGT-018")]
+    PermissionModeRefused,
+    /// Bypass permissions was chosen while Settings does not allow it.
+    #[serde(rename = "ARD-AGT-019")]
+    BypassNotAllowed,
     /// Programs cannot be started and supervised on this computer.
     #[serde(rename = "ARD-PROC-001")]
     ProcessSupervisor,
@@ -150,6 +156,8 @@ impl ErrorCode {
             Self::RequestNotWaiting => "ARD-AGT-015",
             Self::ProjectNotTrusted => "ARD-AGT-016",
             Self::PlaygroundStays => "ARD-AGT-017",
+            Self::PermissionModeRefused => "ARD-AGT-018",
+            Self::BypassNotAllowed => "ARD-AGT-019",
             Self::ProcessSupervisor => "ARD-PROC-001",
             Self::UpdateInstall => "ARD-UPD-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",

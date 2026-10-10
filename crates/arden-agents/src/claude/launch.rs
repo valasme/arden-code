@@ -14,7 +14,7 @@ use arden_process::supervisor::Supervisor;
 
 use super::locate::{self, Missing};
 use crate::detect::parse_version;
-use crate::model::{Effort, Model};
+use crate::model::{Effort, Model, PermissionMode};
 
 /// How long Claude Code gets to say its version.
 const VERSION_PATIENCE: Duration = Duration::from_secs(10);
@@ -62,6 +62,8 @@ pub struct Start {
     pub model: Option<Model>,
     /// How much to think, or none for Claude Code's own setting (ADR 0041).
     pub effort: Option<Effort>,
+    /// How far Claude may go without asking (ADR 0044).
+    pub permission_mode: PermissionMode,
 }
 
 /// A running Claude Code: what Arden Code writes to it, what it writes back, and its process, when
@@ -183,7 +185,7 @@ fn arguments(start: &Start) -> Vec<Arg> {
         Arg::Literal("--permission-prompt-tool"),
         Arg::Literal("stdio"),
         Arg::Literal("--permission-mode"),
-        Arg::Literal("default"),
+        Arg::Literal(start.permission_mode.claude_name()),
     ];
     // The value comes from Claude Code's own list of models, but it was kept in a file and
     // handed over by the page, so it is checked again before it is passed (ADR 0042).
@@ -261,6 +263,7 @@ mod tests {
             conversation: Conversation::New("c1".into()),
             model,
             effort: None,
+            permission_mode: PermissionMode::Manual,
         }
     }
 
@@ -287,6 +290,26 @@ mod tests {
             assert_eq!(chosen[at + 1], word);
         }
         assert!(!with(None).contains(&"--effort".to_owned()));
+    }
+
+    #[test]
+    fn claude_code_starts_in_the_session_s_permission_mode_by_its_own_name() {
+        for (mode, name) in [
+            (PermissionMode::Manual, "default"),
+            (PermissionMode::AcceptEdits, "acceptEdits"),
+            (PermissionMode::Plan, "plan"),
+            (PermissionMode::Auto, "auto"),
+        ] {
+            let arguments = texts(&Start {
+                permission_mode: mode,
+                ..start(None)
+            });
+            let at = arguments
+                .iter()
+                .position(|text| text == "--permission-mode")
+                .expect("--permission-mode");
+            assert_eq!(arguments[at + 1], name);
+        }
     }
 
     #[test]
