@@ -65,7 +65,12 @@ test.describe("Claude in the real app", () => {
         timeout: 30_000,
       });
       await expect(session.getByText("Claude is replying…")).toBeHidden();
-      await expect(page.getByText("Claude · Playground")).toBeVisible();
+      // Once the session has a message, its header names its agent and project (ADR 0044).
+      const header = page
+        .getByRole("heading", { level: 1, name: "Hello from the test" })
+        .locator("..");
+      await expect(header.getByText("Claude", { exact: true })).toBeVisible();
+      await expect(header.getByText("Playground", { exact: true })).toBeVisible();
     } finally {
       app.kill();
       claude.remove();
