@@ -1,4 +1,3 @@
-import { FlaskConicalIcon, SparkleIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -10,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { AgentKind } from "@/ipc/bindings";
 
+import { agentIcons } from "./agentIcons";
 import { ChoiceButton } from "./ChoiceButton";
 
 /** The agents a session can have, in the order the menu lists them (ADR 0039). */
@@ -37,7 +37,7 @@ export function AgentMenu({ agent, unavailable = none, onChoose }: AgentMenuProp
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <ChoiceButton
-          icon={agent === "claude" ? SparkleIcon : FlaskConicalIcon}
+          icon={agentIcons[agent]}
           value={name}
           aria-label={t("sessions.agentMenu.label", { agent: name })}
         />
@@ -52,8 +52,10 @@ export function AgentMenu({ agent, unavailable = none, onChoose }: AgentMenuProp
         >
           {agentKinds.map((kind) => {
             const missing = unavailable.includes(kind);
+            const Icon = agentIcons[kind];
             return (
               <DropdownMenuRadioItem key={kind} value={kind} disabled={missing}>
+                <Icon aria-hidden strokeWidth={1.5} />
                 {t(`agents.${kind}.name`)}
                 {missing ? (
                   <span className="ms-auto ps-4 text-xs text-muted-foreground">

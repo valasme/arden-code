@@ -6,13 +6,22 @@ import { Mark } from "@/components/brand/Logo";
 import { Kbd } from "@/components/ui/kbd";
 import { useShortcutsOf } from "@/features/commands/CommandsProvider";
 import type { CommandId } from "@/features/commands/registry";
+import { useSettings } from "@/features/settings/useSettings";
 import { formatShortcut } from "@/features/commands/shortcuts";
-import { type AgentKind, commands, type Effort, type Model, type Project } from "@/ipc/bindings";
+import {
+  type AgentKind,
+  commands,
+  type Effort,
+  type Model,
+  type PermissionMode,
+  type Project,
+} from "@/ipc/bindings";
 import {
   agentForProjectQuery,
   effortForProjectQuery,
   modelForProjectQuery,
   noSessions,
+  permissionModeForProjectQuery,
   sessionListQuery,
 } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
@@ -20,8 +29,10 @@ import { toAppError } from "@/lib/errors";
 
 import { AgentMenu } from "./AgentMenu";
 import { EffortMenu } from "./EffortMenu";
+import { Figures } from "./Figures";
 import { MessageBox } from "./MessageBox";
 import { ModelMenu } from "./ModelMenu";
+import { PermissionModeMenu } from "./PermissionModeMenu";
 import { ProjectMenu } from "./ProjectMenu";
 import { latestProjectId, PLAYGROUND_ID, projectsByUse } from "./sessionList";
 import { useOpenFolder } from "./useOpenFolder";
@@ -63,8 +74,10 @@ export function Welcome() {
   const [chosenAgent, setChosenAgent] = useState<AgentKind | undefined>(undefined);
   const [chosenModel, setChosenModel] = useState<Model | null | undefined>(undefined);
   const [chosenEffort, setChosenEffort] = useState<Effort | null | undefined>(undefined);
+  const [chosenMode, setChosenMode] = useState<PermissionMode | undefined>(undefined);
   const { gate, dialog: trustDialog } = useTrustGate();
   const { ultrathink, setUltrathink, carrying } = useUltrathink();
+  const bypassAllowed = useSettings().agents.allowBypassPermissions;
 
   const projectId = chosenProject ?? latestProjectId(list) ?? PLAYGROUND_ID;
   const project: Project | undefined = list.projects.find(
@@ -78,20 +91,26 @@ export function Welcome() {
   const model = chosenModel === undefined ? inheritedModel : chosenModel;
   const inheritedEffort = useQuery(effortForProjectQuery(projectId)).data ?? null;
   const effort = chosenEffort === undefined ? inheritedEffort : chosenEffort;
+  // The permission mode a new session takes, never Bypass permissions (ADR 0044).
+  const inheritedMode = useQuery(permissionModeForProjectQuery(projectId)).data ?? "manual";
+  const mode = chosenMode ?? inheritedMode;
   const catalog = useClaudeCatalog(agent === "claude");
   const runHandled = useHandledSlashCommands();
 
   const start = async (text: string) => {
     const id = await startSession(agent, projectId);
     if (id === undefined) return false;
-    // The session takes the inherited model and effort by itself; one chosen here is given
-    // before the message.
+    // The session takes the inherited model, effort and permission mode by itself; one chosen here
+    // is given before the message.
     try {
       if (agent === "claude" && chosenModel !== undefined) {
         await commands.setSessionModel(id, chosenModel);
       }
       if (agent === "claude" && chosenEffort !== undefined) {
         await commands.setSessionEffort(id, chosenEffort);
+      }
+      if (agent === "claude" && chosenMode !== undefined) {
+        await commands.setSessionPermissionMode(id, chosenMode);
       }
     } catch (error) {
       showErrorToast(toAppError(error));
@@ -111,8 +130,8 @@ export function Welcome() {
         ownArea={false}
         agent={agent}
         busy={false}
-        context={
-          <span className="flex min-w-0 items-center gap-1.5">
+        choices={
+          <>
             <AgentMenu agent={agent} unavailable={unavailable} onChoose={setChosenAgent} />
             <ProjectMenu
               projectId={projectId}
@@ -134,12 +153,26 @@ export function Welcome() {
                   onUltrathink={setUltrathink}
                   onChoose={setChosenEffort}
                 />
+                <PermissionModeMenu
+                  mode={mode}
+                  bypassAllowed={bypassAllowed}
+                  onChoose={setChosenMode}
+                />
               </>
             ) : null}
-          </span>
+          </>
         }
+        figures={agent === "claude" ? <Figures /> : null}
         {...(agent === "claude"
-          ? { slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands } }
+          ? {
+              slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands },
+              ultrathink: {
+                on: ultrathink,
+                onTurnOff: () => {
+                  setUltrathink(false);
+                },
+              },
+            }
           : {})}
         onSend={carrying((text) => {
           // There is no session yet to rename or clear (ADR 0042).

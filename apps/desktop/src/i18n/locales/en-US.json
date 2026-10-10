@@ -40,6 +40,7 @@
     "navigateBack": "Back",
     "navigateForward": "Forward",
     "paletteOpen": "Command palette",
+    "permissionModeNext": "Next permission mode",
     "replyStop": "Stop the reply",
     "sessionArchive": "Archive session",
     "sessionDelete": "Delete session",
@@ -158,6 +159,16 @@
       "action": "Archive or delete its sessions instead.",
       "what": "The Playground cannot be removed.",
       "why": "New sessions start in the Playground, so it always stays."
+    },
+    "ARD-AGT-018": {
+      "action": "Choose another permission mode, or check what your Claude Code allows.",
+      "what": "Claude Code did not change the permission mode.",
+      "why": "Claude Code refused it, such as when a mode is not available for your account. Its own words are under this message."
+    },
+    "ARD-AGT-019": {
+      "action": "Turn on Allow Bypass permissions in Settings → Agents first, if you accept the risk.",
+      "what": "Bypass permissions is turned off.",
+      "why": "In Bypass permissions, the agent runs every action without asking, so it has to be allowed in Settings."
     },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
@@ -289,6 +300,21 @@
       "deleted": "Deleted",
       "lines": "{{added}} lines added, {{removed}} lines removed",
       "modified": "Changed"
+    },
+    "plan": {
+      "answered": {
+        "cancelled": "No answer was needed",
+        "keptPlanning": "You asked {{agent}} to keep planning",
+        "startedAcceptingEdits": "You started the plan, accepting edits",
+        "startedAskingFirst": "You started the plan, asking first"
+      },
+      "asks": "{{agent}} has a plan",
+      "keepPlanning": "Keep planning",
+      "noText": "{{agent}} did not send the plan's text.",
+      "send": "Send",
+      "startAcceptingEdits": "Start, accepting edits",
+      "startAskingFirst": "Start, asking first",
+      "whatShouldChange": "What should change?"
     },
     "questions": {
       "asks": "{{agent}} asks you",
@@ -434,7 +460,6 @@
       "defaultHint": "Claude Code's own setting",
       "unlisted": "Not in Claude Code's list"
     },
-    "context": "{{agent}} · {{project}}",
     "delete": {
       "claude": "Claude Code keeps its own copy of the conversation in its folder.",
       "confirm": "Delete session",
@@ -452,6 +477,26 @@
       "ultrathink": "Ultrathink",
       "ultrathinkHint": "Think deeper on the next message"
     },
+    "figures": {
+      "compactedAt": "Compacted at {{percent}}%",
+      "context": "Context {{percent}}%",
+      "contextUsed": "{{percent}}% used: {{used}} of {{size}} tokens",
+      "contextWindow": "Context window",
+      "fiveHour": "5-hour {{percent}}%",
+      "fiveHourReached": "5-hour limit reached",
+      "fiveHourReachedResets": "5-hour limit reached, resets {{time}}",
+      "notCompacted": "Not compacted on its own",
+      "usageLimits": "Usage limits",
+      "used": "{{percent}}% used",
+      "usedAndReset": "{{percent}}% used · resets {{time}}",
+      "weekly": "Weekly {{percent}}%",
+      "weeklyReached": "Weekly limit reached",
+      "weeklyReachedResets": "Weekly limit reached, resets {{time}}",
+      "windows": {
+        "fiveHour": "5-hour limit",
+        "weekly": "Weekly limit"
+      }
+    },
     "jumpToLatest": "Jump to latest",
     "links": {
       "from": "Linked from",
@@ -466,7 +511,9 @@
       "label": "Message",
       "send": "Send",
       "stop": "Stop the reply",
-      "stopShort": "Stop"
+      "stopShort": "Stop",
+      "ultrathink": "Ultrathink",
+      "ultrathinkOff": "Turn off Ultrathink"
     },
     "messages": "Messages",
     "modelMenu": {
@@ -478,6 +525,21 @@
       "sonnet": "Sonnet"
     },
     "new": "New session",
+    "permissionModeMenu": {
+      "acceptEdits": "Accept edits",
+      "acceptEditsHint": "Edits files without asking, and asks before commands",
+      "auto": "Auto",
+      "autoHint": "A classifier approves or denies actions instead of asking you",
+      "bypassPermissions": "Bypass permissions",
+      "bypassPermissionsHint": "Runs every action without asking",
+      "bypassPermissionsOff": "Turn on in Settings → Agents",
+      "heading": "Permission mode",
+      "label": "Permission mode: {{mode}}",
+      "manual": "Manual",
+      "manualHint": "Asks before it edits files or runs commands",
+      "plan": "Plan",
+      "planHint": "Explores and plans, and changes nothing until you approve"
+    },
     "playground": "Playground",
     "projectMenu": {
       "label": "Project: {{project}}",
@@ -634,6 +696,10 @@
     },
     "agents": {
       "account": "Account",
+      "allowBypassPermissions": {
+        "description": "Lets a Claude session run commands and edit files without asking. Use it only in a folder you can afford to lose.",
+        "label": "Allow Bypass permissions"
+      },
       "description": "Claude Code and Codex are separate programs. Arden Code looks for them on this computer. It never installs them, updates them or signs in to them.",
       "howToSignIn": "Open a terminal, run claude, and sign in with /login.",
       "install": "How to install",
@@ -811,15 +877,6 @@
     "replying": "{{agent}}: replying",
     "updateDownloading": "Downloading an update…",
     "updateReady": "Update ready: restart",
-    "usage": {
-      "fiveHour": "5-hour {{percent}}%",
-      "fiveHourReached": "5-hour limit reached",
-      "fiveHourReachedResets": "5-hour limit reached, resets {{time}}",
-      "label": "Usage limits",
-      "weekly": "Weekly {{percent}}%",
-      "weeklyReached": "Weekly limit reached",
-      "weeklyReachedResets": "Weekly limit reached, resets {{time}}"
-    },
     "version": "Version {{version}}",
     "waiting": "{{agent}}: waiting for your answer"
   },

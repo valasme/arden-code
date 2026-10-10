@@ -98,6 +98,7 @@ export function SessionItemsSample() {
           agent="claude"
           onAnswer={() => undefined}
           onAnswerQuestions={() => undefined}
+          onAnswerPlan={() => undefined}
         />
       ))}
     </div>

@@ -44,6 +44,18 @@ describe("numbers", () => {
   });
 });
 
+describe("token counts", () => {
+  it("are short, as a context window's figures are read at a glance", () => {
+    const { tokens } = createFormatters("en-US");
+    expect([tokens(950), tokens(26_000), tokens(17_117), tokens(1_000_000)]).toEqual([
+      "950",
+      "26K",
+      "17.1K",
+      "1M",
+    ]);
+  });
+});
+
 describe("relative times", () => {
   it("say how long ago, in the regional language", () => {
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60_000);

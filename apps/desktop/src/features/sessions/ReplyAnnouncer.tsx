@@ -62,6 +62,7 @@ export function ReplyAnnouncer({ turn, agent }: { turn: Turn | undefined; agent:
       const asked = request.questions.map((question) => question.question).join(" ");
       setMessage(`${t("items.questions.asks", { agent: name })}: ${asked}`);
     }
+    if (request?.type === "plan") setMessage(t("items.plan.asks", { agent: name }));
     // Said once, when the request arrives.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [requestId]);

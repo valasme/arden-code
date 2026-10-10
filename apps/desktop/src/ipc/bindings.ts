@@ -469,6 +469,15 @@ export const commands = {
 	 */
 	answerQuestions: (sessionId: string, itemId: string, answers: QuestionAnswer[]) => __TAURI_INVOKE<null>("answer_questions", { sessionId, itemId, answers }),
 	/**
+	 *  Hands the person's answer to a plan that waits in a session's running turn (ADR 0044), with
+	 *  what should change when they keep planning.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or no such plan waits for an answer.
+	 */
+	answerPlan: (sessionId: string, itemId: string, answer: PlanAnswer, feedback: string | null) => __TAURI_INVOKE<null>("answer_plan", { sessionId, itemId, answer, feedback }),
+	/**
 	 *  The session the page should show because a folder was opened before the page was ready. Asking
 	 *  takes it: it is never returned twice.
 	 * 
@@ -524,6 +533,25 @@ export const commands = {
 	 *  Never fails today; it returns a `Result` like every command.
 	 */
 	effortForNewSession: (projectId: string | null) => __TAURI_INVOKE<"low" | "medium" | "high" | "extraHigh" | "max" | null>("effort_for_new_session", { projectId }),
+	/**
+	 *  Changes how far a session's agent may go without asking (ADR 0044), also while a reply runs: a
+	 *  running Claude Code takes it at once, and says so through [`SessionChanged`].
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, it is archived, Bypass permissions is chosen
+	 *  while Settings does not allow it, or the change cannot be saved.
+	 */
+	setSessionPermissionMode: (id: string, mode: PermissionMode) => __TAURI_INVOKE<null>("set_session_permission_mode", { id, mode }),
+	/**
+	 *  The permission mode a new session in a project would take, the Playground when none is given
+	 *  (ADR 0044): that of the session the agent rule follows, except Bypass permissions.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Never fails today; it returns a `Result` like every command.
+	 */
+	permissionModeForNewSession: (projectId: string | null) => __TAURI_INVOKE<PermissionMode>("permission_mode_for_new_session", { projectId }),
 	/**
 	 *  Moves a session that has had no message yet to another project (ADR 0039).
 	 * 
@@ -643,6 +671,7 @@ export const events = {
 	agentsDetected: makeEvent<AgentsDetected>("agents-detected"),
 	maximizeButtonChanged: makeEvent<MaximizeButtonChanged>("maximize-button-changed"),
 	replyNotSaved: makeEvent<ReplyNotSaved>("reply-not-saved"),
+	sessionChanged: makeEvent<SessionChanged>("session-changed"),
 	sessionRequested: makeEvent<SessionRequested>("session-requested"),
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	systemPreferencesChanged: makeEvent<SystemPreferencesChanged>("system-preferences-changed"),
@@ -687,6 +716,12 @@ export type Agents = {
 	 *  off, Arden Code neither asks nor shows.
 	 */
 	showUsageLimits: boolean,
+	/**
+	 *  Let a Claude session be put in Bypass permissions, where it runs every action without
+	 *  asking (ADR 0044). Off, the mode cannot be chosen, and Claude Code is not started so that it
+	 *  can be.
+	 */
+	allowBypassPermissions: boolean,
 };
 
 /**  Tells the page what was found about the agent programs, when they were looked for on their own. */
@@ -779,6 +814,41 @@ export type CheckResult =
 "unavailable" | 
 /**  A release exists, but its signature is not valid, so it was not used. */
 "rejected";
+
+/**  One part of what fills the context window, under the agent CLI's own name for it. */
+export type ContextPart = {
+	/**  Such as "Messages" or "Free space". */
+	name: string,
+	tokens: number,
+	kind: ContextPartKind,
+};
+
+/**  What a part of the context window is, as the agent CLI says. */
+export type ContextPartKind = 
+/**  In the window: the system prompt, the tools, the messages. */
+"used" | 
+/**  Loaded only when needed, so not in the window yet. */
+"deferred" | 
+/**  Kept free, so the agent CLI can compact the conversation. */
+"buffer" | 
+/**  Room left. */
+"free" | 
+/**  A kind the agent CLI added after this version of Arden Code. */
+"other";
+
+/**  How full a session's context window is, as the agent CLI last reported it. */
+export type ContextWindow = {
+	/**  The tokens in the window. */
+	used: number,
+	/**  How many tokens the window holds, which depends on the model. */
+	size: number,
+	/**  How full it is, in whole percent. */
+	percent: number,
+	/**  The tokens at which the agent CLI compacts the conversation, when it does. */
+	compactsAt: number | null,
+	/**  What fills it, in the agent CLI's order. */
+	parts: ContextPart[],
+};
 
 /**  What was found about one agent program. */
 export type Detection = {
@@ -883,6 +953,10 @@ export type ErrorCode =
 "ARD-AGT-016" | 
 /**  The Playground was to be removed; it always stays. */
 "ARD-AGT-017" | 
+/**  The agent refused the permission mode chosen, and kept the one it was in. */
+"ARD-AGT-018" | 
+/**  Bypass permissions was chosen while Settings does not allow it. */
+"ARD-AGT-019" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -952,7 +1026,15 @@ rule: string | null; state: ApprovalState } |
 /**  The tool call that asks them, when it has one. */
 toolCallId: string | null; questions: Question[]; 
 /**  The person's answers, once given. */
-answers: QuestionAnswer[]; state: QuestionState };
+answers: QuestionAnswer[]; state: QuestionState } | 
+/**  The agent has a plan and asks to start it (ADR 0044). */
+{ type: "plan"; id: string; 
+/**  The tool call that asks, when it has one. */
+toolCallId: string | null; 
+/**  The plan, as Markdown, when the agent sent its text. */
+plan: string | null; 
+/**  What the person said should change, when they asked to keep planning. */
+feedback: string | null; state: PlanState };
 
 /**  The shortcuts a person changed. A command that is not here has its default shortcuts. */
 export type Keyboard = {
@@ -1041,6 +1123,44 @@ export type PagePoint = {
 	x: number | null,
 	y: number | null,
 };
+
+/**
+ *  How freely an agent may act in a session before it asks the person (ADR 0044). A session starts
+ *  in Manual.
+ */
+export type PermissionMode = 
+/**  Asks before it edits files or runs commands. */
+"manual" | 
+/**  Edits files without asking, and asks before commands. */
+"acceptEdits" | 
+/**  Explores and plans, and changes nothing until the person approves. */
+"plan" | 
+/**  A classifier approves or denies actions instead of asking the person. */
+"auto" | 
+/**  Never asks: every action runs. */
+"bypassPermissions";
+
+/**  The person's answer to a plan the agent asks to start (ADR 0044). */
+export type PlanAnswer = 
+/**  Start it, editing files without asking. */
+"startAcceptingEdits" | 
+/**  Start it, asking before edits and commands. */
+"startAskingFirst" | 
+/**  Keep planning, with what should change. */
+"keepPlanning";
+
+/**  Where a plan the agent asks to start stands (ADR 0044). */
+export type PlanState = 
+/**  The agent waits for the person's answer. */
+"waiting" | 
+/**  Started in Accept edits. */
+"startedAcceptingEdits" | 
+/**  Started in Manual, asking before edits and commands. */
+"startedAskingFirst" | 
+/**  The person asked the agent to keep planning, with what should change. */
+"keptPlanning" | 
+/**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
+"cancelled";
 
 /**  A folder on disk where agents work. */
 export type Project = {
@@ -1156,7 +1276,22 @@ export type Session = {
 	model?: Model | null,
 	/**  How much the agent thinks, or none for the agent's own setting (ADR 0041). */
 	effort?: Effort | null,
+	/**  How full the agent's context window is, as it last reported, or none until it has (ADR 0044). */
+	contextWindow?: ContextWindow | null,
+	/**  How freely the agent may act before it asks (ADR 0044). */
+	permissionMode?: PermissionMode,
 	turns: Turn[],
+};
+
+/**
+ *  Tells the page that a session's permission mode changed outside its commands, such as when
+ *  Claude enters Plan by itself, or Claude Code refused a mode, with why (ADR 0044).
+ */
+export type SessionChanged = {
+	sessionId: string,
+	permissionMode: PermissionMode,
+	/**  What to tell the person, when the change is not the one they chose. */
+	notice: AppError | null,
 };
 
 /**  The sessions as the sidebar lists them. */
@@ -1191,10 +1326,10 @@ export type SessionSummary = {
 };
 
 /**  One change to one setting. The UI sends these, so each setting keeps its own type. */
-export type SettingChange = ({ generalOnStartup: OnStartup }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ generalCheckForUpdates: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ generalRegionalFormat: RegionalFormat }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceTheme: Theme }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceZoom: number }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceFollowTextSize: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceCodeFontSize: number }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceCodeLigatures: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceReduceMotion: ReduceMotion }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceSmoothScrolling: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceShowStatusBar: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ layoutSidebarWidth: number }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; notificationsDesktop?: never } | ({ layoutInspectorWidth: number }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ notificationsDesktop: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ agentsShowUsageLimits: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ advancedLogLevel: LogLevel }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ advancedDeveloperMode: boolean }) & { advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ advancedNativeTitleBar: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ advancedHardwareAcceleration: boolean }) & { advancedDeveloperMode?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never };
+export type SettingChange = ({ generalOnStartup: OnStartup }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ generalCheckForUpdates: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ generalRegionalFormat: RegionalFormat }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceTheme: Theme }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceZoom: number }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceFollowTextSize: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceCodeFontSize: number }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceCodeLigatures: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceReduceMotion: ReduceMotion }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceSmoothScrolling: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ appearanceShowStatusBar: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ layoutSidebarWidth: number }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; notificationsDesktop?: never } | ({ layoutInspectorWidth: number }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ notificationsDesktop: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never } | ({ agentsShowUsageLimits: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ agentsAllowBypassPermissions: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ advancedLogLevel: LogLevel }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ advancedDeveloperMode: boolean }) & { advancedHardwareAcceleration?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ advancedNativeTitleBar: boolean }) & { advancedDeveloperMode?: never; advancedHardwareAcceleration?: never; advancedLogLevel?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never } | ({ advancedHardwareAcceleration: boolean }) & { advancedDeveloperMode?: never; advancedLogLevel?: never; advancedNativeTitleBar?: never; agentsAllowBypassPermissions?: never; agentsShowUsageLimits?: never; appearanceCodeFontSize?: never; appearanceCodeLigatures?: never; appearanceFollowTextSize?: never; appearanceReduceMotion?: never; appearanceShowStatusBar?: never; appearanceSmoothScrolling?: never; appearanceTheme?: never; appearanceZoom?: never; generalCheckForUpdates?: never; generalOnStartup?: never; generalRegionalFormat?: never; layoutInspectorWidth?: never; layoutSidebarWidth?: never; notificationsDesktop?: never };
 
 /**  One setting, named so that it can be reset without saying its value. */
-export type SettingKey = "generalOnStartup" | "generalCheckForUpdates" | "generalRegionalFormat" | "appearanceTheme" | "appearanceZoom" | "appearanceFollowTextSize" | "appearanceCodeFontSize" | "appearanceCodeLigatures" | "appearanceReduceMotion" | "appearanceSmoothScrolling" | "appearanceShowStatusBar" | "layoutSidebarWidth" | "layoutInspectorWidth" | "notificationsDesktop" | "agentsShowUsageLimits" | "advancedLogLevel" | "advancedDeveloperMode" | "advancedNativeTitleBar" | "advancedHardwareAcceleration";
+export type SettingKey = "generalOnStartup" | "generalCheckForUpdates" | "generalRegionalFormat" | "appearanceTheme" | "appearanceZoom" | "appearanceFollowTextSize" | "appearanceCodeFontSize" | "appearanceCodeLigatures" | "appearanceReduceMotion" | "appearanceSmoothScrolling" | "appearanceShowStatusBar" | "layoutSidebarWidth" | "layoutInspectorWidth" | "notificationsDesktop" | "agentsShowUsageLimits" | "agentsAllowBypassPermissions" | "advancedLogLevel" | "advancedDeveloperMode" | "advancedNativeTitleBar" | "advancedHardwareAcceleration";
 
 /**
  *  Every setting, as stored in `settings.json`. Keys this version does not know are ignored. The
@@ -1301,7 +1436,12 @@ export type TurnEvent =
 /**  The reply stopped because something went wrong. */
 { type: "failed"; turnId: string } | 
 /**  The person stopped the reply. */
-{ type: "stopped"; turnId: string };
+{ type: "stopped"; turnId: string } | 
+/**
+ *  How full the session's context window is, as the agent reported it once the reply ended
+ *  (ADR 0044).
+ */
+{ type: "contextWindowChanged"; turnId: string; contextWindow: ContextWindow };
 
 /**  How far a turn has come. */
 export type TurnStatus = 

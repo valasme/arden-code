@@ -6,6 +6,7 @@ import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import type { AnswerHandler } from "./ApprovalItem";
 import { ItemView } from "./ItemView";
+import type { PlanHandler } from "./PlanItem";
 import type { QuestionsHandler } from "./QuestionsItem";
 
 import "@/styles/global.css";
@@ -18,6 +19,7 @@ function renderItem(item: Item, streaming = false, onAnswer = vi.fn<AnswerHandle
       agent="claude"
       onAnswer={onAnswer}
       onAnswerQuestions={vi.fn<QuestionsHandler>()}
+      onAnswerPlan={vi.fn<PlanHandler>()}
     />,
   );
 }
@@ -257,6 +259,7 @@ describe("Every kind of item", () => {
             agent="claude"
             onAnswer={vi.fn<AnswerHandler>()}
             onAnswerQuestions={vi.fn<QuestionsHandler>()}
+            onAnswerPlan={vi.fn<PlanHandler>()}
           />
         ))}
       </div>,

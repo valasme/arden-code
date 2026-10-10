@@ -4,6 +4,8 @@ use arden_core::error::ErrorCode;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use crate::context_window::ContextWindow;
+
 /// Which agent answers in a session. Codex arrives with its driver.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -74,6 +76,62 @@ impl Effort {
             Self::High => "high",
             Self::ExtraHigh => "xhigh",
             Self::Max => "max",
+        }
+    }
+}
+
+/// How freely an agent may act in a session before it asks the person (ADR 0044). A session starts
+/// in Manual.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum PermissionMode {
+    /// Asks before it edits files or runs commands.
+    #[default]
+    Manual,
+    /// Edits files without asking, and asks before commands.
+    AcceptEdits,
+    /// Explores and plans, and changes nothing until the person approves.
+    Plan,
+    /// A classifier approves or denies actions instead of asking the person.
+    Auto,
+    /// Never asks: every action runs.
+    BypassPermissions,
+}
+
+impl PermissionMode {
+    /// The name Claude Code takes for it, as in `--permission-mode acceptEdits`. Manual is Claude
+    /// Code's `default`, the name every supported Claude Code takes.
+    #[must_use]
+    pub fn claude_name(self) -> &'static str {
+        match self {
+            Self::Manual => "default",
+            Self::AcceptEdits => "acceptEdits",
+            Self::Plan => "plan",
+            Self::Auto => "auto",
+            Self::BypassPermissions => "bypassPermissions",
+        }
+    }
+
+    /// The mode Claude Code names, or none for one Arden Code does not offer, such as `dontAsk`.
+    #[must_use]
+    pub fn from_claude_name(name: &str) -> Option<Self> {
+        match name {
+            "default" | "manual" => Some(Self::Manual),
+            "acceptEdits" => Some(Self::AcceptEdits),
+            "plan" => Some(Self::Plan),
+            "auto" => Some(Self::Auto),
+            "bypassPermissions" => Some(Self::BypassPermissions),
+            _ => None,
+        }
+    }
+
+    /// The mode a new session takes from the session it follows: the same, except that Bypass
+    /// permissions is never passed on (councils Q16).
+    #[must_use]
+    pub fn inherited(self) -> Self {
+        match self {
+            Self::BypassPermissions => Self::Manual,
+            other => other,
         }
     }
 }
@@ -213,6 +271,22 @@ pub enum QuestionState {
     Cancelled,
 }
 
+/// Where a plan the agent asks to start stands (ADR 0044).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum PlanState {
+    /// The agent waits for the person's answer.
+    Waiting,
+    /// Started in Accept edits.
+    StartedAcceptingEdits,
+    /// Started in Manual, asking before edits and commands.
+    StartedAskingFirst,
+    /// The person asked the agent to keep planning, with what should change.
+    KeptPlanning,
+    /// No answer is needed any more: the reply stopped, or the agent gave up on asking.
+    Cancelled,
+}
+
 /// One part of an agent's reply.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -286,6 +360,18 @@ pub enum Item {
         answers: Vec<QuestionAnswer>,
         state: QuestionState,
     },
+    /// The agent has a plan and asks to start it (ADR 0044).
+    #[serde(rename_all = "camelCase")]
+    Plan {
+        id: String,
+        /// The tool call that asks, when it has one.
+        tool_call_id: Option<String>,
+        /// The plan, as Markdown, when the agent sent its text.
+        plan: Option<String>,
+        /// What the person said should change, when they asked to keep planning.
+        feedback: Option<String>,
+        state: PlanState,
+    },
 }
 
 impl Item {
@@ -299,6 +385,9 @@ impl Item {
                 ..
             } | Self::Questions {
                 state: QuestionState::Waiting,
+                ..
+            } | Self::Plan {
+                state: PlanState::Waiting,
                 ..
             }
         )
@@ -314,7 +403,8 @@ impl Item {
             | Self::Error { id, .. }
             | Self::Status { id, .. }
             | Self::Approval { id, .. }
-            | Self::Questions { id, .. } => id,
+            | Self::Questions { id, .. }
+            | Self::Plan { id, .. } => id,
         }
     }
 }
@@ -374,6 +464,9 @@ impl Turn {
                 Item::Questions { state, .. } if *state == QuestionState::Waiting => {
                     *state = QuestionState::Cancelled;
                 }
+                Item::Plan { state, .. } if *state == PlanState::Waiting => {
+                    *state = PlanState::Cancelled;
+                }
                 _ => {}
             }
         }
@@ -422,6 +515,8 @@ impl Turn {
             TurnEvent::Finished { .. } => self.status = TurnStatus::Done,
             TurnEvent::Failed { .. } => self.status = TurnStatus::Failed,
             TurnEvent::Stopped { .. } => self.stop(),
+            // About the session, not the turn.
+            TurnEvent::ContextWindowChanged { .. } => {}
         }
     }
 }
@@ -451,6 +546,12 @@ pub struct Session {
     /// How much the agent thinks, or none for the agent's own setting (ADR 0041).
     #[serde(default)]
     pub effort: Option<Effort>,
+    /// How full the agent's context window is, as it last reported, or none until it has (ADR 0044).
+    #[serde(default)]
+    pub context_window: Option<ContextWindow>,
+    /// How freely the agent may act before it asks (ADR 0044).
+    #[serde(default)]
+    pub permission_mode: PermissionMode,
     pub turns: Vec<Turn>,
 }
 
@@ -522,6 +623,13 @@ pub enum TurnEvent {
     /// The person stopped the reply.
     #[serde(rename_all = "camelCase")]
     Stopped { turn_id: String },
+    /// How full the session's context window is, as the agent reported it once the reply ended
+    /// (ADR 0044).
+    #[serde(rename_all = "camelCase")]
+    ContextWindowChanged {
+        turn_id: String,
+        context_window: ContextWindow,
+    },
 }
 
 impl TurnEvent {
@@ -534,7 +642,8 @@ impl TurnEvent {
             | Self::ToolCallEnded { turn_id, .. }
             | Self::Finished { turn_id }
             | Self::Failed { turn_id }
-            | Self::Stopped { turn_id } => turn_id,
+            | Self::Stopped { turn_id }
+            | Self::ContextWindowChanged { turn_id, .. } => turn_id,
         }
     }
 }

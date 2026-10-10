@@ -91,12 +91,15 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::remove_project,
         sessions::answer_approval,
         sessions::answer_questions,
+        sessions::answer_plan,
         sessions::take_pending_open,
         sessions::set_session_agent,
         sessions::set_session_model,
         sessions::model_for_new_session,
         sessions::set_session_effort,
         sessions::effort_for_new_session,
+        sessions::set_session_permission_mode,
+        sessions::permission_mode_for_new_session,
         sessions::set_session_project,
         sessions::pick_folder,
         sessions::agent_for_new_session,
@@ -164,12 +167,15 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::remove_project,
         sessions::answer_approval,
         sessions::answer_questions,
+        sessions::answer_plan,
         sessions::take_pending_open,
         sessions::set_session_agent,
         sessions::set_session_model,
         sessions::model_for_new_session,
         sessions::set_session_effort,
         sessions::effort_for_new_session,
+        sessions::set_session_permission_mode,
+        sessions::permission_mode_for_new_session,
         sessions::set_session_project,
         sessions::pick_folder,
         sessions::agent_for_new_session,
@@ -198,7 +204,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         sessions::SessionRequested,
         sessions::ReplyNotSaved,
         agents::AgentsDetected,
-        agents::UsageLimitsChanged
+        agents::UsageLimitsChanged,
+        sessions::SessionChanged
     ])
 }
 
@@ -358,6 +365,12 @@ fn manage_programs(app: &tauri::App, paths: &AppPaths) {
     };
     let claude = agents::Claude::with(supervisor.as_ref());
     claude.report_usage_to(app.handle(), &app.state::<SettingsService>());
+    claude.report_session_changes_to(app.handle(), &app.state::<sessions::Sessions>());
+    claude.follow_bypass_setting(
+        app.handle(),
+        &app.state::<SettingsService>(),
+        &app.state::<sessions::Sessions>(),
+    );
     app.manage(claude);
     app.manage(agents::Programs(supervisor));
     app.manage(agents::Detections::default());

@@ -5,7 +5,7 @@ import { page } from "vitest/browser";
 
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
-import { animationsDone } from "@/test/animations";
+import { animationsDone, menuClosed } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
@@ -35,6 +35,7 @@ async function choose(user: ReturnType<typeof userEvent.setup>, button: string, 
   await animationsDone(menu);
   const role = item.source.includes("Open folder") ? "menuitem" : "menuitemradio";
   await user.click(await within(menu).findByRole(role, { name: item }));
+  await menuClosed();
 }
 
 beforeEach(async () => {
@@ -148,6 +149,11 @@ describe("Ultrathink on the welcome screen", () => {
     await user.click(within(menu).getByRole("menuitemcheckbox", { name: /Ultrathink/ }));
     // The menu stays open to show the switch change; Escape closes it.
     await user.keyboard("{Escape}");
+    await menuClosed();
+    // The message box says the next message will carry the word (ADR 0044).
+    expect(
+      await within(await main()).findByRole("button", { name: "Turn off Ultrathink" }),
+    ).toBeVisible();
     await user.type(within(await main()).getByRole("textbox", { name: "Message" }), "Hello{Enter}");
 
     await waitFor(() => {

@@ -1,14 +1,17 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDownIcon, EllipsisIcon } from "lucide-react";
+import { ArrowDownIcon, EllipsisIcon, FolderIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
+import { useSettings } from "@/features/settings/useSettings";
 import {
   type Effort,
   type Model,
+  type PermissionMode,
+  type PlanAnswer,
   type AgentKind,
   type Answer,
   commands,
@@ -21,11 +24,14 @@ import { logger } from "@/lib/logger";
 import { useRepliesStore } from "@/state/replies";
 import { useSessionDialogsStore } from "@/state/sessionDialogs";
 
+import { agentIcons } from "./agentIcons";
 import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
 import { EffortMenu } from "./EffortMenu";
+import { Figures } from "./Figures";
 import { ModelMenu } from "./ModelMenu";
+import { PermissionModeMenu } from "./PermissionModeMenu";
 import { ProjectMenu } from "./ProjectMenu";
 import { projectsByUse } from "./sessionList";
 import { useTrustGate } from "./useTrustGate";
@@ -71,6 +77,7 @@ export function SessionView({ id }: { id: string }) {
   const [atEnd, setAtEnd] = useState(true);
   const { gate, dialog: trustDialog } = useTrustGate();
   const { ultrathink, setUltrathink, carrying } = useUltrathink();
+  const bypassAllowed = useSettings().agents.allowBypassPermissions;
 
   const turns = session?.turns ?? [];
   const count = turns.length;
@@ -112,6 +119,15 @@ export function SessionView({ id }: { id: string }) {
   const answerQuestions = useCallback(
     (itemId: string, given: QuestionAnswer[]) => {
       commands.answerQuestions(id, itemId, given).catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      });
+    },
+    [id],
+  );
+
+  const answerPlan = useCallback(
+    (itemId: string, given: PlanAnswer, feedback: string | null) => {
+      commands.answerPlan(id, itemId, given, feedback).catch((failure: unknown) => {
         showErrorToast(toAppError(failure));
       });
     },
@@ -206,6 +222,10 @@ export function SessionView({ id }: { id: string }) {
   const chooseEffort = (effort: Effort | null) => {
     change(commands.setSessionEffort(id, effort), false);
   };
+  // The permission mode changes at once, also while a reply runs (ADR 0044).
+  const chooseMode = (mode: PermissionMode) => {
+    change(commands.setSessionPermissionMode(id, mode), false);
+  };
   // /rename names the session, and asks for a name when it is given none (ADR 0042).
   const renameTo = (name: string) => {
     if (name === "") {
@@ -222,30 +242,26 @@ export function SessionView({ id }: { id: string }) {
         showErrorToast(toAppError(failure));
       });
   };
-  const choices =
-    count === 0 && session.archivedAt === null ? (
-      <span className="flex min-w-0 items-center gap-1.5">
-        <AgentMenu agent={agent} unavailable={unavailable} onChoose={chooseAgent} />
-        <ProjectMenu
-          projectId={session.projectId}
-          projects={projectsByUse(list)}
-          onChoose={chooseProject}
-          onOpenFolder={() => {
-            void openFolder().then((opened) => {
-              if (opened) chooseProject(opened.id);
-            });
-          }}
-        />
-      </span>
-    ) : (
-      <span className="truncate">
-        {t("sessions.context", { agent: agentName, project: projectName })}
-      </span>
-    );
-  const context = (
-    <span className="flex min-w-0 items-center gap-1.5">
-      {choices}
-      {agent === "claude" && session.archivedAt === null ? (
+  // Once the session has a message, its agent and project can no longer change: they are named in
+  // the header, and the lower line keeps only what the next message can change (ADR 0044).
+  const choices = (
+    <>
+      {count === 0 ? (
+        <>
+          <AgentMenu agent={agent} unavailable={unavailable} onChoose={chooseAgent} />
+          <ProjectMenu
+            projectId={session.projectId}
+            projects={projectsByUse(list)}
+            onChoose={chooseProject}
+            onOpenFolder={() => {
+              void openFolder().then((opened) => {
+                if (opened) chooseProject(opened.id);
+              });
+            }}
+          />
+        </>
+      ) : null}
+      {agent === "claude" ? (
         <>
           <ModelMenu
             model={session.model ?? null}
@@ -261,10 +277,16 @@ export function SessionView({ id }: { id: string }) {
             onUltrathink={setUltrathink}
             onChoose={chooseEffort}
           />
+          <PermissionModeMenu
+            mode={session.permissionMode ?? "manual"}
+            bypassAllowed={bypassAllowed}
+            onChoose={chooseMode}
+          />
         </>
       ) : null}
-    </span>
+    </>
   );
+  const AgentIcon = agentIcons[agent];
 
   return (
     <div className="flex h-full flex-col">
@@ -272,8 +294,13 @@ export function SessionView({ id }: { id: string }) {
         <h1 className="min-w-0 truncate text-sm font-semibold">
           {session.title ?? t("sessions.untitled")}
         </h1>
-        <span className="shrink-0 border border-border px-1.5 text-2xs leading-4 text-muted-foreground">
+        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <AgentIcon aria-hidden className="size-4" strokeWidth={1.5} />
           {agentName}
+        </span>
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <FolderIcon aria-hidden className="size-4 shrink-0" strokeWidth={1.5} />
+          <span className="truncate">{projectName}</span>
         </span>
         <SessionMenu sessionId={id}>
           <Button
@@ -337,6 +364,7 @@ export function SessionView({ id }: { id: string }) {
                       agent={agent}
                       onAnswer={answer}
                       onAnswerQuestions={answerQuestions}
+                      onAnswerPlan={answerPlan}
                     />
                   </article>
                 );
@@ -360,12 +388,23 @@ export function SessionView({ id }: { id: string }) {
         <MessageBox
           agent={agent}
           busy={busy}
-          context={context}
+          choices={choices}
+          figures={
+            agent === "claude" ? <Figures contextWindow={session.contextWindow ?? null} /> : null
+          }
           onStop={() => {
             run("reply.stop");
           }}
           {...(agent === "claude"
-            ? { slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands } }
+            ? {
+                slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands },
+                ultrathink: {
+                  on: ultrathink,
+                  onTurnOff: () => {
+                    setUltrathink(false);
+                  },
+                },
+              }
             : {})}
           onSend={carrying((text) => {
             if (

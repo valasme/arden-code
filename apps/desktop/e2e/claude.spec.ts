@@ -65,7 +65,12 @@ test.describe("Claude in the real app", () => {
         timeout: 30_000,
       });
       await expect(session.getByText("Claude is replying…")).toBeHidden();
-      await expect(page.getByText("Claude · Playground")).toBeVisible();
+      // Once the session has a message, its header names its agent and project (ADR 0044).
+      const header = page
+        .getByRole("heading", { level: 1, name: "Hello from the test" })
+        .locator("..");
+      await expect(header.getByText("Claude", { exact: true })).toBeVisible();
+      await expect(header.getByText("Playground", { exact: true })).toBeVisible();
     } finally {
       app.kill();
       claude.remove();
@@ -161,7 +166,7 @@ test.describe("Claude in the real app", () => {
     }
   });
 
-  test("the status bar shows the usage limits Claude Code reports", async () => {
+  test("the message box shows the usage limits Claude Code reports", async () => {
     const claude = claudeOnPath({
       usage: {
         subscription_type: "max",
@@ -175,11 +180,172 @@ test.describe("Claude in the real app", () => {
     const app = await launchApp({ env: claude.env });
     try {
       const { page } = app;
-      const bar = page.locator('[data-area="statusbar"]');
 
-      // Asked once Arden Code has found Claude Code after it started, with no session open.
-      await expect(bar.getByText("5-hour 42%")).toBeVisible({ timeout: 30_000 });
-      await expect(bar.getByText("Weekly 18%")).toBeVisible();
+      // Asked once Arden Code has found Claude Code after it started, with no session open: the
+      // welcome screen's message box, for Claude, shows them before Send (ADR 0044).
+      const figures = page.getByRole("button", { name: "5-hour 42% Weekly 18%" });
+      await expect(figures).toBeVisible({ timeout: 30_000 });
+      await figures.click();
+      const details = page.getByRole("dialog", { name: "Usage limits" });
+      await expect(details.getByText("Weekly limit")).toBeVisible();
+      await expect(page.locator('[data-area="statusbar"]').getByText(/5-hour/u)).toBeHidden();
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
+
+  test("the message box shows how full a Claude session's context window is after a reply", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+
+      await say(page, "Hello from the test");
+      await expect(session.getByText("You said: Hello from the test")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      // Claude Code reports its context window once the reply has ended (ADR 0044).
+      const figures = page.getByRole("button", { name: /^Context 13%/u });
+      await expect(figures).toBeVisible({ timeout: 30_000 });
+      await figures.click();
+      const details = page.getByRole("dialog", { name: "Context window" });
+      await expect(details.getByText("13% used: 26K of 200K tokens")).toBeVisible();
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
+
+  test("Claude Code starts in the permission mode chosen, and takes another at once", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
+    const log = path.join(dataDir, "claude.log");
+    const claude = claudeOnPath({ log });
+    const app = await launchApp({ dataDir, env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+
+      await page.getByRole("button", { name: "Permission mode: Manual" }).click();
+      await page.getByRole("menuitemradio", { name: /^Plan/u }).click();
+      await expect(page.getByRole("button", { name: "Permission mode: Plan" })).toBeVisible();
+      await say(page, "Which mode are you in?");
+      await expect(session.getByText("The permission mode is plan.")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      // The running Claude Code takes the new mode without starting again (ADR 0044).
+      await page.getByRole("button", { name: "Permission mode: Plan" }).click();
+      await page.keyboard.press("2");
+      await expect(
+        page.getByRole("button", { name: "Permission mode: Accept edits" }),
+      ).toBeVisible();
+      await say(page, "Which mode now?");
+      await expect(session.getByText("The permission mode is acceptEdits.")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      // Next permission mode, from the keyboard (ADR 0044).
+      await page.keyboard.press("Control+Shift+M");
+      await expect(page.getByRole("button", { name: "Permission mode: Plan" })).toBeVisible();
+
+      const conversations = readFileSync(log, "utf8")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("start "))
+        .map((line) => started.parse(JSON.parse(line.slice("start ".length))).args)
+        .filter((args) => args.includes("-p") && !args.includes("--no-session-persistence"));
+      expect(conversations).toHaveLength(1);
+      const [first] = conversations;
+      expect(first?.[(first?.indexOf("--permission-mode") ?? -2) + 1]).toBe("plan");
+    } finally {
+      app.kill();
+      claude.remove();
+      rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    }
+  });
+
+  test("Bypass permissions, once allowed, starts Claude Code again so that it can, and turning it off goes back to Manual", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
+    const log = path.join(dataDir, "claude.log");
+    const claude = claudeOnPath({ log });
+    const app = await launchApp({ dataDir, env: claude.env });
+    /** Turns Settings → Agents → Allow Bypass permissions on or off, and comes back to the session. */
+    const allowBypass = async (allowed: boolean) => {
+      await app.page.getByRole("link", { name: "Settings" }).click();
+      await app.page.getByRole("link", { name: "Agents", exact: true }).click();
+      const toggle = app.page.getByRole("switch", { name: "Allow Bypass permissions" });
+      await toggle.click();
+      await expect(toggle).toBeChecked({ checked: allowed });
+      await app.page.getByRole("link", { name: "Back" }).click();
+    };
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+      await say(page, "Which mode are you in?");
+      await expect(session.getByText("The permission mode is default.")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      await allowBypass(true);
+      await page.getByRole("button", { name: "Permission mode: Manual" }).click();
+      await page.getByRole("menuitemradio", { name: /^Bypass permissions/u }).click();
+      const bypassed = page.getByRole("button", { name: "Permission mode: Bypass permissions" });
+      await expect(bypassed).toBeVisible();
+      await say(page, "Which mode now?");
+      await expect(session.getByText("The permission mode is bypassPermissions.")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      const conversations = readFileSync(log, "utf8")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("start "))
+        .map((line) => started.parse(JSON.parse(line.slice("start ".length))).args)
+        .filter((args) => args.includes("-p") && !args.includes("--no-session-persistence"));
+      expect(conversations).toHaveLength(2);
+      expect(conversations[0]).not.toContain("--allow-dangerously-skip-permissions");
+      expect(conversations[1]).toContain("--allow-dangerously-skip-permissions");
+      expect(conversations[1]).toContain("--resume");
+
+      await allowBypass(false);
+      await expect(page.getByRole("button", { name: "Permission mode: Manual" })).toBeVisible();
+      await say(page, "Which mode at last?");
+      await expect(session.getByText("The permission mode is default.").nth(1)).toBeVisible({
+        timeout: 30_000,
+      });
+    } finally {
+      app.kill();
+      claude.remove();
+      rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    }
+  });
+
+  test("Claude's plan is shown, and starting it accepting edits changes the session's mode", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+      await page.getByRole("button", { name: "Permission mode: Manual" }).click();
+      await page.getByRole("menuitemradio", { name: /^Plan/u }).click();
+      await expect(page.getByRole("button", { name: "Permission mode: Plan" })).toBeVisible();
+
+      await say(page, "Plan the fix");
+      const card = session.getByRole("group", { name: "Claude has a plan" });
+      await expect(card).toBeVisible({ timeout: 30_000 });
+      await expect(card.getByRole("heading", { name: "The fix" })).toBeVisible();
+      await card.getByRole("button", { name: "Start, accepting edits" }).click();
+
+      await expect(session.getByText("Started the plan in acceptEdits.")).toBeVisible({
+        timeout: 30_000,
+      });
+      await expect(session.getByText("You started the plan, accepting edits")).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Permission mode: Accept edits" }),
+      ).toBeVisible();
     } finally {
       app.kill();
       claude.remove();

@@ -3,8 +3,14 @@
 //! chosen by what the message says. It never talks to Anthropic.
 //!
 //! Its settings are in `stand-in.json` beside it, when there is one: the `version` it says, whether
-//! it is `signedIn`, the `usage` it answers `get_usage` with (ADR 0043), and a `log` file where it
-//! writes how it was started (its arguments and its folder) and every line it reads.
+//! it is `signedIn`, the `usage` it answers `get_usage` with (ADR 0043), the `context` it answers
+//! `get_context_usage` with (ADR 0044), and a `log` file where it writes how it was started (its
+//! arguments and its folder) and every line it reads.
+//!
+//! It applies the `--permission-mode` it is started with and changes it on `set_permission_mode`,
+//! refusing Bypass permissions unless started with `--allow-dangerously-skip-permissions`, as
+//! Claude Code does (ADR 0044). Asked "which mode", it says the mode it applies. Asked to "plan the
+//! fix" in Plan mode, it asks to start a plan with `ExitPlanMode`.
 
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
@@ -20,6 +26,8 @@ struct Settings {
     signed_in: bool,
     /// The answer to `get_usage`: by default, no plan limits, as for an API key.
     usage: Value,
+    /// The answer to `get_context_usage`: by default, a window of 200,000 tokens, 13% full.
+    context: Value,
     log: Option<PathBuf>,
 }
 
@@ -39,6 +47,23 @@ fn settings() -> Settings {
                 json!({ "subscription_type": null, "rate_limits_available": false, "rate_limits": null })
             }
             usage => usage.clone(),
+        },
+        context: match &written["context"] {
+            Value::Null => json!({
+                "categories": [
+                    { "name": "System prompt", "tokens": 2_000, "kind": "used" },
+                    { "name": "System tools", "tokens": 14_000, "kind": "used" },
+                    { "name": "Messages", "tokens": 10_000, "kind": "used" },
+                    { "name": "Autocompact buffer", "tokens": 33_000, "kind": "buffer" },
+                    { "name": "Free space", "tokens": 141_000, "kind": "free" }
+                ],
+                "totalTokens": 26_000,
+                "maxTokens": 200_000,
+                "percentage": 13,
+                "autoCompactThreshold": 167_000,
+                "isAutoCompactEnabled": true
+            }),
+            context => context.clone(),
         },
         log: written["log"].as_str().map(PathBuf::from),
     }
@@ -87,7 +112,16 @@ fn main() {
         .and_then(|at| args.get(at + 1))
         .cloned()
         .unwrap_or_else(|| "stand-in".to_owned());
-    Conversation::new(settings, session).run();
+    let mode = args
+        .iter()
+        .position(|arg| arg == "--permission-mode")
+        .and_then(|at| args.get(at + 1))
+        .cloned()
+        .unwrap_or_else(|| "default".to_owned());
+    let bypass_launched = args
+        .iter()
+        .any(|arg| arg == "--allow-dangerously-skip-permissions");
+    Conversation::new(settings, session, mode, bypass_launched).run();
 }
 
 /// Writes a frame on the stand-in's output.
@@ -102,6 +136,14 @@ fn respond(request: &Value, response: &Value) {
     send(&json!({
         "type": "control_response",
         "response": { "subtype": "success", "request_id": request["request_id"], "response": response }
+    }));
+}
+
+/// Refuses a request of Arden Code's, as Claude Code does.
+fn refuse(request: &Value, error: &str) {
+    send(&json!({
+        "type": "control_response",
+        "response": { "subtype": "error", "request_id": request["request_id"], "error": error }
     }));
 }
 
@@ -129,10 +171,14 @@ struct Conversation {
     session: String,
     lines: Receiver<String>,
     messages: u32,
+    /// The permission mode it applies, by Claude Code's name (ADR 0044).
+    mode: String,
+    /// Whether it was started so that Bypass permissions can be turned on.
+    bypass_launched: bool,
 }
 
 impl Conversation {
-    fn new(settings: Settings, session: String) -> Self {
+    fn new(settings: Settings, session: String, mode: String, bypass_launched: bool) -> Self {
         let (sender, lines) = mpsc::channel();
         thread::spawn(move || {
             for line in io::stdin().lock().lines() {
@@ -147,7 +193,31 @@ impl Conversation {
             session,
             lines,
             messages: 0,
+            mode,
+            bypass_launched,
         }
+    }
+
+    /// Changes the permission mode as Claude Code does: Bypass permissions only when it was started
+    /// so that it can be, and a report of the mode after the change.
+    fn set_permission_mode(&mut self, request: &Value) {
+        let mode = request["request"]["mode"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        if mode == "bypassPermissions" && !self.bypass_launched {
+            refuse(
+                request,
+                "Cannot set permission mode to bypassPermissions because the session was not launched with --dangerously-skip-permissions",
+            );
+            return;
+        }
+        respond(request, &json!({ "mode": mode }));
+        self.mode = mode;
+        send(&json!({
+            "type": "system", "subtype": "status", "status": null,
+            "permissionMode": self.mode, "session_id": self.session
+        }));
     }
 
     /// The next frame Arden Code writes, or nothing when it has gone.
@@ -161,10 +231,18 @@ impl Conversation {
         while let Some(frame) = self.next() {
             match frame["type"].as_str() {
                 Some("control_request") if frame["request"]["subtype"] == "initialize" => {
-                    respond(&frame, &listing());
+                    let mut answer = listing();
+                    answer["current_permission_mode"] = json!(self.mode);
+                    respond(&frame, &answer);
                 }
                 Some("control_request") if frame["request"]["subtype"] == "get_usage" => {
                     respond(&frame, &self.settings.usage);
+                }
+                Some("control_request") if frame["request"]["subtype"] == "get_context_usage" => {
+                    respond(&frame, &self.settings.context);
+                }
+                Some("control_request") if frame["request"]["subtype"] == "set_permission_mode" => {
+                    self.set_permission_mode(&frame);
                 }
                 Some("control_request") => respond(&frame, &json!({})),
                 Some("user") => {
@@ -283,6 +361,12 @@ impl Conversation {
             self.ask_questions();
         } else if asked.contains("run the tests") {
             self.run_tests();
+        } else if asked.contains("plan the fix") && self.mode == "plan" {
+            self.plan();
+        } else if asked.contains("which mode") {
+            let said = format!("The permission mode is {}.", self.mode);
+            self.say(&said);
+            self.result(&said, false);
         } else if asked.contains("read the readme") {
             self.tool(
                 "toolu_read",
@@ -365,6 +449,40 @@ impl Conversation {
         };
         self.say(said);
         self.result(said, false);
+    }
+
+    /// Asks to start a plan, and starts it in the mode the person chose, or keeps planning.
+    fn plan(&mut self) {
+        let input = json!({ "plan": "## The fix\n\n1. Read the build script\n2. Fix the path" });
+        self.messages += 1;
+        let message = format!("msg_{}", self.messages);
+        self.assistant(
+            &message,
+            &json!([{ "type": "tool_use", "id": "toolu_p1", "name": "ExitPlanMode", "input": input }]),
+        );
+        let Some(answer) = self.ask("p1", "ExitPlanMode", &input, &json!([])) else {
+            send(
+                &json!({ "type": "result", "subtype": "error_during_execution", "is_error": true, "result": "", "session_id": self.session }),
+            );
+            return;
+        };
+        let said = if answer["behavior"] == "allow" {
+            if let Some(mode) = answer["updatedPermissions"][0]["mode"].as_str() {
+                mode.clone_into(&mut self.mode);
+                send(&json!({
+                    "type": "system", "subtype": "status", "status": null,
+                    "permissionMode": self.mode, "session_id": self.session
+                }));
+            }
+            format!("Started the plan in {}.", self.mode)
+        } else {
+            format!(
+                "I will keep planning. {}",
+                answer["message"].as_str().unwrap_or_default()
+            )
+        };
+        self.say(&said);
+        self.result(&said, false);
     }
 
     /// Asks which library to use, and says what the person chose.

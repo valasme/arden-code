@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -7,7 +7,7 @@ import { createContext, type ReactNode, useContext, useEffect, useMemo } from "r
 import { useChangeSetting, useSettings } from "@/features/settings/useSettings";
 import { nextZoom } from "@/features/settings/zoom";
 import { commands as ipc } from "@/ipc/bindings";
-import { noSessions, sessionListQuery } from "@/ipc/queries";
+import { noSessions, sessionListQuery, sessionQuery } from "@/ipc/queries";
 import { defaultSettings } from "@/ipc/defaults.gen";
 import { reportFailure, showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
@@ -17,6 +17,7 @@ import {
   type SessionAction,
   useSessionActions,
 } from "@/features/sessions/useSessionActions";
+import { nextPermissionMode } from "@/features/sessions/PermissionModeMenu";
 import { useOpenFolder } from "@/features/sessions/useOpenFolder";
 import { useStartSession } from "@/features/sessions/useStartSession";
 import { moveToArea } from "./areas";
@@ -110,6 +111,9 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
   // Stopping a reply is offered while one is running; the list of commands follows it.
   const replying = useRepliesStore((state) => state.busy);
   const openSession = useRepliesStore((state) => state.sessionId);
+  const openAgent = useRepliesStore((state) => state.agent);
+  const bypassAllowed = useSettings().agents.allowBypassPermissions;
+  const queryClient = useQueryClient();
   const { data: sessionList = noSessions } = useQuery(sessionListQuery);
   const runSessionAction = useSessionActions();
 
@@ -159,6 +163,25 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
           }
         },
         enabled: () => replying,
+      },
+      // The open Claude session moves to the next permission mode, at once (ADR 0044).
+      "permissionMode.next": {
+        run: () => {
+          if (openSession === undefined) return;
+          const key = sessionQuery(openSession).queryKey;
+          const mode = queryClient.getQueryData(key)?.permissionMode ?? "manual";
+          ipc
+            .setSessionPermissionMode(openSession, nextPermissionMode(mode, bypassAllowed))
+            .then(() => queryClient.invalidateQueries({ queryKey: key }))
+            .catch((error: unknown) => {
+              showErrorToast(toAppError(error));
+            });
+        },
+        enabled: () => {
+          const session =
+            openSession === undefined ? undefined : findSession(sessionList, openSession);
+          return openAgent === "claude" && session !== undefined && session.archivedAt === null;
+        },
       },
       "session.newLinked": sessionCommand("link"),
       "session.rename": sessionCommand("rename"),
@@ -229,6 +252,9 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
     changed,
     replying,
     openSession,
+    openAgent,
+    bypassAllowed,
+    queryClient,
     sessionList,
     runSessionAction,
   ]);

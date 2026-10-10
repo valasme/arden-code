@@ -56,6 +56,9 @@ pub enum Frame {
     /// What Claude Code learned about the person's usage limits during a turn
     /// (`rate_limit_event`): its `rate_limit_info`, as it was sent (ADR 0043).
     RateLimit(Value),
+    /// Claude Code says what state it is in (`system`, `status`): the permission mode it applies,
+    /// by Claude Code's own name, after every change of it (ADR 0044).
+    Status { permission_mode: Option<String> },
     /// A frame the driver does not use.
     Other,
 }
@@ -235,6 +238,9 @@ pub fn parse(line: &str) -> Option<Frame> {
         Some("system") if frame["subtype"] == "commands_changed" => Frame::CommandsChanged {
             commands: commands_in(&frame["commands"]),
         },
+        Some("system") if frame["subtype"] == "status" => Frame::Status {
+            permission_mode: text_of(&frame["permissionMode"]),
+        },
         Some("stream_event") => Frame::Stream {
             event: stream_event(&frame["event"]),
             subagent: subagent(&frame),
@@ -299,6 +305,26 @@ pub fn get_usage(id: &str) -> String {
     control_request(
         id,
         &json!({ "subtype": "get_usage", "skip_behaviors": true }),
+    )
+}
+
+/// Asks how full the context window is, answered from Claude Code's own figures with no call to
+/// the model (ADR 0044).
+#[must_use]
+pub fn get_context_usage(id: &str) -> String {
+    control_request(
+        id,
+        &json!({ "subtype": "get_context_usage", "detail": "summary" }),
+    )
+}
+
+/// Changes the permission mode Claude Code applies, at once, by Claude Code's own name for it
+/// (ADR 0044).
+#[must_use]
+pub fn set_permission_mode(id: &str, mode: &str) -> String {
+    control_request(
+        id,
+        &json!({ "subtype": "set_permission_mode", "mode": mode }),
     )
 }
 
@@ -408,7 +434,13 @@ mod tests {
             }
         );
         assert!(matches!(frames[0], Frame::Other));
-        assert!(matches!(frames[4], Frame::Other));
+        assert_eq!(
+            frames[4],
+            Frame::Status {
+                permission_mode: None
+            },
+            "a status that names no mode"
+        );
     }
 
     fn frames_message_id(frame: &Frame) -> String {
@@ -584,6 +616,29 @@ mod tests {
         assert_eq!(parse(r#"{"no_type":true}"#), Some(Frame::Other));
         assert_eq!(parse("Warning: something on stdout"), None);
         assert_eq!(parse(""), None);
+    }
+
+    #[test]
+    fn reads_the_permission_mode_claude_code_reports_and_asks_for_another() {
+        // As Claude Code 2.1.292 sent it after `set_permission_mode`.
+        assert_eq!(
+            parse(
+                r#"{"type":"system","subtype":"status","status":null,"permissionMode":"plan","uuid":"u","session_id":"s"}"#
+            ),
+            Some(Frame::Status {
+                permission_mode: Some("plan".into())
+            })
+        );
+        assert_eq!(
+            parse(r#"{"type":"system","subtype":"status","status":"compacting"}"#),
+            Some(Frame::Status {
+                permission_mode: None
+            })
+        );
+        assert_eq!(
+            value(&set_permission_mode("arden-mode-4", "acceptEdits")),
+            json!({ "type": "control_request", "request_id": "arden-mode-4", "request": { "subtype": "set_permission_mode", "mode": "acceptEdits" } })
+        );
     }
 
     #[test]

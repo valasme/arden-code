@@ -8,10 +8,11 @@ use std::thread;
 
 use arden_agents::claude::catalog::Catalog;
 use arden_agents::demo::DemoDriver;
-use arden_agents::driver::{AgentDriver, Answer};
+use arden_agents::driver::{AgentDriver, Answer, PlanAnswer};
 use arden_agents::model::{
-    AgentKind, ApprovalAction, ApprovalState, Effort, Item, Model, Project, ProjectKind,
-    QuestionAnswer, QuestionState, Session, SessionList, SessionSummary, TurnEvent,
+    AgentKind, ApprovalAction, ApprovalState, Effort, Item, Model, PermissionMode, PlanState,
+    Project, ProjectKind, QuestionAnswer, QuestionState, Session, SessionList, SessionSummary,
+    TurnEvent,
 };
 use arden_agents::playground::PLAYGROUND_ID;
 use arden_agents::store::{OpenProblem, SessionStore, StoreError};
@@ -36,6 +37,7 @@ fn app_error(error: StoreError) -> AppError {
         StoreError::NotWaiting => AppError::new(ErrorCode::RequestNotWaiting),
         StoreError::NotTrusted => AppError::new(ErrorCode::ProjectNotTrusted),
         StoreError::Playground => AppError::new(ErrorCode::PlaygroundStays),
+        StoreError::BypassNotAllowed => AppError::new(ErrorCode::BypassNotAllowed),
         StoreError::NotSaved(reason) => {
             AppError::new(ErrorCode::SessionsNotSaved).with_details(reason)
         }
@@ -255,6 +257,55 @@ pub fn set_session_effort(
     sessions.set_effort(&id, effort).map_err(app_error)?;
     tracing::info!(session = %id, ?effort, "the session's effort changed");
     Ok(())
+}
+
+/// The permission mode a new session in a project would take, the Playground when none is given
+/// (ADR 0044): that of the session the agent rule follows, except Bypass permissions.
+///
+/// # Errors
+///
+/// Never fails today; it returns a `Result` like every command.
+// Every command returns a `Result` (ADR 0008).
+#[allow(clippy::unnecessary_wraps)]
+#[tauri::command]
+#[specta::specta]
+pub fn permission_mode_for_new_session(
+    project_id: Option<String>,
+    sessions: State<'_, Sessions>,
+) -> Result<PermissionMode, AppError> {
+    Ok(sessions.permission_mode_for_new_session(project_id.as_deref().unwrap_or(PLAYGROUND_ID)))
+}
+
+/// Changes how far a session's agent may go without asking (ADR 0044), also while a reply runs: a
+/// running Claude Code takes it at once, and says so through [`SessionChanged`].
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, it is archived, Bypass permissions is chosen
+/// while Settings does not allow it, or the change cannot be saved.
+#[tauri::command]
+#[specta::specta]
+pub fn set_session_permission_mode(
+    id: String,
+    mode: PermissionMode,
+    sessions: State<'_, Sessions>,
+    claude: State<'_, crate::agents::Claude>,
+) -> Result<(), AppError> {
+    sessions.set_permission_mode(&id, mode).map_err(app_error)?;
+    claude.0.set_permission_mode(&id, mode);
+    tracing::info!(session = %id, ?mode, "the session's permission mode changed");
+    Ok(())
+}
+
+/// Tells the page that a session's permission mode changed outside its commands, such as when
+/// Claude enters Plan by itself, or Claude Code refused a mode, with why (ADR 0044).
+#[derive(Debug, Clone, serde::Serialize, specta::Type, tauri_specta::Event)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionChanged {
+    pub session_id: String,
+    pub permission_mode: PermissionMode,
+    /// What to tell the person, when the change is not the one they chose.
+    pub notice: Option<AppError>,
 }
 
 /// Starts an empty session in a project, the Playground when none is given, with the agent given,
@@ -529,8 +580,30 @@ pub fn answer_questions(
         .map_err(app_error)
 }
 
+/// Hands the person's answer to a plan that waits in a session's running turn (ADR 0044), with
+/// what should change when they keep planning.
+///
+/// # Errors
+///
+/// Returns an error when there is no such session, or no such plan waits for an answer.
+#[tauri::command]
+#[specta::specta]
+pub fn answer_plan(
+    session_id: String,
+    item_id: String,
+    answer: PlanAnswer,
+    feedback: Option<String>,
+    sessions: State<'_, Sessions>,
+) -> Result<(), AppError> {
+    sessions
+        .answer_plan(&session_id, &item_id, answer, feedback)
+        .map_err(app_error)?;
+    tracing::info!(session = %session_id, ?answer, "the plan was answered");
+    Ok(())
+}
+
 /// What a notification says when an agent waits for the person's answer, if the event is a
-/// request or questions that start waiting.
+/// request, questions or a plan that start waiting.
 fn waiting_notice(agent: AgentKind, event: &TurnEvent) -> Option<String> {
     let TurnEvent::ItemAdded { item, .. } = event else {
         return None;
@@ -549,6 +622,10 @@ fn waiting_notice(agent: AgentKind, event: &TurnEvent) -> Option<String> {
             state: QuestionState::Waiting,
             ..
         } => return Some(format!("{name} asks you a question.")),
+        Item::Plan {
+            state: PlanState::Waiting,
+            ..
+        } => return Some(format!("{name} has a plan.")),
         _ => return None,
     };
     let what = match action {
@@ -821,6 +898,25 @@ mod tests {
         assert_eq!(
             waiting_notice(AgentKind::Claude, &asking).as_deref(),
             Some("Claude asks you a question.")
+        );
+    }
+
+    #[test]
+    fn a_plan_that_starts_waiting_is_worth_a_notification() {
+        let asking = TurnEvent::ItemAdded {
+            turn_id: "t".to_owned(),
+            item: Item::Plan {
+                id: "t-plan-1".to_owned(),
+                tool_call_id: None,
+                plan: Some("1. Fix it".to_owned()),
+                feedback: None,
+                state: PlanState::Waiting,
+            },
+        };
+
+        assert_eq!(
+            waiting_notice(AgentKind::Claude, &asking).as_deref(),
+            Some("Claude has a plan.")
         );
     }
 

@@ -11,11 +11,11 @@ use serde_json::{Value, json};
 use super::driver::ClaudeDriver;
 use super::launch::{Conversation, LaunchError};
 use super::script::{Scripted, Step, handshake};
-use crate::driver::{AgentDriver, Answer};
+use crate::driver::{AgentDriver, Answer, PlanAnswer, SessionChange};
 use crate::model::{
-    AgentKind, ApprovalAction, ApprovalState, Effort, FileChangeKind, Item, Model, Question,
-    QuestionAnswer, QuestionOption, QuestionState, StatusKind, ToolStatus, Turn, TurnEvent,
-    TurnStatus,
+    AgentKind, ApprovalAction, ApprovalState, Effort, FileChangeKind, Item, Model, PermissionMode,
+    PlanState, Question, QuestionAnswer, QuestionOption, QuestionState, StatusKind, ToolStatus,
+    Turn, TurnEvent, TurnStatus,
 };
 use crate::playground;
 use crate::store::{SessionStore, StoreError};
@@ -29,7 +29,10 @@ fn store() -> SessionStore {
 
 fn claude(scripts: Vec<Result<Vec<Step>, LaunchError>>) -> (Arc<Scripted>, ClaudeDriver) {
     let scripted = Arc::new(Scripted::new(scripts));
-    let driver = ClaudeDriver::new(scripted.clone());
+    // A script that does not answer the driver's question about the context window, as most do not,
+    // holds no reply up for long.
+    let driver =
+        ClaudeDriver::new(scripted.clone()).with_context_patience(Duration::from_millis(20));
     (scripted, driver)
 }
 
@@ -1093,6 +1096,7 @@ fn a_sessions_messages_go_to_one_claude_code_in_its_project_with_a_conversation_
     script.extend([
         message("First"),
         success("One."),
+        asks_for_context(),
         message("Second"),
         success("Two."),
     ]);
@@ -1135,7 +1139,7 @@ fn conversations(scripted: &Scripted) -> Vec<Conversation> {
 #[test]
 fn claude_code_starts_with_the_session_s_model_and_keeps_running_while_it_stays() {
     let mut script = answers("First", "One.");
-    script.extend([message("Second"), success("Two.")]);
+    script.extend([asks_for_context(), message("Second"), success("Two.")]);
     let (scripted, driver) = claude(vec![Ok(script)]);
     let store = store();
     let session = claude_session(&store);
@@ -1531,6 +1535,7 @@ fn a_stop_that_comes_after_claude_finished_does_not_stop_the_next_reply() {
     script.extend([
         message("First"),
         success("One."),
+        asks_for_context(),
         message("Second"),
         assistant("msg_2", &json!([{ "type": "text", "text": "Two." }])),
         success("Two."),
@@ -2053,6 +2058,7 @@ fn asking_again_uses_a_claude_code_that_is_running_and_has_nothing_to_do() {
         success("Hi."),
         asks_for_usage(),
         usage_answer(&plan_usage()),
+        asks_for_context(),
         asks_for_usage(),
         usage_answer(&newer),
     ]);
@@ -2141,4 +2147,587 @@ fn a_claude_code_started_only_to_ask_for_usage_leaves_the_lists_to_the_one_that_
     scripted.assert_followed();
     assert_eq!(scripted.starts.lock().expect("starts").len(), 2);
     assert_eq!(driver.catalog().models.len(), 2);
+}
+
+/// The driver's `get_context_usage`, as Claude Code expects it (ADR 0044).
+fn asks_for_context() -> Step {
+    Step::Expect(json!({
+        "type": "control_request",
+        "request": { "subtype": "get_context_usage", "detail": "summary" }
+    }))
+}
+
+/// The real Claude Code 2.1.292's answer to `get_context_usage`.
+fn context_answer() -> Step {
+    let recorded: Value =
+        serde_json::from_str(include_str!("fixtures/get-context-usage-2.1.292.json"))
+            .expect("the recorded answer");
+    Step::Answer(json!({
+        "type": "control_response",
+        "response": { "subtype": "success", "response": recorded["response"]["response"] }
+    }))
+}
+
+/// A Claude driver that waits as long as a real Claude Code needs to report its context window.
+fn reporting_claude(scripts: Vec<Result<Vec<Step>, LaunchError>>) -> (Arc<Scripted>, ClaudeDriver) {
+    let scripted = Arc::new(Scripted::new(scripts));
+    let driver = ClaudeDriver::new(scripted.clone()).with_context_patience(Duration::from_secs(5));
+    (scripted, driver)
+}
+
+#[test]
+fn when_a_claude_reply_ends_the_session_keeps_how_full_its_context_window_is() {
+    let mut script = handshake();
+    script.extend([
+        message("Hello"),
+        success("Hi."),
+        asks_for_context(),
+        context_answer(),
+    ]);
+    let (scripted, driver) = reporting_claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    let events = send(&store, &driver, &session, "Hello");
+
+    scripted.assert_followed();
+    assert_eq!(turn(&store, &session, 0).status, TurnStatus::Done);
+    let kept = store
+        .session(&session)
+        .expect("the session")
+        .context_window
+        .expect("a context window");
+    assert_eq!(
+        (kept.used, kept.size, kept.percent, kept.compacts_at),
+        (17_117, 1_000_000, 2, Some(967_000))
+    );
+    let finished = events
+        .iter()
+        .position(|event| matches!(event, TurnEvent::Finished { .. }))
+        .expect("the reply finished");
+    let reported = events
+        .iter()
+        .position(|event| matches!(event, TurnEvent::ContextWindowChanged { .. }))
+        .expect("the page heard the context window");
+    assert!(
+        finished < reported,
+        "the reply is not held up for it: {events:?}"
+    );
+}
+
+#[test]
+fn a_claude_code_that_cannot_report_its_context_window_leaves_the_reply_as_it_was() {
+    let mut script = handshake();
+    script.extend([
+        message("Hello"),
+        success("Hi."),
+        asks_for_context(),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "error", "error": "Unknown control request subtype: get_context_usage" }
+        })),
+    ]);
+    let (scripted, driver) = reporting_claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    let events = send(&store, &driver, &session, "Hello");
+
+    scripted.assert_followed();
+    let kept = store.session(&session).expect("the session");
+    assert_eq!(kept.context_window, None);
+    assert_eq!(kept.turns[0].status, TurnStatus::Done);
+    assert!(
+        events
+            .iter()
+            .all(|event| !matches!(event, TurnEvent::ContextWindowChanged { .. })),
+        "{events:?}"
+    );
+}
+
+/// The driver's `set_permission_mode`, as Claude Code expects it (ADR 0044).
+fn sets_permission_mode(mode: &str) -> Step {
+    Step::Expect(json!({
+        "type": "control_request",
+        "request": { "subtype": "set_permission_mode", "mode": mode }
+    }))
+}
+
+/// Claude Code's report of the mode it is in, as it sends one after every change.
+fn status(mode: &str) -> Step {
+    Step::Play(json!({
+        "type": "system", "subtype": "status", "status": null, "permissionMode": mode, "session_id": "c1"
+    }))
+}
+
+/// What the driver says about sessions outside their replies' items, as it says it.
+fn hear_changes(driver: &ClaudeDriver) -> Arc<std::sync::Mutex<Vec<(String, SessionChange)>>> {
+    let heard = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let hearing = Arc::clone(&heard);
+    driver.on_session_changes(Arc::new(move |session: &str, change: SessionChange| {
+        hearing
+            .lock()
+            .expect("heard")
+            .push((session.to_owned(), change));
+    }));
+    heard
+}
+
+/// Waits until the driver has said `change` about `session`.
+fn until_heard(
+    heard: &std::sync::Mutex<Vec<(String, SessionChange)>>,
+    session: &str,
+    change: &SessionChange,
+) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if heard
+            .lock()
+            .expect("heard")
+            .iter()
+            .any(|(about, said)| about == session && said == change)
+        {
+            return;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "never heard {change:?}: {:?}",
+            heard.lock().expect("heard")
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn claude_code_starts_in_the_session_s_permission_mode() {
+    let (scripted, driver) = claude(vec![Ok(answers("Hello", "Hi."))]);
+    let store = store();
+    let session = claude_session(&store);
+    store
+        .set_permission_mode(&session, PermissionMode::AcceptEdits)
+        .expect("chosen");
+
+    send(&store, &driver, &session, "Hello");
+
+    scripted.assert_followed();
+    let starts = scripted.starts.lock().expect("starts");
+    assert_eq!(starts[0].permission_mode, PermissionMode::AcceptEdits);
+}
+
+#[test]
+fn a_new_permission_mode_goes_to_the_running_claude_code_at_once_and_is_heard_back() {
+    let mut script = answers("Hello", "Hi.");
+    script.extend([
+        asks_for_context(),
+        sets_permission_mode("plan"),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "response": { "mode": "plan" } }
+        })),
+        status("plan"),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "Hello");
+
+    driver.set_permission_mode(&session, PermissionMode::Plan);
+
+    until_heard(
+        &heard,
+        &session,
+        &SessionChange::PermissionMode(PermissionMode::Plan),
+    );
+    scripted.assert_followed();
+    assert_eq!(
+        scripted.starts.lock().expect("starts").len(),
+        1,
+        "no new Claude Code"
+    );
+}
+
+#[test]
+fn a_permission_mode_claude_code_refuses_leaves_the_one_it_is_in() {
+    let mut script = answers("Hello", "Hi.");
+    script.extend([
+        asks_for_context(),
+        sets_permission_mode("auto"),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "error", "error": "Auto mode is not available for this account" }
+        })),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "Hello");
+
+    driver.set_permission_mode(&session, PermissionMode::Auto);
+
+    until_heard(
+        &heard,
+        &session,
+        &SessionChange::PermissionModeRefused {
+            kept: PermissionMode::Manual,
+            reason: "Auto mode is not available for this account".into(),
+        },
+    );
+    scripted.assert_followed();
+}
+
+#[test]
+fn a_permission_mode_claude_code_takes_itself_during_a_reply_is_heard() {
+    let mut script = handshake();
+    script.extend([message("Plan it"), status("plan"), success("Planned.")]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "Plan it");
+
+    until_heard(
+        &heard,
+        &session,
+        &SessionChange::PermissionMode(PermissionMode::Plan),
+    );
+    scripted.assert_followed();
+}
+
+#[test]
+fn the_mode_claude_code_says_it_started_in_is_followed_when_it_is_not_the_one_asked_for() {
+    let mut script = vec![
+        Step::Expect(json!({ "type": "control_request", "request": { "subtype": "initialize" } })),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "response": { "commands": [], "current_permission_mode": "default" } }
+        })),
+    ];
+    script.extend([message("Hello"), success("Hi.")]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let store = store();
+    let session = claude_session(&store);
+    store
+        .set_permission_mode(&session, PermissionMode::Auto)
+        .expect("chosen");
+
+    send(&store, &driver, &session, "Hello");
+
+    until_heard(
+        &heard,
+        &session,
+        &SessionChange::PermissionMode(PermissionMode::Manual),
+    );
+    scripted.assert_followed();
+}
+
+#[test]
+fn bypass_permissions_starts_claude_code_again_with_the_flag_when_it_was_started_without() {
+    let mut first = answers("First", "One.");
+    first.push(asks_for_context());
+    let mut second = handshake();
+    second.extend([message("Second"), success("Two.")]);
+    let (scripted, driver) = claude(vec![Ok(first), Ok(second)]);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "First");
+    store.allow_bypass_permissions(true);
+    driver.allow_bypass_permissions(true);
+    store
+        .set_permission_mode(&session, PermissionMode::BypassPermissions)
+        .expect("allowed");
+
+    // Claude Code refuses the switch without the flag, so it is not asked (ADR 0044).
+    driver.set_permission_mode(&session, PermissionMode::BypassPermissions);
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    let starts = scripted.starts.lock().expect("starts");
+    assert_eq!(starts.len(), 2);
+    assert!(!starts[0].allow_bypass);
+    assert!(starts[1].allow_bypass);
+    assert_eq!(starts[1].permission_mode, PermissionMode::BypassPermissions);
+    assert!(matches!(starts[1].conversation, Conversation::Resume(_)));
+    assert!(
+        scripted
+            .written
+            .lock()
+            .expect("written")
+            .iter()
+            .all(|frame| frame["request"]["subtype"] != "set_permission_mode"),
+    );
+}
+
+#[test]
+fn going_back_to_the_mode_claude_code_applies_while_another_is_asked_is_sent_too() {
+    let mut script = answers("Hello", "Hi.");
+    script.extend([
+        asks_for_context(),
+        sets_permission_mode("plan"),
+        sets_permission_mode("default"),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "Hello");
+
+    driver.set_permission_mode(&session, PermissionMode::Plan);
+    driver.set_permission_mode(&session, PermissionMode::Manual);
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while scripted
+        .written
+        .lock()
+        .expect("written")
+        .iter()
+        .filter(|frame| frame["request"]["subtype"] == "set_permission_mode")
+        .count()
+        < 2
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the second mode was not asked"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    scripted.assert_followed();
+}
+
+#[test]
+fn a_reply_brings_a_running_claude_code_to_the_session_s_permission_mode_first() {
+    let mut script = answers("First", "One.");
+    script.extend([
+        asks_for_context(),
+        sets_permission_mode("acceptEdits"),
+        message("Second"),
+        success("Two."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "First");
+    // Changed where the driver did not hear it, as when nothing was running to tell.
+    store
+        .set_permission_mode(&session, PermissionMode::AcceptEdits)
+        .expect("chosen");
+
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    assert_eq!(scripted.starts.lock().expect("starts").len(), 1);
+}
+
+/// The plan Claude asks to start, in `ExitPlanMode`'s input (ADR 0044).
+const PLAN: &str = "1. Read the build script\n2. Fix the path";
+
+/// Claude, in Plan mode, asks to start a plan with `ExitPlanMode`: the start of a script.
+fn asks_to_start_a_plan(input: &Value) -> Vec<Step> {
+    let mut script = handshake();
+    script.extend([
+        message("Plan the fix"),
+        assistant(
+            "msg_1",
+            &json!([{ "type": "tool_use", "id": "toolu_p", "name": "ExitPlanMode", "input": input }]),
+        ),
+        Step::Play(json!({
+            "type": "control_request",
+            "request_id": "r1",
+            "request": { "subtype": "can_use_tool", "tool_name": "ExitPlanMode", "input": input, "tool_use_id": "toolu_p" }
+        })),
+    ]);
+    script
+}
+
+/// Waits until the session's first turn shows a plan that waits, and answers its id.
+fn until_plan(store: &SessionStore, session: &str) -> String {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let waiting = store
+            .session(session)
+            .expect("the session")
+            .turns
+            .first()
+            .and_then(|first| {
+                first.items.iter().find_map(|item| match item {
+                    Item::Plan {
+                        id,
+                        state: PlanState::Waiting,
+                        ..
+                    } => Some(id.clone()),
+                    _ => None,
+                })
+            });
+        if let Some(id) = waiting {
+            return id;
+        }
+        assert!(std::time::Instant::now() < deadline, "no plan came");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+/// The plan item of a turn.
+fn plan_of(turn: &Turn) -> Item {
+    turn.items
+        .iter()
+        .find(|item| matches!(item, Item::Plan { .. }))
+        .cloned()
+        .expect("the plan")
+}
+
+#[test]
+fn a_plan_started_accepting_edits_is_allowed_with_the_mode_and_the_session_follows_it() {
+    let input = json!({ "plan": PLAN });
+    let mut script = asks_to_start_a_plan(&input);
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": "r1",
+                "response": {
+                    "behavior": "allow",
+                    "updatedInput": input,
+                    "updatedPermissions": [{ "type": "setMode", "mode": "acceptEdits", "destination": "session" }]
+                }
+            }
+        })),
+        tool_result("toolu_p", "The plan was approved.", false),
+        success("Fixed."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+    store
+        .set_permission_mode(&session, PermissionMode::Plan)
+        .expect("planning");
+    let replying = {
+        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
+        std::thread::spawn(move || send(&store, &driver, &session, "Plan the fix"))
+    };
+
+    let waiting = until_plan(&store, &session);
+    store
+        .answer_plan(&session, &waiting, PlanAnswer::StartAcceptingEdits, None)
+        .expect("answered");
+    replying.join().expect("the reply ends");
+
+    scripted.assert_followed();
+    until_heard(
+        &heard,
+        &session,
+        &SessionChange::PermissionMode(PermissionMode::AcceptEdits),
+    );
+    let turn = turn(&store, &session, 0);
+    assert_eq!(turn.status, TurnStatus::Done);
+    assert_eq!(
+        plan_of(&turn),
+        Item::Plan {
+            id: format!("{}-plan-r1", turn.id),
+            tool_call_id: Some(format!("{}-toolu_p", turn.id)),
+            plan: Some(PLAN.into()),
+            feedback: None,
+            state: PlanState::StartedAcceptingEdits,
+        }
+    );
+    assert!(
+        !turn
+            .items
+            .iter()
+            .any(|item| matches!(item, Item::ToolCall { .. })),
+        "the card shows the plan, not its tool call: {:#?}",
+        turn.items
+    );
+}
+
+#[test]
+fn keep_planning_denies_with_the_person_s_words_and_the_reply_goes_on() {
+    let mut script = asks_to_start_a_plan(&json!({ "plan": PLAN }));
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": "r1",
+                "response": {
+                    "behavior": "deny",
+                    "message": "The person wants to keep planning. What should change: Test it first.",
+                    "interrupt": false
+                }
+            }
+        })),
+        tool_result("toolu_p", "The person wants to keep planning.", true),
+        success("I will add a test step."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+    let replying = {
+        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
+        std::thread::spawn(move || send(&store, &driver, &session, "Plan the fix"))
+    };
+
+    let waiting = until_plan(&store, &session);
+    store
+        .answer_plan(
+            &session,
+            &waiting,
+            PlanAnswer::KeepPlanning,
+            Some("  Test it first.  ".into()),
+        )
+        .expect("answered");
+    replying.join().expect("the reply ends");
+
+    scripted.assert_followed();
+    let turn = turn(&store, &session, 0);
+    assert_eq!(turn.status, TurnStatus::Done);
+    assert!(matches!(
+        plan_of(&turn),
+        Item::Plan { state: PlanState::KeptPlanning, feedback: Some(feedback), .. } if feedback == "Test it first."
+    ));
+}
+
+#[test]
+fn a_plan_without_its_text_still_waits_and_stopping_denies_it() {
+    let mut script = asks_to_start_a_plan(&json!({}));
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "request_id": "r1", "response": { "behavior": "deny" } }
+        })),
+        Step::Expect(json!({ "type": "control_request", "request": { "subtype": "interrupt" } })),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+    let replying = {
+        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
+        std::thread::spawn(move || send(&store, &driver, &session, "Plan the fix"))
+    };
+
+    let waiting = until_plan(&store, &session);
+    assert!(matches!(
+        plan_of(&turn(&store, &session, 0)),
+        Item::Plan { plan: None, .. }
+    ));
+    store.stop_turn(&session).expect("stopped");
+    replying.join().expect("the reply ends");
+
+    scripted.assert_followed();
+    let stopped = turn(&store, &session, 0);
+    assert!(matches!(
+        plan_of(&stopped),
+        Item::Plan {
+            state: PlanState::Cancelled,
+            ..
+        }
+    ));
+    assert_eq!(
+        store.answer_plan(&session, &waiting, PlanAnswer::StartAskingFirst, None),
+        Err(StoreError::NotWaiting),
+        "a plan that no longer waits takes no answer"
+    );
 }

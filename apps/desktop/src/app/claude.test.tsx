@@ -1,13 +1,15 @@
 import { createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { BotIcon, FolderIcon } from "lucide-react";
 import { page } from "vitest/browser";
 
-import type { Item, Session } from "@/ipc/bindings";
+import type { ContextWindow, Item, Session, UsageLimits } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
+import { drawingOf, drawingsIn } from "@/test/icons";
 import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -16,6 +18,14 @@ import "@/styles/global.css";
 
 function renderApp(entry = "/") {
   render(<App history={createMemoryHistory({ initialEntries: [entry] })} />);
+}
+
+/** The message box's area, once the page shows it. */
+async function messageBoxArea(): Promise<HTMLElement> {
+  await screen.findByRole("textbox", { name: "Message" });
+  const area = document.querySelector("[data-area=messagebox]");
+  if (!(area instanceof HTMLElement)) throw new Error("no message box area");
+  return area;
 }
 
 /** A Claude session that has had one message, answered. */
@@ -65,14 +75,38 @@ describe("Choosing the agent of a session (ADR 0039)", () => {
     expect(title.parentElement).toHaveTextContent("Claude");
   });
 
-  it("names the agent of a session that has had a message in plain text, under its reply too", async () => {
+  it("names the agent and the project of a session that has had a message in its header, under its reply too", async () => {
     startSessionsRust({ sessions: [answeredClaudeSession()] });
     renderApp("/session/session-1");
 
-    expect(await screen.findByText("Claude · Playground")).toBeVisible();
+    const title = await screen.findByRole("heading", { level: 1, name: "Fix the build" });
+    const header = title.closest("header");
+    if (!header) throw new Error("the title is not in a header");
+    expect(within(header).getByText("Claude")).toBeVisible();
+    expect(within(header).getByText("Playground")).toBeVisible();
+    expect(drawingsIn(header)).toEqual(
+      expect.arrayContaining([drawingOf(BotIcon), drawingOf(FolderIcon)]),
+    );
     expect(screen.queryByRole("button", { name: /^Agent:/u })).toBeNull();
+    // The message box's lower line holds only what the next message can change.
+    const area = document.querySelector("[data-area=messagebox]");
+    if (!(area instanceof HTMLElement)) throw new Error("no message box area");
+    expect(within(area).queryByText(/Playground/u)).toBeNull();
     const feed = screen.getByRole("feed", { name: "Messages" });
     expect(within(feed).getByRole("heading", { level: 3, name: "Claude" })).toBeVisible();
+  });
+
+  it("names the agent and the project of an archived session in its header too", async () => {
+    startSessionsRust({
+      sessions: [{ ...answeredClaudeSession(), archivedAt: "2026-10-04T08:00:00Z" }],
+    });
+    renderApp("/session/session-1");
+
+    const title = await screen.findByRole("heading", { level: 1, name: "Fix the build" });
+    const header = title.closest("header");
+    if (!header) throw new Error("the title is not in a header");
+    expect(within(header).getByText("Claude")).toBeVisible();
+    expect(within(header).getByText("Playground")).toBeVisible();
   });
 
   it("says Claude is replying, in the turn and in the status bar", async () => {
@@ -188,6 +222,70 @@ describe("Approval requests (ADR 0039)", () => {
     await screen.findByRole("group", { name: "Claude wants to run a command" });
 
     await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+describe("Claude's plan (ADR 0044)", () => {
+  const plan = {
+    type: "plan",
+    id: "turn-1-plan-r1",
+    toolCallId: null,
+    plan: "1. Read the build script\n2. Fix the path",
+    feedback: null,
+    state: "waiting",
+  } as const;
+
+  it("shows the plan, says Claude waits, and starts it as the person chose", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({
+      sessions: [
+        { ...sessionNamed("session-1", null, "playground", "claude"), permissionMode: "plan" },
+      ],
+    });
+    renderApp("/session/session-1");
+    await user.type(await screen.findByRole("textbox", { name: "Message" }), "Plan it{Enter}");
+    await screen.findByText("Claude is replying…");
+
+    rust.emit({ type: "itemAdded", turnId: "turn-1", item: plan });
+
+    const card = await screen.findByRole("group", { name: "Claude has a plan" });
+    expect(within(card).getByText("Fix the path")).toBeVisible();
+    const statusBar = screen.getByRole("contentinfo");
+    expect(within(statusBar).getByText("Claude: waiting for your answer")).toBeVisible();
+    await user.click(within(card).getByRole("button", { name: "Start, accepting edits" }));
+
+    expect(rust.callsTo("answer_plan")).toEqual([
+      {
+        sessionId: "session-1",
+        itemId: "turn-1-plan-r1",
+        answer: "startAcceptingEdits",
+        feedback: null,
+      },
+    ]);
+    rust.emit({
+      type: "itemAdded",
+      turnId: "turn-1",
+      item: { ...plan, state: "startedAcceptingEdits" },
+    });
+    expect(await screen.findByText("You started the plan, accepting edits")).toBeVisible();
+    expect(within(statusBar).getByText("Claude: replying")).toBeVisible();
+  });
+
+  it("is given up on when the person stops the reply", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({
+      sessions: [sessionNamed("session-1", null, "playground", "claude")],
+    });
+    renderApp("/session/session-1");
+    await user.type(await screen.findByRole("textbox", { name: "Message" }), "Plan it{Enter}");
+    await screen.findByText("Claude is replying…");
+    rust.emit({ type: "itemAdded", turnId: "turn-1", item: plan });
+    await screen.findByRole("group", { name: "Claude has a plan" });
+
+    rust.emit({ type: "stopped", turnId: "turn-1" });
+
+    expect(await screen.findByText("No answer was needed")).toBeVisible();
+    expect(screen.queryByRole("group", { name: "Claude has a plan" })).toBeNull();
   });
 });
 
@@ -513,5 +611,72 @@ describe("An error Arden Code knows (ADR 0039)", () => {
 
     expect(await screen.findByText("Claude could not answer.")).toBeVisible();
     expect(screen.getByText("API Error: Overloaded")).toBeVisible();
+  });
+});
+
+describe("The figures in the message box (ADR 0044)", () => {
+  const plan: UsageLimits = {
+    report: "reported",
+    windows: [
+      { kind: "fiveHour", percent: 42, resetsAt: "2099-10-09T15:10:00Z", status: "allowed" },
+      { kind: "weekly", percent: 18, resetsAt: "2099-10-13T09:00:00Z", status: "allowed" },
+    ],
+  };
+
+  it("shows the usage limits before Send in a Claude session's message box", async () => {
+    startSessionsRust({ sessions: [answeredClaudeSession()], usageLimits: plan });
+    renderApp("/session/session-1");
+    const area = await messageBoxArea();
+
+    const figures = await within(area).findByRole("button", { name: "5-hour 42% Weekly 18%" });
+    const send = within(area).getByRole("button", { name: "Send" });
+    expect(figures.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows no usage limits in a Demo agent session's message box", async () => {
+    startSessionsRust({
+      sessions: [sessionNamed("session-1", "Hi", "playground", "demo")],
+      usageLimits: plan,
+    });
+    renderApp("/session/session-1");
+    const area = await messageBoxArea();
+
+    await screen.findByRole("heading", { level: 1, name: "Hi" });
+    expect(within(area).queryByText(/5-hour/u)).toBeNull();
+  });
+
+  it("shows how full a Claude session's context window is, and follows its replies", async () => {
+    const user = userEvent.setup();
+    const contextWindow: ContextWindow = {
+      used: 26_000,
+      size: 200_000,
+      percent: 13,
+      compactsAt: 167_000,
+      parts: [{ name: "Messages", tokens: 10_000, kind: "used" }],
+    };
+    const rust = startSessionsRust({ sessions: [{ ...answeredClaudeSession(), contextWindow }] });
+    renderApp("/session/session-1");
+    const area = await messageBoxArea();
+    expect(await within(area).findByRole("button", { name: "Context 13%" })).toBeVisible();
+
+    await user.type(within(area).getByRole("textbox", { name: "Message" }), "More{Enter}");
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+    rust.emit({ type: "finished", turnId: "turn-2" });
+    rust.emit({
+      type: "contextWindowChanged",
+      turnId: "turn-2",
+      contextWindow: { ...contextWindow, used: 40_000, percent: 20 },
+    });
+
+    expect(await within(area).findByRole("button", { name: "Context 20%" })).toBeVisible();
+  });
+
+  it("shows the usage limits on the welcome screen while Claude is chosen", async () => {
+    startSessionsRust({ newSessionAgent: "claude", usageLimits: plan });
+    renderApp();
+
+    expect(await screen.findByRole("button", { name: "5-hour 42% Weekly 18%" })).toBeVisible();
   });
 });

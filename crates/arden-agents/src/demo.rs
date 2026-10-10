@@ -222,6 +222,7 @@ mod tests {
             folder: std::path::Path::new(r"C:Playground"),
             conversation: None,
             choices: crate::model::Choices::default(),
+            permission_mode: crate::model::PermissionMode::default(),
             remember: &|_| {},
             controls,
         }
@@ -262,6 +263,7 @@ mod tests {
                 Item::Error { .. } => "error",
                 Item::Approval { .. } => "approval",
                 Item::Questions { .. } => "questions",
+                Item::Plan { .. } => "plan",
                 Item::Status { .. } => "status",
             })
             .collect()

@@ -6,6 +6,7 @@ import type { AgentKind, Turn } from "@/ipc/bindings";
 
 import type { AnswerHandler } from "./items/ApprovalItem";
 import { ItemView } from "./items/ItemView";
+import type { PlanHandler } from "./items/PlanItem";
 import type { QuestionsHandler } from "./items/QuestionsItem";
 
 /**
@@ -17,11 +18,13 @@ export const TurnView = memo(function TurnView({
   agent,
   onAnswer,
   onAnswerQuestions,
+  onAnswerPlan,
 }: {
   turn: Turn;
   agent: AgentKind;
   onAnswer: AnswerHandler;
   onAnswerQuestions: QuestionsHandler;
+  onAnswerPlan: PlanHandler;
 }) {
   const { t } = useTranslation();
   const formatters = useFormatters();
@@ -50,6 +53,7 @@ export const TurnView = memo(function TurnView({
             agent={agent}
             onAnswer={onAnswer}
             onAnswerQuestions={onAnswerQuestions}
+            onAnswerPlan={onAnswerPlan}
           />
         ))}
         {turn.status === "running" ? (

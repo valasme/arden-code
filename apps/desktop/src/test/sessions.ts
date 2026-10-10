@@ -9,11 +9,13 @@ import type {
   Effort,
   ErrorCode,
   Model,
+  PermissionMode,
   Project,
   Session,
   SessionList,
   SessionSummary,
   TurnEvent,
+  UsageLimits,
 } from "@/ipc/bindings";
 
 import { applyTurnEvent } from "@/features/sessions/turnEvents";
@@ -59,6 +61,7 @@ export function sessionNamed(
     pinned: false,
     archivedAt: null,
     linkedFrom: null,
+    permissionMode: "manual",
     turns: [],
   };
 }
@@ -90,10 +93,16 @@ interface Options {
   newSessionModel?: Model | null;
   /** The effort a new session takes (ADR 0041), null for the agent's own setting. */
   newSessionEffort?: Effort | null;
+  /** The permission mode a new session takes (ADR 0044). */
+  newSessionPermissionMode?: PermissionMode;
+  /** Whether Settings → Agents allows Bypass permissions (ADR 0044). */
+  allowBypassPermissions?: boolean;
   /** The folder the person picks in Windows' dialog, or null when they cancel. */
   pickedFolder?: Project | null;
   /** What Claude Code says it can do (ADR 0042). Nothing, until it has been heard. */
   catalog?: Catalog;
+  /** The usage limits Claude Code reports (ADR 0043). None, until it has been asked. */
+  usageLimits?: UsageLimits;
 }
 
 /**
@@ -111,8 +120,11 @@ export function startSessionsRust({
   newSessionAgent = "demo",
   newSessionModel = null,
   newSessionEffort = null,
+  newSessionPermissionMode = "manual",
+  allowBypassPermissions = false,
   catalog = { commands: [], models: [], terminalCommands: [] },
   pickedFolder = null,
+  usageLimits = { report: "unknown", windows: [] },
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
@@ -161,7 +173,7 @@ export function startSessionsRust({
           return { name: "Arden Code", version: "0.1.0" };
         }
         case "get_settings": {
-          return settingsWith({ general: { regionalFormat } });
+          return settingsWith({ general: { regionalFormat }, agents: { allowBypassPermissions } });
         }
         case "list_sessions": {
           return list();
@@ -187,7 +199,10 @@ export function startSessionsRust({
             throw failure("ARD-AGT-001");
           }
           made += 1;
-          const session = sessionNamed(`session-${made}`, null, project, agent ?? newSessionAgent);
+          const session = {
+            ...sessionNamed(`session-${made}`, null, project, agent ?? newSessionAgent),
+            permissionMode: newSessionPermissionMode,
+          };
           sessions.push(session);
           return summaryOf(session);
         }
@@ -216,8 +231,30 @@ export function startSessionsRust({
         case "claude_catalog": {
           return structuredClone(catalog);
         }
+        case "usage_limits": {
+          return structuredClone(usageLimits);
+        }
         case "effort_for_new_session": {
           return newSessionEffort;
+        }
+        case "permission_mode_for_new_session": {
+          return newSessionPermissionMode;
+        }
+        case "set_session_permission_mode": {
+          const { id, mode } = z
+            .object({
+              id: z.string(),
+              mode: z.enum(["manual", "acceptEdits", "plan", "auto", "bypassPermissions"]),
+            })
+            .parse(payload);
+          const session = find(id);
+          if (session.archivedAt !== null) throw failure("ARD-AGT-005");
+          if (mode === "bypassPermissions" && !allowBypassPermissions) {
+            throw failure("ARD-AGT-019");
+          }
+          // Unlike the model, it changes while a reply runs (ADR 0044).
+          session.permissionMode = mode;
+          return null;
         }
         case "set_session_effort": {
           const { id, effort } = z
@@ -368,6 +405,25 @@ export function startSessionsRust({
           if (!waits) throw failure("ARD-AGT-015");
           return null;
         }
+        case "answer_plan": {
+          const { sessionId, itemId } = z
+            .object({
+              sessionId: z.string(),
+              itemId: z.string(),
+              answer: z.enum(["startAcceptingEdits", "startAskingFirst", "keepPlanning"]),
+              feedback: z.string().nullable(),
+            })
+            .parse(payload);
+          const waits = find(sessionId).turns.some(
+            (turn) =>
+              turn.status === "running" &&
+              turn.items.some(
+                (item) => item.type === "plan" && item.id === itemId && item.state === "waiting",
+              ),
+          );
+          if (!waits) throw failure("ARD-AGT-015");
+          return null;
+        }
         case "send_message": {
           const { sessionId, text, onEvent } = z
             .object({
@@ -406,6 +462,10 @@ export function startSessionsRust({
       calls.filter((call) => call.command === command).map((call) => call.payload),
     sent: () => calls.filter((call) => call.command === "send_message"),
     stops: () => calls.filter((call) => call.command === "stop_reply"),
+    /** Changes a session's permission mode as Rust does when Claude Code reports another. */
+    followPermissionMode(id: string, mode: PermissionMode) {
+      find(id).permissionMode = mode;
+    },
     /** Streams an event of the reply, as Rust would through the channel. */
     emit(event: TurnEvent) {
       if (!channel || replying === undefined) throw new Error("no message was sent yet");

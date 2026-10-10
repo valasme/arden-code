@@ -7,6 +7,9 @@ use std::time::Duration;
 use arden_agents::claude::driver::ClaudeDriver;
 use arden_agents::claude::launch::{Connection, LaunchError, Launcher, ProgramLauncher, Start};
 use arden_agents::detect::{self, AgentCli, Detection};
+use arden_agents::driver::SessionChange;
+use arden_agents::model::PermissionMode;
+use arden_agents::store::SessionStore;
 use arden_agents::usage::UsageLimits;
 use arden_core::error::{AppError, ErrorCode};
 use arden_process::supervisor::Supervisor;
@@ -63,6 +66,80 @@ impl Claude {
                 refresh_usage(&app, Duration::ZERO);
             } else {
                 was_shown.store(shown, Ordering::Release);
+            }
+        });
+    }
+}
+
+impl Claude {
+    /// Keeps the permission mode each session's Claude Code says it applies, and tells the page
+    /// when it changed, or when Claude Code refused the one chosen (ADR 0044).
+    pub fn report_session_changes_to(&self, app: &AppHandle, sessions: &Arc<SessionStore>) {
+        let page = app.clone();
+        let sessions = Arc::clone(sessions);
+        self.0
+            .on_session_changes(Arc::new(move |session: &str, change: SessionChange| {
+                let (mode, notice) = match change {
+                    SessionChange::PermissionMode(mode) => (mode, None),
+                    SessionChange::PermissionModeRefused { kept, reason } => {
+                        tracing::warn!(session = %session, %reason, "Claude Code refused the permission mode");
+                        (
+                            kept,
+                            Some(AppError::new(ErrorCode::PermissionModeRefused).with_details(reason)),
+                        )
+                    }
+                };
+                match sessions.follow_permission_mode(session, mode) {
+                    Ok(changed) if changed || notice.is_some() => {
+                        let _ = crate::sessions::SessionChanged {
+                            session_id: session.to_owned(),
+                            permission_mode: mode,
+                            notice,
+                        }
+                        .emit(&page);
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        tracing::warn!(session = %session, ?error, "the permission mode Claude Code reported was not kept");
+                    }
+                }
+            }));
+    }
+}
+
+impl Claude {
+    /// Lets Bypass permissions be chosen while Settings → Agents allows it (ADR 0044). Turned off,
+    /// every session in it goes to Manual at once, its running Claude Code included, and the page
+    /// is told.
+    pub fn follow_bypass_setting(
+        &self,
+        app: &AppHandle,
+        settings: &SettingsService,
+        sessions: &Arc<SessionStore>,
+    ) {
+        let allowed = settings.get().agents.allow_bypass_permissions;
+        sessions.allow_bypass_permissions(allowed);
+        self.0.allow_bypass_permissions(allowed);
+        let driver = Arc::clone(&self.0);
+        let sessions = Arc::clone(sessions);
+        let page = app.clone();
+        let was_allowed = AtomicBool::new(allowed);
+        settings.subscribe(move |settings, _| {
+            let allowed = settings.agents.allow_bypass_permissions;
+            // Only a change of this setting is acted on.
+            if was_allowed.swap(allowed, Ordering::AcqRel) == allowed {
+                return;
+            }
+            driver.allow_bypass_permissions(allowed);
+            for session in sessions.allow_bypass_permissions(allowed) {
+                driver.set_permission_mode(&session, PermissionMode::Manual);
+                tracing::info!(%session, "Bypass permissions was turned off, so the session is in Manual");
+                let _ = crate::sessions::SessionChanged {
+                    session_id: session,
+                    permission_mode: PermissionMode::Manual,
+                    notice: None,
+                }
+                .emit(&page);
             }
         });
     }

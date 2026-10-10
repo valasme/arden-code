@@ -289,6 +289,7 @@ describe("The slash commands that Arden Code runs itself (ADR 0042)", () => {
     await waitFor(() => {
       expect(screen.queryByRole("menu")).toBeNull();
     });
+    expect(screen.getByRole("button", { name: "Turn off Ultrathink" })).toBeVisible();
 
     await user.type(box, "/effort max{Enter}");
     await waitFor(() => {

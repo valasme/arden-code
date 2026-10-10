@@ -1,9 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { BotIcon, FlaskConicalIcon } from "lucide-react";
 
 import type { AgentKind } from "@/ipc/bindings";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
+import { drawingIn, drawingOf, drawingsIn } from "@/test/icons";
 
 import { AgentMenu } from "./AgentMenu";
 
@@ -37,6 +39,34 @@ describe("AgentMenu", () => {
     const button = screen.getByRole("button", { name: "Agent: Claude" });
     expect(button).toHaveAttribute("data-variant", "outline");
     expect(button.querySelectorAll("svg")).toHaveLength(2);
+  });
+
+  it("draws Claude as a bot of Arden Code's own, not a vendor's logo, and the Demo agent as a flask", () => {
+    const claude = renderMenu("claude");
+    expect(drawingIn(screen.getByRole("button", { name: "Agent: Claude" }))).toBe(
+      drawingOf(BotIcon),
+    );
+    claude.unmount();
+
+    renderMenu("demo");
+    expect(drawingIn(screen.getByRole("button", { name: "Agent: Demo agent" }))).toBe(
+      drawingOf(FlaskConicalIcon),
+    );
+  });
+
+  it("shows each agent's icon in the list too", async () => {
+    const user = userEvent.setup();
+    renderMenu("claude");
+
+    await user.click(screen.getByRole("button", { name: "Agent: Claude" }));
+
+    // The chosen item's check mark is an icon too.
+    expect(drawingsIn(await screen.findByRole("menuitemradio", { name: "Claude" }))).toContain(
+      drawingOf(BotIcon),
+    );
+    expect(drawingsIn(screen.getByRole("menuitemradio", { name: "Demo agent" }))).toContain(
+      drawingOf(FlaskConicalIcon),
+    );
   });
 
   it("offers an agent whose agent CLI is not installed only as disabled, saying so", async () => {

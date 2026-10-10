@@ -87,6 +87,14 @@ _Avoid_: provider
 How much of an agent the person's plan allows within a window of time, such as the 5-hour limit or the weekly limit, as the agent CLI reports it.
 _Avoid_: quota, rate limit, usage (alone)
 
+**Permission mode**:
+How freely an agent may act in a session before it asks the person: Manual, Accept edits, Plan, Auto or Bypass permissions.
+_Avoid_: approval mode, autonomy level, mode (alone)
+
+**Context window**:
+How much of a session's conversation the agent can take in at once, and how full it is, as the agent CLI reports it.
+_Avoid_: context (alone), memory, token budget
+
 **Agent CLI**:
 A vendor's own command-line program through which Arden Code runs an agent: Claude Code (`claude`) for Claude, Codex (`codex`) for Codex. It owns the user's sign-in.
 _Avoid_: SDK, backend
