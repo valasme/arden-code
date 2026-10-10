@@ -17,4 +17,12 @@ describe("ChoiceButton", () => {
     expect(getComputedStyle(icon).width).toBe("16px");
     expect(getComputedStyle(icon).color).toBe(getComputedStyle(label).color);
   });
+
+  it("draws no border, so the menus read as one quiet line (ADR 0045)", () => {
+    render(<ChoiceButton icon={BrainIcon} value="Opus 5.5" aria-label="Model: Opus 5.5" />);
+
+    const button = screen.getByRole("button", { name: "Model: Opus 5.5" });
+
+    expect(getComputedStyle(button).borderTopColor).toBe("rgba(0, 0, 0, 0)");
+  });
 });

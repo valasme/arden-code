@@ -623,14 +623,18 @@ describe("The figures in the message box (ADR 0044)", () => {
     ],
   };
 
-  it("shows the usage limits before Send in a Claude session's message box", async () => {
+  it("shows the usage limits under a Claude session's message box (ADR 0045)", async () => {
     startSessionsRust({ sessions: [answeredClaudeSession()], usageLimits: plan });
     renderApp("/session/session-1");
     const area = await messageBoxArea();
 
     const figures = await within(area).findByRole("button", { name: "5-hour 42% Weekly 18%" });
-    const send = within(area).getByRole("button", { name: "Send" });
-    expect(figures.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const frame = area.querySelector("[data-message-frame]");
+    if (!frame) throw new Error("no message frame");
+    expect(frame.contains(figures)).toBe(false);
+    expect(figures.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      frame.getBoundingClientRect().bottom,
+    );
   });
 
   it("shows no usage limits in a Demo agent session's message box", async () => {

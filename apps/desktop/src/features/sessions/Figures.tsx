@@ -132,7 +132,7 @@ function UsageDetails({
 }
 
 /**
- * The figures before Send (ADR 0044): how full the session's context window is, when its agent has
+ * The figures under the message box (ADR 0044, ADR 0045): how full the session's context window is, when its agent has
  * reported it, and the usage limits Claude Code reports, whatever session is open, in one quiet
  * button that opens their details. Nothing when there is nothing to show.
  */

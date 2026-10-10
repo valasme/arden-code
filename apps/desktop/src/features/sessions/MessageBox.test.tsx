@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { BotIcon, BrainIcon, ChartNoAxesColumnIcon, FolderIcon, ShieldIcon } from "lucide-react";
 
 import { expectNoAccessibilityViolations } from "@/test/axe";
 
+import { ChoiceButton } from "./ChoiceButton";
 import { MessageBox } from "./MessageBox";
 import { useUltrathink } from "./ultrathink";
 
@@ -95,5 +97,74 @@ describe("The Ultrathink chip (ADR 0044)", () => {
     if (!box) throw new Error("no message box");
 
     await expectNoAccessibilityViolations(box);
+  });
+});
+
+/** The welcome screen's Claude message box, with its five menus and the usage limits. */
+function ClaudeBox({ width = "40rem" }: { width?: string }) {
+  const choices = [
+    ["Agent", BotIcon, "Claude"],
+    ["Project", FolderIcon, "arden-code"],
+    ["Model", BrainIcon, "Opus"],
+    ["Effort", ChartNoAxesColumnIcon, "Default"],
+    ["Permission mode", ShieldIcon, "Auto"],
+  ] as const;
+  return (
+    // By default, the width of the welcome screen in the maintainer's screenshot.
+    <div style={{ width }}>
+      <MessageBox
+        agent="claude"
+        busy={false}
+        choices={choices.map(([name, icon, value]) => (
+          <ChoiceButton key={name} icon={icon} value={value} aria-label={`${name}: ${value}`} />
+        ))}
+        figures={<button type="button">5-hour 0% · Weekly 39%</button>}
+        onSend={() => true}
+        onStop={() => {}}
+      />
+    </div>
+  );
+}
+
+/** How far down the page the middle of the button with this name is, in CSS pixels. */
+function middle(name: string) {
+  const box = screen.getByRole("button", { name }).getBoundingClientRect();
+  return box.top + box.height / 2;
+}
+
+describe("The message box's lower line (ADR 0045)", () => {
+  it("keeps Send on the row of the last menu, and the figures under the box", () => {
+    const { container } = render(<ClaudeBox />);
+    const frame = container.querySelector("[data-message-frame]");
+    if (!frame) throw new Error("no message frame");
+
+    const send = screen.getByRole("button", { name: "Send" }).getBoundingClientRect();
+    const lastMenu = screen
+      .getByRole("button", { name: "Permission mode: Auto" })
+      .getBoundingClientRect();
+    const figures = screen.getByRole("button", { name: /5-hour/u }).getBoundingClientRect();
+
+    expect(
+      Math.abs(send.top + send.height / 2 - (lastMenu.top + lastMenu.height / 2)),
+    ).toBeLessThan(2);
+    expect(figures.top).toBeGreaterThanOrEqual(frame.getBoundingClientRect().bottom);
+  });
+
+  it("wraps Send with the last menu when the box is narrow", () => {
+    render(<ClaudeBox width="24rem" />);
+
+    expect(middle("Permission mode: Auto")).toBeGreaterThan(middle("Agent: Claude"));
+    expect(Math.abs(middle("Send") - middle("Permission mode: Auto"))).toBeLessThan(2);
+  });
+
+  it("gives Send no fill while there is nothing to send, and fills it once there is", async () => {
+    const user = userEvent.setup();
+    render(<ClaudeBox />);
+    const send = screen.getByRole("button", { name: "Send" });
+
+    expect(getComputedStyle(send).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "Hi");
+
+    expect(getComputedStyle(send).backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
   });
 });

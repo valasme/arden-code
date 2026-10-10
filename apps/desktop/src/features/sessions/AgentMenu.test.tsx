@@ -33,11 +33,10 @@ describe("AgentMenu", () => {
     expect(button).toHaveTextContent("Claude");
   });
 
-  it("is an outlined button with an icon, so it reads as a control and not as a caption", () => {
+  it("is a button with an icon and a chevron, so it reads as a control and not as a caption", () => {
     renderMenu("claude");
 
     const button = screen.getByRole("button", { name: "Agent: Claude" });
-    expect(button).toHaveAttribute("data-variant", "outline");
     expect(button.querySelectorAll("svg")).toHaveLength(2);
   });
 
