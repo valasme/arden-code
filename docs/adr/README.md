@@ -51,3 +51,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0041](0041-choosing-how-a-session-starts.md) | Choosing how a session starts: agent, project, model and effort | Accepted |
 | [0042](0042-slash-commands-and-exact-models.md) | Slash commands, exact models and Ultrathink | Accepted |
 | [0043](0043-usage-limits.md) | Usage limits | Accepted |
+| [0044](0044-permission-modes-the-context-window-and-the-agents-icon.md) | Permission modes, the context window and the agent's icon | Accepted |

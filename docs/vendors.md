@@ -34,6 +34,11 @@ page and the [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/over
 - It ships nothing of Anthropic's: no SDK and no copy of Claude Code.
 - The agent is called **Claude**. **Claude Code** names the program, in plain sentences. There is no Anthropic logo or
   brand color in the app (ADR 0003), and About says Arden Code is not affiliated with Anthropic or OpenAI.
+- Claude's icon in the agent menu is Lucide's bot, not Anthropic's mark (ADR 0044). Checked on 2026-10-10 against the
+  [Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance) page ("Any other use of Anthropic's
+  names or logos … requires our written permission") and the
+  [Trademark Guidelines](https://www.anthropic.com/legal/trademark-guidelines) (only in materials Anthropic approved
+  beforehand, unchanged). The mark comes in only with Anthropic's written permission.
 
 ## OpenAI: Codex
 

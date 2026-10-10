@@ -208,7 +208,9 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 - **Demo driver (in the foundation):** streams realistic fake output through the real pipeline.
 - **Codex (later):** `codex app-server`, JSON-RPC over stdio. This is the protocol OpenAI's own clients use.
 - **Claude** ([ADR 0038](adr/0038-claude-through-its-own-protocol.md), from [the research](research/claude-agent.md) and [the councils](research/claude-agent-councils.md)):
-  - Arden Code runs the person's installed `claude` in headless streaming mode (`-p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode default`) and speaks Claude Code's control protocol itself, in Rust.
+  - Arden Code runs the person's installed `claude` in headless streaming mode (`-p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode <the session's mode>`) and speaks Claude Code's control protocol itself, in Rust.
+  - The session's permission mode is passed at start (Manual as `default`) and changed in a running Claude Code with `set_permission_mode`; its `system/status` frames report every change, which the session follows ([ADR 0044](adr/0044-permission-modes-the-context-window-and-the-agents-icon.md), [the research](research/permission-modes-and-context.md)). `--allow-dangerously-skip-permissions` is passed only while Allow Bypass permissions is on.
+  - When a reply ends, `get_context_usage` (`detail: "summary"`) reports how full the session's context window is, with no message to the model.
   - Approval requests and Claude's questions arrive on the same pipes (`--permission-prompt-tool stdio`) and are answered there. Stop sends `interrupt`.
   - One `claude` per session, started by its first message. It ends when the session is archived or deleted, when the app closes, or after 10 minutes with no turn and nothing heard.
   - Arden Code makes each session's conversation id (`--session-id`), and later starts carry it on (`--resume`).
@@ -244,7 +246,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 │ Archived         │      │                       │        │                     │
 │ Settings    ^,   │      └ message box ──────────┘        │                     │
 ├──────────────────┴───────────────────────────────────────┴─────────────────────┤
-└ Status bar: what the agent is doing · usage limits · update status · version     ┘
+└ Status bar: what the agent is doing · update status · version                    ┘
 ```
 
 - **Panes:** the sidebar and the inspector can be collapsed and resized. Their sizes are remembered.
@@ -280,7 +282,7 @@ On a settings page the sidebar shows Back, the settings search and the tabs inst
 | Appearance | Theme: system [default], light or dark · Zoom 80–200% [100%] · Follow Windows text size [on] · Code font size 11–20 px [13] · Code ligatures [off] · Reduce motion: follow Windows [default], on or off · Smooth scrolling [on], after a restart · Show status bar [on] |
 | Keyboard | Every command with its shortcut · click to record a new shortcut · conflict warnings · reset one or all |
 | Notifications | Desktop notifications [on] · Send a test notification |
-| Agents | Install status, path and version for Claude Code and Codex, with an install link · for Claude Code, the minimum version, whether it is signed in, and its usage limits with their reset times · Show usage limits [on] · Look again |
+| Agents | Install status, path and version for Claude Code and Codex, with an install link · for Claude Code, the minimum version, whether it is signed in, and its usage limits with their reset times · Show usage limits [on] · Allow Bypass permissions [off] · Look again |
 | Advanced | Log level [info] · View logs · Open logs folder · Export diagnostics · Developer mode [off], which enables F12 dev tools · Use native title bar [off] · Hardware acceleration [on]; turning it off works around GPU glitches and needs a restart · Open `settings.json` · Export or import settings · Reset settings · Reset Arden Code |
 | About | Logo, version, build (commit and date), Windows and WebView2 versions · Copy system info · Check for updates · Release notes · Report a bug · Privacy ("Arden Code collects nothing") · MIT license · Open-source licenses · "Not affiliated with Anthropic or OpenAI" |
 
@@ -408,17 +410,21 @@ The decisions and the options turned down are in [ADR 0036](adr/0036-managing-se
 The decisions and the options turned down are in [ADR 0039](adr/0039-working-with-claude.md).
 
 - **Starting a session:** while a session is empty, the message box's lower line holds an agent menu and a project menu; the project menu ends with Open folder. New session (Ctrl+N) starts in the open session's project, or the Playground, with the agent of that project's latest session, else of the latest session anywhere, else Claude when Claude Code is installed, else the Demo agent. Open folder (Ctrl+O) adds a folder as a project and starts a session in it. Claude may work in the Playground.
-- **Choosing ([ADR 0041](adr/0041-choosing-how-a-session-starts.md), [ADR 0042](adr/0042-slash-commands-and-exact-models.md)):** the agent, project, model and effort are outlined menus in the message box, on the welcome screen too, where the project starts as the latest session's. Each has an icon that says what it chooses, at 16 px and the label's color. Model and effort are for Claude only, can change between messages, and are inherited by new and linked sessions.
+- **Choosing ([ADR 0041](adr/0041-choosing-how-a-session-starts.md), [ADR 0042](adr/0042-slash-commands-and-exact-models.md), [ADR 0044](adr/0044-permission-modes-the-context-window-and-the-agents-icon.md)):** the agent, project, model, effort and permission mode are outlined menus in the message box, on the welcome screen too, where the project starts as the latest session's. Each has an icon that says what it chooses, at 16 px and the label's color. Model, effort and permission mode are for Claude only, can change between messages, and are inherited by new and linked sessions. The lower line holds only what the next message can change, then the figures and Send, and wraps when narrow; once a session has its first message, its agent (with the agent's icon) and its project show in the header, by its title.
   - **Model:** Default (Claude Code's own setting), or any model Claude Code lists: the families first (Opus, Sonnet, Fable, Haiku), then the older versions under "Older models", by full id. A saved model Claude Code no longer lists is kept, shown as it is and marked. Until Claude Code has listed its models, the four families.
   - **Effort:** Default, or the efforts the chosen model takes, Low to Max; a model with none shows only Default and the Ultrathink switch.
-  - **Ultrathink:** a switch at the end of the effort menu. The next message gets the word `ultrathink` at its end, once; Claude Code reasons more deeply on that turn only.
+  - **Ultrathink:** a switch at the end of the effort menu. The next message gets the word `ultrathink` at its end, once; Claude Code reasons more deeply on that turn only. While the next message will carry the word, switched on or typed, an Ultrathink chip shows in the lower line; with the switch on, it can turn it off.
+  - **Permission mode:** Manual, Accept edits, Plan, Auto or Bypass permissions, each with a line saying what it does. It can change at any time, during a reply too, and the session follows what Claude Code reports. A new session never inherits Bypass permissions, which can be chosen only while Allow Bypass permissions (Settings → Agents) is on; then the menu's button takes the destructive color. Next permission mode (Ctrl+Shift+M) moves to the next one, and the digits choose in the open menu.
+  - **Plan mode's end:** when Claude asks to leave Plan mode, a plan card shows the plan as Markdown, with Start, accepting edits; Start, asking first; and Keep planning, which sends the person's words back.
 - **Slash commands (ADR 0042):** a message of a Claude session that starts with `/` lists the slash commands Claude Code reports (its own, plugins', skills' and MCP prompts'), filtered as Claude Code's menu filters, with arrow keys, Tab (fill in), Enter (send a command with no arguments, else fill in) and Esc (close). The list comes from Claude Code's answer to `initialize` and its `commands_changed` frames; one Claude Code started in the Playground per start of Arden Code, with no message, hears them before a session has one. `/model`, `/effort`, `/rename` and `/clear` (also `/reset`, `/new`) are run by Arden Code, since they change what it holds; everything else is sent as typed.
 - **Trust:** before Claude first runs in a project, the person is asked once whether they trust it, because Claude Code then runs the project's own hooks, MCP servers and environment. Cancel keeps the message in the box. The Playground needs no trust.
 - **What a reply shows:** text and thinking as they stream, tool calls with their results, and file changes with the lines added and removed. A subagent's inner steps are not shown; its tool call is.
 - **Approval requests:** a card under the tool call says what Claude wants to do and shows the command, the file and its change, or the address. Allow, Always allow (only when Claude Code suggests a rule) and Deny, which stops the reply. Once answered, it folds to a line. Stop, archiving and deleting deny it.
 - **Questions:** a card with each question's options (radio buttons, or check boxes when several may be chosen), an Other field, and Send answers. Stop cancels it.
 - **While Claude waits:** the request is announced, the status bar says Claude is waiting for an answer, and a notification is sent when the window is not focused.
-- **Usage limits ([ADR 0043](adr/0043-usage-limits.md)):** the status bar shows the 5-hour and weekly limits Claude Code reports, as "5-hour 42% · Weekly 18%", whatever session is open. From 80%, or Claude Code's warning, a figure is emphasized; at the limit it says when the window resets. Settings → Agents shows both with their reset times. Arden Code asks Claude Code at start, when a Claude reply ends, on Look again, and on focus when the figures are more than 5 minutes old, never more than once a minute. Nothing shows for an API key, a cloud provider or a signed-out Claude Code. Show usage limits [on] turns both the asking and the showing off.
+- **The figures ([ADR 0044](adr/0044-permission-modes-the-context-window-and-the-agents-icon.md)):** one quiet button before Send, in the message box of a Claude session and of the welcome screen, reads "Context 13% · 5-hour 42% · Weekly 18%", each part only when known, and opens a popover with the details.
+  - **Context window:** how full the session's context window is, as Claude Code reports it when a reply ends, kept with the session. The popover gives the tokens used of the window, where Claude Code compacts the conversation, and the breakdown. From 80% of that point, the figure is emphasized.
+- **Usage limits ([ADR 0043](adr/0043-usage-limits.md)):** the 5-hour and weekly limits Claude Code reports, the same whatever session is open, with their reset times in the popover. From 80%, or Claude Code's warning, a figure is emphasized; at the limit it says when the window resets. Settings → Agents shows both with their reset times. Arden Code asks Claude Code at start, when a Claude reply ends, on Look again, and on focus when the figures are more than 5 minutes old, never more than once a minute. Nothing shows for an API key, a cloud provider or a signed-out Claude Code. Show usage limits [on] turns both the asking and the showing off.
 - **When Claude cannot start:** the reply says why, with a code, and what to do: install Claude Code, run `claude update`, or sign in with `claude` and `/login` in a terminal. Arden Code never offers a sign-in of its own.
 
 ## 7. Visual design
@@ -531,7 +537,7 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
 
 ### 7.5 Icons
 
-Lucide icons are 16 px with a 1.5 stroke in the UI, and 20 px in the title bar, at the color of the text beside them. Every icon-only button has an accessible label. The message box's menus use a sparkle for Claude (a flask for the Demo agent), a folder, a brain and rising bars; Ultrathink is a lightbulb.
+Lucide icons are 16 px with a 1.5 stroke in the UI, and 20 px in the title bar, at the color of the text beside them. Every icon-only button has an accessible label. The message box's menus use a bot for Claude (a flask for the Demo agent), a folder, a brain, rising bars and a shield for the permission mode; Ultrathink is a lightbulb. No vendor's logo is shown without its written permission ([ADR 0044](adr/0044-permission-modes-the-context-window-and-the-agents-icon.md)).
 
 ## 8. Brand
 
@@ -668,6 +674,7 @@ Every row is measured by CI on the release build, and the ones that can fail the
 - **Logs never leave the machine.** "Export diagnostics" creates a local zip, and you decide whether to share it.
 - **Redaction:** logs strip the user folder path, tokens and email addresses.
 - **Usage limits:** when Arden Code asks Claude Code for the person's usage limits, Claude Code asks Anthropic with its own sign-in. Arden Code reads only the percentages and reset times, keeps them in memory, and never sees a token. Show usage limits turns this off.
+- **Context window:** Claude Code answers from its own figures, with no call to Anthropic. Arden Code keeps the token counts and the breakdown's category names with the session, never the names of skills, memory files or tools.
 - **Claude Code keeps its own transcripts** in its own folder. Arden Code never reads or changes Claude Code's files, settings or credentials, and Claude Code's standard output (the conversation) is not copied to the logs.
 
 ## 14. Diagnostics and error handling
