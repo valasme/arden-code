@@ -109,6 +109,27 @@ describe("Applying the events of a reply", () => {
   });
 });
 
+describe("Applying how full the context window is (ADR 0044)", () => {
+  it("keeps it with the session, whatever the turn's state", () => {
+    const contextWindow = {
+      used: 26_000,
+      size: 200_000,
+      percent: 13,
+      compactsAt: 167_000,
+      parts: [{ name: "Messages", tokens: 10_000, kind: "used" as const }],
+    };
+
+    const changed = applyTurnEvent(session, {
+      type: "contextWindowChanged",
+      turnId: "turn-2",
+      contextWindow,
+    });
+
+    expect(changed.contextWindow).toEqual(contextWindow);
+    expect(changed.turns).toEqual(session.turns);
+  });
+});
+
 describe("Applying the stop of a reply", () => {
   it("ends the turn as stopped, stops a tool that was running, and adds a marker once", () => {
     const running = applyTurnEvent(session, added(toolCall));

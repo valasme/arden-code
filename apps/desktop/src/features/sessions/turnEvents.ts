@@ -64,6 +64,9 @@ function applyToTurn(turn: Turn, event: TurnEvent): Turn {
       };
     case "stopped":
       return stopped(turn);
+    // About the session, not the turn.
+    case "contextWindowChanged":
+      return turn;
     case "finished":
     case "failed":
       break;
@@ -73,6 +76,10 @@ function applyToTurn(turn: Turn, event: TurnEvent): Turn {
 
 /** The session after one event of a reply. Events about turns it does not have change nothing. */
 export function applyTurnEvent(session: Session, event: TurnEvent): Session {
+  // What the agent reported about the session itself, once the reply ended (ADR 0044).
+  if (event.type === "contextWindowChanged") {
+    return { ...session, contextWindow: event.contextWindow };
+  }
   return {
     ...session,
     turns: session.turns.map((turn) =>

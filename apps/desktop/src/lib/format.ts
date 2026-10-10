@@ -39,6 +39,7 @@ export function createFormatters(locale: string) {
     day: "numeric",
   };
   const number = new Intl.NumberFormat(locale);
+  const compact = new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 });
   const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
 
   return {
@@ -56,6 +57,8 @@ export function createFormatters(locale: string) {
         ...(timeZone && { timeZone }),
       }).format(value),
     number: (value: number) => number.format(value),
+    /** A count of tokens, short, such as 26K or 1M (ADR 0044). */
+    tokens: (value: number) => compact.format(value),
     /**
      * When a usage limit resets (ADR 0043): the time when it is today, such as 15:10, else the
      * weekday and the time, such as Tue 09:00.

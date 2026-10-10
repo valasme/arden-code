@@ -780,6 +780,41 @@ export type CheckResult =
 /**  A release exists, but its signature is not valid, so it was not used. */
 "rejected";
 
+/**  One part of what fills the context window, under the agent CLI's own name for it. */
+export type ContextPart = {
+	/**  Such as "Messages" or "Free space". */
+	name: string,
+	tokens: number,
+	kind: ContextPartKind,
+};
+
+/**  What a part of the context window is, as the agent CLI says. */
+export type ContextPartKind = 
+/**  In the window: the system prompt, the tools, the messages. */
+"used" | 
+/**  Loaded only when needed, so not in the window yet. */
+"deferred" | 
+/**  Kept free, so the agent CLI can compact the conversation. */
+"buffer" | 
+/**  Room left. */
+"free" | 
+/**  A kind the agent CLI added after this version of Arden Code. */
+"other";
+
+/**  How full a session's context window is, as the agent CLI last reported it. */
+export type ContextWindow = {
+	/**  The tokens in the window. */
+	used: number,
+	/**  How many tokens the window holds, which depends on the model. */
+	size: number,
+	/**  How full it is, in whole percent. */
+	percent: number,
+	/**  The tokens at which the agent CLI compacts the conversation, when it does. */
+	compactsAt: number | null,
+	/**  What fills it, in the agent CLI's order. */
+	parts: ContextPart[],
+};
+
 /**  What was found about one agent program. */
 export type Detection = {
 	cli: AgentCli,
@@ -1156,6 +1191,8 @@ export type Session = {
 	model?: Model | null,
 	/**  How much the agent thinks, or none for the agent's own setting (ADR 0041). */
 	effort?: Effort | null,
+	/**  How full the agent's context window is, as it last reported, or none until it has (ADR 0044). */
+	contextWindow?: ContextWindow | null,
 	turns: Turn[],
 };
 
@@ -1301,7 +1338,12 @@ export type TurnEvent =
 /**  The reply stopped because something went wrong. */
 { type: "failed"; turnId: string } | 
 /**  The person stopped the reply. */
-{ type: "stopped"; turnId: string };
+{ type: "stopped"; turnId: string } | 
+/**
+ *  How full the session's context window is, as the agent reported it once the reply ended
+ *  (ADR 0044).
+ */
+{ type: "contextWindowChanged"; turnId: string; contextWindow: ContextWindow };
 
 /**  How far a turn has come. */
 export type TurnStatus = 

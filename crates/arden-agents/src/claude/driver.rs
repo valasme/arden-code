@@ -15,6 +15,7 @@ use arden_core::error::ErrorCode;
 
 use super::approval;
 use super::catalog::Catalog;
+use super::context::{self, CONTEXT_REQUEST};
 use super::launch::{Connection, Conversation, LaunchError, Launcher, Start};
 use super::locate::MINIMUM_VERSION;
 use super::protocol::{self, Frame, Request};
@@ -38,6 +39,9 @@ const HANDSHAKE_PATIENCE: Duration = Duration::from_secs(60);
 const USAGE_FLOOR: Duration = Duration::from_mins(1);
 /// How long a Claude Code started only to ask for the usage limits has to answer.
 const USAGE_PATIENCE: Duration = Duration::from_secs(20);
+/// How long a Claude Code has to say how full its context window is once a reply has ended. It
+/// answers from its own figures, so it takes moments (ADR 0044).
+const CONTEXT_PATIENCE: Duration = Duration::from_secs(2);
 /// How long a stopped reply has to send its last frame before its Claude Code is started again.
 const DRAIN_PATIENCE: Duration = Duration::from_secs(30);
 /// How long a session's Claude Code is kept with no reply running and nothing heard from it.
@@ -327,6 +331,8 @@ pub struct ClaudeDriver {
     usage: Arc<Usage>,
     /// The least time between two requests for them.
     usage_floor: Duration,
+    /// How long a reply's Claude Code has to report its context window once the reply has ended.
+    context_patience: Duration,
 }
 
 /// Marks a session's Claude Code as used by a reply until the reply ends.
@@ -360,6 +366,7 @@ impl ClaudeDriver {
             listing: AtomicBool::new(false),
             usage: Arc::new(Usage::default()),
             usage_floor: USAGE_FLOOR,
+            context_patience: CONTEXT_PATIENCE,
         }
     }
 
@@ -368,6 +375,14 @@ impl ClaudeDriver {
     #[must_use]
     pub(crate) fn with_usage_floor(mut self, floor: Duration) -> Self {
         self.usage_floor = floor;
+        self
+    }
+
+    /// The driver, with another wait for a reply's Claude Code to report its context window.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn with_context_patience(mut self, patience: Duration) -> Self {
+        self.context_patience = patience;
         self
     }
 
@@ -482,6 +497,55 @@ impl ClaudeDriver {
             "{USAGE_REQUEST}{}",
             self.requests.fetch_add(1, Ordering::Relaxed) + 1
         )
+    }
+
+    /// A new id for a request for the context window.
+    fn next_context_request(&self) -> String {
+        format!(
+            "{CONTEXT_REQUEST}{}",
+            self.requests.fetch_add(1, Ordering::Relaxed) + 1
+        )
+    }
+
+    /// Asks a reply's Claude Code how full its context window is, once the reply has ended, and
+    /// passes the answer on as an event of the reply, after it finished (ADR 0044). An answer that
+    /// gives no figure, or none in time, changes nothing. What else is heard meanwhile is put back
+    /// for whoever reads next.
+    fn report_context(
+        &self,
+        live: &Live,
+        events: &Receiver<Event>,
+        turn_id: &str,
+        emit: &mut dyn FnMut(TurnEvent) -> Flow,
+    ) {
+        let id = self.next_context_request();
+        if live.write(&protocol::get_context_usage(&id)).is_err() {
+            return;
+        }
+        let deadline = Instant::now() + self.context_patience;
+        let mut heard = Vec::new();
+        loop {
+            match events.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                Ok(Event::Frame(Frame::Response {
+                    id: answered,
+                    error,
+                    answer,
+                })) if answered == id => {
+                    if let Some(context_window) = context::window_in(error.as_deref(), &answer) {
+                        emit(TurnEvent::ContextWindowChanged {
+                            turn_id: turn_id.to_owned(),
+                            context_window,
+                        });
+                    }
+                    break;
+                }
+                Ok(other) => heard.push(other),
+                Err(_) => break,
+            }
+        }
+        for event in heard {
+            let _ = live.sender.send(event);
+        }
     }
 
     /// A new id for a request of Arden Code's.
@@ -997,6 +1061,11 @@ impl AgentDriver for ClaudeDriver {
                     // The reply used some of the person's usage limits (ADR 0043).
                     if self.usage.may_ask(self.usage_floor, Duration::ZERO) {
                         let _ = live.write(&protocol::get_usage(&self.next_usage_request()));
+                    }
+                    // A reply Claude Code ended itself filled some of the context window. A stopped
+                    // one has its result still to come.
+                    if turn.reply.ended() {
+                        self.report_context(&live, &events, turn_id, emit);
                     }
                     return;
                 }

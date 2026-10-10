@@ -29,7 +29,10 @@ fn store() -> SessionStore {
 
 fn claude(scripts: Vec<Result<Vec<Step>, LaunchError>>) -> (Arc<Scripted>, ClaudeDriver) {
     let scripted = Arc::new(Scripted::new(scripts));
-    let driver = ClaudeDriver::new(scripted.clone());
+    // A script that does not answer the driver's question about the context window, as most do not,
+    // holds no reply up for long.
+    let driver =
+        ClaudeDriver::new(scripted.clone()).with_context_patience(Duration::from_millis(20));
     (scripted, driver)
 }
 
@@ -1093,6 +1096,7 @@ fn a_sessions_messages_go_to_one_claude_code_in_its_project_with_a_conversation_
     script.extend([
         message("First"),
         success("One."),
+        asks_for_context(),
         message("Second"),
         success("Two."),
     ]);
@@ -1135,7 +1139,7 @@ fn conversations(scripted: &Scripted) -> Vec<Conversation> {
 #[test]
 fn claude_code_starts_with_the_session_s_model_and_keeps_running_while_it_stays() {
     let mut script = answers("First", "One.");
-    script.extend([message("Second"), success("Two.")]);
+    script.extend([asks_for_context(), message("Second"), success("Two.")]);
     let (scripted, driver) = claude(vec![Ok(script)]);
     let store = store();
     let session = claude_session(&store);
@@ -1531,6 +1535,7 @@ fn a_stop_that_comes_after_claude_finished_does_not_stop_the_next_reply() {
     script.extend([
         message("First"),
         success("One."),
+        asks_for_context(),
         message("Second"),
         assistant("msg_2", &json!([{ "type": "text", "text": "Two." }])),
         success("Two."),
@@ -2053,6 +2058,7 @@ fn asking_again_uses_a_claude_code_that_is_running_and_has_nothing_to_do() {
         success("Hi."),
         asks_for_usage(),
         usage_answer(&plan_usage()),
+        asks_for_context(),
         asks_for_usage(),
         usage_answer(&newer),
     ]);
@@ -2141,4 +2147,100 @@ fn a_claude_code_started_only_to_ask_for_usage_leaves_the_lists_to_the_one_that_
     scripted.assert_followed();
     assert_eq!(scripted.starts.lock().expect("starts").len(), 2);
     assert_eq!(driver.catalog().models.len(), 2);
+}
+
+/// The driver's `get_context_usage`, as Claude Code expects it (ADR 0044).
+fn asks_for_context() -> Step {
+    Step::Expect(json!({
+        "type": "control_request",
+        "request": { "subtype": "get_context_usage", "detail": "summary" }
+    }))
+}
+
+/// The real Claude Code 2.1.292's answer to `get_context_usage`.
+fn context_answer() -> Step {
+    let recorded: Value =
+        serde_json::from_str(include_str!("fixtures/get-context-usage-2.1.292.json"))
+            .expect("the recorded answer");
+    Step::Answer(json!({
+        "type": "control_response",
+        "response": { "subtype": "success", "response": recorded["response"]["response"] }
+    }))
+}
+
+/// A Claude driver that waits as long as a real Claude Code needs to report its context window.
+fn reporting_claude(scripts: Vec<Result<Vec<Step>, LaunchError>>) -> (Arc<Scripted>, ClaudeDriver) {
+    let scripted = Arc::new(Scripted::new(scripts));
+    let driver = ClaudeDriver::new(scripted.clone()).with_context_patience(Duration::from_secs(5));
+    (scripted, driver)
+}
+
+#[test]
+fn when_a_claude_reply_ends_the_session_keeps_how_full_its_context_window_is() {
+    let mut script = handshake();
+    script.extend([
+        message("Hello"),
+        success("Hi."),
+        asks_for_context(),
+        context_answer(),
+    ]);
+    let (scripted, driver) = reporting_claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    let events = send(&store, &driver, &session, "Hello");
+
+    scripted.assert_followed();
+    assert_eq!(turn(&store, &session, 0).status, TurnStatus::Done);
+    let kept = store
+        .session(&session)
+        .expect("the session")
+        .context_window
+        .expect("a context window");
+    assert_eq!(
+        (kept.used, kept.size, kept.percent, kept.compacts_at),
+        (17_117, 1_000_000, 2, Some(967_000))
+    );
+    let finished = events
+        .iter()
+        .position(|event| matches!(event, TurnEvent::Finished { .. }))
+        .expect("the reply finished");
+    let reported = events
+        .iter()
+        .position(|event| matches!(event, TurnEvent::ContextWindowChanged { .. }))
+        .expect("the page heard the context window");
+    assert!(
+        finished < reported,
+        "the reply is not held up for it: {events:?}"
+    );
+}
+
+#[test]
+fn a_claude_code_that_cannot_report_its_context_window_leaves_the_reply_as_it_was() {
+    let mut script = handshake();
+    script.extend([
+        message("Hello"),
+        success("Hi."),
+        asks_for_context(),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "error", "error": "Unknown control request subtype: get_context_usage" }
+        })),
+    ]);
+    let (scripted, driver) = reporting_claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    let events = send(&store, &driver, &session, "Hello");
+
+    scripted.assert_followed();
+    let kept = store.session(&session).expect("the session");
+    assert_eq!(kept.context_window, None);
+    assert_eq!(kept.turns[0].status, TurnStatus::Done);
+    assert!(
+        events
+            .iter()
+            .all(|event| !matches!(event, TurnEvent::ContextWindowChanged { .. })),
+        "{events:?}"
+    );
 }

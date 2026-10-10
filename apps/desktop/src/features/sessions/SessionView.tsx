@@ -365,7 +365,9 @@ export function SessionView({ id }: { id: string }) {
           agent={agent}
           busy={busy}
           choices={choices}
-          figures={agent === "claude" ? <Figures /> : null}
+          figures={
+            agent === "claude" ? <Figures contextWindow={session.contextWindow ?? null} /> : null
+          }
           onStop={() => {
             run("reply.stop");
           }}

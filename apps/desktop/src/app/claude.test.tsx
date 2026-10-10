@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { BotIcon, FolderIcon } from "lucide-react";
 import { page } from "vitest/browser";
 
-import type { Item, Session, UsageLimits } from "@/ipc/bindings";
+import type { ContextWindow, Item, Session, UsageLimits } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
@@ -579,6 +579,34 @@ describe("The figures in the message box (ADR 0044)", () => {
 
     await screen.findByRole("heading", { level: 1, name: "Hi" });
     expect(within(area).queryByText(/5-hour/u)).toBeNull();
+  });
+
+  it("shows how full a Claude session's context window is, and follows its replies", async () => {
+    const user = userEvent.setup();
+    const contextWindow: ContextWindow = {
+      used: 26_000,
+      size: 200_000,
+      percent: 13,
+      compactsAt: 167_000,
+      parts: [{ name: "Messages", tokens: 10_000, kind: "used" }],
+    };
+    const rust = startSessionsRust({ sessions: [{ ...answeredClaudeSession(), contextWindow }] });
+    renderApp("/session/session-1");
+    const area = await messageBoxArea();
+    expect(await within(area).findByRole("button", { name: "Context 13%" })).toBeVisible();
+
+    await user.type(within(area).getByRole("textbox", { name: "Message" }), "More{Enter}");
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+    rust.emit({ type: "finished", turnId: "turn-2" });
+    rust.emit({
+      type: "contextWindowChanged",
+      turnId: "turn-2",
+      contextWindow: { ...contextWindow, used: 40_000, percent: 20 },
+    });
+
+    expect(await within(area).findByRole("button", { name: "Context 20%" })).toBeVisible();
   });
 
   it("shows the usage limits on the welcome screen while Claude is chosen", async () => {

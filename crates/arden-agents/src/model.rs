@@ -4,6 +4,8 @@ use arden_core::error::ErrorCode;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use crate::context_window::ContextWindow;
+
 /// Which agent answers in a session. Codex arrives with its driver.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -422,6 +424,8 @@ impl Turn {
             TurnEvent::Finished { .. } => self.status = TurnStatus::Done,
             TurnEvent::Failed { .. } => self.status = TurnStatus::Failed,
             TurnEvent::Stopped { .. } => self.stop(),
+            // About the session, not the turn.
+            TurnEvent::ContextWindowChanged { .. } => {}
         }
     }
 }
@@ -451,6 +455,9 @@ pub struct Session {
     /// How much the agent thinks, or none for the agent's own setting (ADR 0041).
     #[serde(default)]
     pub effort: Option<Effort>,
+    /// How full the agent's context window is, as it last reported, or none until it has (ADR 0044).
+    #[serde(default)]
+    pub context_window: Option<ContextWindow>,
     pub turns: Vec<Turn>,
 }
 
@@ -522,6 +529,13 @@ pub enum TurnEvent {
     /// The person stopped the reply.
     #[serde(rename_all = "camelCase")]
     Stopped { turn_id: String },
+    /// How full the session's context window is, as the agent reported it once the reply ended
+    /// (ADR 0044).
+    #[serde(rename_all = "camelCase")]
+    ContextWindowChanged {
+        turn_id: String,
+        context_window: ContextWindow,
+    },
 }
 
 impl TurnEvent {
@@ -534,7 +548,8 @@ impl TurnEvent {
             | Self::ToolCallEnded { turn_id, .. }
             | Self::Finished { turn_id }
             | Self::Failed { turn_id }
-            | Self::Stopped { turn_id } => turn_id,
+            | Self::Stopped { turn_id }
+            | Self::ContextWindowChanged { turn_id, .. } => turn_id,
         }
     }
 }

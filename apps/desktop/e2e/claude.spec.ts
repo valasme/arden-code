@@ -195,6 +195,30 @@ test.describe("Claude in the real app", () => {
     }
   });
 
+  test("the message box shows how full a Claude session's context window is after a reply", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+
+      await say(page, "Hello from the test");
+      await expect(session.getByText("You said: Hello from the test")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      // Claude Code reports its context window once the reply has ended (ADR 0044).
+      const figures = page.getByRole("button", { name: /^Context 13%/u });
+      await expect(figures).toBeVisible({ timeout: 30_000 });
+      await figures.click();
+      const details = page.getByRole("dialog", { name: "Context window" });
+      await expect(details.getByText("13% used: 26K of 200K tokens")).toBeVisible();
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
+
   test("a Claude session carries on its conversation after Arden Code restarts", async () => {
     const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
     const log = path.join(dataDir, "claude-starts.log");

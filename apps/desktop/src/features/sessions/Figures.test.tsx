@@ -3,7 +3,7 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import type { UsageLimits, UsageWindow } from "@/ipc/bindings";
+import type { ContextWindow, UsageLimits, UsageWindow } from "@/ipc/bindings";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 import { settingsWith } from "@/test/settings";
@@ -39,14 +39,32 @@ function startApp(usage: UsageLimits, showUsageLimits = true) {
   );
 }
 
-function renderFigures() {
+function renderFigures(contextWindow: ContextWindow | null = null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <p>Before</p>
-      <Figures />
+      <Figures contextWindow={contextWindow} />
     </QueryClientProvider>,
   );
+}
+
+/** A window of 200,000 tokens, 13% full, which Claude Code compacts at 167,000. */
+function window13(overrides: Partial<ContextWindow> = {}): ContextWindow {
+  return {
+    used: 26_000,
+    size: 200_000,
+    percent: 13,
+    compactsAt: 167_000,
+    parts: [
+      { name: "System prompt", tokens: 2000, kind: "used" },
+      { name: "Messages", tokens: 10_000, kind: "used" },
+      { name: "System tools (deferred)", tokens: 20_000, kind: "deferred" },
+      { name: "Autocompact buffer", tokens: 33_000, kind: "buffer" },
+      { name: "Free space", tokens: 141_000, kind: "free" },
+    ],
+    ...overrides,
+  };
 }
 
 afterEach(() => {
@@ -71,6 +89,7 @@ describe("Figures, with the usage limits", () => {
     await user.click(await screen.findByRole("button", { name: /5-hour 42%/u }));
 
     const details = await screen.findByRole("dialog", { name: "Usage limits" });
+    await animationsDone(details);
     expect(within(details).getByText("5-hour limit")).toBeVisible();
     expect(within(details).getByText(/^42% used · resets /u)).toBeVisible();
     expect(within(details).getByText("Weekly limit")).toBeVisible();
@@ -141,5 +160,69 @@ describe("Figures, with the usage limits", () => {
 
     await expectNoAccessibilityViolations(container);
     await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+describe("Figures, with the context window (ADR 0044)", () => {
+  it("starts with how full the context window is", async () => {
+    startApp(plan);
+    renderFigures(window13());
+
+    expect(
+      await screen.findByRole("button", { name: "Context 13% 5-hour 42% Weekly 18%" }),
+    ).toHaveTextContent("Context 13% · 5-hour 42% · Weekly 18%");
+  });
+
+  it("shows the context window alone when there are no usage limits", async () => {
+    startApp({ report: "notForThisSignIn", windows: [] });
+    renderFigures(window13());
+
+    expect(await screen.findByRole("button", { name: "Context 13%" })).toBeVisible();
+  });
+
+  it("details the tokens used, where it is compacted, and what fills it", async () => {
+    startApp({ report: "notForThisSignIn", windows: [] });
+    const user = userEvent.setup();
+    renderFigures(window13());
+
+    await user.click(await screen.findByRole("button", { name: "Context 13%" }));
+
+    const details = await screen.findByRole("dialog", { name: "Context window" });
+    await animationsDone(details);
+    expect(within(details).getByText("13% used: 26K of 200K tokens")).toBeVisible();
+    expect(within(details).getByText("Compacted at 84%")).toBeVisible();
+    const parts = within(details)
+      .getAllByRole("term")
+      .map((term) => term.textContent);
+    expect(parts).toEqual(["System prompt", "Messages", "Autocompact buffer", "Free space"]);
+    expect(within(details).getByText("141K")).toBeVisible();
+  });
+
+  it("says a window is not compacted on its own when it is not", async () => {
+    startApp({ report: "notForThisSignIn", windows: [] });
+    const user = userEvent.setup();
+    renderFigures(window13({ compactsAt: null }));
+
+    await user.click(await screen.findByRole("button", { name: "Context 13%" }));
+
+    await animationsDone(await screen.findByRole("dialog", { name: "Context window" }));
+    expect(screen.getByText("Not compacted on its own")).toBeVisible();
+  });
+
+  it("emphasizes the context window from 80% of where it is compacted", async () => {
+    startApp({ report: "notForThisSignIn", windows: [] });
+    renderFigures(window13({ used: 140_000, percent: 70 }));
+
+    const figure = await screen.findByText("Context 70%");
+
+    expect(figure).toHaveAttribute("data-level", "near");
+    expect(figure).toHaveClass("text-foreground");
+  });
+
+  it("does not emphasize a window far from where it is compacted", async () => {
+    startApp({ report: "notForThisSignIn", windows: [] });
+    renderFigures(window13());
+
+    expect(await screen.findByText("Context 13%")).toHaveAttribute("data-level", "normal");
   });
 });

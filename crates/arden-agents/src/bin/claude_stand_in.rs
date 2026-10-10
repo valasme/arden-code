@@ -3,8 +3,9 @@
 //! chosen by what the message says. It never talks to Anthropic.
 //!
 //! Its settings are in `stand-in.json` beside it, when there is one: the `version` it says, whether
-//! it is `signedIn`, the `usage` it answers `get_usage` with (ADR 0043), and a `log` file where it
-//! writes how it was started (its arguments and its folder) and every line it reads.
+//! it is `signedIn`, the `usage` it answers `get_usage` with (ADR 0043), the `context` it answers
+//! `get_context_usage` with (ADR 0044), and a `log` file where it writes how it was started (its
+//! arguments and its folder) and every line it reads.
 
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
@@ -20,6 +21,8 @@ struct Settings {
     signed_in: bool,
     /// The answer to `get_usage`: by default, no plan limits, as for an API key.
     usage: Value,
+    /// The answer to `get_context_usage`: by default, a window of 200,000 tokens, 13% full.
+    context: Value,
     log: Option<PathBuf>,
 }
 
@@ -39,6 +42,23 @@ fn settings() -> Settings {
                 json!({ "subscription_type": null, "rate_limits_available": false, "rate_limits": null })
             }
             usage => usage.clone(),
+        },
+        context: match &written["context"] {
+            Value::Null => json!({
+                "categories": [
+                    { "name": "System prompt", "tokens": 2_000, "kind": "used" },
+                    { "name": "System tools", "tokens": 14_000, "kind": "used" },
+                    { "name": "Messages", "tokens": 10_000, "kind": "used" },
+                    { "name": "Autocompact buffer", "tokens": 33_000, "kind": "buffer" },
+                    { "name": "Free space", "tokens": 141_000, "kind": "free" }
+                ],
+                "totalTokens": 26_000,
+                "maxTokens": 200_000,
+                "percentage": 13,
+                "autoCompactThreshold": 167_000,
+                "isAutoCompactEnabled": true
+            }),
+            context => context.clone(),
         },
         log: written["log"].as_str().map(PathBuf::from),
     }
@@ -165,6 +185,9 @@ impl Conversation {
                 }
                 Some("control_request") if frame["request"]["subtype"] == "get_usage" => {
                     respond(&frame, &self.settings.usage);
+                }
+                Some("control_request") if frame["request"]["subtype"] == "get_context_usage" => {
+                    respond(&frame, &self.settings.context);
                 }
                 Some("control_request") => respond(&frame, &json!({})),
                 Some("user") => {

@@ -117,6 +117,7 @@ impl Entry {
             linked_from: session.linked_from.clone(),
             model: session.model.clone(),
             effort: session.effort,
+            context_window: session.context_window.clone(),
             turns: Vec::new(),
         }
     }
@@ -268,6 +269,7 @@ impl Inner {
                 linked_from,
                 model,
                 effort,
+                context_window: None,
                 turns: Vec::new(),
             },
             loaded: true,
@@ -1068,6 +1070,13 @@ impl SessionStore {
         let Ok(entry) = find(sessions, session_id) else {
             return Ok(());
         };
+        // What the agent reported about the session itself is the session's to keep (ADR 0044).
+        if let TurnEvent::ContextWindowChanged { context_window, .. } = event {
+            entry.session.context_window = Some(context_window.clone());
+            return database
+                .save_session(&entry.header(), entry.order, last_id)
+                .map_err(not_saved);
+        }
         let Some(position) = entry
             .session
             .turns
@@ -1341,8 +1350,9 @@ impl SessionStore {
             if saved.is_ok() {
                 saved = applied;
             }
-            // A driver ends a reply as stopped itself when the person's answer stopped it.
-            ended = matches!(
+            // A driver ends a reply as stopped itself when the person's answer stopped it. What it
+            // reports after the end, such as the context window (ADR 0044), leaves it ended.
+            ended |= matches!(
                 event,
                 TurnEvent::Finished { .. } | TurnEvent::Failed { .. } | TurnEvent::Stopped { .. }
             );
@@ -1383,6 +1393,7 @@ mod tests {
     use std::path::Path;
 
     use super::*;
+    use crate::context_window::{ContextPart, ContextPartKind, ContextWindow};
     use crate::demo::DemoDriver;
     use crate::model::Item;
     use crate::playground;
@@ -2083,7 +2094,7 @@ mod tests {
         let version: i64 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("the version");
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
     }
 
     #[test]
@@ -2998,6 +3009,73 @@ mod tests {
         assert_eq!(
             store.session(&next).expect("it").effort,
             Some(Effort::ExtraHigh)
+        );
+    }
+
+    /// An agent that reports how full its context window is once its reply has ended (ADR 0044).
+    struct Reporting(ContextWindow);
+
+    impl AgentDriver for Reporting {
+        fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+            let turn_id = request.turn_id.to_owned();
+            emit(TurnEvent::Finished {
+                turn_id: turn_id.clone(),
+            });
+            emit(TurnEvent::ContextWindowChanged {
+                turn_id,
+                context_window: self.0.clone(),
+            });
+        }
+    }
+
+    fn two_thirds_full() -> ContextWindow {
+        ContextWindow {
+            used: 130_000,
+            size: 200_000,
+            percent: 65,
+            compacts_at: Some(167_000),
+            parts: vec![ContextPart {
+                name: "Messages".into(),
+                tokens: 120_000,
+                kind: ContextPartKind::Used,
+            }],
+        }
+    }
+
+    #[test]
+    fn a_session_keeps_how_full_its_context_window_is_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let id = {
+            let store = store_in(&file);
+            let session = store
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .expect("a session");
+            assert_eq!(
+                store.session(&session.id).expect("it").context_window,
+                None,
+                "none until the agent reports one"
+            );
+            let turn = store.start_turn(&session.id, "hello").expect("a turn");
+            store
+                .stream_reply(&Reporting(two_thirds_full()), &session.id, &turn, |_| true)
+                .expect("answered");
+            let kept = store.session(&session.id).expect("it");
+            assert_eq!(kept.context_window, Some(two_thirds_full()));
+            assert_eq!(
+                kept.turns[0].status,
+                TurnStatus::Done,
+                "the report after the reply finished leaves it finished"
+            );
+            session.id
+        };
+
+        assert_eq!(
+            store_in(&file)
+                .session(&id)
+                .expect("the session")
+                .context_window,
+            Some(two_thirds_full())
         );
     }
 

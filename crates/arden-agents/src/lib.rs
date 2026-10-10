@@ -6,6 +6,7 @@
 //! applies and the UI receives. The only driver so far is the [`demo::DemoDriver`].
 
 pub mod claude;
+pub mod context_window;
 mod database;
 pub mod demo;
 pub mod detect;

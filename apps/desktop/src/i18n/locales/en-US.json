@@ -452,9 +452,14 @@
       "ultrathinkHint": "Think deeper on the next message"
     },
     "figures": {
+      "compactedAt": "Compacted at {{percent}}%",
+      "context": "Context {{percent}}%",
+      "contextUsed": "{{percent}}% used: {{used}} of {{size}} tokens",
+      "contextWindow": "Context window",
       "fiveHour": "5-hour {{percent}}%",
       "fiveHourReached": "5-hour limit reached",
       "fiveHourReachedResets": "5-hour limit reached, resets {{time}}",
+      "notCompacted": "Not compacted on its own",
       "usageLimits": "Usage limits",
       "used": "{{percent}}% used",
       "usedAndReset": "{{percent}}% used · resets {{time}}",

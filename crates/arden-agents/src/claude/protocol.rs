@@ -302,6 +302,16 @@ pub fn get_usage(id: &str) -> String {
     )
 }
 
+/// Asks how full the context window is, answered from Claude Code's own figures with no call to
+/// the model (ADR 0044).
+#[must_use]
+pub fn get_context_usage(id: &str) -> String {
+    control_request(
+        id,
+        &json!({ "subtype": "get_context_usage", "detail": "summary" }),
+    )
+}
+
 /// Stops the turn that is running.
 #[must_use]
 pub fn interrupt(id: &str) -> String {

@@ -3,6 +3,7 @@
 
 mod approval;
 pub mod catalog;
+pub mod context;
 pub mod driver;
 pub mod launch;
 pub mod locate;
