@@ -10,11 +10,11 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::database::{Database, DatabaseError, Order};
-use crate::driver::{AgentDriver, Answer, Control, Flow, ReplyRequest};
+use crate::driver::{AgentDriver, Answer, Control, Flow, PlanAnswer, ReplyRequest};
 use crate::model::{
-    AgentKind, ApprovalState, Choices, Effort, Item, Model, PermissionMode, Project, ProjectKind,
-    ProjectListing, QuestionAnswer, QuestionState, Session, SessionList, SessionSummary, Turn,
-    TurnEvent, TurnStatus,
+    AgentKind, ApprovalState, Choices, Effort, Item, Model, PermissionMode, PlanState, Project,
+    ProjectKind, ProjectListing, QuestionAnswer, QuestionState, Session, SessionList,
+    SessionSummary, Turn, TurnEvent, TurnStatus,
 };
 
 /// How many characters of the first message become the session's title.
@@ -1348,6 +1348,43 @@ impl SessionStore {
             Control::Answers {
                 item_id: item_id.to_owned(),
                 answers,
+            },
+        )
+    }
+
+    /// Hands the person's answer to the plan that is `item_id` to the reply that waits for it
+    /// (ADR 0044). What should change, when they keep planning, is trimmed; empty, it is none.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotWaiting`] when no running reply waits for an answer to that plan.
+    pub fn answer_plan(
+        &self,
+        session_id: &str,
+        item_id: &str,
+        answer: PlanAnswer,
+        feedback: Option<String>,
+    ) -> Result<(), StoreError> {
+        let feedback = feedback
+            .map(|feedback| feedback.trim().to_owned())
+            .filter(|feedback| !feedback.is_empty());
+        self.hand_to_driver(
+            session_id,
+            item_id,
+            |item| {
+                matches!(
+                    item,
+                    Item::Plan {
+                        state: PlanState::Waiting,
+                        ..
+                    }
+                )
+            },
+            Control::Plan {
+                item_id: item_id.to_owned(),
+                answer,
+                feedback,
             },
         )
     }

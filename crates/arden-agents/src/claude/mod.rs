@@ -7,6 +7,7 @@ pub mod context;
 pub mod driver;
 pub mod launch;
 pub mod locate;
+mod plan;
 pub mod protocol;
 mod question;
 mod reply;

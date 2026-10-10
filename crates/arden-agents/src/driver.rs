@@ -27,6 +27,18 @@ pub enum Answer {
     Deny,
 }
 
+/// The person's answer to a plan the agent asks to start (ADR 0044).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum PlanAnswer {
+    /// Start it, editing files without asking.
+    StartAcceptingEdits,
+    /// Start it, asking before edits and commands.
+    StartAskingFirst,
+    /// Keep planning, with what should change.
+    KeepPlanning,
+}
+
 /// Something the person does while a reply runs. The driver hears it at once, even while it waits
 /// for its agent, as a real agent does during a long tool.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +51,13 @@ pub enum Control {
     Answers {
         item_id: String,
         answers: Vec<QuestionAnswer>,
+    },
+    /// The person answered the plan that is the item with this id, with what should change when
+    /// they keep planning.
+    Plan {
+        item_id: String,
+        answer: PlanAnswer,
+        feedback: Option<String>,
     },
 }
 

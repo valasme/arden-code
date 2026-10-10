@@ -300,6 +300,21 @@
       "lines": "{{added}} lines added, {{removed}} lines removed",
       "modified": "Changed"
     },
+    "plan": {
+      "answered": {
+        "cancelled": "No answer was needed",
+        "keptPlanning": "You asked {{agent}} to keep planning",
+        "startedAcceptingEdits": "You started the plan, accepting edits",
+        "startedAskingFirst": "You started the plan, asking first"
+      },
+      "asks": "{{agent}} has a plan",
+      "keepPlanning": "Keep planning",
+      "noText": "{{agent}} did not send the plan's text.",
+      "send": "Send",
+      "startAcceptingEdits": "Start, accepting edits",
+      "startAskingFirst": "Start, asking first",
+      "whatShouldChange": "What should change?"
+    },
     "questions": {
       "asks": "{{agent}} asks you",
       "cancelled": "No answer was needed",

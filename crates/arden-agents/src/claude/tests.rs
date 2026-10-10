@@ -11,11 +11,11 @@ use serde_json::{Value, json};
 use super::driver::ClaudeDriver;
 use super::launch::{Conversation, LaunchError};
 use super::script::{Scripted, Step, handshake};
-use crate::driver::{AgentDriver, Answer, SessionChange};
+use crate::driver::{AgentDriver, Answer, PlanAnswer, SessionChange};
 use crate::model::{
     AgentKind, ApprovalAction, ApprovalState, Effort, FileChangeKind, Item, Model, PermissionMode,
-    Question, QuestionAnswer, QuestionOption, QuestionState, StatusKind, ToolStatus, Turn,
-    TurnEvent, TurnStatus,
+    PlanState, Question, QuestionAnswer, QuestionOption, QuestionState, StatusKind, ToolStatus,
+    Turn, TurnEvent, TurnStatus,
 };
 use crate::playground;
 use crate::store::{SessionStore, StoreError};
@@ -2483,4 +2483,217 @@ fn a_reply_brings_a_running_claude_code_to_the_session_s_permission_mode_first()
 
     scripted.assert_followed();
     assert_eq!(scripted.starts.lock().expect("starts").len(), 1);
+}
+
+/// The plan Claude asks to start, in `ExitPlanMode`'s input (ADR 0044).
+const PLAN: &str = "1. Read the build script\n2. Fix the path";
+
+/// Claude, in Plan mode, asks to start a plan with `ExitPlanMode`: the start of a script.
+fn asks_to_start_a_plan(input: &Value) -> Vec<Step> {
+    let mut script = handshake();
+    script.extend([
+        message("Plan the fix"),
+        assistant(
+            "msg_1",
+            &json!([{ "type": "tool_use", "id": "toolu_p", "name": "ExitPlanMode", "input": input }]),
+        ),
+        Step::Play(json!({
+            "type": "control_request",
+            "request_id": "r1",
+            "request": { "subtype": "can_use_tool", "tool_name": "ExitPlanMode", "input": input, "tool_use_id": "toolu_p" }
+        })),
+    ]);
+    script
+}
+
+/// Waits until the session's first turn shows a plan that waits, and answers its id.
+fn until_plan(store: &SessionStore, session: &str) -> String {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let waiting = store
+            .session(session)
+            .expect("the session")
+            .turns
+            .first()
+            .and_then(|first| {
+                first.items.iter().find_map(|item| match item {
+                    Item::Plan {
+                        id,
+                        state: PlanState::Waiting,
+                        ..
+                    } => Some(id.clone()),
+                    _ => None,
+                })
+            });
+        if let Some(id) = waiting {
+            return id;
+        }
+        assert!(std::time::Instant::now() < deadline, "no plan came");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+/// The plan item of a turn.
+fn plan_of(turn: &Turn) -> Item {
+    turn.items
+        .iter()
+        .find(|item| matches!(item, Item::Plan { .. }))
+        .cloned()
+        .expect("the plan")
+}
+
+#[test]
+fn a_plan_started_accepting_edits_is_allowed_with_the_mode_and_the_session_follows_it() {
+    let input = json!({ "plan": PLAN });
+    let mut script = asks_to_start_a_plan(&input);
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": "r1",
+                "response": {
+                    "behavior": "allow",
+                    "updatedInput": input,
+                    "updatedPermissions": [{ "type": "setMode", "mode": "acceptEdits", "destination": "session" }]
+                }
+            }
+        })),
+        status("acceptEdits"),
+        tool_result("toolu_p", "The plan was approved.", false),
+        success("Fixed."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+    store
+        .set_permission_mode(&session, PermissionMode::Plan)
+        .expect("planning");
+    let replying = {
+        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
+        std::thread::spawn(move || send(&store, &driver, &session, "Plan the fix"))
+    };
+
+    let waiting = until_plan(&store, &session);
+    store
+        .answer_plan(&session, &waiting, PlanAnswer::StartAcceptingEdits, None)
+        .expect("answered");
+    replying.join().expect("the reply ends");
+
+    scripted.assert_followed();
+    until_heard(
+        &heard,
+        &session,
+        &SessionChange::PermissionMode(PermissionMode::AcceptEdits),
+    );
+    let turn = turn(&store, &session, 0);
+    assert_eq!(turn.status, TurnStatus::Done);
+    assert_eq!(
+        plan_of(&turn),
+        Item::Plan {
+            id: format!("{}-plan-r1", turn.id),
+            tool_call_id: Some(format!("{}-toolu_p", turn.id)),
+            plan: Some(PLAN.into()),
+            feedback: None,
+            state: PlanState::StartedAcceptingEdits,
+        }
+    );
+    assert!(
+        !turn
+            .items
+            .iter()
+            .any(|item| matches!(item, Item::ToolCall { .. })),
+        "the card shows the plan, not its tool call: {:#?}",
+        turn.items
+    );
+}
+
+#[test]
+fn keep_planning_denies_with_the_person_s_words_and_the_reply_goes_on() {
+    let mut script = asks_to_start_a_plan(&json!({ "plan": PLAN }));
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": {
+                "subtype": "success",
+                "request_id": "r1",
+                "response": {
+                    "behavior": "deny",
+                    "message": "The person wants to keep planning. What should change: Test it first.",
+                    "interrupt": false
+                }
+            }
+        })),
+        tool_result("toolu_p", "The person wants to keep planning.", true),
+        success("I will add a test step."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+    let replying = {
+        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
+        std::thread::spawn(move || send(&store, &driver, &session, "Plan the fix"))
+    };
+
+    let waiting = until_plan(&store, &session);
+    store
+        .answer_plan(
+            &session,
+            &waiting,
+            PlanAnswer::KeepPlanning,
+            Some("  Test it first.  ".into()),
+        )
+        .expect("answered");
+    replying.join().expect("the reply ends");
+
+    scripted.assert_followed();
+    let turn = turn(&store, &session, 0);
+    assert_eq!(turn.status, TurnStatus::Done);
+    assert!(matches!(
+        plan_of(&turn),
+        Item::Plan { state: PlanState::KeptPlanning, feedback: Some(feedback), .. } if feedback == "Test it first."
+    ));
+}
+
+#[test]
+fn a_plan_without_its_text_still_waits_and_stopping_denies_it() {
+    let mut script = asks_to_start_a_plan(&json!({}));
+    script.extend([
+        Step::Expect(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "request_id": "r1", "response": { "behavior": "deny" } }
+        })),
+        Step::Expect(json!({ "type": "control_request", "request": { "subtype": "interrupt" } })),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let session = claude_session(&store);
+    let replying = {
+        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
+        std::thread::spawn(move || send(&store, &driver, &session, "Plan the fix"))
+    };
+
+    let waiting = until_plan(&store, &session);
+    assert!(matches!(
+        plan_of(&turn(&store, &session, 0)),
+        Item::Plan { plan: None, .. }
+    ));
+    store.stop_turn(&session).expect("stopped");
+    replying.join().expect("the reply ends");
+
+    scripted.assert_followed();
+    let stopped = turn(&store, &session, 0);
+    assert!(matches!(
+        plan_of(&stopped),
+        Item::Plan {
+            state: PlanState::Cancelled,
+            ..
+        }
+    ));
+    assert_eq!(
+        store.answer_plan(&session, &waiting, PlanAnswer::StartAskingFirst, None),
+        Err(StoreError::NotWaiting),
+        "a plan that no longer waits takes no answer"
+    );
 }

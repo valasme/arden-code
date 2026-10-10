@@ -405,6 +405,25 @@ export function startSessionsRust({
           if (!waits) throw failure("ARD-AGT-015");
           return null;
         }
+        case "answer_plan": {
+          const { sessionId, itemId } = z
+            .object({
+              sessionId: z.string(),
+              itemId: z.string(),
+              answer: z.enum(["startAcceptingEdits", "startAskingFirst", "keepPlanning"]),
+              feedback: z.string().nullable(),
+            })
+            .parse(payload);
+          const waits = find(sessionId).turns.some(
+            (turn) =>
+              turn.status === "running" &&
+              turn.items.some(
+                (item) => item.type === "plan" && item.id === itemId && item.state === "waiting",
+              ),
+          );
+          if (!waits) throw failure("ARD-AGT-015");
+          return null;
+        }
         case "send_message": {
           const { sessionId, text, onEvent } = z
             .object({

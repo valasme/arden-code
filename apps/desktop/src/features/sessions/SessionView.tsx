@@ -11,6 +11,7 @@ import {
   type Effort,
   type Model,
   type PermissionMode,
+  type PlanAnswer,
   type AgentKind,
   type Answer,
   commands,
@@ -118,6 +119,15 @@ export function SessionView({ id }: { id: string }) {
   const answerQuestions = useCallback(
     (itemId: string, given: QuestionAnswer[]) => {
       commands.answerQuestions(id, itemId, given).catch((failure: unknown) => {
+        showErrorToast(toAppError(failure));
+      });
+    },
+    [id],
+  );
+
+  const answerPlan = useCallback(
+    (itemId: string, given: PlanAnswer, feedback: string | null) => {
+      commands.answerPlan(id, itemId, given, feedback).catch((failure: unknown) => {
         showErrorToast(toAppError(failure));
       });
     },
@@ -354,6 +364,7 @@ export function SessionView({ id }: { id: string }) {
                       agent={agent}
                       onAnswer={answer}
                       onAnswerQuestions={answerQuestions}
+                      onAnswerPlan={answerPlan}
                     />
                   </article>
                 );

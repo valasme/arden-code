@@ -18,16 +18,17 @@ use super::catalog::Catalog;
 use super::context::{self, CONTEXT_REQUEST};
 use super::launch::{Connection, Conversation, LaunchError, Launcher, Start};
 use super::locate::MINIMUM_VERSION;
+use super::plan;
 use super::protocol::{self, Frame, Request};
 use super::question;
 use super::reply::Reply;
 use super::usage::{self, USAGE_REQUEST, Usage};
 use crate::driver::{
-    AgentDriver, Answer, Control, Flow, ReplyRequest, SessionChange, SessionListener,
+    AgentDriver, Answer, Control, Flow, PlanAnswer, ReplyRequest, SessionChange, SessionListener,
 };
 use crate::model::{
-    ApprovalState, Choices, Item, PermissionMode, QuestionAnswer, QuestionState, StatusKind,
-    TurnEvent,
+    ApprovalState, Choices, Item, PermissionMode, PlanState, QuestionAnswer, QuestionState,
+    StatusKind, TurnEvent,
 };
 use crate::usage::UsageLimits;
 
@@ -976,7 +977,9 @@ impl Answering<'_> {
         permission: protocol::Permission,
         emit: &mut dyn FnMut(TurnEvent) -> Flow,
     ) -> Next {
-        let (item, rule) = if permission.tool == question::TOOL {
+        let (item, rule) = if permission.tool == plan::TOOL {
+            (plan::item(self.turn_id, &id, &permission), None)
+        } else if permission.tool == question::TOOL {
             let Some(item) = question::item(self.turn_id, &id, &permission) else {
                 let _ = self
                     .live
@@ -1014,6 +1017,7 @@ impl Answering<'_> {
             Item::Questions { .. } => {
                 question::with_answers(&given_up.item, Vec::new(), QuestionState::Cancelled)
             }
+            Item::Plan { .. } => plan::with_state(&given_up.item, PlanState::Cancelled, None),
             _ => approval::with_state(&given_up.item, ApprovalState::Cancelled),
         };
         let event = self.added(item);
@@ -1043,6 +1047,33 @@ impl Answering<'_> {
             answers,
             QuestionState::Answered,
         ));
+        self.show(event, emit)
+    }
+
+    /// The person answers a plan: starting it sets the mode to work in, and keeping on planning
+    /// hands Claude their words without stopping the reply (ADR 0044).
+    fn on_plan(
+        &mut self,
+        item_id: &str,
+        answer: PlanAnswer,
+        feedback: Option<String>,
+        emit: &mut dyn FnMut(TurnEvent) -> Flow,
+    ) -> Next {
+        let Some(at) = self.pending.iter().position(|waiting| {
+            waiting.item.id() == item_id && matches!(waiting.item, Item::Plan { .. })
+        }) else {
+            return Next::Continue;
+        };
+        let answered = self.pending.remove(at);
+        let given = feedback.filter(|_| answer == PlanAnswer::KeepPlanning);
+        let (frame, state) = plan::answer(
+            &answered.request_id,
+            &answered.input,
+            answer,
+            given.as_deref(),
+        );
+        let _ = self.live.write(&frame);
+        let event = self.added(plan::with_state(&answered.item, state, given));
         self.show(event, emit)
     }
 
@@ -1127,6 +1158,11 @@ impl Answering<'_> {
             Event::Control { turn, control } if turn == self.turn_id => match control {
                 Control::Answer { item_id, answer } => self.on_answer(&item_id, answer, emit),
                 Control::Answers { item_id, answers } => self.on_answers(&item_id, &answers, emit),
+                Control::Plan {
+                    item_id,
+                    answer,
+                    feedback,
+                } => self.on_plan(&item_id, answer, feedback, emit),
                 Control::Stop => {
                     self.stop();
                     Next::Over

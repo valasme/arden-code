@@ -271,6 +271,22 @@ pub enum QuestionState {
     Cancelled,
 }
 
+/// Where a plan the agent asks to start stands (ADR 0044).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum PlanState {
+    /// The agent waits for the person's answer.
+    Waiting,
+    /// Started in Accept edits.
+    StartedAcceptingEdits,
+    /// Started in Manual, asking before edits and commands.
+    StartedAskingFirst,
+    /// The person asked the agent to keep planning, with what should change.
+    KeptPlanning,
+    /// No answer is needed any more: the reply stopped, or the agent gave up on asking.
+    Cancelled,
+}
+
 /// One part of an agent's reply.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -344,6 +360,18 @@ pub enum Item {
         answers: Vec<QuestionAnswer>,
         state: QuestionState,
     },
+    /// The agent has a plan and asks to start it (ADR 0044).
+    #[serde(rename_all = "camelCase")]
+    Plan {
+        id: String,
+        /// The tool call that asks, when it has one.
+        tool_call_id: Option<String>,
+        /// The plan, as Markdown, when the agent sent its text.
+        plan: Option<String>,
+        /// What the person said should change, when they asked to keep planning.
+        feedback: Option<String>,
+        state: PlanState,
+    },
 }
 
 impl Item {
@@ -357,6 +385,9 @@ impl Item {
                 ..
             } | Self::Questions {
                 state: QuestionState::Waiting,
+                ..
+            } | Self::Plan {
+                state: PlanState::Waiting,
                 ..
             }
         )
@@ -372,7 +403,8 @@ impl Item {
             | Self::Error { id, .. }
             | Self::Status { id, .. }
             | Self::Approval { id, .. }
-            | Self::Questions { id, .. } => id,
+            | Self::Questions { id, .. }
+            | Self::Plan { id, .. } => id,
         }
     }
 }
@@ -431,6 +463,9 @@ impl Turn {
                 }
                 Item::Questions { state, .. } if *state == QuestionState::Waiting => {
                     *state = QuestionState::Cancelled;
+                }
+                Item::Plan { state, .. } if *state == PlanState::Waiting => {
+                    *state = PlanState::Cancelled;
                 }
                 _ => {}
             }

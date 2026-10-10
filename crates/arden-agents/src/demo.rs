@@ -263,6 +263,7 @@ mod tests {
                 Item::Error { .. } => "error",
                 Item::Approval { .. } => "approval",
                 Item::Questions { .. } => "questions",
+                Item::Plan { .. } => "plan",
                 Item::Status { .. } => "status",
             })
             .collect()

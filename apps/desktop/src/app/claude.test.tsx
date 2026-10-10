@@ -225,6 +225,70 @@ describe("Approval requests (ADR 0039)", () => {
   });
 });
 
+describe("Claude's plan (ADR 0044)", () => {
+  const plan = {
+    type: "plan",
+    id: "turn-1-plan-r1",
+    toolCallId: null,
+    plan: "1. Read the build script\n2. Fix the path",
+    feedback: null,
+    state: "waiting",
+  } as const;
+
+  it("shows the plan, says Claude waits, and starts it as the person chose", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({
+      sessions: [
+        { ...sessionNamed("session-1", null, "playground", "claude"), permissionMode: "plan" },
+      ],
+    });
+    renderApp("/session/session-1");
+    await user.type(await screen.findByRole("textbox", { name: "Message" }), "Plan it{Enter}");
+    await screen.findByText("Claude is replying…");
+
+    rust.emit({ type: "itemAdded", turnId: "turn-1", item: plan });
+
+    const card = await screen.findByRole("group", { name: "Claude has a plan" });
+    expect(within(card).getByText("Fix the path")).toBeVisible();
+    const statusBar = screen.getByRole("contentinfo");
+    expect(within(statusBar).getByText("Claude: waiting for your answer")).toBeVisible();
+    await user.click(within(card).getByRole("button", { name: "Start, accepting edits" }));
+
+    expect(rust.callsTo("answer_plan")).toEqual([
+      {
+        sessionId: "session-1",
+        itemId: "turn-1-plan-r1",
+        answer: "startAcceptingEdits",
+        feedback: null,
+      },
+    ]);
+    rust.emit({
+      type: "itemAdded",
+      turnId: "turn-1",
+      item: { ...plan, state: "startedAcceptingEdits" },
+    });
+    expect(await screen.findByText("You started the plan, accepting edits")).toBeVisible();
+    expect(within(statusBar).getByText("Claude: replying")).toBeVisible();
+  });
+
+  it("is given up on when the person stops the reply", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({
+      sessions: [sessionNamed("session-1", null, "playground", "claude")],
+    });
+    renderApp("/session/session-1");
+    await user.type(await screen.findByRole("textbox", { name: "Message" }), "Plan it{Enter}");
+    await screen.findByText("Claude is replying…");
+    rust.emit({ type: "itemAdded", turnId: "turn-1", item: plan });
+    await screen.findByRole("group", { name: "Claude has a plan" });
+
+    rust.emit({ type: "stopped", turnId: "turn-1" });
+
+    expect(await screen.findByText("No answer was needed")).toBeVisible();
+    expect(screen.queryByRole("group", { name: "Claude has a plan" })).toBeNull();
+  });
+});
+
 describe("Claude's questions (ADR 0039)", () => {
   it("shows Claude's questions, says Claude waits, and sends the answers", async () => {
     const user = userEvent.setup();

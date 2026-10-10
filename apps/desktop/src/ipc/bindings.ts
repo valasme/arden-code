@@ -469,6 +469,15 @@ export const commands = {
 	 */
 	answerQuestions: (sessionId: string, itemId: string, answers: QuestionAnswer[]) => __TAURI_INVOKE<null>("answer_questions", { sessionId, itemId, answers }),
 	/**
+	 *  Hands the person's answer to a plan that waits in a session's running turn (ADR 0044), with
+	 *  what should change when they keep planning.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when there is no such session, or no such plan waits for an answer.
+	 */
+	answerPlan: (sessionId: string, itemId: string, answer: PlanAnswer, feedback: string | null) => __TAURI_INVOKE<null>("answer_plan", { sessionId, itemId, answer, feedback }),
+	/**
 	 *  The session the page should show because a folder was opened before the page was ready. Asking
 	 *  takes it: it is never returned twice.
 	 * 
@@ -1017,7 +1026,15 @@ rule: string | null; state: ApprovalState } |
 /**  The tool call that asks them, when it has one. */
 toolCallId: string | null; questions: Question[]; 
 /**  The person's answers, once given. */
-answers: QuestionAnswer[]; state: QuestionState };
+answers: QuestionAnswer[]; state: QuestionState } | 
+/**  The agent has a plan and asks to start it (ADR 0044). */
+{ type: "plan"; id: string; 
+/**  The tool call that asks, when it has one. */
+toolCallId: string | null; 
+/**  The plan, as Markdown, when the agent sent its text. */
+plan: string | null; 
+/**  What the person said should change, when they asked to keep planning. */
+feedback: string | null; state: PlanState };
 
 /**  The shortcuts a person changed. A command that is not here has its default shortcuts. */
 export type Keyboard = {
@@ -1122,6 +1139,28 @@ export type PermissionMode =
 "auto" | 
 /**  Never asks: every action runs. */
 "bypassPermissions";
+
+/**  The person's answer to a plan the agent asks to start (ADR 0044). */
+export type PlanAnswer = 
+/**  Start it, editing files without asking. */
+"startAcceptingEdits" | 
+/**  Start it, asking before edits and commands. */
+"startAskingFirst" | 
+/**  Keep planning, with what should change. */
+"keepPlanning";
+
+/**  Where a plan the agent asks to start stands (ADR 0044). */
+export type PlanState = 
+/**  The agent waits for the person's answer. */
+"waiting" | 
+/**  Started in Accept edits. */
+"startedAcceptingEdits" | 
+/**  Started in Manual, asking before edits and commands. */
+"startedAskingFirst" | 
+/**  The person asked the agent to keep planning, with what should change. */
+"keptPlanning" | 
+/**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
+"cancelled";
 
 /**  A folder on disk where agents work. */
 export type Project = {

@@ -319,6 +319,35 @@ test.describe("Claude in the real app", () => {
     }
   });
 
+  test("Claude's plan is shown, and starting it accepting edits changes the session's mode", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+      await page.getByRole("button", { name: "Permission mode: Manual" }).click();
+      await page.getByRole("menuitemradio", { name: /^Plan/u }).click();
+      await expect(page.getByRole("button", { name: "Permission mode: Plan" })).toBeVisible();
+
+      await say(page, "Plan the fix");
+      const card = session.getByRole("group", { name: "Claude has a plan" });
+      await expect(card).toBeVisible({ timeout: 30_000 });
+      await expect(card.getByRole("heading", { name: "The fix" })).toBeVisible();
+      await card.getByRole("button", { name: "Start, accepting edits" }).click();
+
+      await expect(session.getByText("Started the plan in acceptEdits.")).toBeVisible({
+        timeout: 30_000,
+      });
+      await expect(session.getByText("You started the plan, accepting edits")).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Permission mode: Accept edits" }),
+      ).toBeVisible();
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
+
   test("a Claude session carries on its conversation after Arden Code restarts", async () => {
     const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
     const log = path.join(dataDir, "claude-starts.log");

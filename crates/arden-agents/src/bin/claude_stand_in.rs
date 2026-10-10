@@ -9,7 +9,8 @@
 //!
 //! It applies the `--permission-mode` it is started with and changes it on `set_permission_mode`,
 //! refusing Bypass permissions unless started with `--allow-dangerously-skip-permissions`, as
-//! Claude Code does (ADR 0044). Asked "which mode", it says the mode it applies.
+//! Claude Code does (ADR 0044). Asked "which mode", it says the mode it applies. Asked to "plan the
+//! fix" in Plan mode, it asks to start a plan with `ExitPlanMode`.
 
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
@@ -360,6 +361,8 @@ impl Conversation {
             self.ask_questions();
         } else if asked.contains("run the tests") {
             self.run_tests();
+        } else if asked.contains("plan the fix") && self.mode == "plan" {
+            self.plan();
         } else if asked.contains("which mode") {
             let said = format!("The permission mode is {}.", self.mode);
             self.say(&said);
@@ -446,6 +449,40 @@ impl Conversation {
         };
         self.say(said);
         self.result(said, false);
+    }
+
+    /// Asks to start a plan, and starts it in the mode the person chose, or keeps planning.
+    fn plan(&mut self) {
+        let input = json!({ "plan": "## The fix\n\n1. Read the build script\n2. Fix the path" });
+        self.messages += 1;
+        let message = format!("msg_{}", self.messages);
+        self.assistant(
+            &message,
+            &json!([{ "type": "tool_use", "id": "toolu_p1", "name": "ExitPlanMode", "input": input }]),
+        );
+        let Some(answer) = self.ask("p1", "ExitPlanMode", &input, &json!([])) else {
+            send(
+                &json!({ "type": "result", "subtype": "error_during_execution", "is_error": true, "result": "", "session_id": self.session }),
+            );
+            return;
+        };
+        let said = if answer["behavior"] == "allow" {
+            if let Some(mode) = answer["updatedPermissions"][0]["mode"].as_str() {
+                mode.clone_into(&mut self.mode);
+                send(&json!({
+                    "type": "system", "subtype": "status", "status": null,
+                    "permissionMode": self.mode, "session_id": self.session
+                }));
+            }
+            format!("Started the plan in {}.", self.mode)
+        } else {
+            format!(
+                "I will keep planning. {}",
+                answer["message"].as_str().unwrap_or_default()
+            )
+        };
+        self.say(&said);
+        self.result(&said, false);
     }
 
     /// Asks which library to use, and says what the person chose.
