@@ -1,4 +1,4 @@
-import { FlaskConicalIcon, SparkleIcon } from "lucide-react";
+import { BotIcon, FlaskConicalIcon, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -14,6 +14,12 @@ import { ChoiceButton } from "./ChoiceButton";
 
 /** The agents a session can have, in the order the menu lists them (ADR 0039). */
 export const agentKinds = ["claude", "demo"] as const satisfies readonly AgentKind[];
+
+/** Each agent's icon: one of Arden Code's own, never a vendor's logo (ADR 0044). */
+const agentIcons: Record<AgentKind, LucideIcon> = {
+  claude: BotIcon,
+  demo: FlaskConicalIcon,
+};
 
 interface AgentMenuProps {
   agent: AgentKind;
@@ -37,7 +43,7 @@ export function AgentMenu({ agent, unavailable = none, onChoose }: AgentMenuProp
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <ChoiceButton
-          icon={agent === "claude" ? SparkleIcon : FlaskConicalIcon}
+          icon={agentIcons[agent]}
           value={name}
           aria-label={t("sessions.agentMenu.label", { agent: name })}
         />
@@ -52,8 +58,10 @@ export function AgentMenu({ agent, unavailable = none, onChoose }: AgentMenuProp
         >
           {agentKinds.map((kind) => {
             const missing = unavailable.includes(kind);
+            const Icon = agentIcons[kind];
             return (
               <DropdownMenuRadioItem key={kind} value={kind} disabled={missing}>
+                <Icon aria-hidden strokeWidth={1.5} />
                 {t(`agents.${kind}.name`)}
                 {missing ? (
                   <span className="ms-auto ps-4 text-xs text-muted-foreground">
