@@ -372,7 +372,15 @@ export function SessionView({ id }: { id: string }) {
             run("reply.stop");
           }}
           {...(agent === "claude"
-            ? { slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands } }
+            ? {
+                slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands },
+                ultrathink: {
+                  on: ultrathink,
+                  onTurnOff: () => {
+                    setUltrathink(false);
+                  },
+                },
+              }
             : {})}
           onSend={carrying((text) => {
             if (

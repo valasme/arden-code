@@ -4,11 +4,19 @@ import { useState } from "react";
 const WORD = "ultrathink";
 
 /**
+ * Whether a message holds the word on its own, in any case, so Claude Code reasons more deeply on
+ * its turn. A slash command never carries it (ADR 0042).
+ */
+export function holdsUltrathink(text: string): boolean {
+  return !text.startsWith("/") && new RegExp(String.raw`\b${WORD}\b`, "i").test(text);
+}
+
+/**
  * The message with the word at its end, so Claude Code reasons more deeply on this turn only. A
  * message that already holds the word, or is a slash command, is left as it is.
  */
 export function withUltrathink(text: string): string {
-  if (text.startsWith("/") || new RegExp(String.raw`\b${WORD}\b`, "i").test(text)) return text;
+  if (text.startsWith("/") || holdsUltrathink(text)) return text;
   return `${text} ${WORD}`;
 }
 

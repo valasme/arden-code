@@ -148,6 +148,10 @@ describe("Ultrathink on the welcome screen", () => {
     await user.click(within(menu).getByRole("menuitemcheckbox", { name: /Ultrathink/ }));
     // The menu stays open to show the switch change; Escape closes it.
     await user.keyboard("{Escape}");
+    // The message box says the next message will carry the word (ADR 0044).
+    expect(
+      await within(await main()).findByRole("button", { name: "Turn off Ultrathink" }),
+    ).toBeVisible();
     await user.type(within(await main()).getByRole("textbox", { name: "Message" }), "Hello{Enter}");
 
     await waitFor(() => {

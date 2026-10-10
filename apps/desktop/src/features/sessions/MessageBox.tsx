@@ -1,4 +1,4 @@
-import { ArrowUpIcon, SquareIcon } from "lucide-react";
+import { ArrowUpIcon, LightbulbIcon, SquareIcon, XIcon } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 
 import { SlashCommandList, slashOptionId } from "./SlashCommandList";
 import { filterSlashCommands, menuQuery } from "./slashCommands";
+import { holdsUltrathink } from "./ultrathink";
 
 /** The key code some browsers report for a key that is part of an input method's composition. */
 const COMPOSING_KEY_CODE = 229;
@@ -38,6 +39,11 @@ interface MessageBoxProps {
    * None for an agent that has none.
    */
   slash?: { commands: readonly SlashCommand[]; terminalCommands: readonly string[] };
+  /**
+   * The Ultrathink switch of an agent that has it (ADR 0042): whether it is on, and how to turn it
+   * off from the chip that says the next message will carry the word (ADR 0044).
+   */
+  ultrathink?: { on: boolean; onTurnOff: () => void };
   className?: string;
 }
 
@@ -61,6 +67,7 @@ export function MessageBox({
   onStop,
   ownArea = true,
   slash,
+  ultrathink,
   className,
 }: MessageBoxProps) {
   const { t } = useTranslation();
@@ -72,6 +79,10 @@ export function MessageBox({
     box.current?.focus();
   }, []);
   const canSend = !busy && text.trim() !== "";
+  // The next message will carry the word: the switch is on, or the word is in it. A slash command
+  // never does.
+  const carriesUltrathink =
+    ultrathink !== undefined && !text.startsWith("/") && (ultrathink.on || holdsUltrathink(text));
 
   const send = (message = text.trim()) => {
     if (busy || message === "") return;
@@ -189,7 +200,30 @@ export function MessageBox({
           </output>
         ) : null}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 ps-3 pe-2 pb-2 text-xs text-muted-foreground">
-          <span className="flex min-w-0 flex-wrap items-center gap-1.5">{choices}</span>
+          <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {choices}
+            {carriesUltrathink ? (
+              ultrathink.on ? (
+                // The switch put it there, so pressing it takes it away.
+                <Button
+                  variant="outline"
+                  size="xs"
+                  className="font-normal text-foreground"
+                  aria-label={t("sessions.messageBox.ultrathinkOff")}
+                  onClick={ultrathink.onTurnOff}
+                >
+                  <LightbulbIcon aria-hidden className="size-4" strokeWidth={1.5} />
+                  {t("sessions.messageBox.ultrathink")}
+                  <XIcon aria-hidden className="size-3.5 text-muted-foreground" strokeWidth={1.5} />
+                </Button>
+              ) : (
+                <span className="flex h-6 items-center gap-1 border border-border px-2 text-foreground">
+                  <LightbulbIcon aria-hidden className="size-4" strokeWidth={1.5} />
+                  {t("sessions.messageBox.ultrathink")}
+                </span>
+              )
+            ) : null}
+          </span>
           <span className="ms-auto flex min-w-0 items-center gap-1">
             {figures}
             {busy ? (

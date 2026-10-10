@@ -1,4 +1,4 @@
-import { withUltrathink } from "./ultrathink";
+import { holdsUltrathink, withUltrathink } from "./ultrathink";
 
 describe("withUltrathink", () => {
   it("adds the word at the end of a message", () => {
@@ -16,5 +16,18 @@ describe("withUltrathink", () => {
 
   it("leaves a slash command as it is", () => {
     expect(withUltrathink("/compact")).toBe("/compact");
+  });
+});
+
+describe("holdsUltrathink", () => {
+  it("finds the word on its own, in any case", () => {
+    expect(holdsUltrathink("please ultrathink this")).toBe(true);
+    expect(holdsUltrathink("UltraThink.")).toBe(true);
+  });
+
+  it("does not find it inside another word, in a slash command, or in nothing", () => {
+    expect(holdsUltrathink("ultrathinking is a word")).toBe(false);
+    expect(holdsUltrathink("/compact ultrathink")).toBe(false);
+    expect(holdsUltrathink("")).toBe(false);
   });
 });

@@ -141,7 +141,15 @@ export function Welcome() {
         }
         figures={agent === "claude" ? <Figures /> : null}
         {...(agent === "claude"
-          ? { slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands } }
+          ? {
+              slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands },
+              ultrathink: {
+                on: ultrathink,
+                onTurnOff: () => {
+                  setUltrathink(false);
+                },
+              },
+            }
           : {})}
         onSend={carrying((text) => {
           // There is no session yet to rename or clear (ADR 0042).

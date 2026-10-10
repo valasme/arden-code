@@ -485,7 +485,9 @@
       "label": "Message",
       "send": "Send",
       "stop": "Stop the reply",
-      "stopShort": "Stop"
+      "stopShort": "Stop",
+      "ultrathink": "Ultrathink",
+      "ultrathinkOff": "Turn off Ultrathink"
     },
     "messages": "Messages",
     "modelMenu": {
