@@ -9,7 +9,7 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import type { UpdateStatus, UsageLimits, UsageWindow } from "@/ipc/bindings";
+import type { UpdateStatus, UsageLimits } from "@/ipc/bindings";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 import { useRepliesStore } from "@/state/replies";
 import { settingsWith } from "@/test/settings";
@@ -141,72 +141,20 @@ describe("The status bar and the open session", () => {
   });
 });
 
-function window(overrides: Partial<UsageWindow> = {}): UsageWindow {
-  return {
-    kind: "fiveHour",
-    percent: 42,
-    resetsAt: "2099-10-09T15:10:00Z",
-    status: "allowed",
-    ...overrides,
-  };
-}
-
 const plan: UsageLimits = {
   report: "reported",
-  windows: [window(), window({ kind: "weekly", percent: 18, resetsAt: "2099-10-13T09:00:00Z" })],
+  windows: [
+    { kind: "fiveHour", percent: 42, resetsAt: "2099-10-09T15:10:00Z", status: "allowed" },
+    { kind: "weekly", percent: 18, resetsAt: "2099-10-13T09:00:00Z", status: "allowed" },
+  ],
 };
 
 describe("The status bar and the usage limits", () => {
-  it("shows the 5-hour and weekly limits Claude Code reports", async () => {
+  it("leaves the usage limits to the message box, even when Claude Code reports them", async () => {
     startApp({ state: "idle" }, plan);
     renderBar();
 
-    expect(await screen.findByText("5-hour 42%")).toBeVisible();
-    expect(screen.getByText("Weekly 18%")).toBeVisible();
-  });
-
-  it("shows nothing when Claude Code reports no usage limits", async () => {
-    startApp({ state: "idle" }, { report: "notForThisSignIn", windows: [] });
-    renderBar();
-
     await screen.findByText("Version 0.1.0");
-    expect(screen.queryByText(/5-hour/u)).toBeNull();
-    expect(screen.queryByText(/Weekly/u)).toBeNull();
-  });
-
-  it("shows nothing when Show usage limits is off", async () => {
-    startApp({ state: "idle" }, plan, false);
-    renderBar();
-
-    await screen.findByText("Version 0.1.0");
-    expect(screen.queryByText("5-hour 42%")).toBeNull();
-  });
-
-  it("emphasizes a window from 80%", async () => {
-    startApp({ state: "idle" }, { report: "reported", windows: [window({ percent: 86 })] });
-    renderBar();
-
-    const figure = await screen.findByText("5-hour 86%");
-
-    expect(figure).toHaveAttribute("data-level", "near");
-    expect(figure).toHaveClass("text-foreground");
-  });
-
-  it("says when a window at its limit resets", async () => {
-    startApp(
-      { state: "idle" },
-      { report: "reported", windows: [window({ percent: 100, status: "rejected" })] },
-    );
-    renderBar();
-
-    expect(await screen.findByText(/^5-hour limit reached, resets /u)).toBeVisible();
-  });
-
-  it("has no accessibility violations while it shows them", async () => {
-    startApp({ state: "idle" }, plan);
-    const { container } = renderBar();
-    await screen.findByText("5-hour 42%");
-
-    await expectNoAccessibilityViolations(container);
+    expect(screen.queryByText(/5-hour|Weekly/u)).toBeNull();
   });
 });

@@ -26,6 +26,7 @@ import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
 import { EffortMenu } from "./EffortMenu";
+import { Figures } from "./Figures";
 import { ModelMenu } from "./ModelMenu";
 import { ProjectMenu } from "./ProjectMenu";
 import { projectsByUse } from "./sessionList";
@@ -225,27 +226,24 @@ export function SessionView({ id }: { id: string }) {
   };
   // Once the session has a message, its agent and project can no longer change: they are named in
   // the header, and the lower line keeps only what the next message can change (ADR 0044).
-  const choices =
-    count === 0 && session.archivedAt === null ? (
-      <span className="flex min-w-0 items-center gap-1.5">
-        <AgentMenu agent={agent} unavailable={unavailable} onChoose={chooseAgent} />
-        <ProjectMenu
-          projectId={session.projectId}
-          projects={projectsByUse(list)}
-          onChoose={chooseProject}
-          onOpenFolder={() => {
-            void openFolder().then((opened) => {
-              if (opened) chooseProject(opened.id);
-            });
-          }}
-        />
-      </span>
-    ) : null;
-  const AgentIcon = agentIcons[agent];
-  const context = (
-    <span className="flex min-w-0 items-center gap-1.5">
-      {choices}
-      {agent === "claude" && session.archivedAt === null ? (
+  const choices = (
+    <>
+      {count === 0 ? (
+        <>
+          <AgentMenu agent={agent} unavailable={unavailable} onChoose={chooseAgent} />
+          <ProjectMenu
+            projectId={session.projectId}
+            projects={projectsByUse(list)}
+            onChoose={chooseProject}
+            onOpenFolder={() => {
+              void openFolder().then((opened) => {
+                if (opened) chooseProject(opened.id);
+              });
+            }}
+          />
+        </>
+      ) : null}
+      {agent === "claude" ? (
         <>
           <ModelMenu
             model={session.model ?? null}
@@ -263,8 +261,9 @@ export function SessionView({ id }: { id: string }) {
           />
         </>
       ) : null}
-    </span>
+    </>
   );
+  const AgentIcon = agentIcons[agent];
 
   return (
     <div className="flex h-full flex-col">
@@ -365,7 +364,8 @@ export function SessionView({ id }: { id: string }) {
         <MessageBox
           agent={agent}
           busy={busy}
-          context={context}
+          choices={choices}
+          figures={agent === "claude" ? <Figures /> : null}
           onStop={() => {
             run("reply.stop");
           }}

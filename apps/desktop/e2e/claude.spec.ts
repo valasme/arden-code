@@ -161,7 +161,7 @@ test.describe("Claude in the real app", () => {
     }
   });
 
-  test("the status bar shows the usage limits Claude Code reports", async () => {
+  test("the message box shows the usage limits Claude Code reports", async () => {
     const claude = claudeOnPath({
       usage: {
         subscription_type: "max",
@@ -175,11 +175,15 @@ test.describe("Claude in the real app", () => {
     const app = await launchApp({ env: claude.env });
     try {
       const { page } = app;
-      const bar = page.locator('[data-area="statusbar"]');
 
-      // Asked once Arden Code has found Claude Code after it started, with no session open.
-      await expect(bar.getByText("5-hour 42%")).toBeVisible({ timeout: 30_000 });
-      await expect(bar.getByText("Weekly 18%")).toBeVisible();
+      // Asked once Arden Code has found Claude Code after it started, with no session open: the
+      // welcome screen's message box, for Claude, shows them before Send (ADR 0044).
+      const figures = page.getByRole("button", { name: "5-hour 42% Weekly 18%" });
+      await expect(figures).toBeVisible({ timeout: 30_000 });
+      await figures.click();
+      const details = page.getByRole("dialog", { name: "Usage limits" });
+      await expect(details.getByText("Weekly limit")).toBeVisible();
+      await expect(page.locator('[data-area="statusbar"]').getByText(/5-hour/u)).toBeHidden();
     } finally {
       app.kill();
       claude.remove();

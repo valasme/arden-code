@@ -20,6 +20,7 @@ import { toAppError } from "@/lib/errors";
 
 import { AgentMenu } from "./AgentMenu";
 import { EffortMenu } from "./EffortMenu";
+import { Figures } from "./Figures";
 import { MessageBox } from "./MessageBox";
 import { ModelMenu } from "./ModelMenu";
 import { ProjectMenu } from "./ProjectMenu";
@@ -111,8 +112,8 @@ export function Welcome() {
         ownArea={false}
         agent={agent}
         busy={false}
-        context={
-          <span className="flex min-w-0 items-center gap-1.5">
+        choices={
+          <>
             <AgentMenu agent={agent} unavailable={unavailable} onChoose={setChosenAgent} />
             <ProjectMenu
               projectId={projectId}
@@ -136,8 +137,9 @@ export function Welcome() {
                 />
               </>
             ) : null}
-          </span>
+          </>
         }
+        figures={agent === "claude" ? <Figures /> : null}
         {...(agent === "claude"
           ? { slash: { commands: catalog.commands, terminalCommands: catalog.terminalCommands } }
           : {})}

@@ -451,6 +451,21 @@
       "ultrathink": "Ultrathink",
       "ultrathinkHint": "Think deeper on the next message"
     },
+    "figures": {
+      "fiveHour": "5-hour {{percent}}%",
+      "fiveHourReached": "5-hour limit reached",
+      "fiveHourReachedResets": "5-hour limit reached, resets {{time}}",
+      "usageLimits": "Usage limits",
+      "used": "{{percent}}% used",
+      "usedAndReset": "{{percent}}% used · resets {{time}}",
+      "weekly": "Weekly {{percent}}%",
+      "weeklyReached": "Weekly limit reached",
+      "weeklyReachedResets": "Weekly limit reached, resets {{time}}",
+      "windows": {
+        "fiveHour": "5-hour limit",
+        "weekly": "Weekly limit"
+      }
+    },
     "jumpToLatest": "Jump to latest",
     "links": {
       "from": "Linked from",
@@ -810,15 +825,6 @@
     "replying": "{{agent}}: replying",
     "updateDownloading": "Downloading an update…",
     "updateReady": "Update ready: restart",
-    "usage": {
-      "fiveHour": "5-hour {{percent}}%",
-      "fiveHourReached": "5-hour limit reached",
-      "fiveHourReachedResets": "5-hour limit reached, resets {{time}}",
-      "label": "Usage limits",
-      "weekly": "Weekly {{percent}}%",
-      "weeklyReached": "Weekly limit reached",
-      "weeklyReachedResets": "Weekly limit reached, resets {{time}}"
-    },
     "version": "Version {{version}}",
     "waiting": "{{agent}}: waiting for your answer"
   },

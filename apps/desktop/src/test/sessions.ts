@@ -14,6 +14,7 @@ import type {
   SessionList,
   SessionSummary,
   TurnEvent,
+  UsageLimits,
 } from "@/ipc/bindings";
 
 import { applyTurnEvent } from "@/features/sessions/turnEvents";
@@ -94,6 +95,8 @@ interface Options {
   pickedFolder?: Project | null;
   /** What Claude Code says it can do (ADR 0042). Nothing, until it has been heard. */
   catalog?: Catalog;
+  /** The usage limits Claude Code reports (ADR 0043). None, until it has been asked. */
+  usageLimits?: UsageLimits;
 }
 
 /**
@@ -113,6 +116,7 @@ export function startSessionsRust({
   newSessionEffort = null,
   catalog = { commands: [], models: [], terminalCommands: [] },
   pickedFolder = null,
+  usageLimits = { report: "unknown", windows: [] },
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
@@ -215,6 +219,9 @@ export function startSessionsRust({
         }
         case "claude_catalog": {
           return structuredClone(catalog);
+        }
+        case "usage_limits": {
+          return structuredClone(usageLimits);
         }
         case "effort_for_new_session": {
           return newSessionEffort;

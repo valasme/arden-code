@@ -19,10 +19,12 @@ interface MessageBoxProps {
   /** The agent the message goes to: the placeholder names it. */
   agent: AgentKind;
   /**
-   * Who the message goes to and where, such as "Claude · my-app": plain text, or the agent menu
-   * while the session has had no message (ADR 0039).
+   * What the next message can change: the agent and project menus while the session is empty
+   * (ADR 0039), then the agent's own menus, such as the model (ADR 0044).
    */
-  context: ReactNode;
+  choices: ReactNode;
+  /** The figures before Send, such as the usage limits (ADR 0044). None for an agent without. */
+  figures?: ReactNode;
   /** Sends the message. Answering `false` (now or later) says it was not sent: the text comes back. */
   onSend: (text: string) => boolean | Promise<boolean>;
   onStop: () => void;
@@ -40,11 +42,11 @@ interface MessageBoxProps {
 }
 
 /**
- * Where the person writes (ADR 0032): a block at least two lines tall, with the agent and the
- * project under the text (menus while the session is empty, ADR 0039), and Send, or Stop while a
- * reply runs. Enter sends and Shift+Enter adds
- * a line. Enter never sends while a character is still being composed (an accent key, an input
- * method for another script): that Enter confirms the character.
+ * Where the person writes (ADR 0032): a block at least two lines tall, with a lower line that
+ * holds what the next message can change, then the figures and Send, or Stop while a reply runs
+ * (ADR 0044). The line wraps when the box is narrow, and the figures stay with Send. Enter sends
+ * and Shift+Enter adds a line. Enter never sends while a character is still being composed (an
+ * accent key, an input method for another script): that Enter confirms the character.
  *
  * A message that starts with a slash lists the agent's slash commands above the box (ADR 0042).
  * The arrow keys move through the list, Tab fills in the command, and Enter sends one that takes
@@ -53,7 +55,8 @@ interface MessageBoxProps {
 export function MessageBox({
   agent,
   busy,
-  context,
+  choices,
+  figures,
   onSend,
   onStop,
   ownArea = true,
@@ -185,32 +188,33 @@ export function MessageBox({
               : ""}
           </output>
         ) : null}
-        <div className="flex items-center gap-2 ps-3 pe-2 pb-2 text-xs text-muted-foreground">
-          <span className="flex min-w-0 items-center truncate">{context}</span>
-          {busy ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="ms-auto"
-              aria-label={t("sessions.messageBox.stop")}
-              onClick={onStop}
-            >
-              <SquareIcon aria-hidden strokeWidth={1.5} />
-              {t("sessions.messageBox.stopShort")}
-            </Button>
-          ) : (
-            <Button
-              size="icon-sm"
-              className="ms-auto"
-              aria-label={t("sessions.messageBox.send")}
-              disabled={!canSend}
-              onClick={() => {
-                send();
-              }}
-            >
-              <ArrowUpIcon aria-hidden strokeWidth={1.5} />
-            </Button>
-          )}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 ps-3 pe-2 pb-2 text-xs text-muted-foreground">
+          <span className="flex min-w-0 flex-wrap items-center gap-1.5">{choices}</span>
+          <span className="ms-auto flex min-w-0 items-center gap-1">
+            {figures}
+            {busy ? (
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label={t("sessions.messageBox.stop")}
+                onClick={onStop}
+              >
+                <SquareIcon aria-hidden strokeWidth={1.5} />
+                {t("sessions.messageBox.stopShort")}
+              </Button>
+            ) : (
+              <Button
+                size="icon-sm"
+                aria-label={t("sessions.messageBox.send")}
+                disabled={!canSend}
+                onClick={() => {
+                  send();
+                }}
+              >
+                <ArrowUpIcon aria-hidden strokeWidth={1.5} />
+              </Button>
+            )}
+          </span>
         </div>
       </div>
     </div>

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { BotIcon, FolderIcon } from "lucide-react";
 import { page } from "vitest/browser";
 
-import type { Item, Session } from "@/ipc/bindings";
+import type { Item, Session, UsageLimits } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
@@ -18,6 +18,14 @@ import "@/styles/global.css";
 
 function renderApp(entry = "/") {
   render(<App history={createMemoryHistory({ initialEntries: [entry] })} />);
+}
+
+/** The message box's area, once the page shows it. */
+async function messageBoxArea(): Promise<HTMLElement> {
+  await screen.findByRole("textbox", { name: "Message" });
+  const area = document.querySelector("[data-area=messagebox]");
+  if (!(area instanceof HTMLElement)) throw new Error("no message box area");
+  return area;
 }
 
 /** A Claude session that has had one message, answered. */
@@ -539,5 +547,44 @@ describe("An error Arden Code knows (ADR 0039)", () => {
 
     expect(await screen.findByText("Claude could not answer.")).toBeVisible();
     expect(screen.getByText("API Error: Overloaded")).toBeVisible();
+  });
+});
+
+describe("The figures in the message box (ADR 0044)", () => {
+  const plan: UsageLimits = {
+    report: "reported",
+    windows: [
+      { kind: "fiveHour", percent: 42, resetsAt: "2099-10-09T15:10:00Z", status: "allowed" },
+      { kind: "weekly", percent: 18, resetsAt: "2099-10-13T09:00:00Z", status: "allowed" },
+    ],
+  };
+
+  it("shows the usage limits before Send in a Claude session's message box", async () => {
+    startSessionsRust({ sessions: [answeredClaudeSession()], usageLimits: plan });
+    renderApp("/session/session-1");
+    const area = await messageBoxArea();
+
+    const figures = await within(area).findByRole("button", { name: "5-hour 42% Weekly 18%" });
+    const send = within(area).getByRole("button", { name: "Send" });
+    expect(figures.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows no usage limits in a Demo agent session's message box", async () => {
+    startSessionsRust({
+      sessions: [sessionNamed("session-1", "Hi", "playground", "demo")],
+      usageLimits: plan,
+    });
+    renderApp("/session/session-1");
+    const area = await messageBoxArea();
+
+    await screen.findByRole("heading", { level: 1, name: "Hi" });
+    expect(within(area).queryByText(/5-hour/u)).toBeNull();
+  });
+
+  it("shows the usage limits on the welcome screen while Claude is chosen", async () => {
+    startSessionsRust({ newSessionAgent: "claude", usageLimits: plan });
+    renderApp();
+
+    expect(await screen.findByRole("button", { name: "5-hour 42% Weekly 18%" })).toBeVisible();
   });
 });
