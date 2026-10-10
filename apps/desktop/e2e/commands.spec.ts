@@ -86,9 +86,13 @@ test.describe("commands and shortcuts in the real app", () => {
   test("hovering a button shows its shortcut", async ({ appPage }) => {
     await expect(appPage.getByRole("main")).toBeVisible();
 
-    await appPage.getByRole("button", { name: "Sidebar", exact: true }).hover();
-
-    await expect(appPage.getByRole("tooltip")).toContainText("Ctrl+B");
+    // The web view also hears the real pointer: when it moves, or the window opens under it, the
+    // page sees the pointer leave the button and the tooltip is called off. Hovering again until it
+    // shows keeps that out of what the test checks, which is what the tooltip says.
+    await expect(async () => {
+      await appPage.getByRole("button", { name: "Sidebar", exact: true }).hover();
+      await expect(appPage.getByRole("tooltip")).toContainText("Ctrl+B", { timeout: 2000 });
+    }).toPass({ timeout: 15_000 });
   });
 
   test("F11 makes the real window fill the screen, and F11 again brings it back", async () => {
