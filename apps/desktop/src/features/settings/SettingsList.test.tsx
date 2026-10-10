@@ -3,6 +3,8 @@ import { emit } from "@tauri-apps/api/event";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { onTestFinished } from "vitest";
+import { page } from "vitest/browser";
 import { z } from "zod";
 
 import { Toaster } from "@/components/Toaster";
@@ -128,6 +130,9 @@ function renderTab(tab: SettingsTab) {
 
 const savedChange = (calls: { command: string; payload: unknown }[]) =>
   calls.find((call) => call.command === "change_setting")?.payload;
+
+/** Where an element ends on the screen, in whole pixels. */
+const rightEdge = (element: HTMLElement) => Math.round(element.getBoundingClientRect().right);
 
 afterEach(() => {
   Reflect.deleteProperty(globalThis, "isTauri");
@@ -423,6 +428,32 @@ describe("Appearance → Smooth scrolling", () => {
       within(dialog).getByText("Smooth scrolling changes the next time Arden Code starts."),
     ).toBeVisible();
     expect(savedChange(calls)).toEqual({ change: { appearanceSmoothScrolling: false } });
+  });
+
+  it("keeps its switch at the end of the row, in line with the others, above the restart note", async () => {
+    // A window wide enough for each control to sit beside its setting's text, not under it.
+    await page.viewport(1280, 800);
+    onTestFinished(async () => {
+      await page.viewport(414, 896);
+    });
+    startApp();
+    const user = userEvent.setup();
+    renderTab("appearance");
+
+    const smooth = await screen.findByRole("switch", { name: "Smooth scrolling" });
+    await user.click(smooth);
+    await user.click(await screen.findByRole("button", { name: "Later" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+
+    const restart = await screen.findByRole("button", { name: "Restart now" });
+    const statusBar = screen.getByRole("switch", { name: "Show status bar" });
+    expect(rightEdge(smooth)).toBe(rightEdge(statusBar));
+    expect(rightEdge(smooth)).toBe(rightEdge(restart));
+    expect(smooth.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      restart.getBoundingClientRect().top,
+    );
   });
 });
 

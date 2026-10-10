@@ -21,7 +21,7 @@ export function RestartNote({ note }: { note: string }) {
   const { t } = useTranslation();
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center justify-end gap-2">
       <p className="text-xs text-muted-foreground">{note}</p>
       <Button size="sm" variant="outline" onClick={restartApp}>
         {t("settings.restart.now")}
@@ -77,8 +77,9 @@ export function RestartToggle({
   const { t } = useTranslation();
   const [asking, setAsking] = useState(false);
 
+  // At the end of the row like every other control, with the note under it (ADR 0032).
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col items-end gap-2">
       <ToggleControl
         id={id}
         checked={checked}
