@@ -101,7 +101,7 @@ describe("The Ultrathink chip (ADR 0044)", () => {
 });
 
 /** The welcome screen's Claude message box, with its five menus and the usage limits. */
-function ClaudeBox() {
+function ClaudeBox({ width = "40rem" }: { width?: string }) {
   const choices = [
     ["Agent", BotIcon, "Claude"],
     ["Project", FolderIcon, "arden-code"],
@@ -110,8 +110,8 @@ function ClaudeBox() {
     ["Permission mode", ShieldIcon, "Auto"],
   ] as const;
   return (
-    // The width of the welcome screen in the maintainer's screenshot.
-    <div style={{ width: "40rem" }}>
+    // By default, the width of the welcome screen in the maintainer's screenshot.
+    <div style={{ width }}>
       <MessageBox
         agent="claude"
         busy={false}
@@ -124,6 +124,12 @@ function ClaudeBox() {
       />
     </div>
   );
+}
+
+/** How far down the page the middle of the button with this name is, in CSS pixels. */
+function middle(name: string) {
+  const box = screen.getByRole("button", { name }).getBoundingClientRect();
+  return box.top + box.height / 2;
 }
 
 describe("The message box's lower line (ADR 0045)", () => {
@@ -142,6 +148,13 @@ describe("The message box's lower line (ADR 0045)", () => {
       Math.abs(send.top + send.height / 2 - (lastMenu.top + lastMenu.height / 2)),
     ).toBeLessThan(2);
     expect(figures.top).toBeGreaterThanOrEqual(frame.getBoundingClientRect().bottom);
+  });
+
+  it("wraps Send with the last menu when the box is narrow", () => {
+    render(<ClaudeBox width="24rem" />);
+
+    expect(middle("Permission mode: Auto")).toBeGreaterThan(middle("Agent: Claude"));
+    expect(Math.abs(middle("Send") - middle("Permission mode: Auto"))).toBeLessThan(2);
   });
 
   it("gives Send no fill while there is nothing to send, and fills it once there is", async () => {

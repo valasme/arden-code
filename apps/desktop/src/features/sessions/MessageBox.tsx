@@ -54,9 +54,9 @@ interface MessageBoxProps {
  * Where the person writes (ADR 0032): a block at least two lines tall, with a lower line that
  * holds what the next message can change, then Send, or Stop while a reply runs (ADR 0044). The
  * line wraps when the box is narrow, Send with the last menu; the figures sit under the box
- * (ADR 0045). Enter sends
- * and Shift+Enter adds a line. Enter never sends while a character is still being composed (an
- * accent key, an input method for another script): that Enter confirms the character.
+ * (ADR 0045). Enter sends and Shift+Enter adds a line. Enter never sends while a character is
+ * still being composed (an accent key, an input method for another script): that Enter confirms
+ * the character.
  *
  * A message that starts with a slash lists the agent's slash commands above the box (ADR 0042).
  * The arrow keys move through the list, Tab fills in the command, and Enter sends one that takes
