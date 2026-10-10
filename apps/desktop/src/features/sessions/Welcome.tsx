@@ -6,6 +6,7 @@ import { Mark } from "@/components/brand/Logo";
 import { Kbd } from "@/components/ui/kbd";
 import { useShortcutsOf } from "@/features/commands/CommandsProvider";
 import type { CommandId } from "@/features/commands/registry";
+import { useSettings } from "@/features/settings/useSettings";
 import { formatShortcut } from "@/features/commands/shortcuts";
 import {
   type AgentKind,
@@ -76,6 +77,7 @@ export function Welcome() {
   const [chosenMode, setChosenMode] = useState<PermissionMode | undefined>(undefined);
   const { gate, dialog: trustDialog } = useTrustGate();
   const { ultrathink, setUltrathink, carrying } = useUltrathink();
+  const bypassAllowed = useSettings().agents.allowBypassPermissions;
 
   const projectId = chosenProject ?? latestProjectId(list) ?? PLAYGROUND_ID;
   const project: Project | undefined = list.projects.find(
@@ -151,7 +153,11 @@ export function Welcome() {
                   onUltrathink={setUltrathink}
                   onChoose={setChosenEffort}
                 />
-                <PermissionModeMenu mode={mode} onChoose={setChosenMode} />
+                <PermissionModeMenu
+                  mode={mode}
+                  bypassAllowed={bypassAllowed}
+                  onChoose={setChosenMode}
+                />
               </>
             ) : null}
           </>

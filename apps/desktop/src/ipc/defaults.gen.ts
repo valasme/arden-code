@@ -26,7 +26,8 @@ export const defaultSettings: Settings = {
     "desktop": true
   },
   "agents": {
-    "showUsageLimits": true
+    "showUsageLimits": true,
+    "allowBypassPermissions": false
   },
   "keyboard": {
     "shortcuts": {}

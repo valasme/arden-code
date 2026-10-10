@@ -87,6 +87,12 @@ function applyChange(settings: Settings, change: SettingChange): Settings {
       agents: { ...settings.agents, showUsageLimits: change.agentsShowUsageLimits },
     };
   }
+  if (change.agentsAllowBypassPermissions !== undefined) {
+    return {
+      ...settings,
+      agents: { ...settings.agents, allowBypassPermissions: change.agentsAllowBypassPermissions },
+    };
+  }
   if (change.advancedLogLevel !== undefined) {
     return { ...settings, advanced: { ...advanced, logLevel: change.advancedLogLevel } };
   }

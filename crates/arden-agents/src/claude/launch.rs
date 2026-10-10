@@ -64,6 +64,8 @@ pub struct Start {
     pub effort: Option<Effort>,
     /// How far Claude may go without asking (ADR 0044).
     pub permission_mode: PermissionMode,
+    /// Whether Bypass permissions may be chosen in it, as Settings allows (ADR 0044).
+    pub allow_bypass: bool,
 }
 
 /// A running Claude Code: what Arden Code writes to it, what it writes back, and its process, when
@@ -187,6 +189,10 @@ fn arguments(start: &Start) -> Vec<Arg> {
         Arg::Literal("--permission-mode"),
         Arg::Literal(start.permission_mode.claude_name()),
     ];
+    // Claude Code switches to Bypass permissions only when it was started so that it can.
+    if start.allow_bypass {
+        arguments.push(Arg::Literal("--allow-dangerously-skip-permissions"));
+    }
     // The value comes from Claude Code's own list of models, but it was kept in a file and
     // handed over by the page, so it is checked again before it is passed (ADR 0042).
     if let Some(model) = &start.model {
@@ -264,6 +270,7 @@ mod tests {
             model,
             effort: None,
             permission_mode: PermissionMode::Manual,
+            allow_bypass: false,
         }
     }
 
@@ -310,6 +317,23 @@ mod tests {
                 .expect("--permission-mode");
             assert_eq!(arguments[at + 1], name);
         }
+    }
+
+    #[test]
+    fn the_flag_that_lets_bypass_permissions_be_chosen_is_passed_only_while_it_is_allowed() {
+        let flag = "--allow-dangerously-skip-permissions".to_owned();
+        assert!(!texts(&start(None)).contains(&flag));
+        let allowed = texts(&Start {
+            allow_bypass: true,
+            permission_mode: PermissionMode::BypassPermissions,
+            ..start(None)
+        });
+        assert!(allowed.contains(&flag));
+        let at = allowed
+            .iter()
+            .position(|text| text == "--permission-mode")
+            .expect("--permission-mode");
+        assert_eq!(allowed[at + 1], "bypassPermissions");
     }
 
     #[test]

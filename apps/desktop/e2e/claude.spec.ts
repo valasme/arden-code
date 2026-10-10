@@ -263,6 +263,62 @@ test.describe("Claude in the real app", () => {
     }
   });
 
+  test("Bypass permissions, once allowed, starts Claude Code again so that it can, and turning it off goes back to Manual", async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
+    const log = path.join(dataDir, "claude.log");
+    const claude = claudeOnPath({ log });
+    const app = await launchApp({ dataDir, env: claude.env });
+    /** Turns Settings → Agents → Allow Bypass permissions on or off, and comes back to the session. */
+    const allowBypass = async (allowed: boolean) => {
+      await app.page.getByRole("link", { name: "Settings" }).click();
+      await app.page.getByRole("link", { name: "Agents", exact: true }).click();
+      const toggle = app.page.getByRole("switch", { name: "Allow Bypass permissions" });
+      await toggle.click();
+      await expect(toggle).toBeChecked({ checked: allowed });
+      await app.page.getByRole("link", { name: "Back" }).click();
+    };
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+      await say(page, "Which mode are you in?");
+      await expect(session.getByText("The permission mode is default.")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      await allowBypass(true);
+      await page.getByRole("button", { name: "Permission mode: Manual" }).click();
+      await page.getByRole("menuitemradio", { name: /^Bypass permissions/u }).click();
+      const bypassed = page.getByRole("button", { name: "Permission mode: Bypass permissions" });
+      await expect(bypassed).toBeVisible();
+      await say(page, "Which mode now?");
+      await expect(session.getByText("The permission mode is bypassPermissions.")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      const conversations = readFileSync(log, "utf8")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("start "))
+        .map((line) => started.parse(JSON.parse(line.slice("start ".length))).args)
+        .filter((args) => args.includes("-p") && !args.includes("--no-session-persistence"));
+      expect(conversations).toHaveLength(2);
+      expect(conversations[0]).not.toContain("--allow-dangerously-skip-permissions");
+      expect(conversations[1]).toContain("--allow-dangerously-skip-permissions");
+      expect(conversations[1]).toContain("--resume");
+
+      await allowBypass(false);
+      await expect(page.getByRole("button", { name: "Permission mode: Manual" })).toBeVisible();
+      await say(page, "Which mode at last?");
+      await expect(session.getByText("The permission mode is default.").nth(1)).toBeVisible({
+        timeout: 30_000,
+      });
+    } finally {
+      app.kill();
+      claude.remove();
+      rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    }
+  });
+
   test("a Claude session carries on its conversation after Arden Code restarts", async () => {
     const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
     const log = path.join(dataDir, "claude-starts.log");

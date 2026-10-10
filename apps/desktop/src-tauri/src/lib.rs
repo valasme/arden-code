@@ -364,6 +364,11 @@ fn manage_programs(app: &tauri::App, paths: &AppPaths) {
     let claude = agents::Claude::with(supervisor.as_ref());
     claude.report_usage_to(app.handle(), &app.state::<SettingsService>());
     claude.report_session_changes_to(app.handle(), &app.state::<sessions::Sessions>());
+    claude.follow_bypass_setting(
+        app.handle(),
+        &app.state::<SettingsService>(),
+        &app.state::<sessions::Sessions>(),
+    );
     app.manage(claude);
     app.manage(agents::Programs(supervisor));
     app.manage(agents::Detections::default());

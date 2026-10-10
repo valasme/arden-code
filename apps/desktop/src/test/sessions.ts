@@ -95,6 +95,8 @@ interface Options {
   newSessionEffort?: Effort | null;
   /** The permission mode a new session takes (ADR 0044). */
   newSessionPermissionMode?: PermissionMode;
+  /** Whether Settings → Agents allows Bypass permissions (ADR 0044). */
+  allowBypassPermissions?: boolean;
   /** The folder the person picks in Windows' dialog, or null when they cancel. */
   pickedFolder?: Project | null;
   /** What Claude Code says it can do (ADR 0042). Nothing, until it has been heard. */
@@ -119,6 +121,7 @@ export function startSessionsRust({
   newSessionModel = null,
   newSessionEffort = null,
   newSessionPermissionMode = "manual",
+  allowBypassPermissions = false,
   catalog = { commands: [], models: [], terminalCommands: [] },
   pickedFolder = null,
   usageLimits = { report: "unknown", windows: [] },
@@ -170,7 +173,7 @@ export function startSessionsRust({
           return { name: "Arden Code", version: "0.1.0" };
         }
         case "get_settings": {
-          return settingsWith({ general: { regionalFormat } });
+          return settingsWith({ general: { regionalFormat }, agents: { allowBypassPermissions } });
         }
         case "list_sessions": {
           return list();
@@ -246,7 +249,9 @@ export function startSessionsRust({
             .parse(payload);
           const session = find(id);
           if (session.archivedAt !== null) throw failure("ARD-AGT-005");
-          if (mode === "bypassPermissions") throw failure("ARD-AGT-019");
+          if (mode === "bypassPermissions" && !allowBypassPermissions) {
+            throw failure("ARD-AGT-019");
+          }
           // Unlike the model, it changes while a reply runs (ADR 0044).
           session.permissionMode = mode;
           return null;

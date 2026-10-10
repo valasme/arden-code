@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuShortcut,
@@ -27,7 +28,8 @@ export const permissionModes: readonly PermissionMode[] = [
  * How far a Claude session's agent may go without asking (ADR 0044), after the effort: Manual,
  * Accept edits, Plan, Auto and Bypass permissions, each saying what it does, chosen by its digit
  * while the menu is open. Unlike the model, it can change while a reply runs: Claude Code takes it
- * at once. Bypass permissions stays unavailable until Settings → Agents allows it.
+ * at once. Bypass permissions stays unavailable until Settings → Agents allows it, and the button
+ * takes the destructive color while the session is in it.
  */
 export function PermissionModeMenu({
   mode,
@@ -70,6 +72,11 @@ export function PermissionModeMenu({
           icon={ShieldIcon}
           value={names[mode]}
           aria-label={t("sessions.permissionModeMenu.label", { mode: names[mode] })}
+          className={
+            mode === "bypassPermissions"
+              ? "border-destructive/50 text-destructive hover:text-destructive"
+              : undefined
+          }
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -83,6 +90,9 @@ export function PermissionModeMenu({
           choose(picked);
         }}
       >
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          {t("sessions.permissionModeMenu.heading")}
+        </DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={mode}
           onValueChange={(picked) => {

@@ -933,9 +933,30 @@ impl SessionStore {
         self.lock().keep_permission_mode(session_id, mode)
     }
 
-    /// Lets Bypass permissions be chosen, or not, as Settings says (ADR 0044).
-    pub fn allow_bypass_permissions(&self, allowed: bool) {
-        self.lock().bypass_allowed = allowed;
+    /// Lets Bypass permissions be chosen, or not, as Settings says (ADR 0044). Turned off, every
+    /// session in it goes to Manual at once: answers which did.
+    pub fn allow_bypass_permissions(&self, allowed: bool) -> Vec<String> {
+        let mut inner = self.lock();
+        inner.bypass_allowed = allowed;
+        if allowed {
+            return Vec::new();
+        }
+        let bypassed: Vec<String> = inner
+            .sessions
+            .iter()
+            .filter(|entry| entry.session.permission_mode == PermissionMode::BypassPermissions)
+            .map(|entry| entry.session.id.clone())
+            .collect();
+        bypassed
+            .into_iter()
+            .filter(|id| match inner.keep_permission_mode(id, PermissionMode::Manual) {
+                Ok(_) => true,
+                Err(error) => {
+                    tracing::warn!(session = %id, ?error, "a session in Bypass permissions could not be moved to Manual");
+                    false
+                }
+            })
+            .collect()
     }
 
     /// Changes what a session's agent works with, between messages (ADR 0041).
@@ -3320,6 +3341,41 @@ mod tests {
         assert_eq!(
             store.session(&session.id).expect("it").permission_mode,
             PermissionMode::Manual
+        );
+    }
+
+    #[test]
+    fn bypass_permissions_can_be_chosen_while_allowed_and_turning_it_off_moves_its_sessions_to_manual()
+     {
+        let store = store();
+        let bypassed = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        let planning = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("another session");
+        store.allow_bypass_permissions(true);
+        store
+            .set_permission_mode(&bypassed.id, PermissionMode::BypassPermissions)
+            .expect("allowed");
+        store
+            .set_permission_mode(&planning.id, PermissionMode::Plan)
+            .expect("chosen");
+
+        let moved = store.allow_bypass_permissions(false);
+
+        assert_eq!(moved, vec![bypassed.id.clone()]);
+        assert_eq!(
+            store.session(&bypassed.id).expect("it").permission_mode,
+            PermissionMode::Manual
+        );
+        assert_eq!(
+            store.session(&planning.id).expect("it").permission_mode,
+            PermissionMode::Plan
+        );
+        assert_eq!(
+            store.set_permission_mode(&bypassed.id, PermissionMode::BypassPermissions),
+            Err(StoreError::BypassNotAllowed)
         );
     }
 

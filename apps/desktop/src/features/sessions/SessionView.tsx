@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/features/commands/CommandsProvider";
+import { useSettings } from "@/features/settings/useSettings";
 import {
   type Effort,
   type Model,
@@ -75,6 +76,7 @@ export function SessionView({ id }: { id: string }) {
   const [atEnd, setAtEnd] = useState(true);
   const { gate, dialog: trustDialog } = useTrustGate();
   const { ultrathink, setUltrathink, carrying } = useUltrathink();
+  const bypassAllowed = useSettings().agents.allowBypassPermissions;
 
   const turns = session?.turns ?? [];
   const count = turns.length;
@@ -265,7 +267,11 @@ export function SessionView({ id }: { id: string }) {
             onUltrathink={setUltrathink}
             onChoose={chooseEffort}
           />
-          <PermissionModeMenu mode={session.permissionMode ?? "manual"} onChoose={chooseMode} />
+          <PermissionModeMenu
+            mode={session.permissionMode ?? "manual"}
+            bypassAllowed={bypassAllowed}
+            onChoose={chooseMode}
+          />
         </>
       ) : null}
     </>

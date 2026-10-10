@@ -2425,6 +2425,43 @@ fn the_mode_claude_code_says_it_started_in_is_followed_when_it_is_not_the_one_as
 }
 
 #[test]
+fn bypass_permissions_starts_claude_code_again_with_the_flag_when_it_was_started_without() {
+    let mut first = answers("First", "One.");
+    first.push(asks_for_context());
+    let mut second = handshake();
+    second.extend([message("Second"), success("Two.")]);
+    let (scripted, driver) = claude(vec![Ok(first), Ok(second)]);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "First");
+    store.allow_bypass_permissions(true);
+    driver.allow_bypass_permissions(true);
+    store
+        .set_permission_mode(&session, PermissionMode::BypassPermissions)
+        .expect("allowed");
+
+    // Claude Code refuses the switch without the flag, so it is not asked (ADR 0044).
+    driver.set_permission_mode(&session, PermissionMode::BypassPermissions);
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    let starts = scripted.starts.lock().expect("starts");
+    assert_eq!(starts.len(), 2);
+    assert!(!starts[0].allow_bypass);
+    assert!(starts[1].allow_bypass);
+    assert_eq!(starts[1].permission_mode, PermissionMode::BypassPermissions);
+    assert!(matches!(starts[1].conversation, Conversation::Resume(_)));
+    assert!(
+        scripted
+            .written
+            .lock()
+            .expect("written")
+            .iter()
+            .all(|frame| frame["request"]["subtype"] != "set_permission_mode"),
+    );
+}
+
+#[test]
 fn a_reply_brings_a_running_claude_code_to_the_session_s_permission_mode_first() {
     let mut script = answers("First", "One.");
     script.extend([

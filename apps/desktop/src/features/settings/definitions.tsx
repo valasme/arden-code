@@ -356,6 +356,24 @@ export const settingDefinitions: readonly SettingDefinition[] = [
     ),
   },
   {
+    id: "allow-bypass-permissions",
+    tab: "agents",
+    key: "agentsAllowBypassPermissions",
+    labelKey: "settings.agents.allowBypassPermissions.label",
+    descriptionKey: "settings.agents.allowBypassPermissions.description",
+    isDefault: (settings) =>
+      settings.agents.allowBypassPermissions === same.agents.allowBypassPermissions,
+    Control: ({ id, settings, change }) => (
+      <ToggleControl
+        id={id}
+        checked={settings.agents.allowBypassPermissions}
+        onChange={(checked) => {
+          change.mutate({ agentsAllowBypassPermissions: checked });
+        }}
+      />
+    ),
+  },
+  {
     id: "developer-mode",
     tab: "advanced",
     key: "advancedDeveloperMode",

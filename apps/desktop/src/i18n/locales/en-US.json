@@ -517,6 +517,7 @@
       "bypassPermissions": "Bypass permissions",
       "bypassPermissionsHint": "Runs every action without asking",
       "bypassPermissionsOff": "Turn on in Settings → Agents",
+      "heading": "Permission mode",
       "label": "Permission mode: {{mode}}",
       "manual": "Manual",
       "manualHint": "Asks before it edits files or runs commands",
@@ -679,6 +680,10 @@
     },
     "agents": {
       "account": "Account",
+      "allowBypassPermissions": {
+        "description": "Lets a Claude session run commands and edit files without asking. Use it only in a folder you can afford to lose.",
+        "label": "Allow Bypass permissions"
+      },
       "description": "Claude Code and Codex are separate programs. Arden Code looks for them on this computer. It never installs them, updates them or signs in to them.",
       "howToSignIn": "Open a terminal, run claude, and sign in with /login.",
       "install": "How to install",

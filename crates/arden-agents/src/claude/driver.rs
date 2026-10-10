@@ -140,6 +140,14 @@ impl Modes {
     }
 }
 
+/// Tells the listener, when there is one, what changed about a session, if anything did.
+fn tell(listening: Option<&Listening>, session: &str, change: Option<SessionChange>) {
+    let listener = listening.and_then(|listening| lock(listening).clone());
+    if let (Some(change), Some(listener)) = (change, listener) {
+        listener(session, change);
+    }
+}
+
 /// One running Claude Code, for one session.
 struct Live {
     input: Mutex<Box<dyn Write + Send>>,
@@ -158,6 +166,8 @@ struct Live {
     /// Whether a reply is using it, which keeps it however long the reply takes.
     busy: AtomicBool,
     modes: Arc<Modes>,
+    /// Whether it was started so that Bypass permissions can be chosen in it (ADR 0044).
+    bypass_launched: bool,
 }
 
 impl Live {
@@ -182,14 +192,6 @@ impl Live {
             asked: Mutex::new(HashMap::new()),
         });
         let moding = Arc::clone(&modes);
-        let tell = move |session: &str, change: Option<SessionChange>| {
-            let listener = listening
-                .as_ref()
-                .and_then(|listening| lock(listening).clone());
-            if let (Some(change), Some(listener)) = (change, listener) {
-                listener(session, change);
-            }
-        };
         thread::spawn(move || {
             for line in BufReader::new(output).lines() {
                 let Ok(line) = line else { break };
@@ -209,12 +211,16 @@ impl Live {
                             // What becomes of a permission mode is told at once, during a reply or
                             // not (ADR 0044).
                             Frame::Response { id, error, .. } if id.starts_with(MODE_REQUEST) => {
-                                tell(&session, moding.answered(id, error.as_deref()));
+                                tell(
+                                    listening.as_ref(),
+                                    &session,
+                                    moding.answered(id, error.as_deref()),
+                                );
                                 continue;
                             }
                             Frame::Status { permission_mode } => {
                                 if let Some(name) = permission_mode {
-                                    tell(&session, moding.reported(name));
+                                    tell(listening.as_ref(), &session, moding.reported(name));
                                 }
                                 continue;
                             }
@@ -274,7 +280,13 @@ impl Live {
             heard,
             busy: AtomicBool::new(false),
             modes,
+            bypass_launched: start.allow_bypass,
         }
+    }
+
+    /// Whether it can apply a permission mode: Bypass permissions only when it was started so.
+    fn can_apply(&self, mode: PermissionMode) -> bool {
+        mode != PermissionMode::BypassPermissions || self.bypass_launched
     }
 
     /// Waits for Claude Code's answer to the request `id`, and says whether it came.
@@ -407,6 +419,9 @@ pub struct ClaudeDriver {
     context_patience: Duration,
     /// Who hears what Claude Code says about its session outside its replies (ADR 0044).
     listening: Listening,
+    /// Whether Settings allows Bypass permissions, so that each Claude Code is started so that it
+    /// can be chosen in it (ADR 0044).
+    bypass_allowed: AtomicBool,
 }
 
 /// Marks a session's Claude Code as used by a reply until the reply ends.
@@ -442,6 +457,7 @@ impl ClaudeDriver {
             usage_floor: USAGE_FLOOR,
             context_patience: CONTEXT_PATIENCE,
             listening: Arc::new(Mutex::new(None)),
+            bypass_allowed: AtomicBool::new(false),
         }
     }
 
@@ -509,6 +525,7 @@ impl ClaudeDriver {
             model: None,
             effort: None,
             permission_mode: PermissionMode::default(),
+            allow_bypass: false,
         };
         let connection = self.launcher.launch(&start).ok()?;
         let live = Live::begin(
@@ -548,9 +565,20 @@ impl ClaudeDriver {
     /// no Claude Code running takes its mode when its next one starts.
     pub fn set_permission_mode(&self, session_id: &str, mode: PermissionMode) {
         let running = lock(&self.live).get(session_id).map(Arc::clone);
-        if let Some(live) = running {
+        let Some(live) = running else { return };
+        if live.can_apply(mode) {
             self.ask_for_mode(&live, mode);
+        } else if !live.busy.load(Ordering::Acquire) {
+            // Claude Code would refuse it: the next message starts one that takes it, carrying on
+            // the conversation, and this one has nothing left to do.
+            self.forget(session_id);
         }
+    }
+
+    /// Whether Claude Codes are started so that Bypass permissions can be chosen in them, as
+    /// Settings says (ADR 0044). One already running keeps how it was started.
+    pub fn allow_bypass_permissions(&self, allowed: bool) {
+        self.bypass_allowed.store(allowed, Ordering::Release);
     }
 
     /// Asks a Claude Code for a permission mode, unless it applies it already.
@@ -675,14 +703,15 @@ impl ClaudeDriver {
     ) -> Result<(Arc<Live>, bool), Problem> {
         let running = lock(&self.live).get(session_id).map(Arc::clone);
         if let Some(live) = running {
-            if live.choices == choices {
+            if live.choices == choices && live.can_apply(mode) {
                 live.busy.store(true, Ordering::Release);
                 // The mode changes without a new Claude Code (ADR 0044).
                 self.ask_for_mode(&live, mode);
                 return Ok((live, false));
             }
-            // Started with another model or effort: it is ended, and the conversation carries on
-            // in a Claude Code started with these (ADR 0041).
+            // Started with another model or effort, or without the flag Bypass permissions needs: it
+            // is ended, and the conversation carries on in a Claude Code started with these
+            // (ADR 0041, ADR 0044).
             self.forget(session_id);
         }
         let fresh = || Conversation::New(uuid::Uuid::new_v4().to_string());
@@ -724,6 +753,7 @@ impl ClaudeDriver {
             model: choices.model,
             effort: choices.effort,
             permission_mode: mode,
+            allow_bypass: self.bypass_allowed.load(Ordering::Acquire),
         };
         let connection = self.launcher.launch(&start).map_err(Problem::Launch)?;
         let live = Arc::new(Live::begin(

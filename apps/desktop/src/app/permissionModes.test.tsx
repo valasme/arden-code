@@ -87,6 +87,21 @@ describe("Choosing the permission mode (ADR 0044)", () => {
     expect(await screen.findByRole("button", { name: "Permission mode: Plan" })).toBeVisible();
   });
 
+  it("offers Bypass permissions once Settings allows it", async () => {
+    const user = userEvent.setup();
+    const rust = startSessionsRust({ sessions: [answered()], allowBypassPermissions: true });
+    renderApp("/session/session-1");
+
+    await choose(user, "Permission mode: Manual", /^Bypass permissions/);
+
+    expect(rust.callsTo("set_session_permission_mode")).toEqual([
+      { id: "session-1", mode: "bypassPermissions" },
+    ]);
+    expect(
+      await screen.findByRole("button", { name: "Permission mode: Bypass permissions" }),
+    ).toBeVisible();
+  });
+
   it("is not offered for a Demo agent session", async () => {
     startSessionsRust({ sessions: [answered("demo")] });
     renderApp("/session/session-1");
