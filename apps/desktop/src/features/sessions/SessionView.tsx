@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDownIcon, EllipsisIcon } from "lucide-react";
+import { ArrowDownIcon, EllipsisIcon, FolderIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -21,6 +21,7 @@ import { logger } from "@/lib/logger";
 import { useRepliesStore } from "@/state/replies";
 import { useSessionDialogsStore } from "@/state/sessionDialogs";
 
+import { agentIcons } from "./agentIcons";
 import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
@@ -222,6 +223,8 @@ export function SessionView({ id }: { id: string }) {
         showErrorToast(toAppError(failure));
       });
   };
+  // Once the session has a message, its agent and project can no longer change: they are named in
+  // the header, and the lower line keeps only what the next message can change (ADR 0044).
   const choices =
     count === 0 && session.archivedAt === null ? (
       <span className="flex min-w-0 items-center gap-1.5">
@@ -237,11 +240,8 @@ export function SessionView({ id }: { id: string }) {
           }}
         />
       </span>
-    ) : (
-      <span className="truncate">
-        {t("sessions.context", { agent: agentName, project: projectName })}
-      </span>
-    );
+    ) : null;
+  const AgentIcon = agentIcons[agent];
   const context = (
     <span className="flex min-w-0 items-center gap-1.5">
       {choices}
@@ -272,8 +272,13 @@ export function SessionView({ id }: { id: string }) {
         <h1 className="min-w-0 truncate text-sm font-semibold">
           {session.title ?? t("sessions.untitled")}
         </h1>
-        <span className="shrink-0 border border-border px-1.5 text-2xs leading-4 text-muted-foreground">
+        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <AgentIcon aria-hidden className="size-4" strokeWidth={1.5} />
           {agentName}
+        </span>
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <FolderIcon aria-hidden className="size-4 shrink-0" strokeWidth={1.5} />
+          <span className="truncate">{projectName}</span>
         </span>
         <SessionMenu sessionId={id}>
           <Button

@@ -1,32 +1,15 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { BotIcon, FlaskConicalIcon, type LucideIcon } from "lucide-react";
+import { BotIcon, FlaskConicalIcon } from "lucide-react";
 
 import type { AgentKind } from "@/ipc/bindings";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
+import { drawingIn, drawingOf, drawingsIn } from "@/test/icons";
 
 import { AgentMenu } from "./AgentMenu";
 
 import "@/styles/global.css";
-
-/** What an icon draws: its shapes, whatever its size or color. */
-function drawingOf(Icon: LucideIcon): string {
-  const { container, unmount } = render(<Icon />);
-  const drawing = container.querySelector("svg")?.innerHTML ?? "";
-  unmount();
-  return drawing;
-}
-
-/** What the first icon inside an element draws. */
-function drawingIn(element: HTMLElement): string {
-  return element.querySelector("svg")?.innerHTML ?? "";
-}
-
-/** What each icon inside an element draws. */
-function drawingsIn(element: HTMLElement): string[] {
-  return [...element.querySelectorAll("svg")].map((svg) => svg.innerHTML);
-}
 
 function renderMenu(agent: AgentKind, unavailable: AgentKind[] = []) {
   const chosen: AgentKind[] = [];

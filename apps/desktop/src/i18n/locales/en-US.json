@@ -434,7 +434,6 @@
       "defaultHint": "Claude Code's own setting",
       "unlisted": "Not in Claude Code's list"
     },
-    "context": "{{agent}} · {{project}}",
     "delete": {
       "claude": "Claude Code keeps its own copy of the conversation in its folder.",
       "confirm": "Delete session",

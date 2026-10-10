@@ -573,7 +573,7 @@ describe("The session view's layout", () => {
     expect(getComputedStyle(call).borderBottomWidth).toBe("0px");
   });
 
-  it("gives the message box room for two lines, and names the agent and the project under it", async () => {
+  it("gives the message box room for two lines, and names the agent and the project in the header", async () => {
     await sessionWithEverything();
     const area = document.querySelector("[data-area=messagebox]");
     if (!(area instanceof HTMLElement)) throw new Error("no message box area");
@@ -581,6 +581,10 @@ describe("The session view's layout", () => {
     const lineHeight = Number.parseFloat(getComputedStyle(textBox).lineHeight);
 
     expect(box(textBox).height).toBeGreaterThanOrEqual(lineHeight * 2);
-    expect(within(area).getByText("Demo agent · Playground")).toBeVisible();
+    expect(within(area).queryByText(/Demo agent|Playground/u)).toBeNull();
+    const header = screen.getByRole("heading", { level: 1 }).closest("header");
+    if (!header) throw new Error("the title is not in a header");
+    expect(within(header).getByText("Demo agent")).toBeVisible();
+    expect(within(header).getByText("Playground")).toBeVisible();
   });
 });

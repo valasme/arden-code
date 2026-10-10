@@ -1,4 +1,3 @@
-import { BotIcon, FlaskConicalIcon, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -10,16 +9,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { AgentKind } from "@/ipc/bindings";
 
+import { agentIcons } from "./agentIcons";
 import { ChoiceButton } from "./ChoiceButton";
 
 /** The agents a session can have, in the order the menu lists them (ADR 0039). */
 export const agentKinds = ["claude", "demo"] as const satisfies readonly AgentKind[];
-
-/** Each agent's icon: one of Arden Code's own, never a vendor's logo (ADR 0044). */
-const agentIcons: Record<AgentKind, LucideIcon> = {
-  claude: BotIcon,
-  demo: FlaskConicalIcon,
-};
 
 interface AgentMenuProps {
   agent: AgentKind;

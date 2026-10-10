@@ -1,6 +1,7 @@
 import { createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { BotIcon, FolderIcon } from "lucide-react";
 import { page } from "vitest/browser";
 
 import type { Item, Session } from "@/ipc/bindings";
@@ -8,6 +9,7 @@ import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
+import { drawingOf, drawingsIn } from "@/test/icons";
 import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -65,14 +67,38 @@ describe("Choosing the agent of a session (ADR 0039)", () => {
     expect(title.parentElement).toHaveTextContent("Claude");
   });
 
-  it("names the agent of a session that has had a message in plain text, under its reply too", async () => {
+  it("names the agent and the project of a session that has had a message in its header, under its reply too", async () => {
     startSessionsRust({ sessions: [answeredClaudeSession()] });
     renderApp("/session/session-1");
 
-    expect(await screen.findByText("Claude · Playground")).toBeVisible();
+    const title = await screen.findByRole("heading", { level: 1, name: "Fix the build" });
+    const header = title.closest("header");
+    if (!header) throw new Error("the title is not in a header");
+    expect(within(header).getByText("Claude")).toBeVisible();
+    expect(within(header).getByText("Playground")).toBeVisible();
+    expect(drawingsIn(header)).toEqual(
+      expect.arrayContaining([drawingOf(BotIcon), drawingOf(FolderIcon)]),
+    );
     expect(screen.queryByRole("button", { name: /^Agent:/u })).toBeNull();
+    // The message box's lower line holds only what the next message can change.
+    const area = document.querySelector("[data-area=messagebox]");
+    if (!(area instanceof HTMLElement)) throw new Error("no message box area");
+    expect(within(area).queryByText(/Playground/u)).toBeNull();
     const feed = screen.getByRole("feed", { name: "Messages" });
     expect(within(feed).getByRole("heading", { level: 3, name: "Claude" })).toBeVisible();
+  });
+
+  it("names the agent and the project of an archived session in its header too", async () => {
+    startSessionsRust({
+      sessions: [{ ...answeredClaudeSession(), archivedAt: "2026-10-04T08:00:00Z" }],
+    });
+    renderApp("/session/session-1");
+
+    const title = await screen.findByRole("heading", { level: 1, name: "Fix the build" });
+    const header = title.closest("header");
+    if (!header) throw new Error("the title is not in a header");
+    expect(within(header).getByText("Claude")).toBeVisible();
+    expect(within(header).getByText("Playground")).toBeVisible();
   });
 
   it("says Claude is replying, in the turn and in the status bar", async () => {
