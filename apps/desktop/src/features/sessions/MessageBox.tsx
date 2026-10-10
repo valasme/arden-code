@@ -24,7 +24,10 @@ interface MessageBoxProps {
    * (ADR 0039), then the agent's own menus, such as the model (ADR 0044).
    */
   choices: ReactNode;
-  /** The figures before Send, such as the usage limits (ADR 0044). None for an agent without. */
+  /**
+   * The figures under the box, such as the usage limits (ADR 0044, ADR 0045). None (`null` or
+   * absent) for an agent without, which then has no line for them.
+   */
   figures?: ReactNode;
   /** Sends the message. Answering `false` (now or later) says it was not sent: the text comes back. */
   onSend: (text: string) => boolean | Promise<boolean>;
@@ -49,8 +52,9 @@ interface MessageBoxProps {
 
 /**
  * Where the person writes (ADR 0032): a block at least two lines tall, with a lower line that
- * holds what the next message can change, then the figures and Send, or Stop while a reply runs
- * (ADR 0044). The line wraps when the box is narrow, and the figures stay with Send. Enter sends
+ * holds what the next message can change, then Send, or Stop while a reply runs (ADR 0044). The
+ * line wraps when the box is narrow, Send with the last menu; the figures sit under the box
+ * (ADR 0045). Enter sends
  * and Shift+Enter adds a line. Enter never sends while a character is still being composed (an
  * accent key, an input method for another script): that Enter confirms the character.
  *
@@ -79,6 +83,7 @@ export function MessageBox({
     box.current?.focus();
   }, []);
   const canSend = !busy && text.trim() !== "";
+  const hasFigures = figures !== undefined && figures !== null;
   // The next message will carry the word: the switch is on, or the word is in it. A slash command
   // never does.
   const carriesUltrathink =
@@ -151,7 +156,7 @@ export function MessageBox({
   return (
     <div
       {...(ownArea ? { "data-area": "messagebox" } : {})}
-      className={cn("shrink-0 px-6 pb-4", className)}
+      className={cn("shrink-0 px-6", hasFigures ? "pb-2" : "pb-4", className)}
     >
       <div
         data-message-frame
@@ -199,58 +204,63 @@ export function MessageBox({
               : ""}
           </output>
         ) : null}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 ps-3 pe-2 pb-2 text-xs text-muted-foreground">
-          <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-            {choices}
-            {carriesUltrathink ? (
-              ultrathink.on ? (
-                // The switch put it there, so pressing it takes it away.
-                <Button
-                  variant="outline"
-                  size="xs"
-                  className="font-normal text-foreground"
-                  aria-label={t("sessions.messageBox.ultrathinkOff")}
-                  onClick={ultrathink.onTurnOff}
-                >
-                  <LightbulbIcon aria-hidden className="size-4" strokeWidth={1.5} />
-                  {t("sessions.messageBox.ultrathink")}
-                  <XIcon aria-hidden className="size-3.5 text-muted-foreground" strokeWidth={1.5} />
-                </Button>
-              ) : (
-                <span className="flex h-6 items-center gap-1 border border-border px-2 text-foreground">
-                  <LightbulbIcon aria-hidden className="size-4" strokeWidth={1.5} />
-                  {t("sessions.messageBox.ultrathink")}
-                </span>
-              )
-            ) : null}
-          </span>
-          <span className="ms-auto flex min-w-0 items-center gap-1">
-            {figures}
-            {busy ? (
+        {/* One wrapping row, so Send wraps with the last menu rather than onto a row of its own. */}
+        <div className="flex flex-wrap items-center gap-1 ps-2 pe-2 pb-2 text-xs text-muted-foreground">
+          {choices}
+          {carriesUltrathink ? (
+            ultrathink.on ? (
+              // The switch put it there, so pressing it takes it away.
               <Button
                 variant="outline"
-                size="sm"
-                aria-label={t("sessions.messageBox.stop")}
-                onClick={onStop}
+                size="xs"
+                className="font-normal text-foreground"
+                aria-label={t("sessions.messageBox.ultrathinkOff")}
+                onClick={ultrathink.onTurnOff}
               >
-                <SquareIcon aria-hidden strokeWidth={1.5} />
-                {t("sessions.messageBox.stopShort")}
+                <LightbulbIcon aria-hidden className="size-4" strokeWidth={1.5} />
+                {t("sessions.messageBox.ultrathink")}
+                <XIcon aria-hidden className="size-3.5 text-muted-foreground" strokeWidth={1.5} />
               </Button>
             ) : (
-              <Button
-                size="icon-sm"
-                aria-label={t("sessions.messageBox.send")}
-                disabled={!canSend}
-                onClick={() => {
-                  send();
-                }}
-              >
-                <ArrowUpIcon aria-hidden strokeWidth={1.5} />
-              </Button>
-            )}
-          </span>
+              <span className="flex h-6 items-center gap-1 border border-border px-2 text-foreground">
+                <LightbulbIcon aria-hidden className="size-4" strokeWidth={1.5} />
+                {t("sessions.messageBox.ultrathink")}
+              </span>
+            )
+          ) : null}
+          {busy ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ms-auto"
+              aria-label={t("sessions.messageBox.stop")}
+              onClick={onStop}
+            >
+              <SquareIcon aria-hidden strokeWidth={1.5} />
+              {t("sessions.messageBox.stopShort")}
+            </Button>
+          ) : (
+            <Button
+              size="icon-sm"
+              // With nothing to send, Send waits quietly instead of looking like a dimmed block.
+              className="ms-auto disabled:bg-transparent disabled:text-muted-foreground disabled:opacity-100"
+              aria-label={t("sessions.messageBox.send")}
+              disabled={!canSend}
+              onClick={() => {
+                send();
+              }}
+            >
+              <ArrowUpIcon aria-hidden strokeWidth={1.5} />
+            </Button>
+          )}
         </div>
       </div>
+      {hasFigures ? (
+        // The line keeps its height while the figures are on their way, so the box does not move.
+        <div className="mx-auto flex min-h-6 max-w-[45rem] items-center justify-end pt-1">
+          {figures}
+        </div>
+      ) : null}
     </div>
   );
 }

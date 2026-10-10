@@ -6,8 +6,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * The button of a choice in the message box's lower line (the agent, the project, the model, the
- * effort): outlined, with an icon, what is chosen and a chevron, so it reads as a control and not
- * as a caption. Its accessible name says what it chooses and what is chosen.
+ * effort): a quiet button with an icon, what is chosen and a chevron, which fills in on hover and
+ * while its menu is open (ADR 0045). The chevron says it opens a menu. Its accessible name says what
+ * it chooses and what is chosen.
  */
 export function ChoiceButton({
   icon: Icon,
@@ -17,7 +18,7 @@ export function ChoiceButton({
 }: ComponentProps<typeof Button> & { icon: LucideIcon; value: string }) {
   return (
     <Button
-      variant="outline"
+      variant="ghost"
       size="xs"
       className={cn("min-w-0 font-normal text-foreground", className)}
       {...props}

@@ -28,7 +28,7 @@ export function MessageBoxChoicesSample() {
       className="flex max-w-[45rem] flex-col border border-input bg-background"
     >
       <p className="px-3 pt-3 pb-1 text-base text-muted-foreground">Message Claude</p>
-      <div className="flex flex-wrap items-center gap-1.5 ps-3 pe-2 pb-2 text-xs">
+      <div className="flex flex-wrap items-center gap-1 ps-2 pe-2 pb-2 text-xs">
         <AgentMenu agent="claude" onChoose={() => {}} />
         <ProjectMenu
           projectId="arden"

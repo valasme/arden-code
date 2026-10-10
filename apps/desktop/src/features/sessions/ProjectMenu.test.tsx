@@ -38,11 +38,10 @@ async function openMenu(user: ReturnType<typeof userEvent.setup>, name: string) 
 }
 
 describe("ProjectMenu", () => {
-  it("is an outlined button with a folder icon, named for what it chooses", () => {
+  it("is a button named for what it chooses, showing the project", () => {
     renderMenu("api");
 
     const button = screen.getByRole("button", { name: "Project: api" });
-    expect(button).toHaveAttribute("data-variant", "outline");
     expect(button).toHaveTextContent("api");
   });
 
