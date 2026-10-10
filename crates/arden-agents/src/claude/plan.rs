@@ -30,6 +30,15 @@ pub fn item(turn_id: &str, request_id: &str, permission: &Permission) -> Item {
     }
 }
 
+/// The permission mode a plan starts in, when the answer starts it.
+pub fn starts_in(answer: PlanAnswer) -> Option<PermissionMode> {
+    match answer {
+        PlanAnswer::StartAcceptingEdits => Some(PermissionMode::AcceptEdits),
+        PlanAnswer::StartAskingFirst => Some(PermissionMode::Manual),
+        PlanAnswer::KeepPlanning => None,
+    }
+}
+
 /// What Claude Code is told of the person's answer, and what becomes of the plan.
 pub fn answer(
     request_id: &str,

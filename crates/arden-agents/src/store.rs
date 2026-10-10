@@ -908,12 +908,12 @@ impl SessionStore {
         mode: PermissionMode,
     ) -> Result<(), StoreError> {
         let mut inner = self.lock();
-        if mode == PermissionMode::BypassPermissions && !inner.bypass_allowed {
-            return Err(StoreError::BypassNotAllowed);
-        }
         let entry = find(&mut inner.sessions, session_id)?;
         if entry.session.archived_at.is_some() {
             return Err(StoreError::Archived);
+        }
+        if mode == PermissionMode::BypassPermissions && !inner.bypass_allowed {
+            return Err(StoreError::BypassNotAllowed);
         }
         inner.keep_permission_mode(session_id, mode).map(|_| ())
     }
@@ -3378,6 +3378,11 @@ mod tests {
         assert_eq!(
             store.session(&session.id).expect("it").permission_mode,
             PermissionMode::Manual
+        );
+        assert_eq!(
+            store.set_permission_mode("no-such-session", PermissionMode::BypassPermissions),
+            Err(StoreError::UnknownSession),
+            "a session that is not there is said first"
         );
     }
 

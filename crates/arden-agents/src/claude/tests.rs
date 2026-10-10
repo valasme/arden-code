@@ -2462,6 +2462,41 @@ fn bypass_permissions_starts_claude_code_again_with_the_flag_when_it_was_started
 }
 
 #[test]
+fn going_back_to_the_mode_claude_code_applies_while_another_is_asked_is_sent_too() {
+    let mut script = answers("Hello", "Hi.");
+    script.extend([
+        asks_for_context(),
+        sets_permission_mode("plan"),
+        sets_permission_mode("default"),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "Hello");
+
+    driver.set_permission_mode(&session, PermissionMode::Plan);
+    driver.set_permission_mode(&session, PermissionMode::Manual);
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while scripted
+        .written
+        .lock()
+        .expect("written")
+        .iter()
+        .filter(|frame| frame["request"]["subtype"] == "set_permission_mode")
+        .count()
+        < 2
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the second mode was not asked"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    scripted.assert_followed();
+}
+
+#[test]
 fn a_reply_brings_a_running_claude_code_to_the_session_s_permission_mode_first() {
     let mut script = answers("First", "One.");
     script.extend([
@@ -2559,7 +2594,6 @@ fn a_plan_started_accepting_edits_is_allowed_with_the_mode_and_the_session_follo
                 }
             }
         })),
-        status("acceptEdits"),
         tool_result("toolu_p", "The plan was approved.", false),
         success("Fixed."),
     ]);

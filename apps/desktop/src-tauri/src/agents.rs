@@ -123,8 +123,13 @@ impl Claude {
         let driver = Arc::clone(&self.0);
         let sessions = Arc::clone(sessions);
         let page = app.clone();
+        let was_allowed = AtomicBool::new(allowed);
         settings.subscribe(move |settings, _| {
             let allowed = settings.agents.allow_bypass_permissions;
+            // Only a change of this setting is acted on.
+            if was_allowed.swap(allowed, Ordering::AcqRel) == allowed {
+                return;
+            }
             driver.allow_bypass_permissions(allowed);
             for session in sessions.allow_bypass_permissions(allowed) {
                 driver.set_permission_mode(&session, PermissionMode::Manual);

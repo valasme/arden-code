@@ -112,6 +112,9 @@ type Listening = Arc<Mutex<Option<SessionListener>>>;
 struct Modes {
     /// As it was started in, or last said.
     applied: Mutex<PermissionMode>,
+    /// The one it was last asked for, or said: what a new request is compared with, so that going
+    /// back to the applied mode while another is asked is not lost.
+    wanted: Mutex<PermissionMode>,
     /// By the id of the request.
     asked: Mutex<HashMap<String, PermissionMode>>,
 }
@@ -126,18 +129,28 @@ impl Modes {
                 *lock(&self.applied) = asked;
                 None
             }
-            Some(reason) => Some(SessionChange::PermissionModeRefused {
-                kept: *lock(&self.applied),
-                reason: reason.to_owned(),
-            }),
+            Some(reason) => {
+                let kept = *lock(&self.applied);
+                *lock(&self.wanted) = kept;
+                Some(SessionChange::PermissionModeRefused {
+                    kept,
+                    reason: reason.to_owned(),
+                })
+            }
         }
     }
 
     /// Hears the mode Claude Code says it applies, whoever changed it.
     fn reported(&self, name: &str) -> Option<SessionChange> {
         let mode = PermissionMode::from_claude_name(name)?;
+        Some(self.applies(mode))
+    }
+
+    /// Takes the mode Claude Code now applies.
+    fn applies(&self, mode: PermissionMode) -> SessionChange {
         *lock(&self.applied) = mode;
-        Some(SessionChange::PermissionMode(mode))
+        *lock(&self.wanted) = mode;
+        SessionChange::PermissionMode(mode)
     }
 }
 
@@ -190,6 +203,7 @@ impl Live {
         let hearing = Arc::clone(&heard);
         let modes = Arc::new(Modes {
             applied: Mutex::new(start.permission_mode),
+            wanted: Mutex::new(start.permission_mode),
             asked: Mutex::new(HashMap::new()),
         });
         let moding = Arc::clone(&modes);
@@ -582,10 +596,15 @@ impl ClaudeDriver {
         self.bypass_allowed.store(allowed, Ordering::Release);
     }
 
-    /// Asks a Claude Code for a permission mode, unless it applies it already.
+    /// Asks a Claude Code for a permission mode, unless it applies it already and was asked for
+    /// no other since.
     fn ask_for_mode(&self, live: &Live, mode: PermissionMode) {
-        if *lock(&live.modes.applied) == mode {
-            return;
+        {
+            let mut wanted = lock(&live.modes.wanted);
+            if *wanted == mode {
+                return;
+            }
+            *wanted = mode;
         }
         let id = format!(
             "{MODE_REQUEST}{}",
@@ -788,10 +807,8 @@ impl ClaudeDriver {
                         // account has no Auto (ADR 0044).
                         if let Some(name) = answer["current_permission_mode"].as_str()
                             && PermissionMode::from_claude_name(name) != Some(mode)
-                            && let Some(change) = live.modes.reported(name)
-                            && let Some(listener) = lock(&self.listening).clone()
                         {
-                            listener(session_id, change);
+                            tell(Some(&self.listening), session_id, live.modes.reported(name));
                         }
                         break;
                     }
@@ -921,6 +938,7 @@ fn fail(turn_id: &str, problem: &Problem, emit: &mut dyn FnMut(TurnEvent) -> Flo
 struct Answering<'a> {
     driver: &'a ClaudeDriver,
     live: &'a Live,
+    session_id: &'a str,
     turn_id: &'a str,
     folder: &'a Path,
     reply: Reply,
@@ -1073,6 +1091,15 @@ impl Answering<'_> {
             given.as_deref(),
         );
         let _ = self.live.write(&frame);
+        // The session takes the mode the plan starts in at once, whether or not Claude Code
+        // reports it (ADR 0044).
+        if let Some(mode) = plan::starts_in(answer) {
+            tell(
+                Some(&self.driver.listening),
+                self.session_id,
+                Some(self.live.modes.applies(mode)),
+            );
+        }
         let event = self.added(plan::with_state(&answered.item, state, given));
         self.show(event, emit)
     }
@@ -1234,6 +1261,7 @@ impl AgentDriver for ClaudeDriver {
         let mut turn = Answering {
             driver: self,
             live: &live,
+            session_id,
             turn_id,
             folder: request.folder,
             reply: Reply::new(turn_id, request.folder),
