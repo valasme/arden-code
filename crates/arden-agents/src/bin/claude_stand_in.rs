@@ -7,6 +7,9 @@
 //! `get_context_usage` with (ADR 0044), and a `log` file where it writes how it was started (its
 //! arguments and its folder) and every line it reads.
 //!
+//! It names a session when asked (`generate_session_title`, ADR 0050): "Named:" and the first four
+//! words of what it is given.
+//!
 //! It applies the `--permission-mode` it is started with and changes it on `set_permission_mode`,
 //! refusing Bypass permissions unless started with `--allow-dangerously-skip-permissions`, as
 //! Claude Code does (ADR 0044). Asked "which mode", it says the mode it applies. Asked to "plan the
@@ -243,6 +246,21 @@ impl Conversation {
                 }
                 Some("control_request") if frame["request"]["subtype"] == "set_permission_mode" => {
                     self.set_permission_mode(&frame);
+                }
+                // A name for the session (ADR 0050): "Named:" and the first four words asked.
+                Some("control_request")
+                    if frame["request"]["subtype"] == "generate_session_title" =>
+                {
+                    let words: Vec<&str> = frame["request"]["description"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .split_whitespace()
+                        .take(4)
+                        .collect();
+                    respond(
+                        &frame,
+                        &json!({ "title": format!("Named: {}", words.join(" ")) }),
+                    );
                 }
                 Some("control_request") => respond(&frame, &json!({})),
                 Some("user") => {

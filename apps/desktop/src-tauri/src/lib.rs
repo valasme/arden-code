@@ -205,7 +205,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         sessions::ReplyNotSaved,
         agents::AgentsDetected,
         agents::UsageLimitsChanged,
-        sessions::SessionChanged
+        sessions::SessionChanged,
+        sessions::SessionNamed
     ])
 }
 

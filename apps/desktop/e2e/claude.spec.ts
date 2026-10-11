@@ -65,12 +65,37 @@ test.describe("Claude in the real app", () => {
         timeout: 30_000,
       });
       await expect(session.getByText("Claude is replying…")).toBeHidden();
-      // Once the session has a message, its header names its agent and project (ADR 0044).
+      // Once the session has a message, its header names its agent and project (ADR 0044). The
+      // name is the message, then the one Claude Code gives it (ADR 0050).
       const header = page
-        .getByRole("heading", { level: 1, name: "Hello from the test" })
+        .getByRole("heading", { level: 1, name: /Hello from the test/ })
         .locator("..");
       await expect(header.getByText("Claude", { exact: true })).toBeVisible();
       await expect(header.getByText("Playground", { exact: true })).toBeVisible();
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
+
+  test("Claude Code names a session from its first message, in the header and the sidebar", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      await claudeSession(page);
+
+      await say(page, "Look at the flaky login test please");
+
+      // The stand-in names a session "Named:" and the first four words (ADR 0050).
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Named: Look at the flaky" }),
+      ).toBeVisible({ timeout: 30_000 });
+      await expect(
+        page
+          .getByRole("complementary", { name: "Sidebar" })
+          .getByRole("link", { name: "Named: Look at the flaky" }),
+      ).toBeVisible();
     } finally {
       app.kill();
       claude.remove();
@@ -368,7 +393,7 @@ test.describe("Claude in the real app", () => {
       const second = await launchApp({ dataDir, env: claude.env });
       try {
         const { page } = second;
-        await page.getByRole("link", { name: "Hello from the test" }).click();
+        await page.getByRole("link", { name: /Hello from the test/ }).click();
         // The session as it was saved, with Claude's earlier reply.
         const reopened = page.getByRole("main", { name: "Session" });
         await expect(reopened.getByText("You said: Hello from the test")).toBeVisible();

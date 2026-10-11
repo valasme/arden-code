@@ -672,6 +672,7 @@ export const events = {
 	maximizeButtonChanged: makeEvent<MaximizeButtonChanged>("maximize-button-changed"),
 	replyNotSaved: makeEvent<ReplyNotSaved>("reply-not-saved"),
 	sessionChanged: makeEvent<SessionChanged>("session-changed"),
+	sessionNamed: makeEvent<SessionNamed>("session-named"),
 	sessionRequested: makeEvent<SessionRequested>("session-requested"),
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	systemPreferencesChanged: makeEvent<SystemPreferencesChanged>("system-preferences-changed"),
@@ -1260,7 +1261,10 @@ export type Session = {
 	id: string,
 	projectId: string,
 	agent: AgentKind,
-	/**  The first message, shortened, or nothing until there is one. */
+	/**
+	 *  Its name: the one the person gave it, else the one its agent gave it from its first message
+	 *  (ADR 0050), else that message, shortened; nothing until one of them is there.
+	 */
 	title: string | null,
 	/**  When the session was created, in UTC. */
 	createdAt: string,
@@ -1305,6 +1309,12 @@ export type SessionList = {
 	projects: ProjectListing[],
 	/**  The archived sessions, whatever their project, the last archived first. */
 	archived: SessionSummary[],
+};
+
+/**  Tells the page that a session was named by its agent from its first message (ADR 0050). */
+export type SessionNamed = {
+	sessionId: string,
+	title: string,
 };
 
 /**  Tells the page to show a session, such as the one made for a folder that was opened. */

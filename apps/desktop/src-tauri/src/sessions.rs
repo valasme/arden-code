@@ -308,6 +308,14 @@ pub struct SessionChanged {
     pub notice: Option<AppError>,
 }
 
+/// Tells the page that a session was named by its agent from its first message (ADR 0050).
+#[derive(Debug, Clone, serde::Serialize, specta::Type, tauri_specta::Event)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionNamed {
+    pub session_id: String,
+    pub title: String,
+}
+
 /// Starts an empty session in a project, the Playground when none is given, with the agent given,
 /// or the one a new session there takes (ADR 0039).
 ///

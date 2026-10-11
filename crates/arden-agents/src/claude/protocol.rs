@@ -308,6 +308,16 @@ pub fn get_usage(id: &str) -> String {
     )
 }
 
+/// Asks Claude Code to name a session from what the person asked, as Claude's own apps name theirs
+/// (ADR 0050). The name is not kept in Claude Code's conversation: Arden Code keeps it.
+#[must_use]
+pub fn generate_session_title(id: &str, description: &str) -> String {
+    control_request(
+        id,
+        &json!({ "subtype": "generate_session_title", "description": description, "persist": false }),
+    )
+}
+
 /// Asks how full the context window is, answered from Claude Code's own figures with no call to
 /// the model (ADR 0044).
 #[must_use]

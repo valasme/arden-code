@@ -12,8 +12,8 @@ import { useTauriListener } from "@/lib/useTauriListener";
  * Keeps the page in step with what Rust did with the sessions on its own. It shows the session Rust
  * made for a folder that was opened, for example by the `arden-code` terminal command: the one that
  * was waiting when the page came up, and any that come later. It also shows the notice for a
- * sessions file that could not be used, or a reply that could not be saved in it (ADR 0035). Draws
- * nothing.
+ * sessions file that could not be used, or a reply that could not be saved in it (ADR 0035), and the
+ * name an agent gives a session (ADR 0050). Draws nothing.
  */
 export function SessionsSync() {
   const queryClient = useQueryClient();
@@ -50,6 +50,17 @@ export function SessionsSync() {
       );
       queryClient.invalidateQueries({ queryKey: newSessionAgentQuery.queryKey }).catch(() => {});
       if (payload.notice) showNoticeToast(payload.notice);
+    }),
+  );
+
+  // A session's agent named it from its first message (ADR 0050): the header and the lists take
+  // the name.
+  useTauriListener(() =>
+    events.sessionNamed.listen(({ payload }) => {
+      queryClient.setQueryData(sessionQuery(payload.sessionId).queryKey, (session) =>
+        session ? { ...session, title: payload.title } : session,
+      );
+      queryClient.invalidateQueries({ queryKey: sessionListQuery.queryKey }).catch(() => {});
     }),
   );
 

@@ -698,6 +698,43 @@ impl SessionStore {
         Ok(())
     }
 
+    /// Gives a session the name its agent suggested for its first message (ADR 0050), trimmed, but
+    /// only while its name is still the one its first message gave it: a session the person named,
+    /// before or after that message, keeps their name. Answers whether the name changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
+    /// [`StoreError::NotSaved`] when the name cannot be written.
+    pub fn name_from_agent(&self, session_id: &str, name: &str) -> Result<bool, StoreError> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > NAME_LENGTH {
+            return Ok(false);
+        }
+        let mut inner = self.lock();
+        let last_id = inner.last_id;
+        let Inner {
+            sessions, database, ..
+        } = &mut *inner;
+        let entry = find(sessions, session_id)?;
+        entry.load(database)?;
+        let given = entry
+            .session
+            .turns
+            .first()
+            .and_then(|turn| title_of(&turn.prompt));
+        if entry.session.archived_at.is_some() || given.is_none() || entry.session.title != given {
+            return Ok(false);
+        }
+        let mut header = entry.header();
+        header.title = Some(name.to_owned());
+        database
+            .save_session(&header, entry.order, last_id)
+            .map_err(not_saved)?;
+        entry.session.title = header.title;
+        Ok(true)
+    }
+
     /// Pins a session to the top of the sidebar, or unpins it (ADR 0036). Pinned sessions are
     /// listed in the order they were pinned; pinning a pinned session leaves it where it is.
     ///
@@ -1449,7 +1486,7 @@ impl SessionStore {
         let mut ended = false;
         let mut saved = Ok(());
         let (sender, controls) = mpsc::channel();
-        let (folder, conversation, choices, permission_mode) = {
+        let (folder, conversation, choices, permission_mode, names) = {
             let mut inner = self.lock();
             inner.controls.insert(turn.id.clone(), sender);
             let entry = inner
@@ -1472,6 +1509,11 @@ impl SessionStore {
                 entry
                     .map(|entry| entry.session.permission_mode)
                     .unwrap_or_default(),
+                // The first message, while the session's name is still the one it gave.
+                entry.is_some_and(|entry| {
+                    entry.session.turns.first().map(|first| &first.id) == Some(&turn.id)
+                        && entry.session.title == title_of(&turn.prompt)
+                }),
             )
         };
         let remember = |id: &str| {
@@ -1487,6 +1529,7 @@ impl SessionStore {
             conversation: conversation.as_deref(),
             choices,
             permission_mode,
+            names,
             remember: &remember,
             controls,
         };
@@ -2171,6 +2214,54 @@ mod tests {
         }
     }
 
+    /// An agent that notes whether it was let name the session, for each message.
+    #[derive(Default)]
+    struct Naming {
+        asked: std::sync::Mutex<Vec<bool>>,
+    }
+
+    impl AgentDriver for Naming {
+        fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+            self.asked.lock().expect("asked").push(request.names);
+            emit(TurnEvent::Finished {
+                turn_id: request.turn_id.to_owned(),
+            });
+        }
+    }
+
+    fn reply_to(store: &SessionStore, agent: &Naming, session: &str, prompt: &str) {
+        let turn = store.start_turn(session, prompt).expect("a turn");
+        store
+            .stream_reply(agent, session, &turn, |_| true)
+            .expect("saved");
+    }
+
+    #[test]
+    fn only_the_first_message_of_a_session_the_person_did_not_name_lets_the_agent_name_it() {
+        let store = store();
+        let agent = Naming::default();
+        let named_by_its_message = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session")
+            .id;
+        let named_by_the_person = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session")
+            .id;
+        store
+            .rename(&named_by_the_person, "Chosen")
+            .expect("renamed");
+
+        reply_to(&store, &agent, &named_by_its_message, "First");
+        reply_to(&store, &agent, &named_by_its_message, "Second");
+        reply_to(&store, &agent, &named_by_the_person, "First");
+
+        assert_eq!(
+            *agent.asked.lock().expect("asked"),
+            vec![true, false, false]
+        );
+    }
+
     #[test]
     fn an_agents_conversation_is_remembered_and_handed_back_after_the_store_is_opened_again() {
         let folder = tempfile::tempdir().expect("a temporary folder");
@@ -2709,6 +2800,84 @@ mod tests {
                 .as_deref(),
             Some("Chosen name")
         );
+    }
+
+    /// A session with its first message sent, and the name that message gave it.
+    fn first_message(store: &SessionStore, prompt: &str) -> String {
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        store.start_turn(&session.id, prompt).expect("a turn");
+        session.id
+    }
+
+    fn title(store: &SessionStore, id: &str) -> Option<String> {
+        store.session(id).expect("the session").title
+    }
+
+    #[test]
+    fn the_agent_names_a_session_whose_name_is_still_its_first_message() {
+        let store = store();
+        let id = first_message(&store, "Why does my login test time out on CI?");
+
+        let named = store
+            .name_from_agent(&id, "Login test timeout in CI")
+            .expect("named");
+
+        assert!(named);
+        assert_eq!(
+            title(&store, &id).as_deref(),
+            Some("Login test timeout in CI")
+        );
+        assert_eq!(
+            store.list().projects[0].sessions[0].title.as_deref(),
+            Some("Login test timeout in CI")
+        );
+    }
+
+    #[test]
+    fn a_session_the_person_named_keeps_its_name_when_the_agent_names_it() {
+        let store = store();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        store.rename(&session.id, "Chosen name").expect("renamed");
+        store
+            .start_turn(&session.id, "The first message")
+            .expect("a turn");
+
+        let named = store
+            .name_from_agent(&session.id, "Something else")
+            .expect("answered");
+
+        assert!(!named);
+        assert_eq!(title(&store, &session.id).as_deref(), Some("Chosen name"));
+    }
+
+    #[test]
+    fn a_session_renamed_after_its_first_message_keeps_that_name() {
+        let store = store();
+        let id = first_message(&store, "The first message");
+        store
+            .rename(&id, "Renamed while Claude thought")
+            .expect("renamed");
+
+        assert!(!store.name_from_agent(&id, "Late name").expect("answered"));
+        assert_eq!(
+            title(&store, &id).as_deref(),
+            Some("Renamed while Claude thought")
+        );
+    }
+
+    #[test]
+    fn a_name_from_the_agent_is_trimmed_and_an_empty_one_changes_nothing() {
+        let store = store();
+        let id = first_message(&store, "The first message");
+
+        assert!(!store.name_from_agent(&id, "   ").expect("answered"));
+        assert_eq!(title(&store, &id).as_deref(), Some("The first message"));
+        assert!(store.name_from_agent(&id, "  A name  ").expect("named"));
+        assert_eq!(title(&store, &id).as_deref(), Some("A name"));
     }
 
     #[test]
