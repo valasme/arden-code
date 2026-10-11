@@ -209,3 +209,39 @@ files itself, in Rust.
 |---|---|---|
 | 28 | The documents | D1, D2 the research, this record, ADR 0052 (the message box), ADR 0053 (plugins), the glossary (Plugin, Skill, Marketplace, File mention), the plan (sections 5.8, 6.1, 6.4, 6.12, a new 6.13 and 13), the vendors page and `PRIVACY.md`: one commit and one pull request, merged first. |
 | 29 | Specs and tickets | D1 two specs on the tracker, each split into vertical tickets with blocking edges, the plugins prototype first. One branch and pull request per spec, a commit and an issue per ticket. R1 every new or changed end-to-end or screenshot test runs 10 times before the merge. |
+
+## Round 5: the prototype's pick (#146)
+
+The maintainer handed the pick to the councils. The prototype is kept on the `prototype/plugins-page` branch
+(`pnpm prototype:plugins`, then `?variant=A|B|C`): three variants of a plugin's details and the install choices, with
+stub data shaped like `claude plugin list --json --available`.
+
+- **A:** a list and a details pane side by side; Install… opens a dialog with the three scopes as radio buttons, the
+  project menu under the two project scopes, and the warning; a marketplace's command is a confirmation of its own.
+- **B:** one list whose rows open in place, with the details, the scopes as joined buttons, the project menu and the
+  warning inline; a marketplace's command is confirmed inside the row.
+- **C:** a table, and a page per plugin with its details in a column and an install panel in numbered steps beside them;
+  the marketplace's command shows on the page before Install.
+
+### Q30. Which variant is built
+
+- **Product:** P2 a person browsing 3,561 plugins compares them; A keeps the list in view while the details change, B
+  makes them open and close one row at a time, and C leaves the list for every plugin. P5 C reads best for one plugin
+  the person already knows.
+- **Experience:** E3 Q23 already said Install opens a dialog that holds the focus: A and C's confirmations do, B's
+  inline form does not, and an inline command block is easier to scroll past than a dialog that must be answered.
+  **E1 dissents** for B: it is Settings' column, and Installed and Marketplaces will be rows. Settled: those tabs keep
+  rows; Discover alone gets the pane, because it is where plugins are compared. E4 at Arden Code's smallest window
+  (500 px, ADR 0047) two panes do not fit; below the width of both, the details take the list's place with a Back
+  button, as C does.
+- **Architecture:** A2 the list is virtualized (Q10); rows of one height, as in A and C, virtualize simply, while B's
+  rows that open in place change height. A4 the scope choice is the same component in the dialog whichever tab opens
+  it later.
+- **Reliability:** R3 C shows a marketplace's command before Install, but Claude Code tells it only in the answer to an
+  install (`shownCommand` in a `failed` result, Q14); the catalog does not hold it. C's layout promises what Arden Code
+  cannot know. R1 a dialog is the existing pattern for the trust question (ADR 0039), so both questions behave alike.
+- **Delivery:** D1 A is the least new code: a list, a pane, one dialog, and the trust and command confirmations as
+  alert dialogs.
+
+**Verdict: A**, with the details taking the list's place below the width of both panes. From B: each scope keeps its
+line saying who gets it. From C: nothing; its pre-shown command is not available.
