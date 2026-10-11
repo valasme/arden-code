@@ -528,7 +528,8 @@ pub struct Session {
     pub id: String,
     pub project_id: String,
     pub agent: AgentKind,
-    /// The first message, shortened, or nothing until there is one.
+    /// Its name: the one the person gave it, else the one its agent gave it from its first message
+    /// (ADR 0050), else that message, shortened; nothing until one of them is there.
     pub title: Option<String>,
     /// When the session was created, in UTC.
     pub created_at: String,

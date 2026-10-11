@@ -223,6 +223,7 @@ mod tests {
             conversation: None,
             choices: crate::model::Choices::default(),
             permission_mode: crate::model::PermissionMode::default(),
+            names: false,
             remember: &|_| {},
             controls,
         }

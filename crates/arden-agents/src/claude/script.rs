@@ -128,6 +128,33 @@ impl Lines<'_> {
     }
 }
 
+/// Whether a frame is the driver's request for a session's name (ADR 0050).
+fn asks_for_a_name(frame: &Value) -> bool {
+    frame["request"]["subtype"] == "generate_session_title"
+}
+
+/// The next frame the driver writes for an `Expect` step. A request for the session's name is
+/// kept but passed over unless the step expects one: most scripts are not about names, and the
+/// driver does not wait for the answer.
+fn next_expected(
+    lines: &mut Lines<'_>,
+    expected: &Value,
+    written: &Mutex<Vec<Value>>,
+) -> Option<Value> {
+    loop {
+        let line = lines.next(PATIENCE).ok()?;
+        let actual: Value = serde_json::from_str(&line).unwrap_or(Value::String(line));
+        if asks_for_a_name(&actual) && !asks_for_a_name(expected) {
+            written
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(actual);
+            continue;
+        }
+        return Some(actual);
+    }
+}
+
 fn play(
     steps: &[Step],
     from_driver: &Receiver<Vec<u8>>,
@@ -152,11 +179,10 @@ fn play(
     for (number, step) in steps.iter().enumerate() {
         match step {
             Step::Expect(expected) => {
-                let Ok(line) = lines.next(PATIENCE) else {
+                let Some(actual) = next_expected(&mut lines, expected, written) else {
                     fail(format!("step {number}: the driver never wrote {expected}"));
                     return;
                 };
-                let actual: Value = serde_json::from_str(&line).unwrap_or(Value::String(line));
                 if actual["type"] == "control_request" {
                     last_request = actual["request_id"].as_str().unwrap_or_default().to_owned();
                 }

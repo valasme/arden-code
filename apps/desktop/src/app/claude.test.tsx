@@ -1,4 +1,5 @@
 import { createMemoryHistory } from "@tanstack/react-router";
+import { emit } from "@tauri-apps/api/event";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BotIcon, FolderIcon } from "lucide-react";
@@ -130,6 +131,32 @@ describe("Choosing the agent of a session (ADR 0039)", () => {
 
     await screen.findByRole("button", { name: "Agent: Demo agent" });
     await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+describe("A session Claude names (ADR 0050)", () => {
+  it("takes the name Claude Code gives it from its first message, in the header and the sidebar", async () => {
+    const rust = startSessionsRust({
+      sessions: [
+        sessionNamed("session-1", "Why does my login test time out on CI?", "playground", "claude"),
+      ],
+    });
+    renderApp("/session/session-1");
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Why does my login test time out on CI?",
+    });
+
+    rust.nameSession("session-1", "Login test timeout in CI");
+    await emit("session-named", { sessionId: "session-1", title: "Login test timeout in CI" });
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Login test timeout in CI" }),
+    ).toBeVisible();
+    const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
+    expect(
+      await within(sidebar).findByRole("link", { name: "Login test timeout in CI" }),
+    ).toBeVisible();
   });
 });
 

@@ -398,6 +398,7 @@ The decisions and the options turned down are in [ADR 0036](adr/0036-managing-se
 
 - **One menu per session:** from the "…" button at the end of its row in the sidebar, a right click, Shift+F10 or the Menu key on the row, and the "…" button in the open session's header. Each action is also a command for the open session.
 - **Rename** opens a small dialog (F2). A name has 1 to 100 characters, and a renamed session keeps its name after its first message.
+- **Names from Claude:** a Claude session is named after its first message, then by Claude Code, which writes a short title from that message (`generate_session_title`). A session the person named keeps their name ([ADR 0050](adr/0050-claude-names-its-sessions.md)).
 - **Pin** keeps a session under Pinned at the top of the sidebar, across projects, in the order it was pinned.
 - **Archive** puts a session away: off the sidebar's lists, listed on the Archived sessions page, and read-only until it is unarchived. A notice offers Undo.
 - **Delete** removes a session for good, after a confirmation. For a Claude session, the confirmation says that Claude Code keeps its own copy of the conversation.

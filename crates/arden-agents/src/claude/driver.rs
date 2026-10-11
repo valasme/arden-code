@@ -57,6 +57,8 @@ const ENDING_PATIENCE: Duration = Duration::from_millis(500);
 /// The start of the ids of Arden Code's requests for a permission mode, which the reader knows
 /// them by (ADR 0044).
 const MODE_REQUEST: &str = "arden-mode-";
+/// The start of the ids of Arden Code's requests for a session's name (ADR 0050).
+const TITLE_REQUEST: &str = "arden-title-";
 /// What Claude is told when its questions cannot be read, so they cannot be shown.
 const UNREADABLE_QUESTIONS: &str =
     "Arden Code could not read these questions, so the person did not see them.";
@@ -184,6 +186,79 @@ struct Live {
     bypass_launched: bool,
 }
 
+/// What a session's reader hears at once, whether or not a reply runs.
+struct Hearing {
+    session: String,
+    catalog: Option<Arc<Mutex<Catalog>>>,
+    usage: Arc<Usage>,
+    listening: Option<Listening>,
+    modes: Arc<Modes>,
+}
+
+impl Hearing {
+    /// Takes in what Claude Code says that is kept for every session, at once: what it can do
+    /// (ADR 0042), the usage limits (ADR 0043), what becomes of a permission mode (ADR 0044) and a
+    /// name for the session (ADR 0050). Answers whether the frame is done with; any other goes on
+    /// to the reply.
+    fn heard(&self, frame: &Frame) -> bool {
+        let tell = |change| tell(self.listening.as_ref(), &self.session, change);
+        match frame {
+            Frame::Response { id, error, answer } if id.starts_with(USAGE_REQUEST) => {
+                self.usage
+                    .answer(usage::limits_in(error.as_deref(), answer));
+                false
+            }
+            Frame::Response { id, error, .. } if id.starts_with(MODE_REQUEST) => {
+                tell(self.modes.answered(id, error.as_deref()));
+                true
+            }
+            // One a Claude Code could not give changes nothing.
+            Frame::Response { id, error, answer } if id.starts_with(TITLE_REQUEST) => {
+                let title = answer["title"].as_str().map(str::trim);
+                if let (None, Some(title)) = (error, title)
+                    && !title.is_empty()
+                {
+                    tell(Some(SessionChange::Named(title.to_owned())));
+                }
+                true
+            }
+            Frame::Status { permission_mode } => {
+                if let Some(name) = permission_mode {
+                    tell(self.modes.reported(name));
+                }
+                true
+            }
+            Frame::Response { answer, .. } => {
+                if let Some(catalog) = &self.catalog {
+                    lock(catalog).absorb_initialize(answer);
+                }
+                false
+            }
+            Frame::CommandsChanged { commands } => {
+                if let Some(catalog) = &self.catalog {
+                    lock(catalog).replace_commands(commands.clone());
+                }
+                true
+            }
+            Frame::RateLimit(info) => {
+                self.usage.hear_rate_limit(info);
+                true
+            }
+            Frame::Init {
+                terminal_commands, ..
+            } if !terminal_commands.is_empty()
+                && let Some(catalog) = &self.catalog =>
+            {
+                lock(catalog)
+                    .terminal_commands
+                    .clone_from(terminal_commands);
+                false
+            }
+            _ => false,
+        }
+    }
+}
+
 impl Live {
     /// Starts reading what Claude Code writes, on a thread of its own.
     fn begin(
@@ -206,7 +281,13 @@ impl Live {
             wanted: Mutex::new(start.permission_mode),
             asked: Mutex::new(HashMap::new()),
         });
-        let moding = Arc::clone(&modes);
+        let at_once = Hearing {
+            session: session.clone(),
+            catalog,
+            usage,
+            listening,
+            modes: Arc::clone(&modes),
+        };
         thread::spawn(move || {
             for line in BufReader::new(output).lines() {
                 let Ok(line) = line else { break };
@@ -214,56 +295,8 @@ impl Live {
                 match protocol::parse(&line) {
                     Some(frame) => {
                         tracing::debug!(%session, frame = kind_of(&frame), "a frame from Claude Code");
-                        // What Claude Code says it can do is kept for every session, at once: no
-                        // reply needs to be running to hear it (ADR 0042).
-                        match &frame {
-                            // The usage limits too (ADR 0043).
-                            Frame::Response { id, error, answer }
-                                if id.starts_with(USAGE_REQUEST) =>
-                            {
-                                usage.answer(usage::limits_in(error.as_deref(), answer));
-                            }
-                            // What becomes of a permission mode is told at once, during a reply or
-                            // not (ADR 0044).
-                            Frame::Response { id, error, .. } if id.starts_with(MODE_REQUEST) => {
-                                tell(
-                                    listening.as_ref(),
-                                    &session,
-                                    moding.answered(id, error.as_deref()),
-                                );
-                                continue;
-                            }
-                            Frame::Status { permission_mode } => {
-                                if let Some(name) = permission_mode {
-                                    tell(listening.as_ref(), &session, moding.reported(name));
-                                }
-                                continue;
-                            }
-                            Frame::Response { answer, .. } => {
-                                if let Some(catalog) = &catalog {
-                                    lock(catalog).absorb_initialize(answer);
-                                }
-                            }
-                            Frame::CommandsChanged { commands } => {
-                                if let Some(catalog) = &catalog {
-                                    lock(catalog).replace_commands(commands.clone());
-                                }
-                                continue;
-                            }
-                            Frame::RateLimit(info) => {
-                                usage.hear_rate_limit(info);
-                                continue;
-                            }
-                            Frame::Init {
-                                terminal_commands, ..
-                            } if !terminal_commands.is_empty()
-                                && let Some(catalog) = &catalog =>
-                            {
-                                lock(catalog)
-                                    .terminal_commands
-                                    .clone_from(terminal_commands);
-                            }
-                            _ => {}
+                        if at_once.heard(&frame) {
+                            continue;
                         }
                         if reader.send(Event::Frame(frame)).is_err() {
                             return;
@@ -1257,6 +1290,14 @@ impl AgentDriver for ClaudeDriver {
                 emit,
             );
             return;
+        }
+        // The session's first message names it, while Claude works on the reply (ADR 0050).
+        if request.names {
+            let id = format!(
+                "{TITLE_REQUEST}{}",
+                self.requests.fetch_add(1, Ordering::Relaxed) + 1
+            );
+            let _ = live.write(&protocol::generate_session_title(&id, request.prompt));
         }
         let mut turn = Answering {
             driver: self,

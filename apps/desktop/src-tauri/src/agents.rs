@@ -73,13 +73,31 @@ impl Claude {
 
 impl Claude {
     /// Keeps the permission mode each session's Claude Code says it applies, and tells the page
-    /// when it changed, or when Claude Code refused the one chosen (ADR 0044).
+    /// when it changed, or when Claude Code refused the one chosen (ADR 0044). Keeps the name it
+    /// gives a session from its first message, unless the person named it, and tells the page
+    /// (ADR 0050).
     pub fn report_session_changes_to(&self, app: &AppHandle, sessions: &Arc<SessionStore>) {
         let page = app.clone();
         let sessions = Arc::clone(sessions);
         self.0
             .on_session_changes(Arc::new(move |session: &str, change: SessionChange| {
                 let (mode, notice) = match change {
+                    SessionChange::Named(title) => {
+                        match sessions.name_from_agent(session, &title) {
+                            Ok(true) => {
+                                let _ = crate::sessions::SessionNamed {
+                                    session_id: session.to_owned(),
+                                    title,
+                                }
+                                .emit(&page);
+                            }
+                            Ok(false) => {}
+                            Err(error) => {
+                                tracing::warn!(session = %session, ?error, "the name Claude Code gave the session was not kept");
+                            }
+                        }
+                        return;
+                    }
                     SessionChange::PermissionMode(mode) => (mode, None),
                     SessionChange::PermissionModeRefused { kept, reason } => {
                         tracing::warn!(session = %session, %reason, "Claude Code refused the permission mode");
