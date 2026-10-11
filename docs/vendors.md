@@ -24,6 +24,9 @@ page and the [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/over
 ### What Arden Code does
 
 - It starts the person's own `claude`, as installed and as published, and never changes it (ADR 0038).
+- It manages Claude's plugins only by running Claude Code's own documented `claude plugin` commands, at the person's
+  action (ADR 0053), checked against [Install and manage plugins](https://code.claude.com/docs/en/discover-plugins) on
+  2026-10-11. It writes none of Claude Code's files.
 - It never signs in, never offers a sign-in, and never reads, stores or passes on a token. The person signs in in
   their own terminal, with `claude` and `/login`; the usage is theirs, under their own agreement with Anthropic. The
   environment, an API key included, passes to `claude` without Arden Code reading it.

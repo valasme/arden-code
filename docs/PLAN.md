@@ -218,6 +218,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
   - Its answer to `initialize` and its `commands_changed` frames list the slash commands and the models, with the efforts each takes ([ADR 0042](adr/0042-slash-commands-and-exact-models.md), [the research](research/claude-commands-and-models.md)). The model passed to `--model` is such a value, checked again before it is passed.
   - Its `get_usage` answers and `rate_limit_event` frames report the person's 5-hour and weekly limits ([ADR 0043](adr/0043-usage-limits.md), [the research](research/usage-limits.md)). `get_usage` is experimental, so an error or an unknown shape only hides the figures.
   - Claude Code's error output goes to the child's log; the conversation on its standard output does not.
+  - Claude's plugins change only through the person's own `claude plugin … --json`, run like the driver's `claude`, one command at a time, its answers kept to what the Plugins page shows and never logged ([ADR 0053](adr/0053-plugins-through-the-agent-cli.md), [the research](research/plugins-skills-and-mentions.md)). After a change, each running Claude Code gets `reload_plugins`, held when it would cost the conversation's prompt cache. The page needs Claude Code 2.1.268 or later.
 - **Raw mode (later):** an embedded terminal (ConPTY + xterm.js) running the vendor's own terminal UI.
 - **Deliberately not used:**
   - The Agent Client Protocol: it mainly helped with Cursor, which is out of scope.
@@ -244,6 +245,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 │ PROJECT          │      │                       │        │                     │
 │  sessions        │      │                       │        │                     │
 │ Archived         │      │                       │        │                     │
+│ Plugins          │      │                       │        │                     │
 │ Settings    ^,   │      └ message box ──────────┘        │                     │
 ├──────────────────┴───────────────────────────────────────┴─────────────────────┤
 └ Status bar: what the agent is doing · update status · version                    ┘
@@ -313,6 +315,7 @@ The command palette is a wide panel high on the screen: a large search line, the
 | Rename session | F2 |
 | Pin, unpin, archive, unarchive or delete the session | none (menus, command palette) |
 | Settings | Ctrl+, |
+| Plugins | none (sidebar, command palette) |
 | Toggle sidebar / inspector | Ctrl+B / Ctrl+J |
 | Toggle status bar | none (title bar, command palette) |
 | Focus the message box | Ctrl+L |
@@ -420,6 +423,7 @@ The decisions and the options turned down are in [ADR 0039](adr/0039-working-wit
   - **Permission mode:** Manual, Accept edits, Plan, Auto or Bypass permissions, each with a line saying what it does. It can change at any time, during a reply too, and the session follows what Claude Code reports. A new session never inherits Bypass permissions, which can be chosen only while Allow Bypass permissions (Settings → Agents) is on; then the menu's button takes the destructive color. Next permission mode (Ctrl+Shift+M) moves to the next one, and the digits choose in the open menu.
   - **Plan mode's end:** when Claude asks to leave Plan mode, a plan card shows the plan as Markdown, with Start, accepting edits; Start, asking first; and Keep planning, which sends the person's words back.
 - **Slash commands (ADR 0042):** a message of a Claude session that starts with `/` lists the slash commands Claude Code reports (its own, plugins', skills' and MCP prompts'), filtered as Claude Code's menu filters, with arrow keys, Tab (fill in), Enter (send a command with no arguments, else fill in) and Esc (close). The list comes from Claude Code's answer to `initialize` and its `commands_changed` frames; one Claude Code started in the Playground per start of Arden Code, with no message, hears them before a session has one. `/model`, `/effort`, `/rename` and `/clear` (also `/reset`, `/new`) are run by Arden Code, since they change what it holds; everything else is sent as typed.
+- **Several slash commands and file mentions ([ADR 0052](adr/0052-several-slash-commands-and-file-mentions.md)):** the list opens at the word under the cursor, wherever a word starts with `/` or `@`, and never sends while open, except a command with no arguments as the first word. A later `/` word lists only skills: Claude Code runs up to six skills stacked at the start of a message, and a skill named after text is permission to use it. `@` lists the files and folders of the project, which Arden Code lists itself in Rust (respecting `.gitignore`, at most 15 matches), and fills in `@path`, or `@"path"` with a space; Claude Code reads the file with the message. Plain text: no chips. Attachments come later.
 - **Trust:** before Claude first runs in a project, the person is asked once whether they trust it, because Claude Code then runs the project's own hooks, MCP servers and environment. Cancel keeps the message in the box. The Playground needs no trust.
 - **What a reply shows:** text and thinking as they stream, tool calls with their results, and file changes with the lines added and removed. A subagent's inner steps are not shown; its tool call is.
 - **Approval requests:** a card under the tool call says what Claude wants to do and shows the command, the file and its change, or the address. Allow, Always allow (only when Claude Code suggests a rule) and Deny, which stops the reply. Once answered, it folds to a line. Stop, archiving and deleting deny it.
@@ -429,6 +433,18 @@ The decisions and the options turned down are in [ADR 0039](adr/0039-working-wit
   - **Context window:** how full the session's context window is, as Claude Code reports it when a reply ends, kept with the session. The popover gives the tokens used of the window, where Claude Code compacts the conversation, and the breakdown. From 80% of that point, the figure is emphasized.
 - **Usage limits ([ADR 0043](adr/0043-usage-limits.md)):** the 5-hour and weekly limits Claude Code reports, the same whatever session is open, with their reset times in the popover. From 80%, or Claude Code's warning, a figure is emphasized; at the limit it says when the window resets. Settings → Agents shows both with their reset times. Arden Code asks Claude Code at start, when a Claude reply ends, on Look again, and on focus when the figures are more than 5 minutes old, never more than once a minute. Nothing shows for an API key, a cloud provider or a signed-out Claude Code. Show usage limits [on] turns both the asking and the showing off.
 - **When Claude cannot start:** the reply says why, with a code, and what to do: install Claude Code, run `claude update`, or sign in with `claude` and `/login` in a terminal. Arden Code never offers a sign-in of its own.
+
+### 6.13 Plugins
+
+The decisions and the options turned down are in [ADR 0053](adr/0053-plugins-through-the-agent-cli.md) and [the councils](research/plugins-and-mentions-councils.md).
+
+- **The page:** a full page like Settings, from the sidebar row Plugins (above Settings) or the palette's Plugins command, with no default shortcut. While it is open, the sidebar shows Back, its search and its tabs: Discover, Installed and Marketplaces.
+- **Discover:** every plugin the person's marketplaces offer, from `claude plugin list --json --available`, read when the page first opens in a run and after each change or Refresh, searched by name and description, the most installed first. A plugin's details show its marketplace, description, version, install count and source, and say that a plugin can run programs through its hooks and servers. When Anthropic's official marketplace is missing, Discover offers to add it.
+- **Install:** For you, in every project (the default); For you, in this project; or For everyone in this project, which says it changes the project's shared `.claude/settings.json`. The two project choices take a trusted folder project, asking for trust first. A command a marketplace declares is shown in full and runs only after the person accepts it.
+- **Installed:** each plugin with its scope, version, an on/off switch, Update, Uninstall and its load errors. Synced plugins can be turned off, and are removed on claude.ai; an organization's show no actions.
+- **Marketplaces:** Add (GitHub `owner/repo`, a git address, a folder or a `marketplace.json` address), Update and Remove, which says how many plugins it uninstalls.
+- **After a change,** running sessions reload their plugins unless that would cost the conversation's prompt cache; then they get it when their Claude Code next starts, and the result says so.
+- **Not here (later):** skills that are not in a plugin, and Codex's plugins, which come with its driver.
 
 ## 7. Visual design
 
@@ -679,6 +695,8 @@ Every row is measured by CI on the release build, and the ones that can fail the
 - **Usage limits:** when Arden Code asks Claude Code for the person's usage limits, Claude Code asks Anthropic with its own sign-in. Arden Code reads only the percentages and reset times, keeps them in memory, and never sees a token. Show usage limits turns this off.
 - **Context window:** Claude Code answers from its own figures, with no call to Anthropic. Arden Code keeps the token counts and the breakdown's category names with the session, never the names of skills, memory files or tools.
 - **Claude Code keeps its own transcripts** in its own folder. Arden Code never reads or changes Claude Code's files, settings or credentials, and Claude Code's standard output (the conversation) is not copied to the logs.
+- **Plugins:** Arden Code changes Claude's plugins only by running Claude Code's own `claude plugin` commands, which write Claude Code's files themselves. Opening the Plugins page, installing, updating and adding a marketplace are the person's actions; Claude Code then reaches the marketplace's host, such as GitHub. Nothing runs in the background.
+- **File mentions:** the `@` list reads the names of the project's files, never their contents; the agent reads a mentioned file.
 
 ## 14. Diagnostics and error handling
 
