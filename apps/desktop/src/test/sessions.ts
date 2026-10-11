@@ -474,6 +474,10 @@ export function startSessionsRust({
     followPermissionMode(id: string, mode: PermissionMode) {
       find(id).permissionMode = mode;
     },
+    /** Names a session as Rust does when its agent names it from its first message (ADR 0050). */
+    nameSession(id: string, title: string) {
+      find(id).title = title;
+    },
     /** Streams an event of the reply, as Rust would through the channel. */
     emit(event: TurnEvent) {
       if (!channel || replying === undefined) throw new Error("no message was sent yet");

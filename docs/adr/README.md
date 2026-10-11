@@ -57,4 +57,5 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0047](0047-holding-the-smallest-window-size.md) | Holding the smallest window size | Accepted |
 | [0048](0048-the-restart-note-across-a-settings-row.md) | The restart note across a setting's row | Accepted |
 | [0049](0049-a-reply-streams-at-a-steady-pace.md) | A reply streams at a steady pace | Accepted |
+| [0050](0050-claude-names-its-sessions.md) | Claude names its sessions | Accepted |
 | [0051](0051-transcript-views.md) | Transcript views | Accepted |

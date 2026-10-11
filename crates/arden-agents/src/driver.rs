@@ -75,6 +75,9 @@ pub struct ReplyRequest<'a> {
     pub choices: Choices,
     /// How freely the agent may act before it asks (ADR 0044).
     pub permission_mode: PermissionMode,
+    /// Whether the agent may name the session from this message: the session's first, while its
+    /// name is still the one that message gave it (ADR 0050).
+    pub names: bool,
     /// Remembers the agent's own conversation for the session, once it has answered in it.
     pub remember: &'a dyn Fn(&str),
     /// What the person does while the reply runs. It closes when the reply has ended.
@@ -92,6 +95,8 @@ pub enum SessionChange {
         /// The agent's own words, for the details.
         reason: String,
     },
+    /// The name the agent suggests for the session, from its first message (ADR 0050).
+    Named(String),
 }
 
 /// Hears what an agent says about a session, by the session's id, from whichever thread hears it.

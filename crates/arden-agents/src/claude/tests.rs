@@ -2731,3 +2731,103 @@ fn a_plan_without_its_text_still_waits_and_stopping_denies_it() {
         "a plan that no longer waits takes no answer"
     );
 }
+
+/// The driver's `generate_session_title`, as Claude Code expects it (ADR 0050).
+fn title_request(description: &str) -> Step {
+    Step::Expect(json!({
+        "type": "control_request",
+        "request": { "subtype": "generate_session_title", "description": description, "persist": false }
+    }))
+}
+
+#[test]
+fn claude_code_names_a_session_from_its_first_message() {
+    let prompt = "Why does my login test time out on CI but pass on my laptop?";
+    let mut script = handshake();
+    script.extend([
+        message(prompt),
+        title_request(prompt),
+        // The real Claude Code 2.1.292's answer.
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "response": { "title": "Login test timeout in CI" } }
+        })),
+        success("It is the clock."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, prompt);
+
+    until_heard(
+        &heard,
+        &session,
+        &SessionChange::Named("Login test timeout in CI".to_owned()),
+    );
+    scripted.assert_followed();
+}
+
+#[test]
+fn only_the_first_message_asks_claude_code_for_a_name() {
+    let mut script = handshake();
+    script.extend([message("First"), title_request("First")]);
+    script.push(Step::Answer(json!({
+        "type": "control_response",
+        "response": { "subtype": "success", "response": { "title": "A name" } }
+    })));
+    script.extend([
+        success("One."),
+        asks_for_context(),
+        message("Second"),
+        success("Two."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "First");
+    send(&store, &driver, &session, "Second");
+
+    scripted.assert_followed();
+    let asked = scripted
+        .written
+        .lock()
+        .expect("written")
+        .iter()
+        .filter(|frame| frame["request"]["subtype"] == "generate_session_title")
+        .count();
+    assert_eq!(asked, 1);
+}
+
+#[test]
+fn a_claude_code_that_cannot_name_a_session_changes_nothing() {
+    let mut script = handshake();
+    script.extend([
+        message("First"),
+        title_request("First"),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "error", "error": "Unknown control request subtype: generate_session_title" }
+        })),
+        success("One."),
+    ]);
+    let (scripted, driver) = claude(vec![Ok(script)]);
+    let heard = hear_changes(&driver);
+    let store = store();
+    let session = claude_session(&store);
+
+    send(&store, &driver, &session, "First");
+
+    scripted.assert_followed();
+    std::thread::sleep(Duration::from_millis(100));
+    assert!(
+        !heard
+            .lock()
+            .expect("heard")
+            .iter()
+            .any(|(_, change)| matches!(change, SessionChange::Named(_))),
+        "no name was told"
+    );
+}
