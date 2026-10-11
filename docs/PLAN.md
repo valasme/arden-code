@@ -343,6 +343,7 @@ The command palette is a wide panel high on the screen: a large search line, the
 - **Demo agent:** clearly labeled as a demo.
   - It streams markdown, code blocks, thinking, tool-call cards, file-change cards and errors.
   - Everything goes through the real pipeline: Rust driver → channel → store → virtualized list → Streamdown.
+- **Streaming:** a reply's text is shown at a steady pace, a few characters on every frame, and the view keeps its end in view in the frame it grows ([ADR 0049](adr/0049-a-reply-streams-at-a-steady-pace.md)).
 - **What it proves:**
   - Scroll anchoring and "jump to latest" work.
   - Esc stops a reply.

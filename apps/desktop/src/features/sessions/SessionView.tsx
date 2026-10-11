@@ -158,8 +158,38 @@ export function SessionView({ id }: { id: string }) {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
 
-  // A reply that grows, or a new message, keeps the end in view while the person is at the end;
-  // a person who scrolled up is left alone.
+  // A turn that grows keeps the end in view in the frame it grows (#132): the observer runs after
+  // the browser has laid the turn out and before it paints, so a new line is never drawn below the
+  // view first and then pulled up. A person who scrolled up is left alone.
+  const [follower] = useState(
+    () =>
+      new ResizeObserver(() => {
+        const element = transcript.current;
+        if (!element || !stuck.current) return;
+        element.scrollTop = element.scrollHeight;
+        heldAt.current = element.scrollTop;
+      }),
+  );
+  useEffect(
+    () => () => {
+      follower.disconnect();
+    },
+    [follower],
+  );
+  // Each turn on the screen is measured for the virtualizer, and followed as it grows.
+  const watchTurn = useCallback(
+    (element: HTMLElement) => {
+      virtualizer.measureElement(element);
+      follower.observe(element);
+      return () => {
+        follower.unobserve(element);
+        virtualizer.measureElement(null);
+      };
+    },
+    [virtualizer, follower],
+  );
+
+  // A new message, or a size the virtualizer measured, keeps the end in view too.
   const total = virtualizer.getTotalSize();
   useEffect(() => {
     const element = transcript.current;
@@ -352,7 +382,7 @@ export function SessionView({ id }: { id: string }) {
                 return (
                   <article
                     key={row.key}
-                    ref={virtualizer.measureElement}
+                    ref={watchTurn}
                     data-index={row.index}
                     aria-posinset={row.index + 1}
                     aria-setsize={count}
