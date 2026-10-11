@@ -1,9 +1,10 @@
 import { wordAt } from "./cursorWord";
 
-/** The word under the cursor, the cursor written as `|` in the text. */
+/** The word under the cursor, the cursor written as one `|` in the text. */
 const at = (marked: string) => {
-  const cursor = marked.indexOf("|");
-  return wordAt(marked.replace("|", ""), cursor);
+  const [before = "", after = "", ...more] = marked.split("|");
+  if (more.length > 0) throw new Error(`one cursor, not ${String(more.length + 1)}: ${marked}`);
+  return wordAt(before + after, before.length);
 };
 
 describe("wordAt", () => {
