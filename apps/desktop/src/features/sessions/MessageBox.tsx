@@ -1,5 +1,13 @@
 import { ArrowUpIcon, LightbulbIcon, SquareIcon, XIcon } from "lucide-react";
-import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -9,7 +17,8 @@ import { cn } from "@/lib/utils";
 import { useDraftsStore } from "@/state/drafts";
 
 import { SlashCommandList, slashOptionId } from "./SlashCommandList";
-import { filterSlashCommands, menuQuery } from "./slashCommands";
+import { type CursorWord, wordAt } from "./cursorWord";
+import { filterSlashCommands, skillsOf } from "./slashCommands";
 import { holdsUltrathink } from "./ultrathink";
 
 /** The key code some browsers report for a key that is part of an input method's composition. */
@@ -64,9 +73,12 @@ interface MessageBoxProps {
  * still being composed (an accent key, an input method for another script): that Enter confirms
  * the character.
  *
- * A message that starts with a slash lists the agent's slash commands above the box (ADR 0042).
- * The arrow keys move through the list, Tab fills in the command, and Enter sends one that takes
- * no arguments and fills in one that does. Esc closes the list and keeps the text.
+ * A word that starts with a slash, at the start of the message or after a space or line break,
+ * lists the agent's slash commands above the box while the cursor is in it (ADR 0042, ADR 0052):
+ * every command for the message's first word, only skills for a later one. The arrow keys move
+ * through the list, Tab fills in the command, and Enter fills it in too, except that a first word
+ * that is the whole message and takes no arguments is sent. Esc closes the list and keeps the
+ * text. Filling in replaces only the word under the cursor.
  */
 export function MessageBox({
   draft,
@@ -111,24 +123,52 @@ export function MessageBox({
     });
   };
 
-  // The list of slash commands, while a message starts with a slash and has no space yet.
+  // The list, while the cursor is in a word that starts with a slash (ADR 0052).
   const listId = useId();
+  const [cursor, setCursor] = useState(text.length);
+  // Where the cursor goes once a filled-in word is in the box: after the render that puts it there.
+  const placeCursor = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const at = placeCursor.current;
+    if (at === null || !box.current) return;
+    placeCursor.current = null;
+    box.current.setSelectionRange(at, at);
+  });
+  // While a character is being composed, the list stays as it was when the composing began.
+  const [composing, setComposing] = useState<{ word: CursorWord | null } | null>(null);
+  const word = slash ? (composing ? composing.word : wordAt(text, cursor)) : null;
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
   const [chosen, setChosen] = useState({ query: "", index: 0 });
-  const query = slash ? menuQuery(text) : null;
+  const query = word?.query ?? null;
   const matches =
-    slash && query !== null
-      ? filterSlashCommands(slash.commands, slash.terminalCommands, query)
+    slash && word
+      ? filterSlashCommands(
+          word.first ? slash.commands : skillsOf(slash.commands),
+          slash.terminalCommands,
+          word.query,
+        )
       : [];
-  const listing = query !== null && dismissedAt !== text;
+  const wordKey = word ? `${String(word.start)}:${text}` : null;
+  const listing = word !== null && dismissedAt !== wordKey;
   const active = chosen.query === query ? Math.min(chosen.index, matches.length - 1) : 0;
+  /** Puts the command in place of the word under the cursor, with a space after it. */
   const fill = (command: SlashCommand) => {
-    setText(`/${command.name} `);
+    if (!word) return;
+    const after = text.slice(word.end);
+    const name = `/${command.name}`;
+    const spaced = /^\s/.test(after) ? name : `${name} `;
+    placeCursor.current = word.start + name.length + 1;
+    setText(text.slice(0, word.start) + spaced + after);
+    setCursor(placeCursor.current);
     box.current?.focus();
   };
-  /** Takes a command of the list: sent at once when it takes no arguments, else filled in. */
+  /**
+   * Takes a command of the list: sent at once when it takes no arguments and is the whole
+   * message, else filled in.
+   */
   const take = (command: SlashCommand) => {
-    if (command.argumentHint === "" && !busy) send(`/${command.name}`);
+    const whole = word?.first === true && text.slice(word.end).trim() === "";
+    if (whole && command.argumentHint === "" && !busy) send(`/${command.name}`);
     else fill(command);
   };
   const move = (step: number) => {
@@ -143,7 +183,7 @@ export function MessageBox({
         // The list closes, and the text stays; Esc does not also stop a reply.
         event.preventDefault();
         event.stopPropagation();
-        setDismissedAt(text);
+        setDismissedAt(wordKey);
         return;
       }
       if (command && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
@@ -198,6 +238,17 @@ export function MessageBox({
           value={text}
           onChange={(event) => {
             setText(event.target.value);
+            setCursor(event.target.selectionStart);
+          }}
+          onSelect={(event) => {
+            setCursor(event.currentTarget.selectionStart);
+          }}
+          onCompositionStart={() => {
+            setComposing({ word });
+          }}
+          onCompositionEnd={(event) => {
+            setComposing(null);
+            setCursor(event.currentTarget.selectionStart);
           }}
           onKeyDown={onKeyDown}
           {...(slash

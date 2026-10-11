@@ -1,5 +1,5 @@
 import { createMemoryHistory } from "@tanstack/react-router";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
 
@@ -57,6 +57,8 @@ const catalog: Catalog = {
       aliases: ["tdd"],
       description: "(mattpocock-skills) Test-driven development.",
     }),
+    command("docx", { description: "Work with Word documents." }),
+    command("github:create_issue (MCP)", { argumentHint: "<title>" }),
   ],
 };
 
@@ -106,8 +108,15 @@ describe("Slash commands in the message box (ADR 0042)", () => {
     await user.type(box, "/");
 
     const list = await screen.findByRole("listbox", { name: "Slash commands" });
-    expect(within(list).getAllByRole("option")).toHaveLength(4);
-    expect(optionNames()).toEqual(["/compact", "/context", "/model", "/mattpocock-skills:tdd"]);
+    expect(within(list).getAllByRole("option")).toHaveLength(6);
+    expect(optionNames()).toEqual([
+      "/compact",
+      "/context",
+      "/model",
+      "/mattpocock-skills:tdd",
+      "/docx",
+      "/github:create_issue (MCP)",
+    ]);
     expect(within(list).getByRole("option", { name: /\/compact/ })).toHaveTextContent(
       "Free up context by summarizing the conversation so far",
     );
@@ -142,7 +151,7 @@ describe("Slash commands in the message box (ADR 0042)", () => {
     const { user, box } = await open();
 
     await user.type(box, "/c");
-    expect(optionNames()).toEqual(["/compact", "/context"]);
+    expect(optionNames()).toEqual(["/compact", "/context", "/github:create_issue (MCP)"]);
     await user.keyboard("{ArrowDown}");
     expect(screen.getByRole("option", { name: /\/context/ })).toHaveAttribute(
       "aria-selected",
@@ -204,6 +213,87 @@ describe("Slash commands in the message box (ADR 0042)", () => {
     const { user, box } = await open();
 
     await user.type(box, "/");
+    await screen.findByRole("listbox");
+
+    await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+describe("Slash commands past the first word (ADR 0052)", () => {
+  it("lists only skills for a slash after another command, without built-in commands or MCP prompts", async () => {
+    const { user, box } = await open();
+
+    await user.type(box, "/tdd /");
+
+    expect(await screen.findByRole("listbox", { name: "Slash commands" })).toBeVisible();
+    expect(optionNames()).toEqual(["/mattpocock-skills:tdd", "/docx"]);
+  });
+
+  it("lists skills for a slash after plain text, filtered as the first word's list is", async () => {
+    const { user, box } = await open();
+
+    await user.type(box, "Write the report with /do");
+
+    expect(optionNames()).toEqual(["/docx"]);
+    expect((await screen.findAllByText("1 slash command")).length).toBeGreaterThan(0);
+  });
+
+  it("fills in the skill with Enter on a later word, and never sends", async () => {
+    const { rust, user, box } = await open();
+
+    await user.type(box, "/tdd /do{Enter}");
+
+    expect(box).toHaveValue("/tdd /docx ");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(rust.sent()).toHaveLength(0);
+  });
+
+  it("fills in only the word under the cursor, after moving back into an earlier word", async () => {
+    const { user, box } = await open();
+
+    await user.type(box, "/co /docx now");
+    await user.keyboard("{Home}{ArrowRight}{ArrowRight}{ArrowRight}");
+    expect(optionNames()).toEqual(["/compact", "/context"]);
+    await user.keyboard("{ArrowDown}{Tab}");
+
+    expect(box).toHaveValue("/context /docx now");
+    expect(box).toHaveProperty("selectionStart", "/context ".length);
+  });
+
+  it("sends the stacked skills as typed", async () => {
+    const { rust, user, box } = await open();
+
+    await user.type(box, "/tdd /docx{Escape} the parser{Enter}");
+
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+    expect(rust.sent()[0]?.payload).toMatchObject({ text: "/tdd /docx the parser" });
+  });
+
+  it("never opens, fills or closes the list while a character is being composed", async () => {
+    const { user, box } = await open();
+
+    fireEvent.compositionStart(box);
+    fireEvent.change(box, { target: { value: "/" } });
+    expect(screen.queryByRole("listbox")).toBeNull();
+    fireEvent.compositionEnd(box);
+    fireEvent.change(box, { target: { value: "/" } });
+    expect(await screen.findByRole("listbox")).toBeVisible();
+
+    await user.type(box, "do");
+    fireEvent.compositionStart(box);
+    fireEvent.change(box, { target: { value: "/doc " } });
+    fireEvent.keyDown(box, { key: "Enter", isComposing: true });
+    expect(optionNames()).toEqual(["/docx"]);
+    expect(box).toHaveValue("/doc ");
+    fireEvent.compositionEnd(box);
+  });
+
+  it("has no accessibility violations while a later word's list is open", async () => {
+    const { user, box } = await open();
+
+    await user.type(box, "Use /");
     await screen.findByRole("listbox");
 
     await expectNoAccessibilityViolations(document.body);

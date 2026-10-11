@@ -522,6 +522,37 @@ test.describe("Claude in the real app", () => {
     }
   });
 
+  test("two skills stack in one message, and reach Claude Code as typed", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+      const box = page.getByRole("textbox", { name: "Message" });
+
+      await box.fill("/gre");
+      await expect(page.getByRole("option", { name: /stand-in-skill:greet/u })).toBeVisible({
+        timeout: 30_000,
+      });
+      await box.press("Tab");
+      // A later word lists only skills, and Enter fills one in instead of sending (ADR 0052).
+      await box.pressSequentially("/wav");
+      await expect(page.getByRole("option", { name: /stand-in-skill:wave/u })).toBeVisible();
+      await expect(page.getByRole("option", { name: /\/compact/u })).toBeHidden();
+      await box.press("Enter");
+      await expect(box).toHaveValue("/stand-in-skill:greet /stand-in-skill:wave ");
+      await box.pressSequentially("the team");
+      await box.press("Enter");
+
+      await expect(
+        session.getByText("You said: /stand-in-skill:greet /stand-in-skill:wave the team"),
+      ).toBeVisible({ timeout: 30_000 });
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
+
   test("an older model that Claude Code lists is chosen by its full id and passed to it", async () => {
     const dataDir = mkdtempSync(path.join(tmpdir(), "arden-e2e-data-"));
     const log = path.join(dataDir, "claude.log");
