@@ -300,3 +300,135 @@ fn the_catalog_is_read_once_kept_to_the_shown_fields_and_read_again_when_asked()
         json!(["plugin", "list", "--json", "--available"])
     );
 }
+
+#[test]
+fn a_plugin_is_installed_for_the_person_in_every_project_from_the_playground() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = claude_on_path(&json!({ "log": log, "plugins": { "available": catalog() } }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+
+    let done = module
+        .install("adobe-for-creativity@claude-plugins-official")
+        .expect("installed");
+
+    assert_eq!(
+        done.message,
+        "Successfully installed plugin: adobe-for-creativity@claude-plugins-official (scope: user)"
+    );
+    let starts = plugin_starts(&log);
+    assert_eq!(
+        starts[0]["args"],
+        json!([
+            "plugin",
+            "install",
+            "adobe-for-creativity@claude-plugins-official",
+            "--scope",
+            "user",
+            "--json"
+        ])
+    );
+    assert!(same_folder(
+        starts[0]["folder"].as_str().unwrap_or_default(),
+        playground.path()
+    ));
+    let installed = module.installed().expect("the list");
+    assert_eq!(
+        installed[0].id,
+        "adobe-for-creativity@claude-plugins-official"
+    );
+    assert_eq!(installed[0].version.as_deref(), Some("1.2.0"));
+}
+
+#[test]
+fn an_id_that_is_not_a_plain_name_at_marketplace_is_refused_before_anything_runs() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = claude_on_path(&json!({ "log": log }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+    let too_long = format!("{}@market", "a".repeat(122));
+
+    for id in [
+        "superpowers",
+        "a@b@c",
+        "@market",
+        "name@",
+        "-flag@market",
+        "two words@market",
+        "semi;colon@market",
+        "quote\"d@market",
+        too_long.as_str(),
+    ] {
+        assert_eq!(
+            module.install(id),
+            Err(PluginError::InvalidId),
+            "{id} was not refused"
+        );
+    }
+    assert!(plugin_starts(&log).is_empty());
+    assert!(
+        module
+            .install(&format!("{}@market", "a".repeat(121)))
+            .is_ok()
+    );
+}
+
+#[test]
+fn a_failed_install_says_claude_codes_message_and_code() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let bin = claude_on_path(&json!({ "plugins": { "failures": {
+        "missing@claude-plugins-official": { "message": "Plugin not found in marketplace", "failureCode": "plugin_not_found" }
+    } } }));
+
+    let refused = plugins(bin.path(), playground.path(), logs.path())
+        .install("missing@claude-plugins-official");
+
+    assert_eq!(
+        refused,
+        Err(PluginError::Failed {
+            message: "Plugin not found in marketplace".into(),
+            code: Some("plugin_not_found".into())
+        })
+    );
+}
+
+#[test]
+fn a_plugin_installed_already_reads_as_success() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let bin = claude_on_path(&json!({ "plugins": { "installed": installed_list() } }));
+
+    let done = plugins(bin.path(), playground.path(), logs.path())
+        .install("superpowers@claude-plugins-official")
+        .expect("success");
+
+    assert!(
+        done.message.contains("already installed"),
+        "{}",
+        done.message
+    );
+}
+
+#[test]
+fn the_catalog_is_read_again_after_a_change() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = claude_on_path(&json!({ "log": log, "plugins": { "available": catalog() } }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+
+    module.catalog(false).expect("the catalog");
+    module
+        .install("agent-sdk-dev@claude-plugins-official")
+        .expect("installed");
+    module.catalog(false).expect("the catalog");
+
+    let lists = plugin_starts(&log)
+        .iter()
+        .filter(|start| start["args"][1] == "list")
+        .count();
+    assert_eq!(lists, 2);
+}

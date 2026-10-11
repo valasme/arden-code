@@ -12,7 +12,10 @@
 //!
 //! It answers `plugin list --json` (with `--available`, the catalog too) from `plugins` in
 //! `stand-in.json`: `installed` and `available`, as Claude Code prints them, and `delayMs`, how
-//! long it takes first (ADR 0053). It writes `plugin-end` to its log when it is done.
+//! long it takes first (ADR 0053). `plugin install` adds to what it lists, kept in
+//! `plugins-state.json` beside it, unless `failures` names the plugin with the `message` and
+//! `failureCode` to fail with; a plugin installed already answers `already_in_goal_state`. It
+//! writes `plugin-end` to its log when it is done.
 //!
 //! It applies the `--permission-mode` it is started with and changes it on `set_permission_mode`,
 //! refusing Bypass permissions unless started with `--allow-dangerously-skip-permissions`, as
@@ -145,11 +148,9 @@ fn plugin(settings: &Settings, args: &[String]) {
     if let Some(delay) = plugins["delayMs"].as_u64() {
         thread::sleep(Duration::from_millis(delay));
     }
-    let installed = match &plugins["installed"] {
-        Value::Null => json!([]),
-        installed => installed.clone(),
-    };
+    let installed = installed_plugins(plugins);
     match args.first().map(String::as_str) {
+        Some("install") => install(plugins, args, installed),
         Some("list") if args.iter().any(|arg| arg == "--available") => {
             let available = match &plugins["available"] {
                 Value::Null => json!([]),
@@ -172,6 +173,108 @@ fn plugin(settings: &Settings, args: &[String]) {
             std::process::exit(1);
         }
     }
+}
+
+/// Where the stand-in keeps the plugins it has installed, between runs.
+fn plugins_state() -> Option<PathBuf> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|folder| folder.join("plugins-state.json")))
+}
+
+/// The plugins it lists as installed: those it installed itself, else those of its settings.
+fn installed_plugins(plugins: &Value) -> Value {
+    plugins_state()
+        .and_then(|file| std::fs::read_to_string(file).ok())
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_else(|| match &plugins["installed"] {
+            Value::Null => json!([]),
+            installed => installed.clone(),
+        })
+}
+
+fn save_installed(installed: &Value) {
+    if let Some(file) = plugins_state() {
+        let _ = std::fs::write(file, installed.to_string());
+    }
+}
+
+/// The value after a flag, such as the scope after `--scope`.
+fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
+    args.iter()
+        .position(|arg| arg == name)
+        .and_then(|at| args.get(at + 1))
+        .map(String::as_str)
+}
+
+/// Prints a command's result on its last line, as Claude Code does with `--json`, and fails with
+/// it when it failed.
+fn result(command: &str, id: &str, outcome: &str, message: &str, extra: &Value) {
+    let mut answer =
+        json!({ "command": command, "outcome": outcome, "message": message, "pluginId": id });
+    if let (Some(answer), Some(extra)) = (answer.as_object_mut(), extra.as_object()) {
+        for (key, value) in extra {
+            answer.insert(key.clone(), value.clone());
+        }
+    }
+    println!("Working on {id}…");
+    println!("{answer}");
+    if outcome != "ok" {
+        std::process::exit(1);
+    }
+}
+
+/// `plugin install <id> --scope <scope> --json`.
+fn install(plugins: &Value, args: &[String], mut installed: Value) {
+    let id = args.get(1).map_or("", String::as_str);
+    let scope = flag(args, "--scope").unwrap_or("user");
+    let failure = &plugins["failures"][id];
+    if !failure.is_null() {
+        let message = failure["message"].as_str().unwrap_or("It failed");
+        result(
+            "install",
+            id,
+            "failed",
+            message,
+            &json!({ "failureCode": failure["failureCode"] }),
+        );
+        return;
+    }
+    let folder = std::env::current_dir()
+        .map(|folder| folder.display().to_string())
+        .unwrap_or_default();
+    let project = (scope != "user").then_some(folder);
+    let already = installed.as_array().is_some_and(|list| {
+        list.iter().any(|plugin| {
+            plugin["id"] == id
+                && plugin["scope"] == scope
+                && plugin["projectPath"].as_str() == project.as_deref()
+        })
+    });
+    if already {
+        let message = format!("Plugin '{id}' is already installed");
+        result(
+            "install",
+            id,
+            "failed",
+            &message,
+            &json!({ "failureCode": "already_in_goal_state", "scope": scope }),
+        );
+        return;
+    }
+    let version = plugins["available"]
+        .as_array()
+        .and_then(|list| list.iter().find(|plugin| plugin["pluginId"] == id))
+        .map_or(json!("1.0.0"), |plugin| plugin["version"].clone());
+    if let Some(list) = installed.as_array_mut() {
+        list.push(json!({
+            "id": id, "version": version, "scope": scope, "enabled": true,
+            "installPath": format!("C:\\stand-in\\cache\\{id}"), "projectPath": project
+        }));
+    }
+    save_installed(&installed);
+    let message = format!("Successfully installed plugin: {id} (scope: {scope})");
+    result("install", id, "ok", &message, &json!({ "scope": scope }));
 }
 
 /// Writes a frame on the stand-in's output.

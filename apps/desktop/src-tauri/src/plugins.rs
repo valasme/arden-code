@@ -2,7 +2,9 @@
 
 use std::sync::Arc;
 
-use arden_agents::claude::plugins::{AvailablePlugin, ClaudePlugins, InstalledPlugin, PluginError};
+use arden_agents::claude::plugins::{
+    AvailablePlugin, ClaudePlugins, InstalledPlugin, PluginChange, PluginError,
+};
 use arden_core::error::{AppError, ErrorCode};
 use tauri::State;
 
@@ -21,6 +23,8 @@ impl Plugins {
 /// Code's own message goes to the page, never to the log: it can name a plugin's settings.
 fn plugin_error(error: PluginError) -> AppError {
     let shown = match error {
+        PluginError::InvalidId => AppError::new(ErrorCode::PluginCommandFailed)
+            .with_details("This is not the id of a plugin, so nothing was run."),
         PluginError::NotInstalled => AppError::new(ErrorCode::ClaudeNotInstalled),
         PluginError::NpmWrapperOnly => AppError::new(ErrorCode::ClaudeNpmWrapper),
         PluginError::TooOld(version) => {
@@ -83,4 +87,22 @@ pub async fn plugin_catalog(
 ) -> Result<Vec<AvailablePlugin>, AppError> {
     let claude = plugins.claude()?;
     off_the_window(move || claude.catalog(fresh)).await
+}
+
+/// Installs a plugin for the person in every project (ADR 0053), once its id is checked, and
+/// answers the agent's own message.
+///
+/// # Errors
+///
+/// Returns why it was not installed: an id that is not a plugin id, a command that failed (with
+/// the agent's message and code), took too long, or answered in a way Arden Code does not
+/// understand.
+#[tauri::command]
+#[specta::specta]
+pub async fn install_plugin(
+    id: String,
+    plugins: State<'_, Plugins>,
+) -> Result<PluginChange, AppError> {
+    let claude = plugins.claude()?;
+    off_the_window(move || claude.install(&id)).await
 }

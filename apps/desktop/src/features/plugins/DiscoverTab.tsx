@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowLeftIcon, RefreshCwIcon, ShieldAlertIcon } from "lucide-react";
+import { ArrowLeftIcon, DownloadIcon, RefreshCwIcon, ShieldAlertIcon } from "lucide-react";
 import { type KeyboardEvent, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -12,6 +12,7 @@ import { toAppError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { usePluginsPageStore } from "@/state/pluginsPage";
 
+import { InstallDialog } from "./InstallDialog";
 import { PluginsProblem } from "./PluginsProblem";
 
 /** The height of a row of the list, which every row has, so the list can be drawn in part. */
@@ -36,10 +37,20 @@ export function discoverable(
     .toSorted((a, b) => (b.installs ?? -1) - (a.installs ?? -1) || a.name.localeCompare(b.name));
 }
 
-/** A plugin's details: what it is, where it comes from, and what installing one can mean. */
+/**
+ * A plugin's details: what it is, where it comes from, and what installing one can mean, with
+ * Install, which asks who gets it first. While it installs, and once it has, the pane says so; the
+ * plugins installed and offered are read again afterwards.
+ */
 function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => void }) {
   const { t } = useTranslation();
   const formatters = useFormatters();
+  const queryClient = useQueryClient();
+  const [choosing, setChoosing] = useState(false);
+  const install = useMutation({
+    mutationFn: () => commands.installPlugin(plugin.id),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["plugins"], refetchType: "all" }),
+  });
   const installs =
     plugin.installs === null
       ? t("plugins.discover.noInstalls")
@@ -59,12 +70,28 @@ function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => vo
         <ArrowLeftIcon aria-hidden strokeWidth={1.5} />
         {t("plugins.discover.back")}
       </Button>
-      <div>
-        <h2 className="text-lg font-semibold break-words">{plugin.name}</h2>
-        <p className="text-xs text-muted-foreground">
-          {plugin.marketplace} · {installs}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold break-words">{plugin.name}</h2>
+          <p className="text-xs text-muted-foreground">
+            {plugin.marketplace} · {installs}
+          </p>
+        </div>
+        <Button
+          disabled={install.isPending}
+          onClick={() => {
+            setChoosing(true);
+          }}
+        >
+          <DownloadIcon aria-hidden strokeWidth={1.5} />
+          {t("plugins.install.open")}
+        </Button>
       </div>
+      <div aria-live="polite" className="text-sm empty:hidden">
+        {install.isPending ? t("plugins.install.underWay", { name: plugin.name }) : null}
+        {install.isSuccess ? install.data.message : null}
+      </div>
+      {install.isError ? <PluginsProblem error={toAppError(install.error)} /> : null}
       {plugin.description ? <p className="text-sm">{plugin.description}</p> : null}
       <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs">
         <dt className="text-muted-foreground">{t("plugins.discover.marketplace")}</dt>
@@ -80,6 +107,14 @@ function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => vo
         <ShieldAlertIcon aria-hidden className="mt-0.5 size-4 shrink-0" strokeWidth={1.5} />
         {t("plugins.discover.warning")}
       </p>
+      <InstallDialog
+        plugin={plugin}
+        open={choosing}
+        onOpenChange={setChoosing}
+        onInstall={() => {
+          install.mutate();
+        }}
+      />
     </section>
   );
 }
@@ -255,6 +290,8 @@ export function DiscoverTab() {
             >
               {plugin ? (
                 <Details
+                  // A plugin's install, under way or done, is its own.
+                  key={plugin.id}
                   plugin={plugin}
                   onBack={() => {
                     setShowing(false);

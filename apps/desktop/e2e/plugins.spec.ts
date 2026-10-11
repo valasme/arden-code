@@ -43,4 +43,50 @@ test.describe("the Plugins page in the real app", () => {
       claude.remove();
     }
   });
+
+  test("a plugin installed from Discover is listed under Installed", async () => {
+    const available = [
+      {
+        pluginId: "superpowers@claude-plugins-official",
+        name: "superpowers",
+        description: "Core skills library.",
+        marketplaceName: "claude-plugins-official",
+        source: { source: "url", url: "https://github.com/obra/superpowers.git" },
+        installCount: 182_400,
+        version: "4.3.1",
+      },
+      {
+        pluginId: "github@claude-plugins-official",
+        name: "github",
+        description: "Official GitHub MCP server.",
+        marketplaceName: "claude-plugins-official",
+        source: "./external_plugins/github",
+        version: "1.2.0",
+      },
+    ];
+    const claude = claudeOnPath({ plugins: { available } });
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const sidebar = page.getByRole("complementary", { name: "Sidebar" });
+      await sidebar.getByRole("link", { name: "Plugins" }).click();
+      await page.getByRole("option", { name: /^github/u }).click({ timeout: 30_000 });
+      const details = page.getByRole("region", { name: "github" });
+      await details.getByRole("button", { name: "Install…" }).click();
+      const dialog = page.getByRole("dialog", { name: "Install github" });
+      await dialog.getByRole("button", { name: "Install" }).click();
+
+      await expect(details).toContainText(
+        "Successfully installed plugin: github@claude-plugins-official (scope: user)",
+        { timeout: 30_000 },
+      );
+      await sidebar.getByRole("link", { name: "Installed" }).click();
+      const list = page.getByRole("list", { name: "Installed plugins" });
+      await expect(list.getByRole("heading", { name: "github" })).toBeVisible();
+      await expect(list).toContainText("For you, in every project");
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
 });

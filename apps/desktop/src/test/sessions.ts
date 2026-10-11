@@ -12,6 +12,7 @@ import type {
   InstalledPlugin,
   Model,
   PermissionMode,
+  PluginChange,
   Project,
   Session,
   SessionList,
@@ -35,8 +36,8 @@ export const playground = {
 } as const;
 
 /** What a command that fails throws, as it reaches the UI through the isolation frame. */
-function failure(code: ErrorCode): string {
-  const error: AppError = { code, messageKey: `errors.${code}`, details: null };
+function failure(code: ErrorCode, details: string | null = null): string {
+  const error: AppError = { code, messageKey: `errors.${code}`, details };
   return JSON.stringify(error);
 }
 
@@ -112,6 +113,11 @@ interface Options {
   installedPlugins?: InstalledPlugin[];
   /** The plugins the person's marketplaces offer (ADR 0053). None by default. */
   pluginCatalog?: AvailablePlugin[];
+  /** What a plugin change answers: Claude Code's message, or the error it fails with. */
+  pluginChange?: (
+    command: string,
+    payload: unknown,
+  ) => PluginChange | AppError | Promise<PluginChange>;
 }
 
 /**
@@ -137,6 +143,7 @@ export function startSessionsRust({
   transcriptView = "normal",
   installedPlugins = [],
   pluginCatalog = [],
+  pluginChange = () => ({ message: "Done." }),
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
@@ -445,6 +452,11 @@ export function startSessionsRust({
         }
         case "plugin_catalog": {
           return pluginCatalog;
+        }
+        case "install_plugin": {
+          const answer = pluginChange(command, payload);
+          if ("code" in answer) throw failure(answer.code, answer.details);
+          return answer;
         }
         case "send_message": {
           const { sessionId, text, onEvent } = z

@@ -111,6 +111,7 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         agents::refresh_usage_limits,
         plugins::installed_plugins,
         plugins::plugin_catalog,
+        plugins::install_plugin,
         sessions::debug_fill_session,
         agents::debug_spawn_sleeper,
         diagnostics::debug_fail,
@@ -189,6 +190,7 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         agents::refresh_usage_limits,
         plugins::installed_plugins,
         plugins::plugin_catalog,
+        plugins::install_plugin,
     ]
 }
 

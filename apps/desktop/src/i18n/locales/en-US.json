@@ -451,6 +451,15 @@
       "version": "Version",
       "warning": "A plugin can run programs on this computer through its hooks and servers. Install only plugins you trust."
     },
+    "install": {
+      "cancel": "Cancel",
+      "confirm": "Install",
+      "open": "Install…",
+      "title": "Install {{name}}",
+      "underWay": "Installing {{name}}…",
+      "userDetail": "Only you get it, wherever you work.",
+      "who": "Who gets it?"
+    },
     "installed": {
       "label": "Installed plugins",
       "noMatch": "No installed plugin matches.",

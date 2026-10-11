@@ -650,6 +650,17 @@ export const commands = {
 	 */
 	pluginCatalog: (fresh: boolean) => __TAURI_INVOKE<AvailablePlugin[]>("plugin_catalog", { fresh }),
 	/**
+	 *  Installs a plugin for the person in every project (ADR 0053), once its id is checked, and
+	 *  answers the agent's own message.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why it was not installed: an id that is not a plugin id, a command that failed (with
+	 *  the agent's message and code), took too long, or answered in a way Arden Code does not
+	 *  understand.
+	 */
+	installPlugin: (id: string) => __TAURI_INVOKE<PluginChange>("install_plugin", { id }),
+	/**
 	 *  Makes a session with `count` finished turns, to test long conversations. Debug builds only.
 	 * 
 	 *  # Errors
@@ -1224,6 +1235,12 @@ export type PlanState =
 "keptPlanning" | 
 /**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
 "cancelled";
+
+/**  What a change to a plugin did, as Claude Code said it. */
+export type PluginChange = {
+	/**  Claude Code's own message. */
+	message: string,
+};
 
 /**  Where a plugin is installed, as Claude Code says it. */
 export type PluginScope = 

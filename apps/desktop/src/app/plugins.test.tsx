@@ -6,6 +6,7 @@ import { page } from "vitest/browser";
 import type { AvailablePlugin, InstalledPlugin } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
+import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 import { sessionNamed, startSessionsRust } from "@/test/sessions";
 
@@ -249,15 +250,15 @@ describe("Discover (ADR 0053)", () => {
 
     await user.click(await screen.findByRole("option", { name: /^github/ }));
 
-    const details = screen.getByRole("region", { name: "github" });
-    expect(details).toHaveTextContent("Official GitHub MCP server: issues and pull requests.");
-    expect(details).toHaveTextContent("claude-plugins-official");
-    expect(details).toHaveTextContent("1.2.0");
-    expect(details).toHaveTextContent("96,120");
-    expect(details).toHaveTextContent(
+    const pane = screen.getByRole("region", { name: "github" });
+    expect(pane).toHaveTextContent("Official GitHub MCP server: issues and pull requests.");
+    expect(pane).toHaveTextContent("claude-plugins-official");
+    expect(pane).toHaveTextContent("1.2.0");
+    expect(pane).toHaveTextContent("96,120");
+    expect(pane).toHaveTextContent(
       "https://github.com/anthropics/claude-plugins-official.git · external_plugins/github",
     );
-    expect(details).toHaveTextContent(
+    expect(pane).toHaveTextContent(
       "A plugin can run programs on this computer through its hooks and servers. Install only plugins you trust.",
     );
   });
@@ -323,6 +324,101 @@ describe("Discover (ADR 0053)", () => {
   it("has no accessibility violations", async () => {
     const { user } = await openApp({ pluginCatalog: catalog }, "/plugins/discover");
     await user.click(await screen.findByRole("option", { name: /^github/ }));
+
+    await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+/** Opens github's details on Discover. */
+async function details(options: Options = {}) {
+  const opened = await openApp({ pluginCatalog: catalog, ...options }, "/plugins/discover");
+  await opened.user.click(await screen.findByRole("option", { name: /^github/ }));
+  return opened;
+}
+
+describe("Installing a plugin for you in every project (ADR 0053)", () => {
+  it("asks who gets it, with the warning, and installs for you in every project", async () => {
+    const { rust, user } = await details({
+      pluginChange: () => ({
+        message: "Successfully installed plugin: github@claude-plugins-official (scope: user)",
+      }),
+    });
+
+    await user.click(screen.getByRole("button", { name: "Install…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Install github" });
+    expect(within(dialog).getByRole("radio", { name: /For you, in every project/ })).toBeChecked();
+    expect(dialog).toHaveTextContent("A plugin can run programs on this computer");
+    await user.click(within(dialog).getByRole("button", { name: "Install" }));
+
+    expect(
+      await screen.findByText(
+        "Successfully installed plugin: github@claude-plugins-official (scope: user)",
+      ),
+    ).toBeVisible();
+    expect(rust.callsTo("install_plugin")).toEqual([{ id: "github@claude-plugins-official" }]);
+    // What the marketplaces offer is read again, and Installed reads what is installed now.
+    await waitFor(() => {
+      expect(rust.callsTo("plugin_catalog")).toHaveLength(2);
+    });
+    // The dialog hides the rest of the window until it has quite closed.
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await user.click(within(sidebar()).getByRole("link", { name: "Installed" }));
+    await waitFor(() => {
+      expect(rust.callsTo("installed_plugins")).toHaveLength(1);
+    });
+  });
+
+  it("says the install is under way", async () => {
+    const { user } = await details({ pluginChange: () => new Promise(() => {}) });
+
+    await user.click(screen.getByRole("button", { name: "Install…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Install github" });
+    await user.click(within(dialog).getByRole("button", { name: "Install" }));
+
+    expect(await screen.findByText("Installing github…")).toBeVisible();
+  });
+
+  it("shows Claude Code's own message and the code when the install failed", async () => {
+    const { user } = await details({
+      pluginChange: () => ({
+        code: "ARD-AGT-021",
+        messageKey: "errors.ARD-AGT-021",
+        details: "Plugin not found in marketplace",
+      }),
+    });
+
+    await user.click(screen.getByRole("button", { name: "Install…" }));
+    await user.click(
+      within(await screen.findByRole("dialog", { name: "Install github" })).getByRole("button", {
+        name: "Install",
+      }),
+    );
+
+    expect(await screen.findByText("Claude Code could not do it.")).toBeVisible();
+    expect(screen.getByText("Plugin not found in marketplace")).toBeVisible();
+    expect(screen.getByText("ARD-AGT-021")).toBeVisible();
+  });
+
+  it("installs nothing when cancelled", async () => {
+    const { rust, user } = await details();
+
+    await user.click(screen.getByRole("button", { name: "Install…" }));
+    await user.click(
+      within(await screen.findByRole("dialog", { name: "Install github" })).getByRole("button", {
+        name: "Cancel",
+      }),
+    );
+
+    expect(rust.callsTo("install_plugin")).toEqual([]);
+  });
+
+  it("has no accessibility violations while it asks", async () => {
+    const { user } = await details();
+
+    await user.click(screen.getByRole("button", { name: "Install…" }));
+    await animationsDone(await screen.findByRole("dialog", { name: "Install github" }));
 
     await expectNoAccessibilityViolations(document.body);
   });
