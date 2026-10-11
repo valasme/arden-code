@@ -21,7 +21,7 @@ const installed = [
 ];
 
 test.describe("the Plugins page in the real app", () => {
-  test("opens from the sidebar and lists the plugins Claude Code has installed", async () => {
+  test("opens from the sidebar, and Installed lists the plugins Claude Code has installed", async () => {
     const claude = claudeOnPath({ plugins: { installed } });
     const app = await launchApp({ env: claude.env });
     try {
@@ -30,6 +30,7 @@ test.describe("the Plugins page in the real app", () => {
       await sidebar.getByRole("link", { name: "Plugins" }).click();
 
       await expect(page.getByRole("heading", { level: 1, name: "Plugins" })).toBeVisible();
+      await sidebar.getByRole("link", { name: "Installed" }).click();
       const list = page.getByRole("list", { name: "Installed plugins" });
       await expect(list.getByRole("heading", { name: "superpowers" })).toBeVisible({
         timeout: 30_000,

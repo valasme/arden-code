@@ -79,6 +79,25 @@ pub struct InstalledPlugin {
     pub errors: Vec<String>,
 }
 
+/// A plugin a marketplace offers, with only what the page shows (ADR 0053).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AvailablePlugin {
+    /// The agent the plugin is for.
+    pub agent: AgentKind,
+    /// The agent's own id for it: `name@marketplace`.
+    pub id: String,
+    pub name: String,
+    pub marketplace: String,
+    pub description: Option<String>,
+    pub version: Option<String>,
+    /// How many times it was installed, when the marketplace counts it.
+    #[specta(type = Option<f64>)]
+    pub installs: Option<u64>,
+    /// Where it comes from, as text: the repository or the path.
+    pub source: String,
+}
+
 /// Why a plugin command could not be run or did not succeed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PluginError {
@@ -138,6 +157,56 @@ impl ListedInstall {
     }
 }
 
+/// The catalog `claude plugin list --json --available` prints, as far as Arden Code reads it.
+#[derive(Deserialize)]
+struct ListedCatalog {
+    available: Vec<ListedPlugin>,
+}
+
+/// One plugin of the catalog. Every other field is dropped while parsing.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListedPlugin {
+    plugin_id: String,
+    name: String,
+    marketplace_name: String,
+    description: Option<String>,
+    version: Option<String>,
+    install_count: Option<u64>,
+    #[serde(default)]
+    source: Value,
+}
+
+impl ListedPlugin {
+    fn shown(self) -> AvailablePlugin {
+        AvailablePlugin {
+            agent: AgentKind::Claude,
+            id: self.plugin_id,
+            name: self.name,
+            marketplace: self.marketplace_name,
+            description: self.description.filter(|text| !text.trim().is_empty()),
+            version: self.version,
+            installs: self.install_count,
+            source: source_text(&self.source),
+        }
+    }
+}
+
+/// Where a plugin comes from, as text: a path in its marketplace as it is, or the address, the
+/// folder in it and the version, such as `https://github.com/adobe/skills.git · plugins/x · main`.
+fn source_text(source: &Value) -> String {
+    match source {
+        Value::String(path) => path.clone(),
+        Value::Object(fields) => ["url", "repo", "path", "ref"]
+            .iter()
+            .filter_map(|key| fields.get(*key).and_then(Value::as_str))
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" · "),
+        _ => String::new(),
+    }
+}
+
 /// The words of a load error: the text itself, or its `message`.
 fn error_text(error: &Value) -> String {
     match error {
@@ -160,6 +229,8 @@ pub struct ClaudePlugins {
     versions: VersionCache,
     /// Held while a command runs, so that two never change Claude Code's settings at once.
     running: Mutex<()>,
+    /// The catalog, once it has been read in this run of Arden Code.
+    catalog: Mutex<Option<Vec<AvailablePlugin>>>,
 }
 
 impl ClaudePlugins {
@@ -173,6 +244,7 @@ impl ClaudePlugins {
             patience: PATIENCE,
             versions: VersionCache::default(),
             running: Mutex::new(()),
+            catalog: Mutex::new(None),
         }
     }
 
@@ -212,6 +284,42 @@ impl ClaudePlugins {
         let listed: Vec<ListedInstall> =
             serde_json::from_str(&output).map_err(|_| PluginError::NotUnderstood)?;
         Ok(listed.into_iter().map(ListedInstall::shown).collect())
+    }
+
+    /// Every plugin the person's marketplaces offer: read from Claude Code the first time it is
+    /// asked for in a run of Arden Code, and again when `fresh`; kept in memory between.
+    ///
+    /// # Errors
+    ///
+    /// Says why it could not be read.
+    pub fn catalog(&self, fresh: bool) -> Result<Vec<AvailablePlugin>, PluginError> {
+        if !fresh
+            && let Some(kept) = self
+                .catalog
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone()
+        {
+            return Ok(kept);
+        }
+        let output = self.run(
+            &self.playground,
+            &[
+                Arg::Literal("plugin"),
+                Arg::Literal("list"),
+                Arg::Literal("--json"),
+                Arg::Literal("--available"),
+            ],
+        )?;
+        let listed: ListedCatalog =
+            serde_json::from_str(&output).map_err(|_| PluginError::NotUnderstood)?;
+        let catalog: Vec<AvailablePlugin> = listed
+            .available
+            .into_iter()
+            .map(ListedPlugin::shown)
+            .collect();
+        *self.catalog.lock().unwrap_or_else(PoisonError::into_inner) = Some(catalog.clone());
+        Ok(catalog)
     }
 
     /// The person's Claude Code, when it is there and recent enough for plugin commands.

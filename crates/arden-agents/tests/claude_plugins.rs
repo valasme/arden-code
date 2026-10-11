@@ -231,3 +231,72 @@ fn plugin_commands_run_one_at_a_time() {
         .collect();
     assert_eq!(order, ["start", "end", "start", "end"]);
 }
+
+fn catalog() -> Value {
+    json!([
+        {
+            "pluginId": "adobe-for-creativity@claude-plugins-official",
+            "name": "adobe-for-creativity",
+            "description": "Adobe's creative tools.",
+            "marketplaceName": "claude-plugins-official",
+            "source": {
+                "source": "git-subdir",
+                "url": "https://github.com/adobe/skills.git",
+                "path": "plugins/creative-cloud/adobe-for-creativity",
+                "ref": "main",
+                "sha": "acb6d76475e6c522a5b109d2df7c8a794ee74ea7"
+            },
+            "installCount": 3952,
+            "version": "1.2.0"
+        },
+        {
+            "pluginId": "agent-sdk-dev@claude-plugins-official",
+            "name": "agent-sdk-dev",
+            "marketplaceName": "claude-plugins-official",
+            "source": "./plugins/agent-sdk-dev",
+            "somethingNew": true
+        }
+    ])
+}
+
+#[test]
+fn the_catalog_is_read_once_kept_to_the_shown_fields_and_read_again_when_asked() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = claude_on_path(&json!({ "log": log, "plugins": { "available": catalog() } }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+
+    let first = module.catalog(false).expect("the catalog");
+    let kept = module.catalog(false).expect("the catalog");
+    let again = module.catalog(true).expect("the catalog");
+
+    assert_eq!(first, kept);
+    assert_eq!(first, again);
+    assert_eq!(first.len(), 2);
+    let adobe = &first[0];
+    assert_eq!(adobe.id, "adobe-for-creativity@claude-plugins-official");
+    assert_eq!(adobe.name, "adobe-for-creativity");
+    assert_eq!(adobe.marketplace, "claude-plugins-official");
+    assert_eq!(
+        adobe.description.as_deref(),
+        Some("Adobe's creative tools.")
+    );
+    assert_eq!(adobe.version.as_deref(), Some("1.2.0"));
+    assert_eq!(adobe.installs, Some(3952));
+    assert_eq!(
+        adobe.source,
+        "https://github.com/adobe/skills.git · plugins/creative-cloud/adobe-for-creativity · main"
+    );
+    let sdk = &first[1];
+    assert_eq!(sdk.description, None);
+    assert_eq!(sdk.installs, None);
+    assert_eq!(sdk.source, "./plugins/agent-sdk-dev");
+
+    let starts = plugin_starts(&log);
+    assert_eq!(starts.len(), 2, "read once, then again when asked");
+    assert_eq!(
+        starts[0]["args"],
+        json!(["plugin", "list", "--json", "--available"])
+    );
+}

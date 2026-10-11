@@ -432,6 +432,25 @@
   "plugins": {
     "back": "Back",
     "description": "Plugins bring skills, slash commands and tools to your agents.",
+    "discover": {
+      "back": "All plugins",
+      "choose": "Choose a plugin to see what it is.",
+      "count_one": "{{count}} plugin",
+      "count_other": "{{count}} plugins",
+      "installs_one": "{{formatted}} install",
+      "installs_other": "{{formatted}} installs",
+      "installsLabel": "Installs",
+      "label": "Plugins",
+      "marketplace": "Marketplace",
+      "noInstalls": "No install count",
+      "noMatch": "No plugin matches.",
+      "noVersion": "Not given",
+      "reading": "Reading what your marketplaces offer…",
+      "refresh": "Refresh",
+      "source": "Source",
+      "version": "Version",
+      "warning": "A plugin can run programs on this computer through its hooks and servers. Install only plugins you trust."
+    },
     "installed": {
       "label": "Installed plugins",
       "noMatch": "No installed plugin matches.",
@@ -455,6 +474,7 @@
       "placeholder": "Search plugins"
     },
     "tabs": {
+      "discover": "Discover",
       "installed": "Installed"
     },
     "tabsLabel": "Plugins tabs",

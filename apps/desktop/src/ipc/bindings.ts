@@ -641,6 +641,15 @@ export const commands = {
 	 */
 	installedPlugins: () => __TAURI_INVOKE<InstalledPlugin[]>("installed_plugins"),
 	/**
+	 *  Every plugin the person's marketplaces offer (ADR 0053): read from the agent the first time the
+	 *  page asks in a run of Arden Code, and again when `fresh`, as on Refresh.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why it could not be read, as [`installed_plugins`] does.
+	 */
+	pluginCatalog: (fresh: boolean) => __TAURI_INVOKE<AvailablePlugin[]>("plugin_catalog", { fresh }),
+	/**
 	 *  Makes a session with `count` finished turns, to test long conversations. Debug builds only.
 	 * 
 	 *  # Errors
@@ -806,6 +815,22 @@ export type ApprovalState =
 "denied" | 
 /**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
 "cancelled";
+
+/**  A plugin a marketplace offers, with only what the page shows (ADR 0053). */
+export type AvailablePlugin = {
+	/**  The agent the plugin is for. */
+	agent: AgentKind,
+	/**  The agent's own id for it: `name@marketplace`. */
+	id: string,
+	name: string,
+	marketplace: string,
+	description: string | null,
+	version: string | null,
+	/**  How many times it was installed, when the marketplace counts it. */
+	installs: number | null,
+	/**  Where it comes from, as text: the repository or the path. */
+	source: string,
+};
 
 /**  The slash commands and models of the person's Claude Code, as it last said them. */
 export type Catalog = {

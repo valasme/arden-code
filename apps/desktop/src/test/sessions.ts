@@ -5,6 +5,7 @@ import { z } from "zod";
 import type {
   AgentKind,
   AppError,
+  AvailablePlugin,
   Catalog,
   Effort,
   ErrorCode,
@@ -109,6 +110,8 @@ interface Options {
   transcriptView?: TranscriptView;
   /** The plugins Claude Code has installed (ADR 0053). None by default. */
   installedPlugins?: InstalledPlugin[];
+  /** The plugins the person's marketplaces offer (ADR 0053). None by default. */
+  pluginCatalog?: AvailablePlugin[];
 }
 
 /**
@@ -133,6 +136,7 @@ export function startSessionsRust({
   usageLimits = { report: "unknown", windows: [] },
   transcriptView = "normal",
   installedPlugins = [],
+  pluginCatalog = [],
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
@@ -438,6 +442,9 @@ export function startSessionsRust({
         }
         case "installed_plugins": {
           return installedPlugins;
+        }
+        case "plugin_catalog": {
+          return pluginCatalog;
         }
         case "send_message": {
           const { sessionId, text, onEvent } = z

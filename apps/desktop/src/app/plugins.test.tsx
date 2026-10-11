@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
 
-import type { InstalledPlugin } from "@/ipc/bindings";
+import type { AvailablePlugin, InstalledPlugin } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { expectNoAccessibilityViolations } from "@/test/axe";
@@ -168,11 +168,161 @@ describe("The Plugins page (ADR 0053)", () => {
     expect(screen.getByText("ARD-AGT-020")).toBeVisible();
   });
 
-  it("has no accessibility violations", async () => {
+  it("has no accessibility violations on Installed", async () => {
     await openApp({}, "/plugins/installed");
     await waitFor(() => {
       expect(rows()).toHaveLength(4);
     });
+
+    await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+function offered(id: string, extra: Partial<AvailablePlugin> = {}): AvailablePlugin {
+  const [name = id, marketplace = ""] = id.split("@");
+  return {
+    agent: "claude",
+    id,
+    name,
+    marketplace,
+    description: `What ${name} does.`,
+    version: "1.0.0",
+    installs: null,
+    source: `./plugins/${name}`,
+    ...extra,
+  };
+}
+
+const catalog: AvailablePlugin[] = [
+  offered("zebra-docs@claude-plugins-official", { description: "Writes docs." }),
+  offered("github@claude-plugins-official", {
+    installs: 96_120,
+    description: "Official GitHub MCP server: issues and pull requests.",
+    source: "https://github.com/anthropics/claude-plugins-official.git · external_plugins/github",
+    version: "1.2.0",
+  }),
+  offered("superpowers@claude-plugins-official", { installs: 182_400 }),
+  offered("alpha-tools@acme", { description: "Deploys to staging." }),
+];
+
+const offeredRows = () =>
+  within(screen.getByRole("listbox", { name: "Plugins" })).getAllByRole("option");
+
+describe("Discover (ADR 0053)", () => {
+  it("is the first tab, where the page opens", async () => {
+    const { user } = await openApp({ pluginCatalog: catalog });
+
+    await user.click(within(sidebar()).getByRole("link", { name: "Plugins" }));
+
+    const tabs = within(within(sidebar()).getByRole("navigation", { name: "Plugins tabs" }))
+      .getAllByRole("link")
+      .map((link) => link.textContent);
+    expect(tabs).toEqual(["Discover", "Installed"]);
+    expect(await screen.findByRole("listbox", { name: "Plugins" })).toBeVisible();
+  });
+
+  it("lists the most installed first, then by name", async () => {
+    await openApp({ pluginCatalog: catalog }, "/plugins/discover");
+
+    await waitFor(() => {
+      expect(
+        offeredRows().map((row) => row.querySelector("[data-plugin-name]")?.textContent),
+      ).toEqual(["superpowers", "github", "alpha-tools", "zebra-docs"]);
+    });
+  });
+
+  it("searches names and descriptions from the sidebar", async () => {
+    const { user } = await openApp({ pluginCatalog: catalog }, "/plugins/discover");
+    await screen.findAllByRole("option");
+
+    await user.type(
+      within(sidebar()).getByRole("searchbox", { name: "Search plugins" }),
+      "pull req",
+    );
+
+    expect(offeredRows()).toHaveLength(1);
+    expect(offeredRows()[0]).toHaveTextContent("github");
+  });
+
+  it("shows a plugin's details with the warning about what it can run", async () => {
+    const { user } = await openApp({ pluginCatalog: catalog }, "/plugins/discover");
+
+    await user.click(await screen.findByRole("option", { name: /^github/ }));
+
+    const details = screen.getByRole("region", { name: "github" });
+    expect(details).toHaveTextContent("Official GitHub MCP server: issues and pull requests.");
+    expect(details).toHaveTextContent("claude-plugins-official");
+    expect(details).toHaveTextContent("1.2.0");
+    expect(details).toHaveTextContent("96,120");
+    expect(details).toHaveTextContent(
+      "https://github.com/anthropics/claude-plugins-official.git · external_plugins/github",
+    );
+    expect(details).toHaveTextContent(
+      "A plugin can run programs on this computer through its hooks and servers. Install only plugins you trust.",
+    );
+  });
+
+  it("moves through the list with the arrow keys", async () => {
+    const { user } = await openApp({ pluginCatalog: catalog }, "/plugins/discover");
+    const list = await screen.findByRole("listbox", { name: "Plugins" });
+    await screen.findAllByRole("option");
+
+    list.focus();
+    await user.keyboard("{ArrowDown}");
+
+    expect(screen.getByRole("option", { name: /^github/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("region", { name: "github" })).toBeVisible();
+  });
+
+  it("reads the catalog once in a run, and again on Refresh", async () => {
+    const { rust, user } = await openApp({ pluginCatalog: catalog }, "/plugins/discover");
+    await screen.findAllByRole("option");
+    await user.click(within(sidebar()).getByRole("link", { name: "Installed" }));
+    await user.click(within(sidebar()).getByRole("link", { name: "Discover" }));
+    await screen.findAllByRole("option");
+    expect(rust.callsTo("plugin_catalog")).toEqual([{ fresh: false }]);
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    await waitFor(() => {
+      expect(rust.callsTo("plugin_catalog")).toEqual([{ fresh: false }, { fresh: true }]);
+    });
+  });
+
+  it("draws only a screenful of a catalog of thousands", async () => {
+    const thousands = Array.from({ length: 4000 }, (_, at) =>
+      offered(`plugin-${String(at).padStart(4, "0")}@market`),
+    );
+    const { user } = await openApp({ pluginCatalog: thousands }, "/plugins/discover");
+    await screen.findAllByRole("option");
+
+    expect(offeredRows().length).toBeLessThan(100);
+    await user.type(
+      within(sidebar()).getByRole("searchbox", { name: "Search plugins" }),
+      "plugin-3999",
+    );
+    expect(offeredRows()).toHaveLength(1);
+  });
+
+  it("puts the details in the list's place, with a way back, when the window is narrow", async () => {
+    await page.viewport(500, 700);
+    useLayoutStore.setState({ sidebarOpen: false });
+    const { user } = await openApp({ pluginCatalog: catalog }, "/plugins/discover");
+
+    await user.click(await screen.findByRole("option", { name: /^github/ }));
+
+    expect(screen.queryByRole("listbox", { name: "Plugins" })).toBeNull();
+    expect(screen.getByRole("region", { name: "github" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "All plugins" }));
+    expect(screen.getByRole("listbox", { name: "Plugins" })).toBeVisible();
+  });
+
+  it("has no accessibility violations", async () => {
+    const { user } = await openApp({ pluginCatalog: catalog }, "/plugins/discover");
+    await user.click(await screen.findByRole("option", { name: /^github/ }));
 
     await expectNoAccessibilityViolations(document.body);
   });

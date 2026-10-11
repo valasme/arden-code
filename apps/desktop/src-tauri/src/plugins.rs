@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use arden_agents::claude::plugins::{ClaudePlugins, InstalledPlugin, PluginError};
+use arden_agents::claude::plugins::{AvailablePlugin, ClaudePlugins, InstalledPlugin, PluginError};
 use arden_core::error::{AppError, ErrorCode};
 use tauri::State;
 
@@ -67,4 +67,20 @@ pub async fn installed_plugins(
 ) -> Result<Vec<InstalledPlugin>, AppError> {
     let claude = plugins.claude()?;
     off_the_window(move || claude.installed()).await
+}
+
+/// Every plugin the person's marketplaces offer (ADR 0053): read from the agent the first time the
+/// page asks in a run of Arden Code, and again when `fresh`, as on Refresh.
+///
+/// # Errors
+///
+/// Returns why it could not be read, as [`installed_plugins`] does.
+#[tauri::command]
+#[specta::specta]
+pub async fn plugin_catalog(
+    fresh: bool,
+    plugins: State<'_, Plugins>,
+) -> Result<Vec<AvailablePlugin>, AppError> {
+    let claude = plugins.claude()?;
+    off_the_window(move || claude.catalog(fresh)).await
 }

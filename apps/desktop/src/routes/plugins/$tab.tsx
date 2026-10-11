@@ -1,5 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 
+import { DiscoverTab } from "@/features/plugins/DiscoverTab";
 import { InstalledTab } from "@/features/plugins/InstalledTab";
 import { isPluginsTab } from "@/features/plugins/tabs";
 
@@ -15,5 +16,5 @@ function PluginsTabPage() {
   const { tab } = Route.useParams();
   // beforeLoad has already turned away tabs that do not exist.
   if (!isPluginsTab(tab)) return null;
-  return <InstalledTab />;
+  return tab === "discover" ? <DiscoverTab /> : <InstalledTab />;
 }

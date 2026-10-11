@@ -28,6 +28,17 @@ export const installedPluginsQuery = queryOptions({
   retry: false,
 });
 
+/**
+ * Every plugin the person's marketplaces offer (ADR 0053). Rust reads it once in a run of Arden
+ * Code and keeps it; Refresh asks for it afresh.
+ */
+export const pluginCatalogQuery = queryOptions({
+  queryKey: ["plugins", "catalog"],
+  queryFn: () => commands.pluginCatalog(false),
+  staleTime: Number.POSITIVE_INFINITY,
+  retry: false,
+});
+
 /** The product name and version. They never change while the app runs. */
 export const appInfoQuery = queryOptions({
   queryKey: ["app-info"],
