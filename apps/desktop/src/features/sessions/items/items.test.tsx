@@ -39,6 +39,20 @@ function approval(overrides: Partial<Extract<Item, { type: "approval" }>> = {}):
 }
 
 const textItem = (value: string): Item => ({ type: "text", id: "text-1", text: value });
+/**
+ * A streaming text item, drawn the same way each time the reply grows: one tree, so React keeps the
+ * item and its pace.
+ */
+const streamingText = (value: string) => (
+  <ItemView
+    item={textItem(value)}
+    streaming
+    agent="claude"
+    onAnswer={vi.fn<AnswerHandler>()}
+    onAnswerQuestions={vi.fn<QuestionsHandler>()}
+    onAnswerPlan={vi.fn<PlanHandler>()}
+  />
+);
 const nextFrame = () =>
   new Promise<void>((resolve) => {
     requestAnimationFrame(() => {
@@ -59,20 +73,11 @@ async function shownOverFrames(container: HTMLElement, frames: number) {
 
 describe("A reply's text as it streams (#132)", () => {
   it("shows a piece that arrives at once a few characters on every frame, then catches up", async () => {
-    const { container, rerender } = renderItem(textItem("A hash map"), true);
+    const { container, rerender } = render(streamingText("A hash map"));
     await screen.findByText("A hash map");
     // A piece of 50 characters arrives at once, as Claude Code can send.
     const full = "A hash map keeps each value under a key, so a lookup is quick.";
-    rerender(
-      <ItemView
-        item={textItem(full)}
-        streaming
-        agent="claude"
-        onAnswer={vi.fn<AnswerHandler>()}
-        onAnswerQuestions={vi.fn<QuestionsHandler>()}
-        onAnswerPlan={vi.fn<PlanHandler>()}
-      />,
-    );
+    rerender(streamingText(full));
 
     const lengths = await shownOverFrames(container, 24);
     // Not all at once, but in steps of a few characters (about eight frames on a quiet machine; a
