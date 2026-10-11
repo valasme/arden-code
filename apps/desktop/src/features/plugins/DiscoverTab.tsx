@@ -12,6 +12,7 @@ import { toAppError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { usePluginsPageStore } from "@/state/pluginsPage";
 
+import { afterChange } from "./afterChange";
 import { InstallDialog } from "./InstallDialog";
 import { PluginsProblem } from "./PluginsProblem";
 
@@ -49,7 +50,7 @@ function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => vo
   const [choosing, setChoosing] = useState(false);
   const install = useMutation({
     mutationFn: () => commands.installPlugin(plugin.id),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["plugins"], refetchType: "all" }),
+    onSettled: () => afterChange(queryClient),
   });
   const installs =
     plugin.installs === null
@@ -90,6 +91,9 @@ function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => vo
       <div aria-live="polite" className="text-sm empty:hidden">
         {install.isPending ? t("plugins.install.underWay", { name: plugin.name }) : null}
         {install.isSuccess ? install.data.message : null}
+        {install.isSuccess && install.data.sessionsWaiting ? (
+          <p className="text-xs text-muted-foreground">{t("plugins.waiting")}</p>
+        ) : null}
       </div>
       {install.isError ? <PluginsProblem error={toAppError(install.error)} /> : null}
       {plugin.description ? <p className="text-sm">{plugin.description}</p> : null}

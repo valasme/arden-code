@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Child;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -59,6 +59,10 @@ const ENDING_PATIENCE: Duration = Duration::from_millis(500);
 const MODE_REQUEST: &str = "arden-mode-";
 /// The start of the ids of Arden Code's requests for a session's name (ADR 0050).
 const TITLE_REQUEST: &str = "arden-title-";
+/// The start of the id of a request to reload a Claude Code's plugins (ADR 0053).
+const RELOAD_REQUEST: &str = "arden-reload-";
+/// How long the running Claude Codes have to answer a reload of their plugins.
+const RELOAD_PATIENCE: Duration = Duration::from_secs(30);
 /// What Claude is told when its questions cannot be read, so they cannot be shown.
 const UNREADABLE_QUESTIONS: &str =
     "Arden Code could not read these questions, so the person did not see them.";
@@ -164,6 +168,52 @@ fn tell(listening: Option<&Listening>, session: &str, change: Option<SessionChan
     }
 }
 
+/// What reloading the running Claude Codes' plugins came to (ADR 0053).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Reloaded {
+    /// Whether a session gets the change only when its Claude Code next starts: one held the
+    /// reload, so as not to cost its prompt cache, or did not answer.
+    pub waiting: bool,
+}
+
+/// The answers to requests to reload plugins, as the readers hear them: whether each was held.
+#[derive(Default)]
+struct Reloads {
+    answers: Mutex<HashMap<String, bool>>,
+    heard: Condvar,
+}
+
+impl Reloads {
+    fn answer(&self, id: &str, held: bool) {
+        lock(&self.answers).insert(id.to_owned(), held);
+        self.heard.notify_all();
+    }
+
+    /// Waits up to `patience` for the answers to `ids`, and says whether any was held or did not
+    /// come.
+    fn any_held(&self, ids: &[String], patience: Duration) -> bool {
+        let deadline = Instant::now() + patience;
+        let mut answers = lock(&self.answers);
+        while !ids.iter().all(|id| answers.contains_key(id)) {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            answers = self
+                .heard
+                .wait_timeout(answers, left)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+        }
+        // Every answer is taken out, so none is left behind.
+        let held: Vec<bool> = ids
+            .iter()
+            .map(|id| answers.remove(id).unwrap_or(true))
+            .collect();
+        held.contains(&true)
+    }
+}
+
 /// One running Claude Code, for one session.
 struct Live {
     input: Mutex<Box<dyn Write + Send>>,
@@ -193,6 +243,7 @@ struct Hearing {
     usage: Arc<Usage>,
     listening: Option<Listening>,
     modes: Arc<Modes>,
+    reloads: Arc<Reloads>,
 }
 
 impl Hearing {
@@ -210,6 +261,16 @@ impl Hearing {
             }
             Frame::Response { id, error, .. } if id.starts_with(MODE_REQUEST) => {
                 tell(self.modes.answered(id, error.as_deref()));
+                true
+            }
+            // A reload that was applied brings the commands the plugins have now (ADR 0053); one
+            // that was held, or refused by an older Claude Code, leaves them.
+            Frame::Response { id, error, answer } if id.starts_with(RELOAD_REQUEST) => {
+                let held = error.is_some() || answer["held"] == true;
+                if !held && let Some(catalog) = &self.catalog {
+                    lock(catalog).absorb_initialize(answer);
+                }
+                self.reloads.answer(id, held);
                 true
             }
             // One a Claude Code could not give changes nothing.
@@ -268,6 +329,7 @@ impl Live {
         catalog: Option<Arc<Mutex<Catalog>>>,
         usage: Arc<Usage>,
         listening: Option<Listening>,
+        reloads: Arc<Reloads>,
     ) -> Self {
         let conversation = &start.conversation;
         let (sender, events) = mpsc::channel();
@@ -287,6 +349,7 @@ impl Live {
             usage,
             listening,
             modes: Arc::clone(&modes),
+            reloads,
         };
         thread::spawn(move || {
             for line in BufReader::new(output).lines() {
@@ -470,6 +533,8 @@ pub struct ClaudeDriver {
     /// Whether Settings allows Bypass permissions, so that each Claude Code is started so that it
     /// can be chosen in it (ADR 0044).
     bypass_allowed: AtomicBool,
+    /// The answers to requests to reload plugins (ADR 0053).
+    reloads: Arc<Reloads>,
 }
 
 /// Marks a session's Claude Code as used by a reply until the reply ends.
@@ -506,6 +571,7 @@ impl ClaudeDriver {
             context_patience: CONTEXT_PATIENCE,
             listening: Arc::new(Mutex::new(None)),
             bypass_allowed: AtomicBool::new(false),
+            reloads: Arc::new(Reloads::default()),
         }
     }
 
@@ -583,6 +649,7 @@ impl ClaudeDriver {
             hears_lists.then(|| Arc::clone(&self.catalog)),
             Arc::clone(&self.usage),
             None,
+            Arc::clone(&self.reloads),
         );
         let id = self.next_request();
         live.write(&protocol::initialize(&id)).ok()?;
@@ -676,6 +743,37 @@ impl ClaudeDriver {
             }
         }
         self.usage_limits()
+    }
+
+    /// Gives every running Claude Code a change to its plugins (ADR 0053): each is asked to reload
+    /// them unless that would cost its conversation's prompt cache. An applied reload's commands
+    /// replace the slash command list; a held one leaves it, and that session gets the change when
+    /// its Claude Code next starts. With none running, the lists are heard again from a Claude Code
+    /// started in `folder` only for that, as at start. Blocks while it waits, so the app calls it on
+    /// a thread of its own.
+    pub fn reload_plugins(&self, folder: &Path) -> Reloaded {
+        self.reload_plugins_with(folder, LIST_SETTLE)
+    }
+
+    /// [`Self::reload_plugins`], with the time without news after which the lists are complete.
+    pub fn reload_plugins_with(&self, folder: &Path, settle: Duration) -> Reloaded {
+        let running: Vec<Arc<Live>> = lock(&self.live).values().map(Arc::clone).collect();
+        if running.is_empty() {
+            self.warm_with(folder, settle);
+            return Reloaded { waiting: false };
+        }
+        let asked: Vec<String> = running
+            .iter()
+            .filter_map(|live| {
+                let id = format!(
+                    "{RELOAD_REQUEST}{}",
+                    self.requests.fetch_add(1, Ordering::Relaxed) + 1
+                );
+                live.write(&protocol::reload_plugins(&id)).ok().map(|()| id)
+            })
+            .collect();
+        let waiting = asked.len() < running.len() || self.reloads.any_held(&asked, RELOAD_PATIENCE);
+        Reloaded { waiting }
     }
 
     /// A new id for a request for the usage limits, which the reader knows by its start.
@@ -816,6 +914,7 @@ impl ClaudeDriver {
             Some(Arc::clone(&self.catalog)),
             Arc::clone(&self.usage),
             Some(Arc::clone(&self.listening)),
+            Arc::clone(&self.reloads),
         ));
         let id = self.next_request();
         live.write(&protocol::initialize(&id)).map_err(|error| {

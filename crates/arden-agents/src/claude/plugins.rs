@@ -104,6 +104,9 @@ pub struct AvailablePlugin {
 pub struct PluginChange {
     /// Claude Code's own message.
     pub message: String,
+    /// Whether a session gets the change only when its Claude Code next starts, because applying it
+    /// now would cost its prompt cache (ADR 0053). The app says so once it has asked them.
+    pub sessions_waiting: bool,
 }
 
 /// The result a change prints on its last line with `--json`, as far as Arden Code reads it.
@@ -475,6 +478,7 @@ impl ClaudePlugins {
         if result.outcome == "ok" || already {
             return Ok(PluginChange {
                 message: result.message,
+                sessions_waiting: false,
             });
         }
         Err(PluginError::Failed {

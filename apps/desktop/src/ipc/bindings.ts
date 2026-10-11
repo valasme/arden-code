@@ -1255,6 +1255,11 @@ export type PluginAction = "enable" | "disable" | "update" | "uninstall";
 export type PluginChange = {
 	/**  Claude Code's own message. */
 	message: string,
+	/**
+	 *  Whether a session gets the change only when its Claude Code next starts, because applying it
+	 *  now would cost its prompt cache (ADR 0053). The app says so once it has asked them.
+	 */
+	sessionsWaiting: boolean,
 };
 
 /**  Where a plugin is installed, as Claude Code says it. */

@@ -497,7 +497,8 @@
       "installed": "Installed"
     },
     "tabsLabel": "Plugins tabs",
-    "title": "Plugins"
+    "title": "Plugins",
+    "waiting": "A session that is open gets it when its Claude Code next starts, so that its conversation is not read again at full price."
   },
   "projects": {
     "menu": "Actions for {{name}}",

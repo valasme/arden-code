@@ -341,6 +341,7 @@ describe("Installing a plugin for you in every project (ADR 0053)", () => {
     const { rust, user } = await details({
       pluginChange: () => ({
         message: "Successfully installed plugin: github@claude-plugins-official (scope: user)",
+        sessionsWaiting: false,
       }),
     });
 
@@ -442,7 +443,10 @@ async function installedTab(options: Options = {}) {
 describe("Changing installed plugins (ADR 0053)", () => {
   it("turns a plugin off with its switch, at its scope", async () => {
     const { rust, user } = await installedTab({
-      pluginChange: () => ({ message: "Successfully disabled plugin: superpowers" }),
+      pluginChange: () => ({
+        message: "Successfully disabled plugin: superpowers",
+        sessionsWaiting: false,
+      }),
     });
 
     const toggle = within(rowOf("superpowers")).getByRole("switch", { name: "Use superpowers" });
@@ -607,5 +611,43 @@ describe("Changing installed plugins (ADR 0053)", () => {
     await installedTab({ folders: [folderProject("api", "billing-api", true)] });
 
     await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+describe("Giving running sessions a plugin change (ADR 0053)", () => {
+  it("says when a session gets the change only when its Claude Code next starts", async () => {
+    const { user } = await details({
+      pluginChange: () => ({ message: "Installed.", sessionsWaiting: true }),
+    });
+
+    await user.click(screen.getByRole("button", { name: "Install…" }));
+    await user.click(
+      within(await screen.findByRole("dialog", { name: "Install github" })).getByRole("button", {
+        name: "Install",
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        "A session that is open gets it when its Claude Code next starts, so that its conversation is not read again at full price.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("reads the slash commands again, so a new plugin's skills can be run", async () => {
+    const { rust, user } = await details();
+    const before = rust.callsTo("claude_catalog").length;
+
+    await user.click(screen.getByRole("button", { name: "Install…" }));
+    await user.click(
+      within(await screen.findByRole("dialog", { name: "Install github" })).getByRole("button", {
+        name: "Install",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(rust.callsTo("claude_catalog").length).toBeGreaterThan(before);
+    });
+    expect(screen.queryByText(/next starts/)).toBeNull();
   });
 });

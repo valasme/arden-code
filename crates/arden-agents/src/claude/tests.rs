@@ -2831,3 +2831,120 @@ fn a_claude_code_that_cannot_name_a_session_changes_nothing() {
         "no name was told"
     );
 }
+
+/// The driver's `reload_plugins`, asking Claude Code to hold a reload that would cost the prompt
+/// cache (ADR 0053).
+fn asks_to_reload() -> Step {
+    Step::Expect(json!({
+        "type": "control_request",
+        "request": { "subtype": "reload_plugins", "hold_on_cache_impact": true }
+    }))
+}
+
+/// A session's Claude Code that answers one message, then `reload_plugins` with `answer`.
+fn reloading(answer: &Value) -> Vec<Step> {
+    let mut script = handshake_listing(&listed_commands(), &listed_models());
+    script.extend([
+        message("Hello"),
+        success("Hi."),
+        asks_for_context(),
+        context_answer(),
+        asks_to_reload(),
+        Step::Answer(json!({
+            "type": "control_response",
+            "response": { "subtype": "success", "response": answer }
+        })),
+    ]);
+    script
+}
+
+fn command_names(driver: &ClaudeDriver) -> Vec<String> {
+    driver
+        .catalog()
+        .commands
+        .into_iter()
+        .map(|command| command.name)
+        .collect()
+}
+
+#[test]
+fn a_running_claude_code_reloads_its_plugins_and_its_commands_replace_the_list() {
+    let (scripted, driver) = claude(vec![Ok(reloading(&json!({
+        "held": false,
+        "commands": [
+            { "name": "compact", "description": "", "argumentHint": "", "builtin": true },
+            { "name": "github:review", "description": "Reviews", "argumentHint": "" }
+        ],
+        "error_count": 0
+    })))]);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "Hello");
+
+    let reloaded = driver.reload_plugins(Path::new(FOLDER));
+
+    scripted.assert_followed();
+    assert!(!reloaded.waiting);
+    assert_eq!(command_names(&driver), ["compact", "github:review"]);
+    assert_eq!(
+        scripted.starts.lock().expect("starts").len(),
+        1,
+        "no Claude Code was started"
+    );
+}
+
+#[test]
+fn a_reload_held_for_the_prompt_cache_leaves_the_commands_and_says_the_session_waits() {
+    let (scripted, driver) = claude(vec![Ok(reloading(&json!({
+        "held": true,
+        "cache_impact": { "tools_changed": true }
+    })))]);
+    let store = store();
+    let session = claude_session(&store);
+    send(&store, &driver, &session, "Hello");
+
+    let reloaded = driver.reload_plugins(Path::new(FOLDER));
+
+    scripted.assert_followed();
+    assert!(reloaded.waiting);
+    assert_eq!(command_names(&driver), ["compact", "mattpocock-skills:tdd"]);
+}
+
+#[test]
+fn every_running_claude_code_is_asked_to_reload() {
+    let applied = json!({ "held": false, "commands": [{ "name": "compact", "description": "", "argumentHint": "" }] });
+    let held = json!({ "held": true });
+    let (scripted, driver) = claude(vec![Ok(reloading(&applied)), Ok(reloading(&held))]);
+    let store = store();
+    let first = claude_session(&store);
+    let second = claude_session(&store);
+    send(&store, &driver, &first, "Hello");
+    send(&store, &driver, &second, "Hello");
+
+    let reloaded = driver.reload_plugins(Path::new(FOLDER));
+
+    scripted.assert_followed();
+    assert!(reloaded.waiting, "one of them held its reload");
+    let written = scripted.written.lock().expect("written");
+    let reloads = written
+        .iter()
+        .filter(|frame| frame["request"]["subtype"] == "reload_plugins")
+        .count();
+    assert_eq!(reloads, 2);
+}
+
+#[test]
+fn with_no_claude_code_running_the_lists_are_heard_again_from_one_started_for_it() {
+    let fresh = json!([{ "name": "github:review", "description": "", "argumentHint": "" }]);
+    let (scripted, driver) = claude(vec![Ok(handshake_listing(&fresh, &listed_models()))]);
+
+    let reloaded = driver.reload_plugins_with(Path::new(FOLDER), Duration::from_millis(100));
+
+    scripted.assert_followed();
+    assert!(!reloaded.waiting);
+    assert_eq!(command_names(&driver), ["github:review"]);
+    let starts = scripted.starts.lock().expect("starts");
+    assert_eq!(starts[0].conversation, Conversation::Listing);
+    let written = scripted.written.lock().expect("written");
+    assert!(written.iter().all(|frame| frame["type"] != "user"));
+}

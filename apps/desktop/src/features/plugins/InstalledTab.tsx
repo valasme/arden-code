@@ -12,6 +12,7 @@ import { installedPluginsQuery, sessionListQuery } from "@/ipc/queries";
 import { toAppError } from "@/lib/errors";
 import { usePluginsPageStore } from "@/state/pluginsPage";
 
+import { afterChange } from "./afterChange";
 import { PluginsProblem } from "./PluginsProblem";
 
 /** Whether a plugin matches what was typed in the sidebar's search: its name or marketplace. */
@@ -68,7 +69,7 @@ function InstalledRow({
   const change = useMutation({
     mutationFn: (action: PluginAction) =>
       commands.changePlugin(action, plugin.id, plugin.scope, project?.id ?? null),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["plugins"], refetchType: "all" }),
+    onSettled: () => afterChange(queryClient),
   });
   const run = (action: PluginAction) => {
     void gate("claude", project, () => {
@@ -159,6 +160,9 @@ function InstalledRow({
       <div aria-live="polite" className="text-xs empty:hidden">
         {change.isPending ? t("plugins.installed.changing", { name: plugin.name }) : null}
         {change.isSuccess ? change.data.message : null}
+        {change.isSuccess && change.data.sessionsWaiting ? (
+          <p className="text-muted-foreground">{t("plugins.waiting")}</p>
+        ) : null}
       </div>
       {change.isError ? <PluginsProblem error={toAppError(change.error)} /> : null}
       <ConfirmDialog

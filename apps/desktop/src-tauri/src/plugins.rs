@@ -53,6 +53,27 @@ fn plugin_error(error: PluginError) -> AppError {
     shown
 }
 
+/// Runs a change to plugins off the window's thread, then gives it to the running Claude Codes
+/// (ADR 0053): each reloads its plugins unless that would cost its prompt cache, and the answer
+/// says whether a session waits for its next start. With none running, the slash commands are
+/// heard again in the Playground.
+async fn change_off_the_window(
+    claude: &crate::agents::Claude,
+    sessions: &crate::sessions::Sessions,
+    work: impl FnOnce() -> Result<PluginChange, PluginError> + Send + 'static,
+) -> Result<PluginChange, AppError> {
+    let driver = Arc::clone(&claude.0);
+    let playground = crate::sessions::playground_folder(sessions);
+    off_the_window(move || {
+        let mut change = work()?;
+        if let Some(playground) = playground {
+            change.sessions_waiting = driver.reload_plugins(&playground).waiting;
+        }
+        Ok(change)
+    })
+    .await
+}
+
 /// Runs a plugin command off the window's thread: it can take a while.
 async fn off_the_window<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, PluginError> + Send + 'static,
@@ -108,9 +129,11 @@ pub async fn plugin_catalog(
 pub async fn install_plugin(
     id: String,
     plugins: State<'_, Plugins>,
+    claude: State<'_, crate::agents::Claude>,
+    sessions: State<'_, crate::sessions::Sessions>,
 ) -> Result<PluginChange, AppError> {
-    let claude = plugins.claude()?;
-    off_the_window(move || claude.install(&id)).await
+    let module = plugins.claude()?;
+    change_off_the_window(&claude, &sessions, move || module.install(&id)).await
 }
 
 /// The folder of a project a plugin command may run in: a folder project the person trusts
@@ -149,12 +172,16 @@ pub async fn change_plugin(
     scope: PluginScope,
     project_id: Option<String>,
     plugins: State<'_, Plugins>,
+    claude: State<'_, crate::agents::Claude>,
     sessions: State<'_, crate::sessions::Sessions>,
 ) -> Result<PluginChange, AppError> {
-    let claude = plugins.claude()?;
+    let module = plugins.claude()?;
     let folder = match project_id {
         Some(project_id) => Some(trusted_folder(&sessions, &project_id)?),
         None => None,
     };
-    off_the_window(move || claude.change(action, &id, scope, folder.as_deref())).await
+    change_off_the_window(&claude, &sessions, move || {
+        module.change(action, &id, scope, folder.as_deref())
+    })
+    .await
 }
