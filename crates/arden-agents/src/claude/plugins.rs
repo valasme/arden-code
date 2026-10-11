@@ -391,24 +391,37 @@ impl ClaudePlugins {
         Ok(catalog)
     }
 
-    /// Installs a plugin for the person in every project (`--scope user`), in the Playground's
+    /// Installs a plugin: for the person in every project (`user`), in the Playground's folder,
+    /// or for the person (`local`) or everyone (`project`) in one project, in that project's
     /// folder.
     ///
     /// # Errors
     ///
-    /// Says why it was not installed; an id that is not a plugin id runs nothing.
-    pub fn install(&self, id: &str) -> Result<PluginChange, PluginError> {
+    /// Says why it was not installed; an id that is not a plugin id, another scope, or a project
+    /// scope without the project's folder runs nothing.
+    pub fn install(
+        &self,
+        id: &str,
+        scope: PluginScope,
+        project: Option<&Path>,
+    ) -> Result<PluginChange, PluginError> {
         if !is_plugin_id(id) {
             return Err(PluginError::InvalidId);
         }
+        let (scope_name, folder) = match (scope, project) {
+            (PluginScope::User, _) => ("user", self.playground.as_path()),
+            (PluginScope::Project, Some(project)) => ("project", project),
+            (PluginScope::Local, Some(project)) => ("local", project),
+            _ => return Err(PluginError::NotChangeable),
+        };
         self.run_change(
-            &self.playground,
+            folder,
             &[
                 Arg::Literal("plugin"),
                 Arg::Literal("install"),
                 Arg::Untrusted(id.to_owned()),
                 Arg::Literal("--scope"),
-                Arg::Literal("user"),
+                Arg::Literal(scope_name),
                 Arg::Literal("--json"),
             ],
         )

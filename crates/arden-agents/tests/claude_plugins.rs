@@ -310,7 +310,11 @@ fn a_plugin_is_installed_for_the_person_in_every_project_from_the_playground() {
     let module = plugins(bin.path(), playground.path(), logs.path());
 
     let done = module
-        .install("adobe-for-creativity@claude-plugins-official")
+        .install(
+            "adobe-for-creativity@claude-plugins-official",
+            PluginScope::User,
+            None,
+        )
         .expect("installed");
 
     assert_eq!(
@@ -362,7 +366,7 @@ fn an_id_that_is_not_a_plain_name_at_marketplace_is_refused_before_anything_runs
         too_long.as_str(),
     ] {
         assert_eq!(
-            module.install(id),
+            module.install(id, PluginScope::User, None),
             Err(PluginError::InvalidId),
             "{id} was not refused"
         );
@@ -370,7 +374,11 @@ fn an_id_that_is_not_a_plain_name_at_marketplace_is_refused_before_anything_runs
     assert!(plugin_starts(&log).is_empty());
     assert!(
         module
-            .install(&format!("{}@market", "a".repeat(121)))
+            .install(
+                &format!("{}@market", "a".repeat(121)),
+                PluginScope::User,
+                None
+            )
             .is_ok()
     );
 }
@@ -383,8 +391,11 @@ fn a_failed_install_says_claude_codes_message_and_code() {
         "missing@claude-plugins-official": { "message": "Plugin not found in marketplace", "failureCode": "plugin_not_found" }
     } } }));
 
-    let refused = plugins(bin.path(), playground.path(), logs.path())
-        .install("missing@claude-plugins-official");
+    let refused = plugins(bin.path(), playground.path(), logs.path()).install(
+        "missing@claude-plugins-official",
+        PluginScope::User,
+        None,
+    );
 
     assert_eq!(
         refused,
@@ -402,7 +413,11 @@ fn a_plugin_installed_already_reads_as_success() {
     let bin = claude_on_path(&json!({ "plugins": { "installed": installed_list() } }));
 
     let done = plugins(bin.path(), playground.path(), logs.path())
-        .install("superpowers@claude-plugins-official")
+        .install(
+            "superpowers@claude-plugins-official",
+            PluginScope::User,
+            None,
+        )
         .expect("success");
 
     assert!(
@@ -422,7 +437,11 @@ fn the_catalog_is_read_again_after_a_change() {
 
     module.catalog(false).expect("the catalog");
     module
-        .install("agent-sdk-dev@claude-plugins-official")
+        .install(
+            "agent-sdk-dev@claude-plugins-official",
+            PluginScope::User,
+            None,
+        )
         .expect("installed");
     module.catalog(false).expect("the catalog");
 
@@ -592,4 +611,70 @@ fn only_what_a_synced_or_managed_plugin_allows_is_run() {
         start["args"],
         json!(["plugin", "disable", "notes@synced", "--json"])
     );
+}
+
+#[test]
+fn a_plugin_is_installed_for_a_project_in_its_folder_at_the_scope_chosen() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let project = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = claude_on_path(&json!({ "log": log, "plugins": { "available": catalog() } }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+    let id = "adobe-for-creativity@claude-plugins-official";
+
+    module
+        .install(id, PluginScope::Project, Some(project.path()))
+        .expect("for everyone in the project");
+    module
+        .install(id, PluginScope::Local, Some(project.path()))
+        .expect("for the person in the project");
+
+    let installs: Vec<Value> = plugin_starts(&log)
+        .into_iter()
+        .filter(|start| start["args"][1] == "install")
+        .collect();
+    assert_eq!(
+        installs[0]["args"],
+        json!(["plugin", "install", id, "--scope", "project", "--json"])
+    );
+    assert_eq!(
+        installs[1]["args"],
+        json!(["plugin", "install", id, "--scope", "local", "--json"])
+    );
+    for install in &installs {
+        assert!(same_folder(
+            install["folder"].as_str().unwrap_or_default(),
+            project.path()
+        ));
+    }
+    let installed = module.installed().expect("the list");
+    assert!(installed.iter().any(|plugin| {
+        plugin.scope == PluginScope::Project
+            && plugin
+                .project_path
+                .as_deref()
+                .is_some_and(|path| same_folder(path, project.path()))
+    }));
+}
+
+#[test]
+fn a_project_install_needs_its_projects_folder_and_another_scope_is_refused() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = claude_on_path(&json!({ "log": log }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+
+    for scope in [PluginScope::Project, PluginScope::Local] {
+        assert_eq!(
+            module.install("x@market", scope, None),
+            Err(PluginError::NotChangeable)
+        );
+    }
+    assert_eq!(
+        module.install("x@market", PluginScope::Managed, Some(playground.path())),
+        Err(PluginError::NotChangeable)
+    );
+    assert!(plugin_starts(&log).is_empty());
 }

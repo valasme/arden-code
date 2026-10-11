@@ -6,7 +6,8 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { useFormatters } from "@/features/settings/useFormatters";
-import { type AvailablePlugin, commands } from "@/ipc/bindings";
+import { useTrustGate } from "@/features/sessions/useTrustGate";
+import { type AvailablePlugin, commands, type PluginScope, type Project } from "@/ipc/bindings";
 import { pluginCatalogQuery } from "@/ipc/queries";
 import { toAppError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ import { usePluginsPageStore } from "@/state/pluginsPage";
 
 import { afterChange } from "./afterChange";
 import { InstallDialog } from "./InstallDialog";
+import { useInstallProjects } from "./useInstallProjects";
 import { PluginsProblem } from "./PluginsProblem";
 
 /** The height of a row of the list, which every row has, so the list can be drawn in part. */
@@ -48,8 +50,11 @@ function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => vo
   const formatters = useFormatters();
   const queryClient = useQueryClient();
   const [choosing, setChoosing] = useState(false);
+  const { gate, dialog } = useTrustGate();
+  const projects = useInstallProjects();
   const install = useMutation({
-    mutationFn: () => commands.installPlugin(plugin.id),
+    mutationFn: ({ scope, project }: { scope: PluginScope; project: Project | undefined }) =>
+      commands.installPlugin(plugin.id, scope, project?.id ?? null),
     onSettled: () => afterChange(queryClient),
   });
   const installs =
@@ -113,12 +118,18 @@ function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => vo
       </p>
       <InstallDialog
         plugin={plugin}
+        projects={projects}
         open={choosing}
         onOpenChange={setChoosing}
-        onInstall={() => {
-          install.mutate();
+        onInstall={(scope, project) => {
+          // A plugin for a project is installed only once the person trusts the project.
+          void gate("claude", project, () => {
+            install.mutate({ scope, project });
+            return true;
+          });
         }}
       />
+      {dialog}
     </section>
   );
 }

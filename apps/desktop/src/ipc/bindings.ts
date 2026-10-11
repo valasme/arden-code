@@ -650,16 +650,17 @@ export const commands = {
 	 */
 	pluginCatalog: (fresh: boolean) => __TAURI_INVOKE<AvailablePlugin[]>("plugin_catalog", { fresh }),
 	/**
-	 *  Installs a plugin for the person in every project (ADR 0053), once its id is checked, and
-	 *  answers the agent's own message.
+	 *  Installs a plugin (ADR 0053), once its id is checked: for the person in every project, or for
+	 *  the person or everyone in a project, which must be a trusted folder project. Answers the agent's
+	 *  own message.
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns why it was not installed: an id that is not a plugin id, a command that failed (with
-	 *  the agent's message and code), took too long, or answered in a way Arden Code does not
-	 *  understand.
+	 *  Returns why it was not installed: an id that is not a plugin id, a project that is unknown or
+	 *  not trusted, or a command that failed (with the agent's message and code), took too long, or
+	 *  answered in a way Arden Code does not understand.
 	 */
-	installPlugin: (id: string) => __TAURI_INVOKE<PluginChange>("install_plugin", { id }),
+	installPlugin: (id: string, scope: PluginScope, projectId: string | null) => __TAURI_INVOKE<PluginChange>("install_plugin", { id, scope, projectId }),
 	/**
 	 *  Turns an installed plugin on or off, updates it or uninstalls it, at the scope it is installed
 	 *  at (ADR 0053). A project's plugin is changed in that project's folder, which must be a trusted

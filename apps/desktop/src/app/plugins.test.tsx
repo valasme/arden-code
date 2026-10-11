@@ -356,7 +356,9 @@ describe("Installing a plugin for you in every project (ADR 0053)", () => {
         "Successfully installed plugin: github@claude-plugins-official (scope: user)",
       ),
     ).toBeVisible();
-    expect(rust.callsTo("install_plugin")).toEqual([{ id: "github@claude-plugins-official" }]);
+    expect(rust.callsTo("install_plugin")).toEqual([
+      { id: "github@claude-plugins-official", scope: "user", projectId: null },
+    ]);
     // What the marketplaces offer is read again, and Installed reads what is installed now.
     await waitFor(() => {
       expect(rust.callsTo("plugin_catalog")).toHaveLength(2);
@@ -649,5 +651,137 @@ describe("Giving running sessions a plugin change (ADR 0053)", () => {
       expect(rust.callsTo("claude_catalog").length).toBeGreaterThan(before);
     });
     expect(screen.queryByText(/next starts/)).toBeNull();
+  });
+});
+
+/** Opens github's details on Discover, coming from a session in the website project. */
+async function fromSession(options: Options = {}) {
+  const opened = await openApp({
+    pluginCatalog: catalog,
+    folders: [folderProject("api", "billing-api", true), folderProject("site", "website", true)],
+    sessions: [
+      {
+        ...sessionNamed("session-1", "Fix the build", "site"),
+        updatedAt: "2026-10-01T09:00:00Z",
+      },
+      { ...sessionNamed("session-2", "Older", "api"), updatedAt: "2026-10-02T09:00:00Z" },
+    ],
+    ...options,
+  });
+  await opened.user.click(within(sidebar()).getByRole("link", { name: "Plugins" }));
+  await opened.user.click(await screen.findByRole("option", { name: /^github/ }));
+  await opened.user.click(screen.getByRole("button", { name: "Install…" }));
+  const dialog = await screen.findByRole("dialog", { name: "Install github" });
+  await animationsDone(dialog);
+  return { ...opened, dialog };
+}
+
+describe("Installing a plugin for a project (ADR 0053)", () => {
+  it("offers the three choices, saying everyone's changes the project's shared settings", async () => {
+    const { dialog } = await fromSession();
+
+    expect(
+      within(dialog)
+        .getAllByRole("radio")
+        .map((radio) => radio.getAttribute("aria-label") ?? radio.id),
+    ).toHaveLength(3);
+    expect(within(dialog).getByRole("radio", { name: /For you, in every project/ })).toBeChecked();
+    expect(within(dialog).getByRole("radio", { name: /For you, in this project/ })).toBeVisible();
+    expect(
+      within(dialog).getByRole("radio", { name: /For everyone in this project/ }),
+    ).toBeVisible();
+    expect(dialog).toHaveTextContent(".claude/settings.json");
+    expect(within(dialog).queryByRole("combobox", { name: "Project" })).toBeNull();
+  });
+
+  it("takes a folder project from a menu, the open session's first, without the Playground", async () => {
+    const { rust, user, dialog } = await fromSession();
+
+    await user.click(within(dialog).getByRole("radio", { name: /For you, in this project/ }));
+    const menu = within(dialog).getByRole("combobox", { name: "Project" });
+    expect(
+      within(menu)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["website", "billing-api"]);
+    await user.click(within(dialog).getByRole("button", { name: "Install" }));
+
+    await waitFor(() => {
+      expect(rust.callsTo("install_plugin")).toEqual([
+        { id: "github@claude-plugins-official", scope: "local", projectId: "site" },
+      ]);
+    });
+  });
+
+  it("installs for everyone in the project chosen", async () => {
+    const { rust, user, dialog } = await fromSession();
+
+    await user.click(within(dialog).getByRole("radio", { name: /For everyone in this project/ }));
+    await user.selectOptions(
+      within(dialog).getByRole("combobox", { name: "Project" }),
+      "billing-api",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Install" }));
+
+    await waitFor(() => {
+      expect(rust.callsTo("install_plugin")).toEqual([
+        { id: "github@claude-plugins-official", scope: "project", projectId: "api" },
+      ]);
+    });
+  });
+
+  it("asks to trust the project first, and Cancel installs nothing", async () => {
+    const { rust, user, dialog } = await fromSession({
+      folders: [
+        folderProject("api", "billing-api", false),
+        folderProject("site", "website", false),
+      ],
+    });
+
+    await user.click(within(dialog).getByRole("radio", { name: /For you, in this project/ }));
+    await user.click(within(dialog).getByRole("button", { name: "Install" }));
+    const asked = await screen.findByRole("alertdialog", { name: /Trust “website”/ });
+    await animationsDone(asked);
+    await user.click(within(asked).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(rust.callsTo("install_plugin")).toEqual([]);
+
+    await user.click(screen.getByRole("button", { name: "Install…" }));
+    const again = await screen.findByRole("dialog", { name: "Install github" });
+    await user.click(within(again).getByRole("radio", { name: /For you, in this project/ }));
+    await user.click(within(again).getByRole("button", { name: "Install" }));
+    await user.click(
+      within(await screen.findByRole("alertdialog", { name: /Trust “website”/ })).getByRole(
+        "button",
+        { name: "Trust folder" },
+      ),
+    );
+    await waitFor(() => {
+      expect(rust.callsTo("trust_project")).toEqual([{ projectId: "site" }]);
+      expect(rust.callsTo("install_plugin")).toEqual([
+        { id: "github@claude-plugins-official", scope: "local", projectId: "site" },
+      ]);
+    });
+  });
+
+  it("says a folder must be opened first when there is no folder project", async () => {
+    const { dialog } = await fromSession({
+      folders: [],
+      sessions: [sessionNamed("session-1", "Fix")],
+    });
+
+    expect(within(dialog).getByRole("radio", { name: /For you, in this project/ })).toBeDisabled();
+    expect(dialog).toHaveTextContent("Open a folder as a project to install a plugin for it.");
+  });
+
+  it("has no accessibility violations with the project menu open", async () => {
+    const { user, dialog } = await fromSession();
+
+    await user.click(within(dialog).getByRole("radio", { name: /For everyone in this project/ }));
+
+    await expectNoAccessibilityViolations(document.body);
   });
 });

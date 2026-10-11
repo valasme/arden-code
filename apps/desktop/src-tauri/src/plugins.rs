@@ -116,24 +116,34 @@ pub async fn plugin_catalog(
     off_the_window(move || claude.catalog(fresh)).await
 }
 
-/// Installs a plugin for the person in every project (ADR 0053), once its id is checked, and
-/// answers the agent's own message.
+/// Installs a plugin (ADR 0053), once its id is checked: for the person in every project, or for
+/// the person or everyone in a project, which must be a trusted folder project. Answers the agent's
+/// own message.
 ///
 /// # Errors
 ///
-/// Returns why it was not installed: an id that is not a plugin id, a command that failed (with
-/// the agent's message and code), took too long, or answered in a way Arden Code does not
-/// understand.
+/// Returns why it was not installed: an id that is not a plugin id, a project that is unknown or
+/// not trusted, or a command that failed (with the agent's message and code), took too long, or
+/// answered in a way Arden Code does not understand.
 #[tauri::command]
 #[specta::specta]
 pub async fn install_plugin(
     id: String,
+    scope: PluginScope,
+    project_id: Option<String>,
     plugins: State<'_, Plugins>,
     claude: State<'_, crate::agents::Claude>,
     sessions: State<'_, crate::sessions::Sessions>,
 ) -> Result<PluginChange, AppError> {
     let module = plugins.claude()?;
-    change_off_the_window(&claude, &sessions, move || module.install(&id)).await
+    let folder = match project_id {
+        Some(project_id) => Some(trusted_folder(&sessions, &project_id)?),
+        None => None,
+    };
+    change_off_the_window(&claude, &sessions, move || {
+        module.install(&id, scope, folder.as_deref())
+    })
+    .await
 }
 
 /// The folder of a project a plugin command may run in: a folder project the person trusts

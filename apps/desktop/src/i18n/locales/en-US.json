@@ -454,7 +454,11 @@
     "install": {
       "cancel": "Cancel",
       "confirm": "Install",
+      "localDetail": "Only you get it, and only in the project you choose.",
+      "noProject": "Open a folder as a project to install a plugin for it.",
       "open": "Install…",
+      "project": "Project",
+      "projectDetail": "Everyone who works in the project gets it once you commit its .claude/settings.json, which this changes.",
       "title": "Install {{name}}",
       "underWay": "Installing {{name}}…",
       "userDetail": "Only you get it, wherever you work.",
