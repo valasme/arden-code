@@ -17,6 +17,17 @@ import {
   type UsageLimits,
 } from "./bindings";
 
+/**
+ * The plugins the agents have installed (ADR 0053), read from the agent's own commands each time
+ * the page asks: the person may have changed them in a terminal.
+ */
+export const installedPluginsQuery = queryOptions({
+  queryKey: ["plugins", "installed"],
+  queryFn: () => commands.installedPlugins(),
+  staleTime: 0,
+  retry: false,
+});
+
 /** The product name and version. They never change while the app runs. */
 export const appInfoQuery = queryOptions({
   queryKey: ["app-info"],

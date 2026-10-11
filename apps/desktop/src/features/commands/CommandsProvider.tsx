@@ -34,6 +34,7 @@ import {
   type CommandId,
 } from "./registry";
 import { matchesShortcut, parseShortcut } from "./shortcuts";
+import { firstPluginsTab } from "@/features/plugins/tabs";
 
 /** A command as the app can use it: its definition, and whether it can run right now. */
 export interface AvailableCommand extends CommandDefinition {
@@ -191,6 +192,9 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
       "session.unarchive": sessionCommand("unarchive"),
       "session.delete": sessionCommand("delete"),
       "archived.open": { run: () => void navigate({ to: "/archived" }) },
+      "plugins.open": {
+        run: () => void navigate({ to: "/plugins/$tab", params: { tab: firstPluginsTab } }),
+      },
       "settings.open": {
         run: () => void navigate({ to: "/settings/$tab", params: { tab: "general" } }),
       },

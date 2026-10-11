@@ -1,32 +1,11 @@
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 
-import { expect, launchApp, pathKey, pathWithoutAgents, test } from "./fixtures";
-
-const repoRoot = path.resolve(import.meta.dirname, "..", "..", "..");
-/** The workspace's stand-in for Claude Code (ADR 0038), built with the app. */
-const standIn =
-  process.env["ARDEN_E2E_CLAUDE"] ?? path.join(repoRoot, "target", "debug", "claude-stand-in.exe");
-
-/**
- * A folder that holds the stand-in as `claude.exe`, and the environment that puts it first on the
- * app's `PATH`. Windows spells the variable as it likes, so the one already there is replaced.
- */
-function claudeOnPath(settings: Record<string, unknown> = {}) {
-  const bin = mkdtempSync(path.join(tmpdir(), "arden-e2e-claude-"));
-  copyFileSync(standIn, path.join(bin, "claude.exe"));
-  writeFileSync(path.join(bin, "stand-in.json"), JSON.stringify(settings));
-  return {
-    env: { [pathKey]: `${bin};${pathWithoutAgents()}` },
-    remove: () => {
-      rmSync(bin, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
-    },
-  };
-}
+import { claudeOnPath, expect, launchApp, test } from "./fixtures";
 
 /** Starts a session, makes Claude its agent, and returns the session view. */
 async function claudeSession(page: Page) {

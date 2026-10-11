@@ -28,6 +28,7 @@ export default defineConfig({
       "errors.*",
       "commands.*",
       "items.*",
+      "plugins.*",
       "sessions.announce.*",
       "sessions.actions.*",
       "settings.agents.names.*",

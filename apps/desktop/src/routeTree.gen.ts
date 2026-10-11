@@ -12,9 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArchivedRouteImport } from './routes/archived'
 import { Route as LogsRouteImport } from './routes/logs'
+import { Route as PluginsRouteImport } from './routes/plugins'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as DevDesignSystemRouteImport } from './routes/dev/design-system'
 import { Route as DevErrorsRouteImport } from './routes/dev/errors'
+import { Route as PluginsIndexRouteImport } from './routes/plugins/index'
+import { Route as PluginsTabRouteImport } from './routes/plugins/$tab'
 import { Route as SessionIdRouteImport } from './routes/session/$id'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsTabRouteImport } from './routes/settings/$tab'
@@ -34,6 +37,11 @@ const LogsRoute = LogsRouteImport.update({
   path: '/logs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PluginsRoute = PluginsRouteImport.update({
+  id: '/plugins',
+  path: '/plugins',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -48,6 +56,16 @@ const DevErrorsRoute = DevErrorsRouteImport.update({
   id: '/dev/errors',
   path: '/dev/errors',
   getParentRoute: () => rootRouteImport,
+} as any)
+const PluginsIndexRoute = PluginsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PluginsRoute,
+} as any)
+const PluginsTabRoute = PluginsTabRouteImport.update({
+  id: '/$tab',
+  path: '/$tab',
+  getParentRoute: () => PluginsRoute,
 } as any)
 const SessionIdRoute = SessionIdRouteImport.update({
   id: '/session/$id',
@@ -69,11 +87,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/archived': typeof ArchivedRoute
   '/logs': typeof LogsRoute
+  '/plugins': typeof PluginsRouteWithChildren
   '/settings': typeof SettingsRouteWithChildren
   '/dev/design-system': typeof DevDesignSystemRoute
   '/dev/errors': typeof DevErrorsRoute
+  '/plugins/$tab': typeof PluginsTabRoute
   '/session/$id': typeof SessionIdRoute
   '/settings/$tab': typeof SettingsTabRoute
+  '/plugins/': typeof PluginsIndexRoute
   '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -82,8 +103,10 @@ export interface FileRoutesByTo {
   '/logs': typeof LogsRoute
   '/dev/design-system': typeof DevDesignSystemRoute
   '/dev/errors': typeof DevErrorsRoute
+  '/plugins/$tab': typeof PluginsTabRoute
   '/session/$id': typeof SessionIdRoute
   '/settings/$tab': typeof SettingsTabRoute
+  '/plugins': typeof PluginsIndexRoute
   '/settings': typeof SettingsIndexRoute
 }
 export interface FileRoutesById {
@@ -91,11 +114,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/archived': typeof ArchivedRoute
   '/logs': typeof LogsRoute
+  '/plugins': typeof PluginsRouteWithChildren
   '/settings': typeof SettingsRouteWithChildren
   '/dev/design-system': typeof DevDesignSystemRoute
   '/dev/errors': typeof DevErrorsRoute
+  '/plugins/$tab': typeof PluginsTabRoute
   '/session/$id': typeof SessionIdRoute
   '/settings/$tab': typeof SettingsTabRoute
+  '/plugins/': typeof PluginsIndexRoute
   '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -104,11 +130,14 @@ export interface FileRouteTypes {
     | '/'
     | '/archived'
     | '/logs'
+    | '/plugins'
     | '/settings'
     | '/dev/design-system'
     | '/dev/errors'
+    | '/plugins/$tab'
     | '/session/$id'
     | '/settings/$tab'
+    | '/plugins/'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -117,19 +146,24 @@ export interface FileRouteTypes {
     | '/logs'
     | '/dev/design-system'
     | '/dev/errors'
+    | '/plugins/$tab'
     | '/session/$id'
     | '/settings/$tab'
+    | '/plugins'
     | '/settings'
   id:
     | '__root__'
     | '/'
     | '/archived'
     | '/logs'
+    | '/plugins'
     | '/settings'
     | '/dev/design-system'
     | '/dev/errors'
+    | '/plugins/$tab'
     | '/session/$id'
     | '/settings/$tab'
+    | '/plugins/'
     | '/settings/'
   fileRoutesById: FileRoutesById
 }
@@ -137,6 +171,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ArchivedRoute: typeof ArchivedRoute
   LogsRoute: typeof LogsRoute
+  PluginsRoute: typeof PluginsRouteWithChildren
   SettingsRoute: typeof SettingsRouteWithChildren
   DevDesignSystemRoute: typeof DevDesignSystemRoute
   DevErrorsRoute: typeof DevErrorsRoute
@@ -166,6 +201,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LogsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/plugins': {
+      id: '/plugins'
+      path: '/plugins'
+      fullPath: '/plugins'
+      preLoaderRoute: typeof PluginsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -186,6 +228,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/dev/errors'
       preLoaderRoute: typeof DevErrorsRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/plugins/': {
+      id: '/plugins/'
+      path: '/'
+      fullPath: '/plugins/'
+      preLoaderRoute: typeof PluginsIndexRouteImport
+      parentRoute: typeof PluginsRoute
+    }
+    '/plugins/$tab': {
+      id: '/plugins/$tab'
+      path: '/$tab'
+      fullPath: '/plugins/$tab'
+      preLoaderRoute: typeof PluginsTabRouteImport
+      parentRoute: typeof PluginsRoute
     }
     '/session/$id': {
       id: '/session/$id'
@@ -211,6 +267,19 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface PluginsRouteChildren {
+  PluginsTabRoute: typeof PluginsTabRoute
+  PluginsIndexRoute: typeof PluginsIndexRoute
+}
+
+const PluginsRouteChildren: PluginsRouteChildren = {
+  PluginsTabRoute: PluginsTabRoute,
+  PluginsIndexRoute: PluginsIndexRoute,
+}
+
+const PluginsRouteWithChildren =
+  PluginsRoute._addFileChildren(PluginsRouteChildren)
+
 interface SettingsRouteChildren {
   SettingsTabRoute: typeof SettingsTabRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
@@ -229,6 +298,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ArchivedRoute: ArchivedRoute,
   LogsRoute: LogsRoute,
+  PluginsRoute: PluginsRouteWithChildren,
   SettingsRoute: SettingsRouteWithChildren,
   DevDesignSystemRoute: DevDesignSystemRoute,
   DevErrorsRoute: DevErrorsRoute,

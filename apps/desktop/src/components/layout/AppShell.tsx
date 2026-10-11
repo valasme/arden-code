@@ -17,6 +17,7 @@ import { useRememberedLayout } from "@/features/settings/useRememberedLayout";
 import { useSettings } from "@/features/settings/useSettings";
 import { useOverlayStore } from "@/state/overlays";
 import { useLayoutStore } from "@/state/layout";
+import { isPluginsPage } from "@/state/pluginsPage";
 import { isSettingsPage, useSettingsPageStore } from "@/state/settingsPage";
 
 import { TitleBar } from "../TitleBar";
@@ -57,12 +58,16 @@ function usePanelOpen(open: boolean, remembered: number) {
   return panel;
 }
 
-/** Remembers the last page outside Settings, where Back in the settings sidebar returns to. */
+/**
+ * Remembers the last page outside Settings and Plugins, where Back in their sidebars returns to.
+ */
 function useReturnFromSettings() {
   const location = useRouterState({ select: (state) => state.location });
   const setReturnTo = useSettingsPageStore((state) => state.setReturnTo);
   useEffect(() => {
-    if (!isSettingsPage(location.pathname)) setReturnTo(location.href);
+    if (!isSettingsPage(location.pathname) && !isPluginsPage(location.pathname)) {
+      setReturnTo(location.href);
+    }
   }, [location, setReturnTo]);
 }
 

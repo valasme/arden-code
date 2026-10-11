@@ -6,6 +6,7 @@ mod diagnostics;
 mod launch;
 mod navigation;
 mod notifications;
+mod plugins;
 mod restart;
 mod restarter;
 mod sessions;
@@ -21,6 +22,7 @@ pub use window::{FIRST_FRAME_GLOBAL, startup_background};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use arden_agents::claude::plugins::ClaudePlugins;
 use arden_agents::playground;
 use arden_agents::store::SessionStore;
 use arden_core::error::ErrorCode;
@@ -107,6 +109,7 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         agents::detect_agents,
         agents::usage_limits,
         agents::refresh_usage_limits,
+        plugins::installed_plugins,
         sessions::debug_fill_session,
         agents::debug_spawn_sleeper,
         diagnostics::debug_fail,
@@ -183,6 +186,7 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         agents::detect_agents,
         agents::usage_limits,
         agents::refresh_usage_limits,
+        plugins::installed_plugins,
     ]
 }
 
@@ -373,6 +377,12 @@ fn manage_programs(app: &tauri::App, paths: &AppPaths) {
         &app.state::<sessions::Sessions>(),
     );
     app.manage(claude);
+    let playground = sessions::playground_folder(&app.state::<sessions::Sessions>());
+    app.manage(plugins::Plugins(supervisor.as_ref().zip(playground).map(
+        |(supervisor, playground)| {
+            Arc::new(ClaudePlugins::new(Arc::clone(supervisor), &playground))
+        },
+    )));
     app.manage(agents::Programs(supervisor));
     app.manage(agents::Detections::default());
     agents::detect_after_start(app.handle());

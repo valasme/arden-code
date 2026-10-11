@@ -41,6 +41,7 @@
     "navigateForward": "Forward",
     "paletteOpen": "Command palette",
     "permissionModeNext": "Next permission mode",
+    "pluginsOpen": "Plugins",
     "replyStop": "Stop the reply",
     "sessionArchive": "Archive session",
     "sessionDelete": "Delete session",
@@ -169,6 +170,26 @@
       "action": "Turn on Allow Bypass permissions in Settings → Agents first, if you accept the risk.",
       "what": "Bypass permissions is turned off.",
       "why": "In Bypass permissions, the agent runs every action without asking, so it has to be allowed in Settings."
+    },
+    "ARD-AGT-020": {
+      "action": "Run claude update in a terminal, then look again.",
+      "what": "Plugins need a newer Claude Code.",
+      "why": "Arden Code manages plugins through Claude Code's own plugin commands, which answer in a form it reads from Claude Code 2.1.268."
+    },
+    "ARD-AGT-021": {
+      "action": "Read Claude Code's message under this one, then try again.",
+      "what": "Claude Code could not do it.",
+      "why": "Claude Code refused or failed, for the reason in its own words under this message."
+    },
+    "ARD-AGT-022": {
+      "action": "Try again. If it keeps happening, run claude update, or report it with a diagnostics bundle.",
+      "what": "Claude Code answered in a way Arden Code does not understand.",
+      "why": "This version of Claude Code may print its plugins differently from what Arden Code expects."
+    },
+    "ARD-AGT-023": {
+      "action": "Check your connection and try again.",
+      "what": "Claude Code took too long, so it was stopped.",
+      "why": "A plugin command that runs for more than 5 minutes is ended, such as one waiting on a slow network."
     },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
@@ -407,6 +428,37 @@
     "session": "{{session}}, in {{project}}",
     "sessions": "Sessions",
     "title": "Command palette"
+  },
+  "plugins": {
+    "back": "Back",
+    "description": "Plugins bring skills, slash commands and tools to your agents.",
+    "installed": {
+      "label": "Installed plugins",
+      "noMatch": "No installed plugin matches.",
+      "none": "No plugins are installed.",
+      "off": "Off",
+      "on": "On",
+      "reading": "Reading the installed plugins…",
+      "version": "Version {{version}}"
+    },
+    "scope": {
+      "local": "For you, in this project",
+      "managed": "From your organization",
+      "other": "Installed elsewhere",
+      "project": "For everyone in this project",
+      "session": "For one session only",
+      "synced": "From your claude.ai account",
+      "user": "For you, in every project"
+    },
+    "search": {
+      "label": "Search plugins",
+      "placeholder": "Search plugins"
+    },
+    "tabs": {
+      "installed": "Installed"
+    },
+    "tabsLabel": "Plugins tabs",
+    "title": "Plugins"
   },
   "projects": {
     "menu": "Actions for {{name}}",
@@ -874,6 +926,7 @@
     "navigation": "Main navigation",
     "noSessions": "No sessions yet.",
     "pinned": "Pinned",
+    "plugins": "Plugins",
     "projects": "Projects",
     "settings": "Settings"
   },

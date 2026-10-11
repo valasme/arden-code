@@ -631,6 +631,16 @@ export const commands = {
 	 */
 	refreshUsageLimits: (onFocus: boolean) => __TAURI_INVOKE<null>("refresh_usage_limits", { onFocus }),
 	/**
+	 *  The plugins the agents have installed, in every scope, from their terminals too: for now
+	 *  Claude's, from `claude plugin list --json`.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why they could not be read: no Claude Code, one older than 2.1.268, or a command that
+	 *  failed, took too long or answered in a way Arden Code does not understand.
+	 */
+	installedPlugins: () => __TAURI_INVOKE<InstalledPlugin[]>("installed_plugins"),
+	/**
 	 *  Makes a session with `count` finished turns, to test long conversations. Debug builds only.
 	 * 
 	 *  # Errors
@@ -960,6 +970,14 @@ export type ErrorCode =
 "ARD-AGT-018" | 
 /**  Bypass permissions was chosen while Settings does not allow it. */
 "ARD-AGT-019" | 
+/**  Plugins need a newer Claude Code than the one installed. */
+"ARD-AGT-020" | 
+/**  A plugin command failed, for a reason Claude Code gave. */
+"ARD-AGT-021" | 
+/**  A plugin command answered in a way Arden Code does not understand. */
+"ARD-AGT-022" | 
+/**  A plugin command took too long, and was ended. */
+"ARD-AGT-023" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -980,6 +998,23 @@ export type General = {
 	checkForUpdates: boolean,
 	/**  How dates and numbers are written. */
 	regionalFormat: RegionalFormat,
+};
+
+/**  An installed plugin, with only what the page shows. */
+export type InstalledPlugin = {
+	/**  The agent the plugin belongs to. */
+	agent: AgentKind,
+	/**  The agent's own id for it: `name@marketplace`. */
+	id: string,
+	name: string,
+	marketplace: string,
+	scope: PluginScope,
+	/**  The project's folder, for a plugin installed for a project. */
+	projectPath: string | null,
+	version: string | null,
+	enabled: boolean,
+	/**  What went wrong when it was loaded. */
+	errors: string[],
 };
 
 /**  One part of an agent's reply. */
@@ -1164,6 +1199,23 @@ export type PlanState =
 "keptPlanning" | 
 /**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
 "cancelled";
+
+/**  Where a plugin is installed, as Claude Code says it. */
+export type PluginScope = 
+/**  For the person, in every project. */
+"user" | 
+/**  For everyone in a project, in its shared `.claude/settings.json`. */
+"project" | 
+/**  For the person, in one project. */
+"local" | 
+/**  By the person's organization: it cannot be changed here. */
+"managed" | 
+/**  From the person's claude.ai account: it is removed there. */
+"synced" | 
+/**  Loaded for one session only. */
+"session" | 
+/**  A scope this version of Arden Code does not know. */
+"other";
 
 /**  A folder on disk where agents work. */
 export type Project = {

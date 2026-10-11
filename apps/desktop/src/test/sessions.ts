@@ -8,6 +8,7 @@ import type {
   Catalog,
   Effort,
   ErrorCode,
+  InstalledPlugin,
   Model,
   PermissionMode,
   Project,
@@ -106,6 +107,8 @@ interface Options {
   usageLimits?: UsageLimits;
   /** The default transcript view in the settings (ADR 0051). */
   transcriptView?: TranscriptView;
+  /** The plugins Claude Code has installed (ADR 0053). None by default. */
+  installedPlugins?: InstalledPlugin[];
 }
 
 /**
@@ -129,6 +132,7 @@ export function startSessionsRust({
   pickedFolder = null,
   usageLimits = { report: "unknown", windows: [] },
   transcriptView = "normal",
+  installedPlugins = [],
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
@@ -431,6 +435,9 @@ export function startSessionsRust({
           );
           if (!waits) throw failure("ARD-AGT-015");
           return null;
+        }
+        case "installed_plugins": {
+          return installedPlugins;
         }
         case "send_message": {
           const { sessionId, text, onEvent } = z

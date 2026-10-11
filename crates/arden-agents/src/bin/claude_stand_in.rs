@@ -10,6 +10,10 @@
 //! It names a session when asked (`generate_session_title`, ADR 0050): "Named:" and the first four
 //! words of what it is given.
 //!
+//! It answers `plugin list --json` (with `--available`, the catalog too) from `plugins` in
+//! `stand-in.json`: `installed` and `available`, as Claude Code prints them, and `delayMs`, how
+//! long it takes first (ADR 0053). It writes `plugin-end` to its log when it is done.
+//!
 //! It applies the `--permission-mode` it is started with and changes it on `set_permission_mode`,
 //! refusing Bypass permissions unless started with `--allow-dangerously-skip-permissions`, as
 //! Claude Code does (ADR 0044). Asked "which mode", it says the mode it applies. Asked to "plan the
@@ -32,6 +36,8 @@ struct Settings {
     /// The answer to `get_context_usage`: by default, a window of 200,000 tokens, 13% full.
     context: Value,
     log: Option<PathBuf>,
+    /// What it answers `plugin` commands with (ADR 0053).
+    plugins: Value,
 }
 
 fn settings() -> Settings {
@@ -69,6 +75,7 @@ fn settings() -> Settings {
             context => context.clone(),
         },
         log: written["log"].as_str().map(PathBuf::from),
+        plugins: written["plugins"].clone(),
     }
 }
 
@@ -95,6 +102,11 @@ fn main() {
     );
     if args.iter().any(|arg| arg == "--version") {
         println!("{} (Claude Code)", settings.version);
+        return;
+    }
+    if args.first().map(String::as_str) == Some("plugin") {
+        plugin(&settings, &args[1..]);
+        log(&settings, "plugin-end");
         return;
     }
     if args.first().map(String::as_str) == Some("auth") {
@@ -125,6 +137,41 @@ fn main() {
         .iter()
         .any(|arg| arg == "--allow-dangerously-skip-permissions");
     Conversation::new(settings, session, mode, bypass_launched).run();
+}
+
+/// Answers a `claude plugin` command as Claude Code does with `--json` (ADR 0053).
+fn plugin(settings: &Settings, args: &[String]) {
+    let plugins = &settings.plugins;
+    if let Some(delay) = plugins["delayMs"].as_u64() {
+        thread::sleep(Duration::from_millis(delay));
+    }
+    let installed = match &plugins["installed"] {
+        Value::Null => json!([]),
+        installed => installed.clone(),
+    };
+    match args.first().map(String::as_str) {
+        Some("list") if args.iter().any(|arg| arg == "--available") => {
+            let available = match &plugins["available"] {
+                Value::Null => json!([]),
+                available => available.clone(),
+            };
+            let answer = json!({ "installed": installed, "available": available });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&answer).unwrap_or_default()
+            );
+        }
+        Some("list") => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&installed).unwrap_or_default()
+            );
+        }
+        _ => {
+            eprintln!("error: unknown plugin command");
+            std::process::exit(1);
+        }
+    }
 }
 
 /// Writes a frame on the stand-in's output.

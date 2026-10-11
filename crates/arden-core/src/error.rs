@@ -107,6 +107,18 @@ pub enum ErrorCode {
     /// Bypass permissions was chosen while Settings does not allow it.
     #[serde(rename = "ARD-AGT-019")]
     BypassNotAllowed,
+    /// Plugins need a newer Claude Code than the one installed.
+    #[serde(rename = "ARD-AGT-020")]
+    PluginsNeedNewerClaude,
+    /// A plugin command failed, for a reason Claude Code gave.
+    #[serde(rename = "ARD-AGT-021")]
+    PluginCommandFailed,
+    /// A plugin command answered in a way Arden Code does not understand.
+    #[serde(rename = "ARD-AGT-022")]
+    PluginAnswerNotUnderstood,
+    /// A plugin command took too long, and was ended.
+    #[serde(rename = "ARD-AGT-023")]
+    PluginCommandTooLong,
     /// Programs cannot be started and supervised on this computer.
     #[serde(rename = "ARD-PROC-001")]
     ProcessSupervisor,
@@ -158,6 +170,10 @@ impl ErrorCode {
             Self::PlaygroundStays => "ARD-AGT-017",
             Self::PermissionModeRefused => "ARD-AGT-018",
             Self::BypassNotAllowed => "ARD-AGT-019",
+            Self::PluginsNeedNewerClaude => "ARD-AGT-020",
+            Self::PluginCommandFailed => "ARD-AGT-021",
+            Self::PluginAnswerNotUnderstood => "ARD-AGT-022",
+            Self::PluginCommandTooLong => "ARD-AGT-023",
             Self::ProcessSupervisor => "ARD-PROC-001",
             Self::UpdateInstall => "ARD-UPD-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",
