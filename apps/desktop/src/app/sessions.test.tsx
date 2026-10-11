@@ -254,7 +254,11 @@ describe("Sending a message", () => {
     history.push("/session/s1");
     await screen.findByRole("heading", { level: 1, name: "First" });
 
-    expect(await messageBox()).toHaveValue("Not yet");
+    const box = await messageBox();
+    expect(box).toHaveValue("Not yet");
+    // Ready to carry on writing where it stopped.
+    expect(box).toHaveFocus();
+    expect(box).toHaveProperty("selectionStart", "Not yet".length);
   });
 
   it("sends on Enter, streams the reply into the view and names the session after the message", async () => {

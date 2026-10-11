@@ -197,6 +197,27 @@ describe("The welcome screen's draft (#131)", () => {
     expect(within(back).getByRole("button", { name: "Turn off Ultrathink" })).toBeVisible();
   });
 
+  it("lets go of a chosen project once it is removed", async () => {
+    const { user } = await welcome({
+      folders: [folderProject("api", "api", true), folderProject("web", "web", true)],
+      sessions: [
+        sessionNamed("s1", "Earlier", "api"),
+        { ...sessionNamed("s2", "Latest", "web"), updatedAt: "2026-10-01T09:00:00Z" },
+      ],
+    });
+    await choose(user, "Project: web", /^api/);
+
+    const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
+    await user.click(within(sidebar).getByRole("button", { name: "Actions for api" }));
+    const item = await screen.findByRole("menuitem", { name: "Remove project…" });
+    await animationsDone(await screen.findByRole("menu"));
+    await user.click(item);
+    const question = await screen.findByRole("alertdialog", { name: "Remove “api”?" });
+    await user.click(within(question).getByRole("button", { name: "Remove project" }));
+
+    expect(await within(await main()).findByRole("button", { name: "Project: web" })).toBeVisible();
+  });
+
   it("starts afresh once its message has started a session", async () => {
     const { rust, user, history } = await welcome();
     await choose(user, "Agent: Demo agent", /^Claude/);

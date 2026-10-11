@@ -89,9 +89,12 @@ export function MessageBox({
   };
   const box = useRef<HTMLTextAreaElement>(null);
 
-  // A session opens ready to be written in.
+  // A session opens ready to be written in, at the end of its draft.
   useEffect(() => {
-    box.current?.focus();
+    const element = box.current;
+    if (!element) return;
+    element.focus();
+    element.setSelectionRange(element.value.length, element.value.length);
   }, []);
   const canSend = !busy && text.trim() !== "";
   const hasFigures = figures !== undefined && figures !== null;
