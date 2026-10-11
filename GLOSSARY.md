@@ -79,6 +79,18 @@ _Avoid_: thinking budget, reasoning level
 An action of an agent CLI, run by starting a message with a slash and its name, such as /compact. It is built into the agent CLI, or comes from the person's skills, plugins or MCP servers.
 _Avoid_: command (that is Arden Code's own action), skill
 
+**Skill**:
+Instructions an agent takes up when they are relevant, or when the person runs them as a slash command. It comes in a plugin or stands on its own.
+_Avoid_: prompt, recipe
+
+**Plugin**:
+A package from a marketplace that adds skills and other abilities, such as subagents, hooks and MCP servers, to an agent.
+_Avoid_: extension, add-on
+
+**Marketplace**:
+A catalog of plugins that an agent installs from, such as Anthropic's official one for Claude.
+_Avoid_: store, registry
+
 **Vendor**:
 The company behind an agent: Anthropic for Claude, OpenAI for Codex.
 _Avoid_: provider
@@ -120,6 +132,10 @@ _Avoid_: composer, input, prompt box
 **Draft**:
 What is written in a message box and not sent yet, kept while the user is away from it. The welcome state's draft also holds what its menus were set to.
 _Avoid_: unsent message, pending input
+
+**File mention**:
+A file or folder of the session's project, named in a message with `@` and its path, which the agent reads with the message.
+_Avoid_: attachment (a file sent with the message itself), tag, reference
 
 **Transcript view**:
 How much of a session's replies the session view shows: Normal, Thinking or Verbose. A setting gives the default, and a session can have its own.

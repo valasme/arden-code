@@ -5,6 +5,8 @@
 - **Network:** the only automatic request is the update check to GitHub Releases, which shows your IP
   address to GitHub. You can turn it off in Settings → General.
 - **Everything else is your action,** such as opening a link in your browser.
+- **Plugins.** When you open the Plugins page, install, update or add a marketplace, Arden Code runs Claude Code's own
+  plugin commands, and Claude Code reaches the marketplace's host, such as GitHub. Arden Code itself sends nothing.
 - **Your data stays on your machine.** Settings live in `%APPDATA%\io.github.valasme.arden`, and your
   sessions and logs in `%LOCALAPPDATA%\io.github.valasme.arden`. Sessions are never part of a diagnostics
   bundle.

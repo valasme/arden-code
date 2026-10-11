@@ -59,3 +59,5 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0049](0049-a-reply-streams-at-a-steady-pace.md) | A reply streams at a steady pace | Accepted |
 | [0050](0050-claude-names-its-sessions.md) | Claude names its sessions | Accepted |
 | [0051](0051-transcript-views.md) | Transcript views | Accepted |
+| [0052](0052-several-slash-commands-and-file-mentions.md) | Several slash commands and file mentions in a message | Accepted |
+| [0053](0053-plugins-through-the-agent-cli.md) | Plugins through the agent CLI | Accepted |
