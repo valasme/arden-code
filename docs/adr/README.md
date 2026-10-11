@@ -53,3 +53,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0043](0043-usage-limits.md) | Usage limits | Accepted |
 | [0044](0044-permission-modes-the-context-window-and-the-agents-icon.md) | Permission modes, the context window and the agent's icon | Accepted |
 | [0045](0045-the-message-box-on-one-row.md) | The message box on one row | Accepted |
+| [0049](0049-a-reply-streams-at-a-steady-pace.md) | A reply streams at a steady pace | Accepted |
