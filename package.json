@@ -36,7 +36,8 @@
     "licenses:build": "node scripts/generate-licenses.mjs",
     "licenses:check": "node scripts/generate-licenses.mjs --check",
     "test:visual": "pnpm --filter @arden/desktop test:visual",
-    "test:visual:update": "pnpm --filter @arden/desktop test:visual:update"
+    "test:visual:update": "pnpm --filter @arden/desktop test:visual:update",
+    "prototype:plugins": "pnpm --filter @arden/desktop exec vite --port 5179 --open /dev/plugins-prototype"
   },
   "devDependencies": {
     "@commitlint/cli": "catalog:",
