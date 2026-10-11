@@ -117,6 +117,46 @@ describe("the window's regions", () => {
   });
 });
 
+describe("the smallest window, 500 x 560 (#128)", () => {
+  it("keeps the sidebar's rows on one line", async () => {
+    await page.viewport(500, 560);
+    renderApp();
+    await openSessionView();
+
+    const newSession = screen.getByRole("button", { name: "New session" });
+    // A row is one line: nothing spills out of its 28px.
+    expect(newSession.scrollHeight).toBeLessThanOrEqual(newSession.clientHeight);
+  });
+
+  it("lets nothing in the sidebar's rows or the search strip spill over, at any width", async () => {
+    // A narrow strip showed a lone "S…" before its shortcut; now its words show whole or not at all.
+    await page.viewport(500, 560);
+    renderApp();
+    await openSessionView();
+    const rows = [
+      screen.getByRole("button", { name: "New session" }),
+      screen.getByRole("link", { name: "Settings" }),
+    ];
+    const strip = screen.getByRole("button", { name: /Search or run a command/ });
+    const words = screen.getByText("Search or run a command");
+    /** Whether the words are drawn: hidden, they are a 1px box kept for assistive technology. */
+    const drawn = () => getComputedStyle(words).position !== "absolute";
+
+    for (let windowWidth = 500; windowWidth <= 1000; windowWidth += 10) {
+      // oxlint-disable-next-line no-await-in-loop -- one window size at a time
+      await page.viewport(windowWidth, 560);
+      for (const element of [...rows, strip]) {
+        expect
+          .soft(element.scrollWidth, `${element.textContent} at ${windowWidth}px`)
+          .toBeLessThanOrEqual(element.clientWidth);
+      }
+      // How far drawn words spill out of their box; hidden words draw nothing.
+      const spill = drawn() ? words.scrollWidth - words.clientWidth : 0;
+      expect.soft(spill, `the words at ${windowWidth}px`).toBeLessThanOrEqual(0);
+    }
+  });
+});
+
 describe("the layout controls in the title bar", () => {
   const withoutStatusBar = settingsWith({ appearance: { showStatusBar: false } });
 
