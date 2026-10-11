@@ -204,35 +204,41 @@ export function MessageBox({
               : ""}
           </output>
         ) : null}
-        {/* One wrapping row, so Send wraps with the last menu rather than onto a row of its own. */}
-        <div className="flex flex-wrap items-center gap-1 ps-2 pe-2 pb-2 text-xs text-muted-foreground">
-          {choices}
-          {carriesUltrathink ? (
-            ultrathink.on ? (
-              // The switch put it there, so pressing it takes it away.
-              <Button
-                variant="outline"
-                size="xs"
-                className="font-normal text-foreground"
-                aria-label={t("sessions.messageBox.ultrathinkOff")}
-                onClick={ultrathink.onTurnOff}
-              >
-                <LightbulbIcon aria-hidden className="size-4" strokeWidth={1.5} />
-                {t("sessions.messageBox.ultrathink")}
-                <XIcon aria-hidden className="size-3.5 text-muted-foreground" strokeWidth={1.5} />
-              </Button>
-            ) : (
-              <span className="flex h-6 items-center gap-1 border border-border px-2 text-foreground">
-                <LightbulbIcon aria-hidden className="size-4" strokeWidth={1.5} />
-                {t("sessions.messageBox.ultrathink")}
-              </span>
-            )
-          ) : null}
+        {/*
+          The menus wrap among themselves, and Send keeps the end of their last row, so it never
+          goes onto a row of its own (#127). Every row of menus is as tall as Send, so Send lines
+          up with the last one.
+        */}
+        <div className="flex items-end gap-1 ps-2 pe-2 pb-2 text-xs text-muted-foreground">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1 *:my-0.5">
+            {choices}
+            {carriesUltrathink ? (
+              ultrathink.on ? (
+                // The switch put it there, so pressing it takes it away.
+                <Button
+                  variant="outline"
+                  size="xs"
+                  className="font-normal text-foreground"
+                  aria-label={t("sessions.messageBox.ultrathinkOff")}
+                  onClick={ultrathink.onTurnOff}
+                >
+                  <LightbulbIcon aria-hidden className="size-4" strokeWidth={1.5} />
+                  {t("sessions.messageBox.ultrathink")}
+                  <XIcon aria-hidden className="size-3.5 text-muted-foreground" strokeWidth={1.5} />
+                </Button>
+              ) : (
+                <span className="flex h-6 items-center gap-1 border border-border px-2 text-foreground">
+                  <LightbulbIcon aria-hidden className="size-4" strokeWidth={1.5} />
+                  {t("sessions.messageBox.ultrathink")}
+                </span>
+              )
+            ) : null}
+          </div>
           {busy ? (
             <Button
               variant="outline"
               size="sm"
-              className="ms-auto"
+              className="shrink-0"
               aria-label={t("sessions.messageBox.stop")}
               onClick={onStop}
             >
@@ -243,7 +249,7 @@ export function MessageBox({
             <Button
               size="icon-sm"
               // With nothing to send, Send waits quietly instead of looking like a dimmed block.
-              className="ms-auto disabled:bg-transparent disabled:text-muted-foreground disabled:opacity-100"
+              className="shrink-0 disabled:bg-transparent disabled:text-muted-foreground disabled:opacity-100"
               aria-label={t("sessions.messageBox.send")}
               disabled={!canSend}
               onClick={() => {

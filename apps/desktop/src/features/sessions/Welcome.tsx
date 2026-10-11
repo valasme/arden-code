@@ -126,7 +126,8 @@ export function Welcome() {
         <h1 className="text-xl font-semibold text-balance">{t(`agents.${agent}.question`)}</h1>
       </div>
       <MessageBox
-        className="w-full max-w-[40rem] px-0 pb-0"
+        // As wide as a session's message box, so its lower line fits on one row (#127).
+        className="w-full max-w-[45rem] px-0 pb-0"
         ownArea={false}
         agent={agent}
         busy={false}

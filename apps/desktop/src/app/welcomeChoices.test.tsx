@@ -137,6 +137,40 @@ describe("Choosing the agent and the project on the welcome screen", () => {
   });
 });
 
+/** How far down the page the middle of the welcome screen's button with this name is. */
+async function middleOf(name: string) {
+  const box = (await within(await main()).findByRole("button", { name })).getBoundingClientRect();
+  return box.top + box.height / 2;
+}
+
+/** Turns on the Ultrathink switch at the end of the effort menu, and closes the menu. */
+async function turnOnUltrathink(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await within(await main()).findByRole("button", { name: /^Effort/ }));
+  const menu = await screen.findByRole("menu");
+  await animationsDone(menu);
+  await user.click(within(menu).getByRole("menuitemcheckbox", { name: /Ultrathink/ }));
+  // The menu stays open to show the switch change; Escape closes it.
+  await user.keyboard("{Escape}");
+  await menuClosed();
+}
+
+describe("The welcome screen's message box (#127)", () => {
+  it("fits the five menus, the Ultrathink chip and Send on one row at the window's usual size", async () => {
+    // The maintainer's screenshot: Claude in arden-code, with Opus, Max, Manual and Ultrathink.
+    const { user } = await welcome({
+      folders: [folderProject("arden", "arden-code", true)],
+      sessions: [sessionNamed("s1", "Earlier", "arden", "claude")],
+      newSessionAgent: "claude",
+      newSessionModel: "opus",
+      newSessionEffort: "max",
+    });
+    await turnOnUltrathink(user);
+    await within(await main()).findByRole("button", { name: "Turn off Ultrathink" });
+
+    expect(Math.abs((await middleOf("Send")) - (await middleOf("Agent: Claude")))).toBeLessThan(2);
+  });
+});
+
 describe("Ultrathink on the welcome screen", () => {
   it("adds the word to the next message only, and turns itself off", async () => {
     const { rust, user } = await welcome();
