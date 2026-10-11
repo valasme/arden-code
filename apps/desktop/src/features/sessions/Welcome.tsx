@@ -159,6 +159,7 @@ export function Welcome() {
         ownArea={false}
         agent={agent}
         busy={false}
+        files={{ projectId }}
         choices={
           <>
             <AgentMenu agent={agent} unavailable={unavailable} onChoose={setChosenAgent} />

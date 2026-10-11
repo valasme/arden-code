@@ -78,7 +78,7 @@ export function useShortcutsOf(id: CommandId): readonly string[] {
 function overlayIsOpen(): boolean {
   return (
     document.querySelector(
-      '[role="dialog"], [role="alertdialog"], [role="menu"], [data-slash-menu]',
+      '[role="dialog"], [role="alertdialog"], [role="menu"], [data-message-box-list]',
     ) !== null
   );
 }

@@ -11,6 +11,7 @@ mod database;
 pub mod demo;
 pub mod detect;
 pub mod driver;
+pub mod files;
 pub mod model;
 pub mod playground;
 pub mod store;

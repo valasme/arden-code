@@ -497,6 +497,12 @@
         "weekly": "Weekly limit"
       }
     },
+    "files": {
+      "count_one": "{{count}} file",
+      "count_other": "{{count}} files",
+      "label": "Files",
+      "none": "No matching files"
+    },
     "jumpToLatest": "Jump to latest",
     "links": {
       "from": "Linked from",

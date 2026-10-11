@@ -104,6 +104,7 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::pick_folder,
         sessions::agent_for_new_session,
         sessions::claude_catalog,
+        sessions::find_files,
         agents::detect_agents,
         agents::usage_limits,
         agents::refresh_usage_limits,
@@ -180,6 +181,7 @@ fn ui_commands() -> tauri_specta::Commands<tauri::Wry> {
         sessions::pick_folder,
         sessions::agent_for_new_session,
         sessions::claude_catalog,
+        sessions::find_files,
         agents::detect_agents,
         agents::usage_limits,
         agents::refresh_usage_limits,
@@ -353,6 +355,7 @@ fn manage_sessions(app: &tauri::App, paths: &AppPaths, on_startup: OnStartup) {
     app.manage(sessions::PendingOpen::at_start(on_startup, &opened.store));
     let store: sessions::Sessions = Arc::new(opened.store);
     app.manage(store);
+    app.manage(sessions::Files::default());
 }
 
 /// Starts the supervisor that keeps the agent programs in a job with the app.

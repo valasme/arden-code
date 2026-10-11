@@ -41,3 +41,22 @@ describe("wordAt", () => {
     expect(at("a/|")).toBeNull();
   });
 });
+
+describe("wordAt, for file mentions (ADR 0052)", () => {
+  it("is a word that starts with @, as the first word or a later one", () => {
+    expect(at("@glos|")).toEqual({ sign: "@", query: "glos", start: 0, end: 5, first: true });
+    expect(at("Read @src/ma|")).toEqual({
+      sign: "@",
+      query: "src/ma",
+      start: 5,
+      end: 12,
+      first: false,
+    });
+    expect(at("Read @|")).toMatchObject({ sign: "@", query: "" });
+  });
+
+  it("is nothing for an @ inside a word, such as an email address", () => {
+    expect(at("Write to ada@example.com|")).toBeNull();
+    expect(at("ada@|")).toBeNull();
+  });
+});

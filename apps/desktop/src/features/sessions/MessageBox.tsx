@@ -12,17 +12,21 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentKind, SlashCommand } from "@/ipc/bindings";
+import type { AgentKind, FileMatch, SlashCommand } from "@/ipc/bindings";
 import { cn } from "@/lib/utils";
 import { useDraftsStore } from "@/state/drafts";
 
-import { SlashCommandList, slashOptionId } from "./SlashCommandList";
+import { FileRow, MessageBoxList, SlashCommandRow, optionId } from "./MessageBoxList";
 import { type CursorWord, wordAt } from "./cursorWord";
 import { filterSlashCommands, skillsOf } from "./slashCommands";
 import { holdsUltrathink } from "./ultrathink";
+import { useFileMatches } from "./useFileMatches";
 
 /** The key code some browsers report for a key that is part of an input method's composition. */
 const COMPOSING_KEY_CODE = 229;
+
+/** An option of the list above the box: a slash command, or a file to mention. */
+type Choice = { kind: "command"; command: SlashCommand } | { kind: "file"; file: FileMatch };
 
 interface MessageBoxProps {
   /**
@@ -58,6 +62,11 @@ interface MessageBoxProps {
    */
   slash?: { commands: readonly SlashCommand[]; terminalCommands: readonly string[] };
   /**
+   * The project whose files a word that starts with `@` lists (ADR 0052): the session's, or the
+   * one chosen in the welcome state.
+   */
+  files?: { projectId: string };
+  /**
    * The Ultrathink switch of an agent that has it (ADR 0042): whether it is on, and how to turn it
    * off from the chip that says the next message will carry the word (ADR 0044).
    */
@@ -79,6 +88,9 @@ interface MessageBoxProps {
  * through the list, Tab fills in the command, and Enter fills it in too, except that a first word
  * that is the whole message and takes no arguments is sent. Esc closes the list and keeps the
  * text. Filling in replaces only the word under the cursor.
+ *
+ * A word that starts with `@` lists the project's files the same way, and fills in `@` and the
+ * path; Enter never sends while that list is open.
  */
 export function MessageBox({
   draft,
@@ -90,6 +102,7 @@ export function MessageBox({
   onStop,
   ownArea = true,
   slash,
+  files,
   ultrathink,
   className,
 }: MessageBoxProps) {
@@ -123,7 +136,7 @@ export function MessageBox({
     });
   };
 
-  // The list, while the cursor is in a word that starts with a slash (ADR 0052).
+  // The list, while the cursor is in a word that starts with a slash or an `@` (ADR 0052).
   const listId = useId();
   const [cursor, setCursor] = useState(text.length);
   // Where the cursor goes once a filled-in word is in the box: after the render that puts it there.
@@ -136,40 +149,47 @@ export function MessageBox({
   });
   // While a character is being composed, the list stays as it was when the composing began.
   const [composing, setComposing] = useState<{ word: CursorWord | null } | null>(null);
-  const word = slash ? (composing ? composing.word : wordAt(text, cursor)) : null;
+  const seen = composing ? composing.word : wordAt(text, cursor);
+  const word = seen && ((seen.sign === "/" && slash) || (seen.sign === "@" && files)) ? seen : null;
+  const foundFiles = useFileMatches(files?.projectId, word?.sign === "@" ? word.query : null);
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
   const [chosen, setChosen] = useState({ query: "", index: 0 });
-  const query = word?.query ?? null;
-  const matches =
-    slash && word
-      ? filterSlashCommands(
-          word.first ? slash.commands : skillsOf(slash.commands),
-          slash.terminalCommands,
-          word.query,
-        )
-      : [];
+  const query = word ? `${word.sign}${word.query}` : null;
+  // The options, or null while the files are on their way.
+  const options: Choice[] | null =
+    word?.sign === "@"
+      ? (foundFiles?.map((file) => ({ kind: "file" as const, file })) ?? null)
+      : slash && word
+        ? filterSlashCommands(
+            word.first ? slash.commands : skillsOf(slash.commands),
+            slash.terminalCommands,
+            word.query,
+          ).map((command) => ({ kind: "command" as const, command }))
+        : [];
+  const matches = options ?? [];
   const wordKey = word ? `${String(word.start)}:${text}` : null;
   const listing = word !== null && dismissedAt !== wordKey;
   const active = chosen.query === query ? Math.min(chosen.index, matches.length - 1) : 0;
-  /** Puts the command in place of the word under the cursor, with a space after it. */
-  const fill = (command: SlashCommand) => {
+  /** Puts what was chosen in place of the word under the cursor, with a space after it. */
+  const fill = (choice: Choice) => {
     if (!word) return;
     const after = text.slice(word.end);
-    const name = `/${command.name}`;
-    const spaced = /^\s/.test(after) ? name : `${name} `;
-    placeCursor.current = word.start + name.length + 1;
+    const filled = choice.kind === "command" ? `/${choice.command.name}` : `@${choice.file.path}`;
+    const spaced = /^\s/.test(after) ? filled : `${filled} `;
+    placeCursor.current = word.start + filled.length + 1;
     setText(text.slice(0, word.start) + spaced + after);
     setCursor(placeCursor.current);
     box.current?.focus();
   };
   /**
-   * Takes a command of the list: sent at once when it takes no arguments and is the whole
-   * message, else filled in.
+   * Takes an option of the list: a command that takes no arguments and is the whole message is
+   * sent at once; everything else is filled in.
    */
-  const take = (command: SlashCommand) => {
+  const take = (choice: Choice) => {
     const whole = word?.first === true && text.slice(word.end).trim() === "";
-    if (whole && command.argumentHint === "" && !busy) send(`/${command.name}`);
-    else fill(command);
+    if (choice.kind === "command" && whole && choice.command.argumentHint === "" && !busy) {
+      send(`/${choice.command.name}`);
+    } else fill(choice);
   };
   const move = (step: number) => {
     setChosen({ query: query ?? "", index: (active + step + matches.length) % matches.length });
@@ -178,7 +198,7 @@ export function MessageBox({
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === COMPOSING_KEY_CODE) return;
     if (listing) {
-      const command = matches[active];
+      const choice = matches[active];
       if (event.key === "Escape") {
         // The list closes, and the text stays; Esc does not also stop a reply.
         event.preventDefault();
@@ -186,19 +206,19 @@ export function MessageBox({
         setDismissedAt(wordKey);
         return;
       }
-      if (command && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+      if (choice && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
         event.preventDefault();
         move(event.key === "ArrowDown" ? 1 : -1);
         return;
       }
-      if (command && event.key === "Tab" && !event.shiftKey) {
+      if (choice && event.key === "Tab" && !event.shiftKey) {
         event.preventDefault();
-        fill(command);
+        fill(choice);
         return;
       }
-      if (command && event.key === "Enter" && !event.shiftKey) {
+      if (choice && event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
-        take(command);
+        take(choice);
         return;
       }
     }
@@ -217,11 +237,25 @@ export function MessageBox({
         className="relative mx-auto flex max-w-[45rem] flex-col border border-input bg-background"
       >
         {listing ? (
-          <SlashCommandList
+          <MessageBoxList
             id={listId}
-            matches={matches}
+            label={t(word.sign === "@" ? "sessions.files.label" : "sessions.slash.label")}
+            none={t(word.sign === "@" ? "sessions.files.none" : "sessions.slash.none")}
+            options={
+              options?.map((choice) =>
+                choice.kind === "command"
+                  ? {
+                      key: choice.command.name,
+                      content: <SlashCommandRow command={choice.command} />,
+                    }
+                  : { key: choice.file.path, content: <FileRow file={choice.file} /> },
+              ) ?? null
+            }
             active={active}
-            onTake={take}
+            onTake={(index) => {
+              const choice = matches[index];
+              if (choice) take(choice);
+            }}
             onHover={(index) => {
               setChosen({ query: query ?? "", index });
             }}
@@ -251,22 +285,26 @@ export function MessageBox({
             setCursor(event.currentTarget.selectionStart);
           }}
           onKeyDown={onKeyDown}
-          {...(slash
+          {...(slash || files
             ? {
                 "aria-autocomplete": "list" as const,
                 "aria-controls": listing ? listId : undefined,
                 "aria-activedescendant":
-                  listing && matches.length > 0 ? slashOptionId(listId, active) : undefined,
+                  listing && matches.length > 0 ? optionId(listId, active) : undefined,
               }
             : {})}
         />
-        {slash ? (
+        {slash || files ? (
           <output className="sr-only">
-            {listing
-              ? matches.length === 0
-                ? t("sessions.slash.none")
-                : t("sessions.slash.count", { count: matches.length })
-              : ""}
+            {!listing || options === null
+              ? ""
+              : word.sign === "@"
+                ? matches.length === 0
+                  ? t("sessions.files.none")
+                  : t("sessions.files.count", { count: matches.length })
+                : matches.length === 0
+                  ? t("sessions.slash.none")
+                  : t("sessions.slash.count", { count: matches.length })}
           </output>
         ) : null}
         {/*
