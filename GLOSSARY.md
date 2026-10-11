@@ -117,6 +117,10 @@ _Avoid_: chat area, chat view
 Where the user writes the next message of a session.
 _Avoid_: composer, input, prompt box
 
+**Transcript view**:
+How much of a session's replies the session view shows: Normal, Thinking or Verbose. A setting gives the default, and a session can have its own.
+_Avoid_: display mode, detail level
+
 **Inspector**:
 The right-hand pane showing details of the open session. Hidden by default.
 _Avoid_: right panel, details pane

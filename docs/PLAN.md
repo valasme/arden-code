@@ -279,7 +279,7 @@ On a settings page the sidebar shows Back, the settings search and the tabs inst
 | Tab | Settings and actions (default in brackets) |
 |---|---|
 | General | On startup: restore last session [default] or start fresh · Regional format: follow Windows [default] or English (US) · Check for updates automatically [on] |
-| Appearance | Theme: system [default], light or dark · Zoom 80–200% [100%] · Follow Windows text size [on] · Code font size 11–20 px [13] · Code ligatures [off] · Reduce motion: follow Windows [default], on or off · Smooth scrolling [on], after a restart · Show status bar [on] |
+| Appearance | Theme: system [default], light or dark · Zoom 80–200% [100%] · Follow Windows text size [on] · Code font size 11–20 px [13] · Code ligatures [off] · Reduce motion: follow Windows [default], on or off · Smooth scrolling [on], after a restart · Show status bar [on] · Default transcript view: Normal [default], Thinking or Verbose ([ADR 0051](adr/0051-transcript-views.md)) |
 | Keyboard | Every command with its shortcut · click to record a new shortcut · conflict warnings · reset one or all |
 | Notifications | Desktop notifications [on] · Send a test notification |
 | Agents | Install status, path and version for Claude Code and Codex, with an install link · for Claude Code, the minimum version, whether it is signed in, and its usage limits with their reset times · Show usage limits [on] · Allow Bypass permissions [off] · Look again |
@@ -333,7 +333,7 @@ The command palette is a wide panel high on the screen: a large search line, the
 
 ### 6.5 Session view placeholder and the Demo agent
 
-- **Layout:** the turns sit in a centered reading column, at most 45rem wide. The person's message is a filled block at the end of the line; the reply follows under the agent's name with no box. Tool calls, file changes and thinking are quiet lines along a rule, and turns are separated by space.
+- **Layout:** the turns sit in a centered reading column, at most 45rem wide. The person's message is a filled block at the end of the line; the reply follows under the agent's name with no box. Tool calls, file changes and thinking are quiet lines along a rule, and turns are separated by space. How much of them shows is the session's transcript view: Normal folds the thinking and each tool's output, Thinking opens the thinking, Verbose opens everything; a session's menu changes its own ([ADR 0051](adr/0051-transcript-views.md)).
 - **Message box:**
   - A bordered block, at least two lines tall, with the agent and the project under the text, and Send at the end of that line. While the session is empty they are menus (§6.12). While a reply runs, Send becomes Stop. Send has no fill while there is nothing to send ([ADR 0045](adr/0045-the-message-box-on-one-row.md)).
   - Enter sends; Shift+Enter adds a line.
