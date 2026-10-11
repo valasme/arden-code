@@ -661,6 +661,18 @@ export const commands = {
 	 */
 	installPlugin: (id: string) => __TAURI_INVOKE<PluginChange>("install_plugin", { id }),
 	/**
+	 *  Turns an installed plugin on or off, updates it or uninstalls it, at the scope it is installed
+	 *  at (ADR 0053). A project's plugin is changed in that project's folder, which must be a trusted
+	 *  folder project. Answers the agent's own message.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why it was not changed: a project that is unknown or not trusted, a change the plugin
+	 *  does not allow, or a command that failed (with the agent's message), took too long or answered
+	 *  in a way Arden Code does not understand.
+	 */
+	changePlugin: (action: PluginAction, id: string, scope: PluginScope, projectId: string | null) => __TAURI_INVOKE<PluginChange>("change_plugin", { action, id, scope, projectId }),
+	/**
 	 *  Makes a session with `count` finished turns, to test long conversations. Debug builds only.
 	 * 
 	 *  # Errors
@@ -1235,6 +1247,9 @@ export type PlanState =
 "keptPlanning" | 
 /**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
 "cancelled";
+
+/**  A change to an installed plugin (ADR 0053). */
+export type PluginAction = "enable" | "disable" | "update" | "uninstall";
 
 /**  What a change to a plugin did, as Claude Code said it. */
 export type PluginChange = {

@@ -8,7 +8,7 @@ import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
-import { sessionNamed, startSessionsRust } from "@/test/sessions";
+import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
 
@@ -419,6 +419,192 @@ describe("Installing a plugin for you in every project (ADR 0053)", () => {
 
     await user.click(screen.getByRole("button", { name: "Install…" }));
     await animationsDone(await screen.findByRole("dialog", { name: "Install github" }));
+
+    await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+/** The row of an installed plugin on Installed. */
+const rowOf = (name: string) => {
+  const row = rows().find((item) => item.querySelector("h2")?.textContent === name);
+  if (!row) throw new Error(`no row for ${name}`);
+  return row;
+};
+
+async function installedTab(options: Options = {}) {
+  const opened = await openApp(options, "/plugins/installed");
+  await waitFor(() => {
+    expect(rows().length).toBeGreaterThan(0);
+  });
+  return opened;
+}
+
+describe("Changing installed plugins (ADR 0053)", () => {
+  it("turns a plugin off with its switch, at its scope", async () => {
+    const { rust, user } = await installedTab({
+      pluginChange: () => ({ message: "Successfully disabled plugin: superpowers" }),
+    });
+
+    const toggle = within(rowOf("superpowers")).getByRole("switch", { name: "Use superpowers" });
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+
+    expect(await screen.findByText("Successfully disabled plugin: superpowers")).toBeVisible();
+    expect(rust.callsTo("change_plugin")).toEqual([
+      {
+        action: "disable",
+        id: "superpowers@claude-plugins-official",
+        scope: "user",
+        projectId: null,
+      },
+    ]);
+    // What is installed is read again.
+    await waitFor(() => {
+      expect(rust.callsTo("installed_plugins").length).toBeGreaterThan(1);
+    });
+  });
+
+  it("updates a plugin", async () => {
+    const { rust, user } = await installedTab();
+
+    await user.click(
+      within(rowOf("superpowers")).getByRole("button", { name: "Update superpowers" }),
+    );
+
+    await waitFor(() => {
+      expect(rust.callsTo("change_plugin")).toEqual([
+        {
+          action: "update",
+          id: "superpowers@claude-plugins-official",
+          scope: "user",
+          projectId: null,
+        },
+      ]);
+    });
+  });
+
+  it("uninstalls a plugin after a confirmation, and Cancel keeps it", async () => {
+    const { rust, user } = await installedTab();
+    const uninstall = () =>
+      user.click(
+        within(rowOf("superpowers")).getByRole("button", { name: "Uninstall superpowers" }),
+      );
+
+    await uninstall();
+    const asked = await screen.findByRole("alertdialog", { name: "Uninstall superpowers?" });
+    await user.click(within(asked).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(rust.callsTo("change_plugin")).toEqual([]);
+
+    await uninstall();
+    await user.click(
+      within(await screen.findByRole("alertdialog", { name: "Uninstall superpowers?" })).getByRole(
+        "button",
+        { name: "Uninstall" },
+      ),
+    );
+    await waitFor(() => {
+      expect(rust.callsTo("change_plugin")).toEqual([
+        {
+          action: "uninstall",
+          id: "superpowers@claude-plugins-official",
+          scope: "user",
+          projectId: null,
+        },
+      ]);
+    });
+  });
+
+  it("lets a synced plugin be turned off only, and a managed one not at all", async () => {
+    await installedTab();
+
+    const synced = rowOf("notes");
+    expect(within(synced).getByRole("switch", { name: "Use notes" })).toBeVisible();
+    expect(within(synced).queryByRole("button", { name: /Uninstall|Update/ })).toBeNull();
+    expect(synced).toHaveTextContent("Remove it on claude.ai.");
+    const managed = rowOf("policy");
+    expect(within(managed).queryByRole("switch")).toBeNull();
+    expect(within(managed).queryByRole("button")).toBeNull();
+  });
+
+  it("changes a project's plugin in that project, once the project is trusted", async () => {
+    const { rust, user } = await installedTab({
+      folders: [folderProject("api", "billing-api", true)],
+    });
+
+    await user.click(within(rowOf("deploy")).getByRole("switch", { name: "Use deploy" }));
+
+    await waitFor(() => {
+      expect(rust.callsTo("change_plugin")).toEqual([
+        { action: "enable", id: "deploy@acme", scope: "project", projectId: "api" },
+      ]);
+    });
+  });
+
+  it("asks to trust a project first, and Cancel changes nothing", async () => {
+    const { rust, user } = await installedTab({
+      folders: [folderProject("api", "billing-api", false)],
+    });
+    const toggle = () =>
+      user.click(within(rowOf("deploy")).getByRole("switch", { name: "Use deploy" }));
+
+    await toggle();
+    const asked = await screen.findByRole("alertdialog", { name: /Trust “billing-api”/ });
+    await user.click(within(asked).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(rust.callsTo("change_plugin")).toEqual([]);
+
+    await toggle();
+    await user.click(
+      within(await screen.findByRole("alertdialog", { name: /Trust “billing-api”/ })).getByRole(
+        "button",
+        { name: "Trust folder" },
+      ),
+    );
+    await waitFor(() => {
+      expect(rust.callsTo("trust_project")).toEqual([{ projectId: "api" }]);
+      expect(rust.callsTo("change_plugin")).toHaveLength(1);
+    });
+  });
+
+  it("says to open a project's folder first when it is not a project in Arden Code", async () => {
+    await installedTab();
+
+    const deploy = rowOf("deploy");
+    expect(within(deploy).queryByRole("switch")).toBeNull();
+    expect(deploy).toHaveTextContent(
+      "Open C:\\Work\\billing-api as a project in Arden Code to change this plugin here.",
+    );
+  });
+
+  it("shows Claude Code's own words when it refuses", async () => {
+    const { user } = await installedTab({
+      pluginChange: () => ({
+        code: "ARD-AGT-021",
+        messageKey: "errors.ARD-AGT-021",
+        details: "Plugin is required by another plugin",
+      }),
+    });
+
+    await user.click(
+      within(rowOf("superpowers")).getByRole("button", { name: "Uninstall superpowers" }),
+    );
+    await user.click(
+      within(await screen.findByRole("alertdialog", { name: "Uninstall superpowers?" })).getByRole(
+        "button",
+        { name: "Uninstall" },
+      ),
+    );
+
+    expect(await screen.findByText("Plugin is required by another plugin")).toBeVisible();
+  });
+
+  it("has no accessibility violations", async () => {
+    await installedTab({ folders: [folderProject("api", "billing-api", true)] });
 
     await expectNoAccessibilityViolations(document.body);
   });

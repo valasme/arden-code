@@ -151,6 +151,9 @@ fn plugin(settings: &Settings, args: &[String]) {
     let installed = installed_plugins(plugins);
     match args.first().map(String::as_str) {
         Some("install") => install(plugins, args, installed),
+        Some(command @ ("enable" | "disable" | "update" | "uninstall")) => {
+            alter(command, args, installed);
+        }
         Some("list") if args.iter().any(|arg| arg == "--available") => {
             let available = match &plugins["available"] {
                 Value::Null => json!([]),
@@ -275,6 +278,71 @@ fn install(plugins: &Value, args: &[String], mut installed: Value) {
     save_installed(&installed);
     let message = format!("Successfully installed plugin: {id} (scope: {scope})");
     result("install", id, "ok", &message, &json!({ "scope": scope }));
+}
+
+/// `plugin enable|disable|update|uninstall <id> [--scope <scope>] --json`, on the plugin listed at
+/// that scope (and, for a project's, in this folder), or the first with that id without one.
+fn alter(command: &str, args: &[String], mut installed: Value) {
+    let id = args.get(1).map_or("", String::as_str);
+    let scope = flag(args, "--scope");
+    let folder = std::env::current_dir()
+        .map(|folder| folder.display().to_string())
+        .unwrap_or_default();
+    let Some(list) = installed.as_array_mut() else {
+        return;
+    };
+    let at = list.iter().position(|plugin| {
+        plugin["id"] == id
+            && scope.is_none_or(|scope| {
+                plugin["scope"] == scope
+                    && (scope == "user"
+                        || plugin["projectPath"].as_str().is_some_and(|path| {
+                            std::fs::canonicalize(path).ok() == std::fs::canonicalize(&folder).ok()
+                        }))
+            })
+    });
+    let Some(at) = at else {
+        let message = format!("Plugin '{id}' is not installed in this scope");
+        result(
+            command,
+            id,
+            "failed",
+            &message,
+            &json!({ "failureCode": "not_installed" }),
+        );
+        return;
+    };
+    let message = match command {
+        "enable" | "disable" => {
+            let on = command == "enable";
+            if list[at]["enabled"] == on {
+                let message = format!("Plugin '{id}' is already {command}d");
+                result(
+                    command,
+                    id,
+                    "failed",
+                    &message,
+                    &json!({ "failureCode": "already_in_goal_state" }),
+                );
+                return;
+            }
+            list[at]["enabled"] = json!(on);
+            format!("Successfully {command}d plugin: {id}")
+        }
+        "update" => {
+            let version = list[at]["version"].as_str().unwrap_or("1.0.0").to_owned();
+            let (base, patch) = version.rsplit_once('.').unwrap_or(("1.0", "0"));
+            let next = format!("{base}.{}", patch.parse::<u32>().unwrap_or(0) + 1);
+            list[at]["version"] = json!(next);
+            format!("Plugin '{id}' updated from {version} to {next}")
+        }
+        _ => {
+            list.remove(at);
+            format!("Successfully uninstalled plugin: {id}")
+        }
+    };
+    save_installed(&installed);
+    result(command, id, "ok", &message, &json!({}));
 }
 
 /// Writes a frame on the stand-in's output.

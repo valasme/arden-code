@@ -2,9 +2,13 @@
 
 use std::sync::Arc;
 
+use std::path::PathBuf;
+
 use arden_agents::claude::plugins::{
-    AvailablePlugin, ClaudePlugins, InstalledPlugin, PluginChange, PluginError,
+    AvailablePlugin, ClaudePlugins, InstalledPlugin, PluginAction, PluginChange, PluginError,
+    PluginScope,
 };
+use arden_agents::model::ProjectKind;
 use arden_core::error::{AppError, ErrorCode};
 use tauri::State;
 
@@ -25,6 +29,8 @@ fn plugin_error(error: PluginError) -> AppError {
     let shown = match error {
         PluginError::InvalidId => AppError::new(ErrorCode::PluginCommandFailed)
             .with_details("This is not the id of a plugin, so nothing was run."),
+        PluginError::NotChangeable => AppError::new(ErrorCode::PluginCommandFailed)
+            .with_details("This plugin cannot be changed that way here."),
         PluginError::NotInstalled => AppError::new(ErrorCode::ClaudeNotInstalled),
         PluginError::NpmWrapperOnly => AppError::new(ErrorCode::ClaudeNpmWrapper),
         PluginError::TooOld(version) => {
@@ -105,4 +111,50 @@ pub async fn install_plugin(
 ) -> Result<PluginChange, AppError> {
     let claude = plugins.claude()?;
     off_the_window(move || claude.install(&id)).await
+}
+
+/// The folder of a project a plugin command may run in: a folder project the person trusts
+/// (ADR 0039, ADR 0053). Claude Code reads a project's settings when it runs there.
+fn trusted_folder(
+    sessions: &crate::sessions::Sessions,
+    project_id: &str,
+) -> Result<PathBuf, AppError> {
+    let project = sessions
+        .list()
+        .projects
+        .into_iter()
+        .map(|listing| listing.project)
+        .find(|project| project.id == project_id && project.kind == ProjectKind::Folder)
+        .ok_or_else(|| AppError::new(ErrorCode::SessionNotFound))?;
+    if !project.trusted {
+        return Err(AppError::new(ErrorCode::ProjectNotTrusted));
+    }
+    Ok(PathBuf::from(project.path))
+}
+
+/// Turns an installed plugin on or off, updates it or uninstalls it, at the scope it is installed
+/// at (ADR 0053). A project's plugin is changed in that project's folder, which must be a trusted
+/// folder project. Answers the agent's own message.
+///
+/// # Errors
+///
+/// Returns why it was not changed: a project that is unknown or not trusted, a change the plugin
+/// does not allow, or a command that failed (with the agent's message), took too long or answered
+/// in a way Arden Code does not understand.
+#[tauri::command]
+#[specta::specta]
+pub async fn change_plugin(
+    action: PluginAction,
+    id: String,
+    scope: PluginScope,
+    project_id: Option<String>,
+    plugins: State<'_, Plugins>,
+    sessions: State<'_, crate::sessions::Sessions>,
+) -> Result<PluginChange, AppError> {
+    let claude = plugins.claude()?;
+    let folder = match project_id {
+        Some(project_id) => Some(trusted_folder(&sessions, &project_id)?),
+        None => None,
+    };
+    off_the_window(move || claude.change(action, &id, scope, folder.as_deref())).await
 }

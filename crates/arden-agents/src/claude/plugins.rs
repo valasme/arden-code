@@ -26,7 +26,7 @@ use crate::model::AgentKind;
 pub const PATIENCE: Duration = Duration::from_mins(5);
 
 /// Where a plugin is installed, as Claude Code says it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum PluginScope {
     /// For the person, in every project.
@@ -138,9 +138,33 @@ fn is_plugin_id(id: &str) -> bool {
             .is_some_and(|(name, marketplace)| part(name) && part(marketplace))
 }
 
+/// A change to an installed plugin (ADR 0053).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum PluginAction {
+    Enable,
+    Disable,
+    Update,
+    Uninstall,
+}
+
+impl PluginAction {
+    const fn command(self) -> &'static str {
+        match self {
+            Self::Enable => "enable",
+            Self::Disable => "disable",
+            Self::Update => "update",
+            Self::Uninstall => "uninstall",
+        }
+    }
+}
+
 /// Why a plugin command could not be run or did not succeed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PluginError {
+    /// The plugin cannot be changed so: one from the person's organization, one synced from
+    /// claude.ai that is to be removed, or one of a project whose folder is not given. Nothing ran.
+    NotChangeable,
     /// The plugin id is not one Arden Code passes on, so nothing ran.
     InvalidId,
     /// No Claude Code was found.
@@ -374,7 +398,7 @@ impl ClaudePlugins {
         if !is_plugin_id(id) {
             return Err(PluginError::InvalidId);
         }
-        self.change(
+        self.run_change(
             &self.playground,
             &[
                 Arg::Literal("plugin"),
@@ -387,9 +411,51 @@ impl ClaudePlugins {
         )
     }
 
+    /// Turns an installed plugin on or off, updates it or uninstalls it, at the scope it is
+    /// installed at: in the project's folder for a project's plugin, in the Playground's otherwise.
+    /// A plugin synced from claude.ai can only be turned off and on; one from the person's
+    /// organization cannot be changed.
+    ///
+    /// # Errors
+    ///
+    /// Says why it was not changed; nothing runs for an id that is not a plugin id or a change the
+    /// plugin does not allow.
+    pub fn change(
+        &self,
+        action: PluginAction,
+        id: &str,
+        scope: PluginScope,
+        project: Option<&Path>,
+    ) -> Result<PluginChange, PluginError> {
+        if !is_plugin_id(id) {
+            return Err(PluginError::InvalidId);
+        }
+        let (scope_name, folder) = match (scope, project) {
+            (PluginScope::User, _) => (Some("user"), self.playground.as_path()),
+            (PluginScope::Project, Some(project)) => (Some("project"), project),
+            (PluginScope::Local, Some(project)) => (Some("local"), project),
+            (PluginScope::Synced, _)
+                if matches!(action, PluginAction::Enable | PluginAction::Disable) =>
+            {
+                (None, self.playground.as_path())
+            }
+            _ => return Err(PluginError::NotChangeable),
+        };
+        let mut args = vec![
+            Arg::Literal("plugin"),
+            Arg::Literal(action.command()),
+            Arg::Untrusted(id.to_owned()),
+        ];
+        if let Some(scope_name) = scope_name {
+            args.extend([Arg::Literal("--scope"), Arg::Literal(scope_name)]);
+        }
+        args.push(Arg::Literal("--json"));
+        self.run_change(folder, &args)
+    }
+
     /// Runs a command that changes plugins, and reads the result on the last line it printed. A
     /// change that was there already counts as done. The catalog is read again next time.
-    fn change(&self, folder: &Path, args: &[Arg]) -> Result<PluginChange, PluginError> {
+    fn run_change(&self, folder: &Path, args: &[Arg]) -> Result<PluginChange, PluginError> {
         let done = self.run_to_end(folder, args)?;
         *self.catalog.lock().unwrap_or_else(PoisonError::into_inner) = None;
         let result = done

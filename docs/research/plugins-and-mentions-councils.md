@@ -245,3 +245,18 @@ stub data shaped like `claude plugin list --json --available`.
 
 **Verdict: A**, with the details taking the list's place below the width of both panes. From B: each scope keeps its
 line saying who gets it. From C: nothing; its pre-shown command is not available.
+
+### Q31. A project's plugin whose folder is not a project in Arden Code (#151)
+
+Claude Code lists plugins installed for a project from its terminal too, and that folder may never have been opened in
+Arden Code. Changing one runs Claude Code in that folder, which Q12 allows only in a trusted project.
+
+- **Reliability:** R3 Arden Code may run Claude Code only in a folder the person trusts (ADR 0039); a folder that is not
+  a project has no trust to give.
+- **Product:** P1 adding that folder as a project for the person would make a project they never opened. **P3
+  dissents**: the row is then stuck. Settled: the row says to open the folder as a project, which Open folder does in
+  one step, and the trust question follows as for any change.
+- **Experience:** E3 the row keeps its name, scope, path and errors; only its switch and buttons are left out.
+
+**Verdict:** such a row shows no actions and says "Open <folder> as a project in Arden Code to change this plugin
+here." A project that is open but not trusted asks the trust question first; Cancel changes nothing.

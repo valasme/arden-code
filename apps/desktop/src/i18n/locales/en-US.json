@@ -461,12 +461,22 @@
       "who": "Who gets it?"
     },
     "installed": {
+      "changing": "Changing {{name}}…",
       "label": "Installed plugins",
       "noMatch": "No installed plugin matches.",
       "none": "No plugins are installed.",
       "off": "Off",
       "on": "On",
+      "openProject": "Open {{path}} as a project in Arden Code to change this plugin here.",
       "reading": "Reading the installed plugins…",
+      "synced": "Remove it on claude.ai.",
+      "toggle": "Use {{name}}",
+      "uninstall": "Uninstall",
+      "uninstallDescription": "Claude Code uninstalls it from “{{scope}}”.",
+      "uninstallLabel": "Uninstall {{name}}",
+      "uninstallTitle": "Uninstall {{name}}?",
+      "update": "Update",
+      "updateLabel": "Update {{name}}",
       "version": "Version {{version}}"
     },
     "scope": {

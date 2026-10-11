@@ -453,6 +453,7 @@ export function startSessionsRust({
         case "plugin_catalog": {
           return pluginCatalog;
         }
+        case "change_plugin":
         case "install_plugin": {
           const answer = pluginChange(command, payload);
           if ("code" in answer) throw failure(answer.code, answer.details);

@@ -89,4 +89,37 @@ test.describe("the Plugins page in the real app", () => {
       claude.remove();
     }
   });
+
+  test("an installed plugin is turned off, then uninstalled", async () => {
+    const claude = claudeOnPath({ plugins: { installed } });
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const sidebar = page.getByRole("complementary", { name: "Sidebar" });
+      await sidebar.getByRole("link", { name: "Plugins" }).click();
+      await sidebar.getByRole("link", { name: "Installed" }).click();
+      const list = page.getByRole("list", { name: "Installed plugins" });
+      const row = list
+        .getByRole("listitem")
+        .filter({ has: page.getByRole("heading", { name: "superpowers" }) });
+
+      const toggle = row.getByRole("switch", { name: "Use superpowers" });
+      await expect(toggle).toBeChecked({ timeout: 30_000 });
+      await toggle.click();
+      await expect(toggle).not.toBeChecked({ timeout: 30_000 });
+
+      await row.getByRole("button", { name: "Uninstall superpowers" }).click();
+      await page
+        .getByRole("alertdialog", { name: "Uninstall superpowers?" })
+        .getByRole("button", { name: "Uninstall" })
+        .click();
+      await expect(list.getByRole("heading", { name: "superpowers" })).toBeHidden({
+        timeout: 30_000,
+      });
+      await expect(list.getByRole("heading", { name: "deploy" })).toBeVisible();
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
 });

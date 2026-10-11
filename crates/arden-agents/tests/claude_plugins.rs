@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use arden_agents::claude::plugins::{ClaudePlugins, PluginError, PluginScope};
+use arden_agents::claude::plugins::{ClaudePlugins, PluginAction, PluginError, PluginScope};
 use arden_process::supervisor::Supervisor;
 use serde_json::{Value, json};
 
@@ -431,4 +431,165 @@ fn the_catalog_is_read_again_after_a_change() {
         .filter(|start| start["args"][1] == "list")
         .count();
     assert_eq!(lists, 2);
+}
+
+#[test]
+fn an_installed_plugin_is_turned_off_and_on_updated_and_uninstalled_at_its_scope() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = claude_on_path(&json!({ "log": log, "plugins": { "installed": installed_list() } }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+    let id = "superpowers@claude-plugins-official";
+
+    module
+        .change(PluginAction::Disable, id, PluginScope::User, None)
+        .expect("off");
+    assert!(!module.installed().expect("the list")[0].enabled);
+    module
+        .change(PluginAction::Enable, id, PluginScope::User, None)
+        .expect("on");
+    module
+        .change(PluginAction::Update, id, PluginScope::User, None)
+        .expect("updated");
+    assert_eq!(
+        module.installed().expect("the list")[0].version.as_deref(),
+        Some("4.3.2")
+    );
+    module
+        .change(PluginAction::Uninstall, id, PluginScope::User, None)
+        .expect("gone");
+    assert!(
+        module
+            .installed()
+            .expect("the list")
+            .iter()
+            .all(|plugin| plugin.id != id)
+    );
+
+    let commands: Vec<Value> = plugin_starts(&log)
+        .into_iter()
+        .filter(|start| start["args"][1] != "list")
+        .map(|start| start["args"].clone())
+        .collect();
+    assert_eq!(
+        commands,
+        [
+            json!(["plugin", "disable", id, "--scope", "user", "--json"]),
+            json!(["plugin", "enable", id, "--scope", "user", "--json"]),
+            json!(["plugin", "update", id, "--scope", "user", "--json"]),
+            json!(["plugin", "uninstall", id, "--scope", "user", "--json"]),
+        ]
+    );
+}
+
+#[test]
+fn a_project_plugin_is_changed_in_its_projects_folder() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let project = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let installed = json!([{
+        "id": "deploy@acme", "version": "0.9.2", "scope": "project", "enabled": true,
+        "installPath": "x", "projectPath": project.path().display().to_string()
+    }]);
+    let bin = claude_on_path(&json!({ "log": log, "plugins": { "installed": installed } }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+
+    module
+        .change(
+            PluginAction::Disable,
+            "deploy@acme",
+            PluginScope::Project,
+            Some(project.path()),
+        )
+        .expect("off");
+
+    let start = plugin_starts(&log)
+        .into_iter()
+        .find(|start| start["args"][1] == "disable")
+        .expect("disabled");
+    assert_eq!(
+        start["args"],
+        json!([
+            "plugin",
+            "disable",
+            "deploy@acme",
+            "--scope",
+            "project",
+            "--json"
+        ])
+    );
+    assert!(same_folder(
+        start["folder"].as_str().unwrap_or_default(),
+        project.path()
+    ));
+}
+
+#[test]
+fn turning_on_a_plugin_that_is_on_reads_as_success() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let bin = claude_on_path(&json!({ "plugins": { "installed": installed_list() } }));
+
+    let done = plugins(bin.path(), playground.path(), logs.path()).change(
+        PluginAction::Enable,
+        "superpowers@claude-plugins-official",
+        PluginScope::User,
+        None,
+    );
+
+    assert!(done.is_ok(), "{done:?}");
+}
+
+#[test]
+fn only_what_a_synced_or_managed_plugin_allows_is_run() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = claude_on_path(&json!({ "log": log, "plugins": { "installed": installed_list() } }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+
+    assert_eq!(
+        module.change(
+            PluginAction::Uninstall,
+            "notes@synced",
+            PluginScope::Synced,
+            None
+        ),
+        Err(PluginError::NotChangeable)
+    );
+    assert_eq!(
+        module.change(
+            PluginAction::Disable,
+            "policy@corp",
+            PluginScope::Managed,
+            None
+        ),
+        Err(PluginError::NotChangeable)
+    );
+    assert_eq!(
+        module.change(
+            PluginAction::Disable,
+            "deploy@acme",
+            PluginScope::Project,
+            None
+        ),
+        Err(PluginError::NotChangeable),
+        "a project plugin needs its project's folder"
+    );
+    assert!(plugin_starts(&log).is_empty());
+    module
+        .change(
+            PluginAction::Disable,
+            "notes@synced",
+            PluginScope::Synced,
+            None,
+        )
+        .expect("a synced plugin can be turned off");
+    let start = plugin_starts(&log).pop().expect("disabled");
+    assert_eq!(
+        start["args"],
+        json!(["plugin", "disable", "notes@synced", "--json"])
+    );
 }
