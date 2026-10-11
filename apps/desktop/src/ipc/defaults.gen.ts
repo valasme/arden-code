@@ -16,7 +16,8 @@ export const defaultSettings: Settings = {
     "codeLigatures": false,
     "reduceMotion": "system",
     "smoothScrolling": true,
-    "showStatusBar": true
+    "showStatusBar": true,
+    "transcriptView": "normal"
   },
   "layout": {
     "sidebarWidth": 260,

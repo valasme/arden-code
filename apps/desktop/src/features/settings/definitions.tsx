@@ -6,6 +6,7 @@ import type {
   LogLevel,
   OnStartup,
   ReduceMotion,
+  TranscriptView,
   RegionalFormat,
   SettingKey,
   Settings,
@@ -51,6 +52,11 @@ const themeChoices = ["system", "light", "dark"] as const satisfies readonly The
 const regionChoices = ["windows", "english"] as const satisfies readonly RegionalFormat[];
 const logLevelChoices = ["error", "warn", "info", "debug"] as const satisfies readonly LogLevel[];
 const motionChoices = ["system", "on", "off"] as const satisfies readonly ReduceMotion[];
+const transcriptChoices = [
+  "normal",
+  "thinking",
+  "verbose",
+] as const satisfies readonly TranscriptView[];
 
 export const settingDefinitions: readonly SettingDefinition[] = [
   {
@@ -296,6 +302,30 @@ export const settingDefinitions: readonly SettingDefinition[] = [
         }}
       />
     ),
+  },
+  {
+    id: "transcript-view",
+    tab: "appearance",
+    key: "appearanceTranscriptView",
+    labelKey: "settings.appearance.transcriptView.label",
+    descriptionKey: "settings.appearance.transcriptView.description",
+    isDefault: (settings) => settings.appearance.transcriptView === same.appearance.transcriptView,
+    Control: function TranscriptViewControl({ id, settings, change }) {
+      const { t } = useTranslation();
+      return (
+        <ChoiceControl
+          id={id}
+          value={settings.appearance.transcriptView}
+          options={transcriptChoices.map((value) => ({
+            value,
+            label: t(`transcriptView.${value}`),
+          }))}
+          onChange={(value) => {
+            change.mutate({ appearanceTranscriptView: value });
+          }}
+        />
+      );
+    },
   },
   {
     id: "log-level",

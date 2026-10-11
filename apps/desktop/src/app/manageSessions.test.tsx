@@ -570,7 +570,8 @@ describe("Archiving a session", () => {
     await user.click(await screen.findByRole("button", { name: "Session actions" }));
 
     await shownItem(/Unarchive/);
-    expect(menuItems()).toEqual(["New linked session", "Unarchive", "Delete…"]);
+    // An archived session can still be read, so its transcript view can change (ADR 0051).
+    expect(menuItems()).toEqual(["Transcript view", "New linked session", "Unarchive", "Delete…"]);
   });
 
   it("moves the focus to the next row when it is archived from its row", async () => {

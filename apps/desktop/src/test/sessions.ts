@@ -14,6 +14,7 @@ import type {
   Session,
   SessionList,
   SessionSummary,
+  TranscriptView,
   TurnEvent,
   UsageLimits,
 } from "@/ipc/bindings";
@@ -103,6 +104,8 @@ interface Options {
   catalog?: Catalog;
   /** The usage limits Claude Code reports (ADR 0043). None, until it has been asked. */
   usageLimits?: UsageLimits;
+  /** The default transcript view in the settings (ADR 0051). */
+  transcriptView?: TranscriptView;
 }
 
 /**
@@ -125,6 +128,7 @@ export function startSessionsRust({
   catalog = { commands: [], models: [], terminalCommands: [] },
   pickedFolder = null,
   usageLimits = { report: "unknown", windows: [] },
+  transcriptView = "normal",
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
@@ -173,7 +177,11 @@ export function startSessionsRust({
           return { name: "Arden Code", version: "0.1.0" };
         }
         case "get_settings": {
-          return settingsWith({ general: { regionalFormat }, agents: { allowBypassPermissions } });
+          return settingsWith({
+            general: { regionalFormat },
+            appearance: { transcriptView },
+            agents: { allowBypassPermissions },
+          });
         }
         case "list_sessions": {
           return list();

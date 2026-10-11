@@ -371,7 +371,8 @@ describe("Sending a message", () => {
     expect(screen.getByText("Thinking")).toBeVisible();
     expect(screen.getByText("Let me look.")).toBeInTheDocument();
     expect(screen.getByText("read_file")).toBeVisible();
-    expect(await screen.findByText("42 lines")).toBeVisible();
+    // What the tool answered is folded under its line in the Normal view (ADR 0051).
+    expect(await screen.findByText("42 lines")).toBeInTheDocument();
     expect(screen.queryByText("Running…")).toBeNull();
     // Markdown is drawn, not printed.
     expect(await screen.findByText("the answer")).toBeVisible();

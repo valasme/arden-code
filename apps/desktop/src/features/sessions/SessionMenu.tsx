@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { EyeIcon } from "lucide-react";
 import { type ReactNode, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -6,7 +7,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
@@ -17,6 +23,7 @@ import type { SessionSummary } from "@/ipc/bindings";
 import { noSessions, sessionListQuery } from "@/ipc/queries";
 
 import { findSession } from "./sessionList";
+import { transcriptViews, useTranscriptView, useTranscriptViewsStore } from "./transcriptView";
 import { actionsFor, type SessionAction, useSessionActions } from "./useSessionActions";
 
 /** Each action's words in the menu, and the command that does the same for the open session. */
@@ -87,6 +94,37 @@ export function SessionMenuItems({
   );
 }
 
+/** How much of its replies the session shows, chosen for it alone (ADR 0051). */
+function TranscriptViewMenu({ sessionId }: { sessionId: string }) {
+  const { t } = useTranslation();
+  const view = useTranscriptView(sessionId);
+  const choose = useTranscriptViewsStore((state) => state.choose);
+
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <EyeIcon aria-hidden className="size-4 text-muted-foreground" strokeWidth={1.5} />
+        {t("transcriptView.label")}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        <DropdownMenuRadioGroup
+          value={view}
+          onValueChange={(value) => {
+            const chosen = transcriptViews.find((candidate) => candidate === value);
+            if (chosen) choose(sessionId, chosen);
+          }}
+        >
+          {transcriptViews.map((value) => (
+            <DropdownMenuRadioItem key={value} value={value}>
+              {t(`transcriptView.${value}`)}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
 /**
  * A session's menu, opened by the control it wraps (ADR 0036). The chosen action runs once the menu
  * has closed and the focus is back on that control, so a dialog it opens keeps the focus. The menu
@@ -118,6 +156,8 @@ export function SessionMenu({
           if (action) runAction(action, sessionId, onRow);
         }}
       >
+        <TranscriptViewMenu sessionId={sessionId} />
+        <DropdownMenuSeparator />
         <SessionMenuItems
           session={findSession(list, sessionId)}
           onChoose={(action) => {

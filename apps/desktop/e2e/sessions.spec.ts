@@ -256,13 +256,16 @@ test.describe("rich replies in the real app", () => {
       await untilTheReplyEnds(session);
 
       await expect(session.getByText("The agent started working")).toBeVisible();
-      const thinking = session.locator("details");
+      const thinking = session.locator("details[data-item=thinking]");
       await expect(thinking).toHaveCount(1);
       await expect(thinking).not.toHaveAttribute("open", "");
       await thinking.getByText("Thinking").click();
       await expect(thinking.getByText(/I will not do any real work/)).toBeVisible();
 
       await expect(session.getByText("read_file")).toBeVisible();
+      // What the tool answered is folded under its line in the Normal view (ADR 0051).
+      await expect(session.getByText("42 lines")).toBeHidden();
+      await session.getByText("read_file").click();
       await expect(session.getByText("42 lines")).toBeVisible();
       await expect(session.getByText("run_command")).toBeVisible();
       await expect(session.getByText("Failed", { exact: true })).toBeVisible();
