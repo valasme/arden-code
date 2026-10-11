@@ -12,7 +12,7 @@ import "@/styles/global.css";
 
 /** A message box with the Ultrathink switch, wired as a session's is, and a way to turn it on. */
 function Harness() {
-  const { ultrathink, setUltrathink, carrying } = useUltrathink();
+  const { ultrathink, setUltrathink, carrying } = useUltrathink("session-1");
   return (
     <>
       <button
@@ -24,6 +24,7 @@ function Harness() {
         Switch on
       </button>
       <MessageBox
+        draft="session-1"
         agent="claude"
         busy={false}
         choices={null}
@@ -122,6 +123,7 @@ function ClaudeBox({
     // By default, the width of the welcome screen in the maintainer's screenshot.
     <div style={{ width }}>
       <MessageBox
+        draft="welcome"
         agent="claude"
         busy={false}
         choices={choices.map(([name, icon, value]) => (

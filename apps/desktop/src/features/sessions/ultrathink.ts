@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useDraftsStore } from "@/state/drafts";
 
 /** The word that asks Claude Code for deeper reasoning on the turn it is in (ADR 0042). */
 const WORD = "ultrathink";
@@ -24,10 +24,15 @@ export function withUltrathink(text: string): string {
  * The Ultrathink switch of a message box: the next message carries the word, and the switch turns
  * itself off once that message is sent. A message that was not sent, such as one that asked to
  * trust a folder and was cancelled, leaves the switch as it was. `carrying` makes the function
- * that sends a message send it with the word when the switch is on.
+ * that sends a message send it with the word when the switch is on. The switch belongs to the
+ * draft of a message box, the session's or the welcome state's, and stays with it (ADR 0046).
  */
-export function useUltrathink() {
-  const [ultrathink, setUltrathink] = useState(false);
+export function useUltrathink(draft: string) {
+  const ultrathink = useDraftsStore((state) => state.ultrathink[draft] ?? false);
+  const setSwitch = useDraftsStore((state) => state.setUltrathink);
+  const setUltrathink = (on: boolean) => {
+    setSwitch(draft, on);
+  };
 
   const carrying =
     (send: (text: string) => boolean | Promise<boolean>) =>

@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Mark } from "@/components/brand/Logo";
@@ -26,6 +25,7 @@ import {
 } from "@/ipc/queries";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
+import { useDraftsStore, WELCOME_DRAFT } from "@/state/drafts";
 
 import { AgentMenu } from "./AgentMenu";
 import { EffortMenu } from "./EffortMenu";
@@ -70,16 +70,41 @@ export function Welcome() {
   const openFolder = useOpenFolder();
   const unavailable = useUnavailableAgents();
   const { data: list = noSessions } = useQuery(sessionListQuery);
-  const [chosenProject, setChosenProject] = useState<string | undefined>(undefined);
-  const [chosenAgent, setChosenAgent] = useState<AgentKind | undefined>(undefined);
-  const [chosenModel, setChosenModel] = useState<Model | null | undefined>(undefined);
-  const [chosenEffort, setChosenEffort] = useState<Effort | null | undefined>(undefined);
-  const [chosenMode, setChosenMode] = useState<PermissionMode | undefined>(undefined);
+  // What the menus were set to stays while the person is away (ADR 0046).
+  const {
+    agent: chosenAgent,
+    projectId: chosenProject,
+    model: chosenModel,
+    effort: chosenEffort,
+    permissionMode: chosenMode,
+  } = useDraftsStore((state) => state.welcomeChoices);
+  const chooseOnWelcome = useDraftsStore((state) => state.chooseOnWelcome);
+  const forgetWelcomeChoices = useDraftsStore((state) => state.forgetWelcomeChoices);
+  const setChosenAgent = (agent: AgentKind) => {
+    chooseOnWelcome({ agent });
+  };
+  const setChosenProject = (projectId: string) => {
+    chooseOnWelcome({ projectId });
+  };
+  const setChosenModel = (model: Model | null) => {
+    chooseOnWelcome({ model });
+  };
+  const setChosenEffort = (effort: Effort | null) => {
+    chooseOnWelcome({ effort });
+  };
+  const setChosenMode = (permissionMode: PermissionMode) => {
+    chooseOnWelcome({ permissionMode });
+  };
   const { gate, dialog: trustDialog } = useTrustGate();
-  const { ultrathink, setUltrathink, carrying } = useUltrathink();
+  const { ultrathink, setUltrathink, carrying } = useUltrathink(WELCOME_DRAFT);
   const bypassAllowed = useSettings().agents.allowBypassPermissions;
 
-  const projectId = chosenProject ?? latestProjectId(list) ?? PLAYGROUND_ID;
+  // A chosen project that was removed while the person was away is chosen no longer.
+  const chosenListed =
+    chosenProject !== undefined &&
+    list.projects.some((listing) => listing.project.id === chosenProject);
+  const projectId =
+    (chosenListed ? chosenProject : undefined) ?? latestProjectId(list) ?? PLAYGROUND_ID;
   const project: Project | undefined = list.projects.find(
     (listing) => listing.project.id === projectId,
   )?.project;
@@ -116,6 +141,8 @@ export function Welcome() {
       showErrorToast(toAppError(error));
     }
     await send(id, text);
+    // The next session starts from what it inherits again.
+    forgetWelcomeChoices();
     return true;
   };
 
@@ -126,6 +153,7 @@ export function Welcome() {
         <h1 className="text-xl font-semibold text-balance">{t(`agents.${agent}.question`)}</h1>
       </div>
       <MessageBox
+        draft={WELCOME_DRAFT}
         // As wide as a session's message box, so its lower line fits on one row (#127).
         className="w-full max-w-[45rem] px-0 pb-0"
         ownArea={false}

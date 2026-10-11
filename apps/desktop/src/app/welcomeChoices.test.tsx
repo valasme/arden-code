@@ -18,9 +18,10 @@ type Options = Parameters<typeof startSessionsRust>[0];
 async function welcome(options: Options = {}) {
   const rust = startSessionsRust(options);
   const user = userEvent.setup();
-  render(<App history={createMemoryHistory({ initialEntries: ["/"] })} />);
+  const history = createMemoryHistory({ initialEntries: ["/"] });
+  render(<App history={history} />);
   await screen.findByRole("heading", { level: 1, name: /work on\?/ });
-  return { rust, user };
+  return { rust, user, history };
 }
 
 /**
@@ -168,6 +169,50 @@ describe("The welcome screen's message box (#127)", () => {
     await within(await main()).findByRole("button", { name: "Turn off Ultrathink" });
 
     expect(Math.abs((await middleOf("Send")) - (await middleOf("Agent: Claude")))).toBeLessThan(2);
+  });
+});
+
+describe("The welcome screen's draft (#131)", () => {
+  it("keeps what was written and chosen while the person is away", async () => {
+    const { user, history } = await welcome({ folders: [folderProject("api", "api", true)] });
+    await choose(user, "Project: Playground", /^api/);
+    await choose(user, "Agent: Demo agent", /^Claude/);
+    await choose(user, "Model: Default", /^Opus/);
+    await turnOnUltrathink(user);
+    await user.type(
+      within(await main()).getByRole("textbox", { name: "Message" }),
+      "Half a thought",
+    );
+
+    history.push("/settings");
+    await screen.findByRole("heading", { level: 1, name: "General" });
+    history.push("/");
+    await screen.findByRole("heading", { level: 1, name: /work on\?/ });
+
+    const back = await main();
+    expect(within(back).getByRole("textbox", { name: "Message" })).toHaveValue("Half a thought");
+    expect(within(back).getByRole("button", { name: "Agent: Claude" })).toBeVisible();
+    expect(within(back).getByRole("button", { name: "Project: api" })).toBeVisible();
+    expect(within(back).getByRole("button", { name: "Model: Opus" })).toBeVisible();
+    expect(within(back).getByRole("button", { name: "Turn off Ultrathink" })).toBeVisible();
+  });
+
+  it("starts afresh once its message has started a session", async () => {
+    const { rust, user, history } = await welcome();
+    await choose(user, "Agent: Demo agent", /^Claude/);
+    await turnOnUltrathink(user);
+    await user.type(within(await main()).getByRole("textbox", { name: "Message" }), "Hello{Enter}");
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+
+    history.push("/");
+    await screen.findByRole("heading", { level: 1, name: /work on\?/ });
+
+    const back = await main();
+    expect(within(back).getByRole("textbox", { name: "Message" })).toHaveValue("");
+    // A new session there would take the Demo agent: the choice of Claude went with the message.
+    expect(within(back).getByRole("button", { name: "Agent: Demo agent" })).toBeVisible();
   });
 });
 

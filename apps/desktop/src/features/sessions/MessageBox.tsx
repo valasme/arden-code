@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentKind, SlashCommand } from "@/ipc/bindings";
 import { cn } from "@/lib/utils";
+import { useDraftsStore } from "@/state/drafts";
 
 import { SlashCommandList, slashOptionId } from "./SlashCommandList";
 import { filterSlashCommands, menuQuery } from "./slashCommands";
@@ -15,6 +16,11 @@ import { holdsUltrathink } from "./ultrathink";
 const COMPOSING_KEY_CODE = 229;
 
 interface MessageBoxProps {
+  /**
+   * Whose draft the box holds: the session's id, or the welcome state's (ADR 0046). What is
+   * written stays with it while the box is away.
+   */
+  draft: string;
   /** Whether a reply is running: then the button stops it instead of sending. */
   busy: boolean;
   /** The agent the message goes to: the placeholder names it. */
@@ -63,6 +69,7 @@ interface MessageBoxProps {
  * no arguments and fills in one that does. Esc closes the list and keeps the text.
  */
 export function MessageBox({
+  draft,
   agent,
   busy,
   choices,
@@ -75,7 +82,11 @@ export function MessageBox({
   className,
 }: MessageBoxProps) {
   const { t } = useTranslation();
-  const [text, setText] = useState("");
+  const text = useDraftsStore((state) => state.texts[draft] ?? "");
+  const setDraftText = useDraftsStore((state) => state.setText);
+  const setText = (value: string) => {
+    setDraftText(draft, value);
+  };
   const box = useRef<HTMLTextAreaElement>(null);
 
   // A session opens ready to be written in.
