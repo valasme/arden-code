@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use arden_windows::placement::{Monitor, Placement, Rect, WindowState, restore};
 use arden_windows::store;
-use tauri::{AppHandle, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 
 /// The size of the window the first time, in logical pixels.
 const DEFAULT_LOGICAL_SIZE: (u32, u32) = (1280, 800);
@@ -46,6 +46,26 @@ fn monitors(app: &AppHandle) -> tauri::Result<Vec<Monitor>> {
     Ok(result)
 }
 
+/// The smallest size the window can be made, in logical pixels: the `minWidth` and `minHeight` of
+/// its entry in `tauri.conf.json` (ADR 0009). None set is no smallest size.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn smallest_logical_size(window: &WebviewWindow) -> (u32, u32) {
+    window
+        .app_handle()
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|config| config.label == window.label())
+        .map_or((0, 0), |config| {
+            // Window sizes are small and never negative.
+            (
+                config.min_width.unwrap_or(0.0).round() as u32,
+                config.min_height.unwrap_or(0.0).round() as u32,
+            )
+        })
+}
+
 /// Moves and sizes the (still hidden) window to where it was last time, or to a sensible default.
 ///
 /// # Errors
@@ -57,7 +77,12 @@ pub fn restore_window(
     state_file: &std::path::Path,
 ) -> tauri::Result<Placement> {
     let saved = store::load(state_file);
-    let placement = restore(saved.as_ref(), &monitors(app)?, DEFAULT_LOGICAL_SIZE);
+    let placement = restore(
+        saved.as_ref(),
+        &monitors(app)?,
+        DEFAULT_LOGICAL_SIZE,
+        smallest_logical_size(window),
+    );
 
     let Rect {
         x,
@@ -115,6 +140,40 @@ fn capture(window: &WebviewWindow, normal: &Rect) -> Option<(Rect, bool)> {
         Rect::new(position.x, position.y, size.width, size.height),
         false,
     ))
+}
+
+/// Grows the window back to its smallest size whenever something makes it smaller (#128).
+///
+/// Windows stops a person's drag at the smallest size the window gives it, but a program that sizes
+/// the window itself, such as a window tool, can go below it, since the window draws its own frame.
+pub fn keep_smallest_size(window: &WebviewWindow) {
+    let (smallest_width, smallest_height) = smallest_logical_size(window);
+    let watched = window.clone();
+    window.on_window_event(move |event| {
+        let WindowEvent::Resized(_) = event else {
+            return;
+        };
+        if watched.is_minimized().unwrap_or(true) || watched.is_maximized().unwrap_or(true) {
+            return;
+        }
+        let (Ok(outer), Ok(scale)) = (watched.outer_size(), watched.scale_factor()) else {
+            return;
+        };
+        let smallest = PhysicalSize::<u32>::from_logical::<_, f64>(
+            (f64::from(smallest_width), f64::from(smallest_height)),
+            scale,
+        );
+        if outer.width >= smallest.width && outer.height >= smallest.height {
+            return;
+        }
+        let width = outer.width.max(smallest.width);
+        let height = outer.height.max(smallest.height);
+        // Sized again away from the event, which it would otherwise be sizing from within.
+        let window = watched.clone();
+        std::thread::spawn(move || {
+            let _ = set_outer_size(&window, width, height);
+        });
+    });
 }
 
 /// Starts saving the window's place whenever it changes, and once more when it closes.

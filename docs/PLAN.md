@@ -254,7 +254,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 - **The look** ([ADR 0032](adr/0032-the-redesign.md)): a quiet frame in the spirit of Linear, the session view in the spirit of Claude Desktop. New session is the sidebar's first row and Settings its last, each with its shortcut; each project is a small label over its sessions. Every enabled control shows the pointer cursor, except the window buttons, which keep the arrow as Windows' own do ([ADR 0037](adr/0037-the-window-buttons-keep-the-arrow.md)).
 - **No white flash:** the window starts hidden, with its background already in the current theme. It appears after the first frame is drawn.
 - **Window memory:** size, position, monitor and maximized state are restored. A position that would now be off-screen is corrected.
-- **Smallest size:** 500 × 560 px. Windows asks for 500 px or less, or the window does not fit the zones of Snap Layouts; the sidebar and the session view at their smallest fit in it.
+- **Smallest size:** 500 × 560 px. Windows asks for 500 px or less, or the window does not fit the zones of Snap Layouts; the sidebar and the session view at their smallest fit in it. It holds on every path: a smaller saved size opens at it, and a window made smaller by another program grows back. At that size a sidebar row stays on one line with its shortcut aside, and the search strip shows only its icon and shortcut ([ADR 0047](adr/0047-holding-the-smallest-window-size.md)).
 
 ### 6.2 Title bar and Snap Layouts
 
