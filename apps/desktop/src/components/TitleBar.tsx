@@ -158,10 +158,14 @@ export function TitleBar({
       <button
         type="button"
         onClick={onSearch}
-        className="mx-auto my-1 flex max-w-md min-w-0 flex-1 items-center gap-2 bg-muted px-2.5 text-xs text-muted-foreground hover:bg-border hover:text-foreground forced-colors:border forced-colors:border-[ButtonBorder]"
+        className="@container/search mx-auto my-1 flex max-w-md min-w-0 flex-1 items-center gap-2 bg-muted px-2.5 text-xs text-muted-foreground hover:bg-border hover:text-foreground forced-colors:border forced-colors:border-[ButtonBorder]"
       >
         <SearchIcon aria-hidden className="size-3.5 shrink-0" strokeWidth={1.5} />
-        <span className="truncate">{t("titleBar.search")}</span>
+        {/* All of it or none of it: a narrow strip shows only the icon and the shortcut, and keeps
+            the words for assistive technology (#128). */}
+        <span className="sr-only whitespace-nowrap @min-[15rem]/search:not-sr-only">
+          {t("titleBar.search")}
+        </span>
         {paletteShortcut ? (
           <Kbd className="ms-auto h-4 border-0 bg-transparent px-0 text-muted-foreground">
             {formatShortcut(paletteShortcut)}

@@ -3,6 +3,7 @@ import type { Channel } from "@tauri-apps/api/core";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { onTestFinished } from "vitest";
 import { page } from "vitest/browser";
 import { z } from "zod";
 
@@ -200,6 +201,41 @@ async function scrollThrough(element: HTMLElement, steps: number): Promise<numbe
   }
   return durations;
 }
+
+describe("Following a reply as it streams (#132)", () => {
+  it("keeps the end of a growing reply in view on the frame it grows, never a frame behind", async () => {
+    const user = userEvent.setup();
+    const rust = openLongSession(300);
+    await screen.findByText("Message number 300");
+    await user.click(screen.getByRole("textbox", { name: "Message" }));
+    await user.keyboard("Tell me a lot{Enter}");
+    await screen.findByText("The Demo agent is replying…");
+    rust.emit(paragraph(0));
+    await screen.findByText(/Paragraph 0 of a long reply/);
+    const reply = [...rows()].at(-1);
+    if (!reply) throw new Error("no reply");
+
+    // What each frame is about to show: the app's own observers have run, the paint has not. This
+    // observer is made after the app's, so the browser calls it after them in the same frame.
+    const behind: number[] = [];
+    const observer = new ResizeObserver(() => {
+      behind.push(distanceFromEnd());
+    });
+    observer.observe(reply);
+    onTestFinished(() => {
+      observer.disconnect();
+    });
+    for (let number = 1; number <= 30; number += 1) {
+      rust.emit(paragraph(number));
+      // oxlint-disable-next-line no-await-in-loop -- a piece of the reply about every 25 ms, as Claude Code sends
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(await screen.findByText(/Paragraph 30 of a long reply/)).toBeVisible();
+
+    expect(behind.length).toBeGreaterThan(10);
+    expect(Math.max(...behind)).toBeLessThan(2);
+  });
+});
 
 describe("Benchmark: a session of 10,000 messages", () => {
   it("opens quickly, draws only a screenful, and scrolls without dropping many frames", async ({

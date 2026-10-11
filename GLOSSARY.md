@@ -117,6 +117,10 @@ _Avoid_: chat area, chat view
 Where the user writes the next message of a session.
 _Avoid_: composer, input, prompt box
 
+**Draft**:
+What is written in a message box and not sent yet, kept while the user is away from it. The welcome state's draft also holds what its menus were set to.
+_Avoid_: unsent message, pending input
+
 **Transcript view**:
 How much of a session's replies the session view shows: Normal, Thinking or Verbose. A setting gives the default, and a session can have its own.
 _Avoid_: display mode, detail level

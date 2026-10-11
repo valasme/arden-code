@@ -16,7 +16,7 @@ import { defaultSettings } from "@/ipc/defaults.gen";
 
 import { ChoiceControl, RangeControl, ToggleControl } from "./controls";
 import { RegionalPreview } from "./RegionalPreview";
-import { RestartToggle } from "./RestartControls";
+import { RestartNote, RestartToggle } from "./RestartControls";
 import { useStartupSettings } from "./startup";
 import type { SettingsTab } from "./tabs";
 import type { useChangeSetting } from "./useSettings";
@@ -43,6 +43,8 @@ export interface SettingDefinition {
   /** Whether the setting has its default value. */
   isDefault: (settings: Settings) => boolean;
   Control: (props: ControlProps) => ReactNode;
+  /** A note across the foot of the setting's row, when it has one to give (#130). */
+  Note?: (props: ControlProps) => ReactNode;
 }
 
 const same = defaultSettings;
@@ -285,6 +287,10 @@ export const settingDefinitions: readonly SettingDefinition[] = [
         />
       );
     },
+    Note: function SmoothScrollingNote({ settings }) {
+      const startedWith = useStartupSettings().appearance.smoothScrolling;
+      return <RestartNote changed={settings.appearance.smoothScrolling !== startedWith} />;
+    },
   },
   {
     id: "show-status-bar",
@@ -458,6 +464,10 @@ export const settingDefinitions: readonly SettingDefinition[] = [
           }}
         />
       );
+    },
+    Note: function HardwareAccelerationNote({ settings }) {
+      const startedWith = useStartupSettings().advanced.hardwareAcceleration;
+      return <RestartNote changed={settings.advanced.hardwareAcceleration !== startedWith} />;
     },
   },
 ];

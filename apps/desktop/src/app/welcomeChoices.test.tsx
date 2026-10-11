@@ -18,9 +18,10 @@ type Options = Parameters<typeof startSessionsRust>[0];
 async function welcome(options: Options = {}) {
   const rust = startSessionsRust(options);
   const user = userEvent.setup();
-  render(<App history={createMemoryHistory({ initialEntries: ["/"] })} />);
+  const history = createMemoryHistory({ initialEntries: ["/"] });
+  render(<App history={history} />);
   await screen.findByRole("heading", { level: 1, name: /work on\?/ });
-  return { rust, user };
+  return { rust, user, history };
 }
 
 /**
@@ -134,6 +135,105 @@ describe("Choosing the agent and the project on the welcome screen", () => {
     await welcome();
 
     await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+/** How far down the page the middle of the welcome screen's button with this name is. */
+async function middleOf(name: string) {
+  const box = (await within(await main()).findByRole("button", { name })).getBoundingClientRect();
+  return box.top + box.height / 2;
+}
+
+/** Turns on the Ultrathink switch at the end of the effort menu, and closes the menu. */
+async function turnOnUltrathink(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await within(await main()).findByRole("button", { name: /^Effort/ }));
+  const menu = await screen.findByRole("menu");
+  await animationsDone(menu);
+  await user.click(within(menu).getByRole("menuitemcheckbox", { name: /Ultrathink/ }));
+  // The menu stays open to show the switch change; Escape closes it.
+  await user.keyboard("{Escape}");
+  await menuClosed();
+}
+
+describe("The welcome screen's message box (#127)", () => {
+  it("fits the five menus, the Ultrathink chip and Send on one row at the window's usual size", async () => {
+    // The maintainer's screenshot: Claude in arden-code, with Opus, Max, Manual and Ultrathink.
+    const { user } = await welcome({
+      folders: [folderProject("arden", "arden-code", true)],
+      sessions: [sessionNamed("s1", "Earlier", "arden", "claude")],
+      newSessionAgent: "claude",
+      newSessionModel: "opus",
+      newSessionEffort: "max",
+    });
+    await turnOnUltrathink(user);
+    await within(await main()).findByRole("button", { name: "Turn off Ultrathink" });
+
+    expect(Math.abs((await middleOf("Send")) - (await middleOf("Agent: Claude")))).toBeLessThan(2);
+  });
+});
+
+describe("The welcome screen's draft (#131)", () => {
+  it("keeps what was written and chosen while the person is away", async () => {
+    const { user, history } = await welcome({ folders: [folderProject("api", "api", true)] });
+    await choose(user, "Project: Playground", /^api/);
+    await choose(user, "Agent: Demo agent", /^Claude/);
+    await choose(user, "Model: Default", /^Opus/);
+    await turnOnUltrathink(user);
+    await user.type(
+      within(await main()).getByRole("textbox", { name: "Message" }),
+      "Half a thought",
+    );
+
+    history.push("/settings");
+    await screen.findByRole("heading", { level: 1, name: "General" });
+    history.push("/");
+    await screen.findByRole("heading", { level: 1, name: /work on\?/ });
+
+    const back = await main();
+    expect(within(back).getByRole("textbox", { name: "Message" })).toHaveValue("Half a thought");
+    expect(within(back).getByRole("button", { name: "Agent: Claude" })).toBeVisible();
+    expect(within(back).getByRole("button", { name: "Project: api" })).toBeVisible();
+    expect(within(back).getByRole("button", { name: "Model: Opus" })).toBeVisible();
+    expect(within(back).getByRole("button", { name: "Turn off Ultrathink" })).toBeVisible();
+  });
+
+  it("lets go of a chosen project once it is removed", async () => {
+    const { user } = await welcome({
+      folders: [folderProject("api", "api", true), folderProject("web", "web", true)],
+      sessions: [
+        sessionNamed("s1", "Earlier", "api"),
+        { ...sessionNamed("s2", "Latest", "web"), updatedAt: "2026-10-01T09:00:00Z" },
+      ],
+    });
+    await choose(user, "Project: web", /^api/);
+
+    const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
+    await user.click(within(sidebar).getByRole("button", { name: "Actions for api" }));
+    const item = await screen.findByRole("menuitem", { name: "Remove project…" });
+    await animationsDone(await screen.findByRole("menu"));
+    await user.click(item);
+    const question = await screen.findByRole("alertdialog", { name: "Remove “api”?" });
+    await user.click(within(question).getByRole("button", { name: "Remove project" }));
+
+    expect(await within(await main()).findByRole("button", { name: "Project: web" })).toBeVisible();
+  });
+
+  it("starts afresh once its message has started a session", async () => {
+    const { rust, user, history } = await welcome();
+    await choose(user, "Agent: Demo agent", /^Claude/);
+    await turnOnUltrathink(user);
+    await user.type(within(await main()).getByRole("textbox", { name: "Message" }), "Hello{Enter}");
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+
+    history.push("/");
+    await screen.findByRole("heading", { level: 1, name: /work on\?/ });
+
+    const back = await main();
+    expect(within(back).getByRole("textbox", { name: "Message" })).toHaveValue("");
+    // A new session there would take the Demo agent: the choice of Claude went with the message.
+    expect(within(back).getByRole("button", { name: "Agent: Demo agent" })).toBeVisible();
   });
 });
 

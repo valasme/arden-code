@@ -9,7 +9,7 @@ import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
-import { startSessionsRust } from "@/test/sessions";
+import { sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
 
@@ -240,6 +240,27 @@ async function openSession(rust: ReturnType<typeof startSessionsRust>) {
 }
 
 describe("Sending a message", () => {
+  it("keeps what each session has unsent while another is open (#131)", async () => {
+    startSessionsRust({ sessions: [sessionNamed("s1", "First"), sessionNamed("s2", "Second")] });
+    const user = userEvent.setup();
+    const history = createMemoryHistory({ initialEntries: ["/session/s1"] });
+    render(<App history={history} />);
+    await screen.findByRole("heading", { level: 1, name: "First" });
+    await user.type(await messageBox(), "Not yet");
+
+    history.push("/session/s2");
+    await screen.findByRole("heading", { level: 1, name: "Second" });
+    expect(await messageBox()).toHaveValue("");
+    history.push("/session/s1");
+    await screen.findByRole("heading", { level: 1, name: "First" });
+
+    const box = await messageBox();
+    expect(box).toHaveValue("Not yet");
+    // Ready to carry on writing where it stopped.
+    expect(box).toHaveFocus();
+    expect(box).toHaveProperty("selectionStart", "Not yet".length);
+  });
+
   it("sends on Enter, streams the reply into the view and names the session after the message", async () => {
     const rust = startSessionsRust();
     const { user } = await openSession(rust);
