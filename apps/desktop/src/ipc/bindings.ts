@@ -674,6 +674,34 @@ export const commands = {
 	 */
 	changePlugin: (action: PluginAction, id: string, scope: PluginScope, projectId: string | null) => __TAURI_INVOKE<PluginChange>("change_plugin", { action, id, scope, projectId }),
 	/**
+	 *  The marketplaces the person has added (ADR 0053): for now Claude's, from
+	 *  `claude plugin marketplace list --json`.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why they could not be read, as [`installed_plugins`] does.
+	 */
+	marketplaces: () => __TAURI_INVOKE<Marketplace[]>("marketplaces"),
+	/**
+	 *  Adds a marketplace from a source the person typed (ADR 0053), once it is checked, and answers
+	 *  the agent's own message.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why it was not added: a source that could be read as a flag or holds a line break, a
+	 *  Claude Code older than 2.1.287, or a command that failed (with the agent's message and code),
+	 *  took too long or answered in a way Arden Code does not understand.
+	 */
+	addMarketplace: (source: string) => __TAURI_INVOKE<PluginChange>("add_marketplace", { source }),
+	/**
+	 *  Updates a marketplace's listing, or removes it with the plugins installed from it (ADR 0053).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why it was not changed, as [`add_marketplace`] does.
+	 */
+	changeMarketplace: (action: MarketplaceAction, name: string) => __TAURI_INVOKE<PluginChange>("change_marketplace", { action, name }),
+	/**
 	 *  Makes a session with `count` finished turns, to test long conversations. Debug builds only.
 	 * 
 	 *  # Errors
@@ -1150,6 +1178,22 @@ export type LogLevel =
 "info" | 
 /**  Everything, for finding a bug. Files grow faster. */
 "debug";
+
+/**  A marketplace the person has added, with only what the page shows (ADR 0053). */
+export type Marketplace = {
+	/**  The agent whose marketplace it is. */
+	agent: AgentKind,
+	name: string,
+	/**  Where it comes from, as text: the repository, the address or the path, and its version. */
+	source: string,
+};
+
+/**  A change to a marketplace (ADR 0053). */
+export type MarketplaceAction = 
+/**  Reads its listing again from where it comes from. */
+"update" | 
+/**  Removes it, and with it every plugin installed from it. */
+"remove";
 
 /**  Where the page's Maximize button is, in physical pixels from the top left of the page. */
 export type MaximizeButtonArea = {

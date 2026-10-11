@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::path::PathBuf;
 
 use arden_agents::claude::plugins::{
-    AvailablePlugin, ClaudePlugins, InstalledPlugin, PluginAction, PluginChange, PluginError,
-    PluginScope,
+    AvailablePlugin, ClaudePlugins, InstalledPlugin, Marketplace, MarketplaceAction, PluginAction,
+    PluginChange, PluginError, PluginScope,
 };
 use arden_agents::model::ProjectKind;
 use arden_core::error::{AppError, ErrorCode};
@@ -29,6 +29,8 @@ fn plugin_error(error: PluginError) -> AppError {
     let shown = match error {
         PluginError::InvalidId => AppError::new(ErrorCode::PluginCommandFailed)
             .with_details("This is not the id of a plugin, so nothing was run."),
+        PluginError::InvalidSource => AppError::new(ErrorCode::PluginCommandFailed)
+            .with_details("This is not a marketplace source, so nothing was run."),
         PluginError::NotChangeable => AppError::new(ErrorCode::PluginCommandFailed)
             .with_details("This plugin cannot be changed that way here."),
         PluginError::NotInstalled => AppError::new(ErrorCode::ClaudeNotInstalled),
@@ -194,6 +196,60 @@ pub async fn change_plugin(
     };
     change_off_the_window(&claude, &sessions, move || {
         module.change(action, &id, scope, folder.as_deref())
+    })
+    .await
+}
+
+/// The marketplaces the person has added (ADR 0053): for now Claude's, from
+/// `claude plugin marketplace list --json`.
+///
+/// # Errors
+///
+/// Returns why they could not be read, as [`installed_plugins`] does.
+#[tauri::command]
+#[specta::specta]
+pub async fn marketplaces(plugins: State<'_, Plugins>) -> Result<Vec<Marketplace>, AppError> {
+    let claude = plugins.claude()?;
+    off_the_window(move || claude.marketplaces()).await
+}
+
+/// Adds a marketplace from a source the person typed (ADR 0053), once it is checked, and answers
+/// the agent's own message.
+///
+/// # Errors
+///
+/// Returns why it was not added: a source that could be read as a flag or holds a line break, a
+/// Claude Code older than 2.1.287, or a command that failed (with the agent's message and code),
+/// took too long or answered in a way Arden Code does not understand.
+#[tauri::command]
+#[specta::specta]
+pub async fn add_marketplace(
+    source: String,
+    plugins: State<'_, Plugins>,
+    claude: State<'_, crate::agents::Claude>,
+    sessions: State<'_, crate::sessions::Sessions>,
+) -> Result<PluginChange, AppError> {
+    let module = plugins.claude()?;
+    change_off_the_window(&claude, &sessions, move || module.add_marketplace(&source)).await
+}
+
+/// Updates a marketplace's listing, or removes it with the plugins installed from it (ADR 0053).
+///
+/// # Errors
+///
+/// Returns why it was not changed, as [`add_marketplace`] does.
+#[tauri::command]
+#[specta::specta]
+pub async fn change_marketplace(
+    action: MarketplaceAction,
+    name: String,
+    plugins: State<'_, Plugins>,
+    claude: State<'_, crate::agents::Claude>,
+    sessions: State<'_, crate::sessions::Sessions>,
+) -> Result<PluginChange, AppError> {
+    let module = plugins.claude()?;
+    change_off_the_window(&claude, &sessions, move || {
+        module.change_marketplace(action, &name)
     })
     .await
 }

@@ -440,6 +440,7 @@
     },
     "description": "Plugins bring skills, slash commands and tools to your agents.",
     "discover": {
+      "addOfficial": "Add Anthropic's official marketplace",
       "back": "All plugins",
       "choose": "Choose a plugin to see what it is.",
       "count_one": "{{count}} plugin",
@@ -452,6 +453,7 @@
       "noInstalls": "No install count",
       "noMatch": "No plugin matches.",
       "noVersion": "Not given",
+      "officialMissing": "Anthropic's official marketplace is not added, so its plugins are not listed.",
       "reading": "Reading what your marketplaces offer…",
       "refresh": "Refresh",
       "source": "Source",
@@ -490,6 +492,23 @@
       "updateLabel": "Update {{name}}",
       "version": "Version {{version}}"
     },
+    "marketplaces": {
+      "add": "Add",
+      "adding": "Adding the marketplace…",
+      "changing": "Changing {{name}}…",
+      "label": "Marketplaces",
+      "none": "No marketplaces are added.",
+      "remove": "Remove",
+      "removeDescription_zero": "No plugin installed from it is uninstalled.",
+      "removeDescription_one": "It also uninstalls the {{count}} plugin installed from it.",
+      "removeDescription_other": "It also uninstalls the {{count}} plugins installed from it.",
+      "removeLabel": "Remove {{name}}",
+      "removeTitle": "Remove {{name}}?",
+      "source": "Source",
+      "sourceHint": "A GitHub owner/repo, a git address, a folder, or the address of a marketplace.json.",
+      "update": "Update",
+      "updateLabel": "Update {{name}}"
+    },
     "scope": {
       "local": "For you, in this project",
       "managed": "From your organization",
@@ -505,7 +524,8 @@
     },
     "tabs": {
       "discover": "Discover",
-      "installed": "Installed"
+      "installed": "Installed",
+      "marketplaces": "Marketplaces"
     },
     "tabsLabel": "Plugins tabs",
     "title": "Plugins",

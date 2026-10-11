@@ -39,6 +39,14 @@ export const pluginCatalogQuery = queryOptions({
   retry: false,
 });
 
+/** The marketplaces the person has added (ADR 0053), read from the agent each time it is shown. */
+export const marketplacesQuery = queryOptions({
+  queryKey: ["plugins", "marketplaces"],
+  queryFn: () => commands.marketplaces(),
+  staleTime: 0,
+  retry: false,
+});
+
 /** The product name and version. They never change while the app runs. */
 export const appInfoQuery = queryOptions({
   queryKey: ["app-info"],

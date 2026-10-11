@@ -10,6 +10,7 @@ import type {
   Effort,
   ErrorCode,
   InstalledPlugin,
+  Marketplace,
   Model,
   PermissionMode,
   PluginChange,
@@ -113,6 +114,8 @@ interface Options {
   installedPlugins?: InstalledPlugin[];
   /** The plugins the person's marketplaces offer (ADR 0053). None by default. */
   pluginCatalog?: AvailablePlugin[];
+  /** The marketplaces the person has added (ADR 0053). None by default. */
+  marketplaces?: Marketplace[];
   /** What a plugin change answers: Claude Code's message, or the error it fails with. */
   pluginChange?: (
     command: string,
@@ -143,6 +146,7 @@ export function startSessionsRust({
   transcriptView = "normal",
   installedPlugins = [],
   pluginCatalog = [],
+  marketplaces = [],
   pluginChange = () => ({ message: "Done.", sessionsWaiting: false, shownCommand: null }),
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
@@ -453,6 +457,11 @@ export function startSessionsRust({
         case "plugin_catalog": {
           return pluginCatalog;
         }
+        case "marketplaces": {
+          return marketplaces;
+        }
+        case "add_marketplace":
+        case "change_marketplace":
         case "change_plugin":
         case "install_plugin": {
           const answer = pluginChange(command, payload);

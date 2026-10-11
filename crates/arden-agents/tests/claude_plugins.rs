@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use arden_agents::claude::plugins::{
-    ClaudePlugins, PluginAction, PluginError, PluginScope, ShownCommand,
+    ClaudePlugins, MarketplaceAction, PluginAction, PluginError, PluginScope, ShownCommand,
 };
 use arden_process::supervisor::Supervisor;
 use serde_json::{Value, json};
@@ -808,5 +808,163 @@ fn accepting_a_command_needs_claude_code_2_1_271() {
             Some(&"a".repeat(64))
         ),
         Err(PluginError::TooOld("2.1.270".into()))
+    );
+}
+
+fn marketplaces() -> Value {
+    json!([
+        { "name": "claude-plugins-official", "source": "github", "repo": "anthropics/claude-plugins-official", "installLocation": "C:\\cache\\official" },
+        { "name": "acme", "source": "git", "url": "https://git.acme.example/platform/marketplace.git", "ref": "main", "installLocation": "C:\\cache\\acme" }
+    ])
+}
+
+/// A stand-in recent enough for the marketplace commands' `--json` (2.1.287).
+fn marketplace_claude(log: &Path, extra: &Value) -> tempfile::TempDir {
+    let mut plugins = json!({ "marketplaces": marketplaces(), "installed": installed_list() });
+    if let (Some(plugins), Some(extra)) = (plugins.as_object_mut(), extra.as_object()) {
+        for (key, value) in extra {
+            plugins.insert(key.clone(), value.clone());
+        }
+    }
+    claude_on_path(&json!({ "log": log, "version": "2.1.292", "plugins": plugins }))
+}
+
+#[test]
+fn the_marketplaces_are_listed_with_where_they_come_from() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = marketplace_claude(&log, &json!({}));
+
+    let found = plugins(bin.path(), playground.path(), logs.path())
+        .marketplaces()
+        .expect("the list");
+
+    assert_eq!(found.len(), 2);
+    assert_eq!(found[0].name, "claude-plugins-official");
+    assert_eq!(found[0].source, "anthropics/claude-plugins-official");
+    assert_eq!(
+        found[1].source,
+        "https://git.acme.example/platform/marketplace.git · main"
+    );
+    assert_eq!(
+        plugin_starts(&log)[0]["args"],
+        json!(["plugin", "marketplace", "list", "--json"])
+    );
+}
+
+#[test]
+fn a_marketplace_is_added_updated_and_removed_and_removing_uninstalls_its_plugins() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = marketplace_claude(&log, &json!({}));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+
+    let added = module.add_marketplace("mattpocock/skills").expect("added");
+    assert_eq!(added.message, "Successfully added marketplace: skills");
+    module
+        .change_marketplace(MarketplaceAction::Update, "acme")
+        .expect("updated");
+    module
+        .change_marketplace(MarketplaceAction::Remove, "acme")
+        .expect("removed");
+
+    let names: Vec<String> = module
+        .marketplaces()
+        .expect("the list")
+        .into_iter()
+        .map(|known| known.name)
+        .collect();
+    assert_eq!(names, ["claude-plugins-official", "skills"]);
+    assert!(
+        module
+            .installed()
+            .expect("the list")
+            .iter()
+            .all(|plugin| plugin.marketplace != "acme")
+    );
+    let commands: Vec<Value> = plugin_starts(&log)
+        .into_iter()
+        .filter(|start| start["args"][2] != "list" && start["args"][1] != "list")
+        .map(|start| start["args"].clone())
+        .collect();
+    assert_eq!(
+        commands,
+        [
+            json!([
+                "plugin",
+                "marketplace",
+                "add",
+                "mattpocock/skills",
+                "--json"
+            ]),
+            json!(["plugin", "marketplace", "update", "acme", "--json"]),
+            json!(["plugin", "marketplace", "remove", "acme", "--json"]),
+        ]
+    );
+}
+
+#[test]
+fn a_source_that_could_be_read_as_a_flag_or_holds_a_line_break_is_refused_before_anything_runs() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = marketplace_claude(&log, &json!({}));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+
+    for source in [
+        "",
+        "   ",
+        "--scope",
+        "-x",
+        "owner/repo\n--yes",
+        "owner/repo\r",
+    ] {
+        assert_eq!(
+            module.add_marketplace(source),
+            Err(PluginError::InvalidSource),
+            "{source:?} was not refused"
+        );
+    }
+    assert_eq!(
+        module.change_marketplace(MarketplaceAction::Remove, "--all"),
+        Err(PluginError::InvalidSource)
+    );
+    assert!(plugin_starts(&log).is_empty());
+}
+
+#[test]
+fn a_source_claude_code_refuses_says_its_message_and_code() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = marketplace_claude(
+        &log,
+        &json!({ "marketplaceFailures": { "gitlab.example.com/team": true } }),
+    );
+
+    let refused = plugins(bin.path(), playground.path(), logs.path())
+        .add_marketplace("gitlab.example.com/team");
+
+    assert_eq!(
+        refused,
+        Err(PluginError::Failed {
+            message: "Invalid marketplace source format. Try: owner/repo, https://..., or ./path"
+                .into(),
+            code: Some("invalid_source".into())
+        })
+    );
+}
+
+#[test]
+fn the_marketplace_commands_need_claude_code_2_1_287() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let bin = claude_on_path(&json!({ "version": "2.1.286" }));
+
+    assert_eq!(
+        plugins(bin.path(), playground.path(), logs.path()).add_marketplace("owner/repo"),
+        Err(PluginError::TooOld("2.1.286".into()))
     );
 }

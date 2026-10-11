@@ -139,6 +139,34 @@ struct ChangeResult {
     shown_command: Value,
 }
 
+/// The oldest Claude Code whose marketplace commands answer with `--json` (councils' Q32).
+const MARKETPLACE_MINIMUM_VERSION: &str = "2.1.287";
+
+/// The longest marketplace source Arden Code passes on.
+const SOURCE_LIMIT: usize = 2048;
+
+/// Whether `source` is a marketplace source Arden Code passes on (ADR 0053): some text that
+/// cannot be read as a flag and holds no line break. Claude Code decides what it names.
+fn is_marketplace_source(source: &str) -> bool {
+    !source.trim().is_empty()
+        && !source.starts_with('-')
+        && !source.contains(['\n', '\r'])
+        && source.len() <= SOURCE_LIMIT
+}
+
+/// Whether `name` is a marketplace's name as Claude Code lists it: letters, digits, `.`, `_` and
+/// `-`, starting with a letter or digit.
+fn is_marketplace_name(name: &str) -> bool {
+    name.len() <= ID_LIMIT
+        && name
+            .chars()
+            .next()
+            .is_some_and(|first| first.is_ascii_alphanumeric())
+        && name
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "._-".contains(character))
+}
+
 /// The oldest Claude Code that takes `--accept-command`.
 const ACCEPT_MINIMUM_VERSION: &str = "2.1.271";
 
@@ -170,6 +198,35 @@ fn is_plugin_id(id: &str) -> bool {
             .is_some_and(|(name, marketplace)| part(name) && part(marketplace))
 }
 
+/// A marketplace the person has added, with only what the page shows (ADR 0053).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Marketplace {
+    /// The agent whose marketplace it is.
+    pub agent: AgentKind,
+    pub name: String,
+    /// Where it comes from, as text: the repository, the address or the path, and its version.
+    pub source: String,
+}
+
+/// One marketplace of `claude plugin marketplace list --json`, as far as Arden Code reads it.
+#[derive(Deserialize)]
+struct ListedMarketplace {
+    name: String,
+    #[serde(flatten)]
+    fields: serde_json::Map<String, Value>,
+}
+
+/// A change to a marketplace (ADR 0053).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum MarketplaceAction {
+    /// Reads its listing again from where it comes from.
+    Update,
+    /// Removes it, and with it every plugin installed from it.
+    Remove,
+}
+
 /// A change to an installed plugin (ADR 0053).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -199,6 +256,8 @@ pub enum PluginError {
     NotChangeable,
     /// The plugin id is not one Arden Code passes on, so nothing ran.
     InvalidId,
+    /// The marketplace's source or name is not one Arden Code passes on, so nothing ran.
+    InvalidSource,
     /// No Claude Code was found.
     NotInstalled,
     /// Only npm's `claude.cmd` was found, with no program behind it.
@@ -465,6 +524,92 @@ impl ClaudePlugins {
             PLUGINS_MINIMUM_VERSION
         };
         self.run_change_at(folder, &args, minimum)
+    }
+
+    /// The marketplaces the person has added, from `claude plugin marketplace list --json`.
+    ///
+    /// # Errors
+    ///
+    /// Says why they could not be read.
+    pub fn marketplaces(&self) -> Result<Vec<Marketplace>, PluginError> {
+        let output = self.run(
+            &self.playground,
+            &[
+                Arg::Literal("plugin"),
+                Arg::Literal("marketplace"),
+                Arg::Literal("list"),
+                Arg::Literal("--json"),
+            ],
+        )?;
+        let listed: Vec<ListedMarketplace> =
+            serde_json::from_str(&output).map_err(|_| PluginError::NotUnderstood)?;
+        Ok(listed
+            .into_iter()
+            .map(|listed| Marketplace {
+                agent: AgentKind::Claude,
+                source: ["repo", "url", "path", "ref"]
+                    .iter()
+                    .filter_map(|key| listed.fields.get(*key).and_then(Value::as_str))
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" · "),
+                name: listed.name,
+            })
+            .collect())
+    }
+
+    /// Adds a marketplace for the person, from a GitHub `owner/repo`, a git address, a folder or
+    /// a `marketplace.json` address, in the Playground's folder.
+    ///
+    /// # Errors
+    ///
+    /// Says why it was not added; a source that could be read as a flag or holds a line break runs
+    /// nothing.
+    pub fn add_marketplace(&self, source: &str) -> Result<PluginChange, PluginError> {
+        if !is_marketplace_source(source) {
+            return Err(PluginError::InvalidSource);
+        }
+        self.run_change_at(
+            &self.playground,
+            &[
+                Arg::Literal("plugin"),
+                Arg::Literal("marketplace"),
+                Arg::Literal("add"),
+                Arg::Untrusted(source.trim().to_owned()),
+                Arg::Literal("--json"),
+            ],
+            MARKETPLACE_MINIMUM_VERSION,
+        )
+    }
+
+    /// Updates a marketplace's listing, or removes it with the plugins installed from it.
+    ///
+    /// # Errors
+    ///
+    /// Says why it was not changed; a name that is not a marketplace's runs nothing.
+    pub fn change_marketplace(
+        &self,
+        action: MarketplaceAction,
+        name: &str,
+    ) -> Result<PluginChange, PluginError> {
+        if !is_marketplace_name(name) {
+            return Err(PluginError::InvalidSource);
+        }
+        let command = match action {
+            MarketplaceAction::Update => "update",
+            MarketplaceAction::Remove => "remove",
+        };
+        self.run_change_at(
+            &self.playground,
+            &[
+                Arg::Literal("plugin"),
+                Arg::Literal("marketplace"),
+                Arg::Literal(command),
+                Arg::Untrusted(name.to_owned()),
+                Arg::Literal("--json"),
+            ],
+            MARKETPLACE_MINIMUM_VERSION,
+        )
     }
 
     /// Turns an installed plugin on or off, updates it or uninstalls it, at the scope it is

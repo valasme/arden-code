@@ -19,6 +19,10 @@
 //! it, it shows the command (`shownCommand`), as Claude Code does. It writes `plugin-end` to its
 //! log when it is done.
 //!
+//! It answers `plugin marketplace list --json` from `marketplaces` in `plugins`, and adds, updates
+//! and removes marketplaces, kept in `marketplaces-state.json` beside it; removing one uninstalls
+//! its plugins. A source named in `marketplaceFailures` fails with `invalid_source`.
+//!
 //! It applies the `--permission-mode` it is started with and changes it on `set_permission_mode`,
 //! refusing Bypass permissions unless started with `--allow-dangerously-skip-permissions`, as
 //! Claude Code does (ADR 0044). Asked "which mode", it says the mode it applies. Asked to "plan the
@@ -153,6 +157,7 @@ fn plugin(settings: &Settings, args: &[String]) {
     let installed = installed_plugins(plugins);
     match args.first().map(String::as_str) {
         Some("install") => install(plugins, args, installed),
+        Some("marketplace") => marketplace(plugins, &args[1..], installed),
         Some(command @ ("enable" | "disable" | "update" | "uninstall")) => {
             alter(command, args, installed);
         }
@@ -187,6 +192,122 @@ fn hash_of(command: &str) -> String {
     let mut hasher = DefaultHasher::new();
     command.hash(&mut hasher);
     format!("{:016x}", hasher.finish()).repeat(4)
+}
+
+/// Where the stand-in keeps the marketplaces it has added, between runs.
+fn marketplaces_state() -> Option<PathBuf> {
+    std::env::current_exe().ok().and_then(|exe| {
+        exe.parent()
+            .map(|folder| folder.join("marketplaces-state.json"))
+    })
+}
+
+/// The marketplaces it lists: those it changed itself, else those of its settings.
+fn known_marketplaces(plugins: &Value) -> Value {
+    marketplaces_state()
+        .and_then(|file| std::fs::read_to_string(file).ok())
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_else(|| match &plugins["marketplaces"] {
+            Value::Null => json!([]),
+            known => known.clone(),
+        })
+}
+
+fn save_marketplaces(known: &Value) {
+    if let Some(file) = marketplaces_state() {
+        let _ = std::fs::write(file, known.to_string());
+    }
+}
+
+/// Prints a marketplace command's result, as Claude Code does with `--json`, and fails with it
+/// when it failed.
+fn marketplace_result(command: &str, name: &str, outcome: &str, message: &str, code: Option<&str>) {
+    println!(
+        "{}",
+        json!({ "command": command, "outcome": outcome, "marketplace": name, "message": message, "failureCode": code })
+    );
+    if outcome != "ok" {
+        std::process::exit(1);
+    }
+}
+
+/// The name a marketplace added from `source` takes: the last part of its path.
+fn marketplace_name(source: &str) -> String {
+    source
+        .trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(source)
+        .trim_end_matches(".git")
+        .trim_end_matches(".json")
+        .to_owned()
+}
+
+/// `plugin marketplace list|add|update|remove … --json`.
+fn marketplace(plugins: &Value, args: &[String], mut installed: Value) {
+    let mut known = known_marketplaces(plugins);
+    let target = args.get(1).map_or("", String::as_str);
+    let listed = known
+        .as_array()
+        .is_some_and(|list| list.iter().any(|known| known["name"] == target));
+    match args.first().map(String::as_str) {
+        Some("list") => println!(
+            "{}",
+            serde_json::to_string_pretty(&known).unwrap_or_default()
+        ),
+        Some("add") if !plugins["marketplaceFailures"][target].is_null() => {
+            let message =
+                "Invalid marketplace source format. Try: owner/repo, https://..., or ./path";
+            marketplace_result(
+                "marketplace-add",
+                "",
+                "failed",
+                message,
+                Some("invalid_source"),
+            );
+        }
+        Some("add") => {
+            let name = marketplace_name(target);
+            if let Some(list) = known.as_array_mut() {
+                list.push(json!({ "name": name, "source": "github", "repo": target, "installLocation": "x" }));
+            }
+            save_marketplaces(&known);
+            let message = format!("Successfully added marketplace: {name}");
+            marketplace_result("marketplace-add", &name, "ok", &message, None);
+        }
+        Some("update") if listed => {
+            let message = format!("Successfully updated marketplace: {target}");
+            marketplace_result("marketplace-update", target, "ok", &message, None);
+        }
+        Some("remove") if listed => {
+            if let Some(list) = known.as_array_mut() {
+                list.retain(|known| known["name"] != target);
+            }
+            save_marketplaces(&known);
+            let suffix = format!("@{target}");
+            if let Some(plugins) = installed.as_array_mut() {
+                plugins.retain(|plugin| {
+                    !plugin["id"]
+                        .as_str()
+                        .is_some_and(|id| id.ends_with(&suffix))
+                });
+            }
+            save_installed(&installed);
+            let message = format!("Successfully removed marketplace: {target}");
+            marketplace_result("marketplace-remove", target, "ok", &message, None);
+        }
+        Some(command) => {
+            let message = format!("Marketplace '{target}' not found");
+            marketplace_result(
+                &format!("marketplace-{command}"),
+                target,
+                "failed",
+                &message,
+                Some("not_found"),
+            );
+        }
+        None => std::process::exit(1),
+    }
 }
 
 /// Where the stand-in keeps the plugins it has installed, between runs.

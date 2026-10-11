@@ -1,5 +1,5 @@
 /** The tabs of the Plugins page, in the order they are listed (plan section 6.13). */
-export const pluginsTabs = ["discover", "installed"] as const;
+export const pluginsTabs = ["discover", "installed", "marketplaces"] as const;
 
 export type PluginsTab = (typeof pluginsTabs)[number];
 

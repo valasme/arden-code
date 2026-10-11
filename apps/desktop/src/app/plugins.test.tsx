@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
 import { z } from "zod";
 
-import type { AvailablePlugin, InstalledPlugin } from "@/ipc/bindings";
+import type { AvailablePlugin, InstalledPlugin, Marketplace } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
@@ -219,7 +219,7 @@ describe("Discover (ADR 0053)", () => {
     const tabs = within(within(sidebar()).getByRole("navigation", { name: "Plugins tabs" }))
       .getAllByRole("link")
       .map((link) => link.textContent);
-    expect(tabs).toEqual(["Discover", "Installed"]);
+    expect(tabs).toEqual(["Discover", "Installed", "Marketplaces"]);
     expect(await screen.findByRole("listbox", { name: "Plugins" })).toBeVisible();
   });
 
@@ -879,5 +879,150 @@ describe("Accepting a command a marketplace declares (ADR 0053)", () => {
     await install({ pluginChange: declaring() });
 
     await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+const added: Marketplace[] = [
+  {
+    agent: "claude",
+    name: "claude-plugins-official",
+    source: "anthropics/claude-plugins-official",
+  },
+  {
+    agent: "claude",
+    name: "acme",
+    source: "https://git.acme.example/platform/marketplace.git · main",
+  },
+];
+
+async function marketplacesTab(options: Options = {}) {
+  const opened = await openApp({ marketplaces: added, ...options }, "/plugins/marketplaces");
+  await screen.findByRole("list", { name: "Marketplaces" });
+  return opened;
+}
+
+/** The row of a marketplace. */
+const marketplaceRow = (name: string) => {
+  const row = within(screen.getByRole("list", { name: "Marketplaces" }))
+    .getAllByRole("listitem")
+    .find((item) => item.querySelector("h2")?.textContent === name);
+  if (!row) throw new Error(`no row for ${name}`);
+  return row;
+};
+
+describe("Managing marketplaces (ADR 0053)", () => {
+  it("lists the marketplaces with where they come from", async () => {
+    await marketplacesTab();
+
+    expect(marketplaceRow("claude-plugins-official")).toHaveTextContent(
+      "anthropics/claude-plugins-official",
+    );
+    expect(marketplaceRow("acme")).toHaveTextContent(
+      "https://git.acme.example/platform/marketplace.git · main",
+    );
+  });
+
+  it("adds a marketplace from the source typed, and says Claude Code's answer", async () => {
+    const { rust, user } = await marketplacesTab({
+      pluginChange: () => ({
+        message: "Successfully added marketplace: skills",
+        sessionsWaiting: false,
+        shownCommand: null,
+      }),
+    });
+
+    await user.type(screen.getByRole("textbox", { name: "Source" }), "mattpocock/skills");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(await screen.findByText("Successfully added marketplace: skills")).toBeVisible();
+    expect(rust.callsTo("add_marketplace")).toEqual([{ source: "mattpocock/skills" }]);
+  });
+
+  it("shows Claude Code's own words and the code when a source is refused", async () => {
+    const { user } = await marketplacesTab({
+      pluginChange: () => ({
+        code: "ARD-AGT-021",
+        messageKey: "errors.ARD-AGT-021",
+        details: "Invalid marketplace source format. Try: owner/repo, https://..., or ./path",
+      }),
+    });
+
+    await user.type(screen.getByRole("textbox", { name: "Source" }), "gitlab.example.com/team");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(
+      await screen.findByText(
+        "Invalid marketplace source format. Try: owner/repo, https://..., or ./path",
+      ),
+    ).toBeVisible();
+    expect(screen.getByText("ARD-AGT-021")).toBeVisible();
+  });
+
+  it("updates a marketplace's listing", async () => {
+    const { rust, user } = await marketplacesTab();
+
+    await user.click(within(marketplaceRow("acme")).getByRole("button", { name: "Update acme" }));
+
+    await waitFor(() => {
+      expect(rust.callsTo("change_marketplace")).toEqual([{ action: "update", name: "acme" }]);
+    });
+  });
+
+  it("removes a marketplace after a confirmation that counts the plugins it uninstalls", async () => {
+    const { rust, user } = await marketplacesTab();
+    const remove = () =>
+      user.click(within(marketplaceRow("acme")).getByRole("button", { name: "Remove acme" }));
+
+    await remove();
+    const asked = await screen.findByRole("alertdialog", { name: "Remove acme?" });
+    await animationsDone(asked);
+    expect(asked).toHaveTextContent("It also uninstalls the 1 plugin installed from it.");
+    await user.click(within(asked).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(rust.callsTo("change_marketplace")).toEqual([]);
+
+    await remove();
+    const again = await screen.findByRole("alertdialog", { name: "Remove acme?" });
+    await animationsDone(again);
+    await user.click(within(again).getByRole("button", { name: "Remove" }));
+    await waitFor(() => {
+      expect(rust.callsTo("change_marketplace")).toEqual([{ action: "remove", name: "acme" }]);
+    });
+  });
+
+  it("has no accessibility violations", async () => {
+    await marketplacesTab();
+
+    await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+describe("Anthropic's official marketplace on Discover (ADR 0053)", () => {
+  it("is offered when none of the plugins comes from it", async () => {
+    const { rust, user } = await openApp(
+      { pluginCatalog: [offered("alpha-tools@acme")] },
+      "/plugins/discover",
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "Add Anthropic's official marketplace" }),
+    );
+
+    await waitFor(() => {
+      expect(rust.callsTo("add_marketplace")).toEqual([
+        { source: "anthropics/claude-plugins-official" },
+      ]);
+    });
+  });
+
+  it("is not offered when it is there", async () => {
+    await openApp({ pluginCatalog: catalog }, "/plugins/discover");
+    await screen.findAllByRole("option");
+
+    expect(
+      screen.queryByRole("button", { name: "Add Anthropic's official marketplace" }),
+    ).toBeNull();
   });
 });

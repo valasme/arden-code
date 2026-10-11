@@ -25,6 +25,10 @@ import { InstallDialog } from "./InstallDialog";
 import { useInstallProjects } from "./useInstallProjects";
 import { PluginsProblem } from "./PluginsProblem";
 
+/** Anthropic's official marketplace, by its name and where it comes from (ADR 0053). */
+const OFFICIAL_MARKETPLACE = "claude-plugins-official";
+const OFFICIAL_SOURCE = "anthropics/claude-plugins-official";
+
 /** The height of a row of the list, which every row has, so the list can be drawn in part. */
 const ROW_HEIGHT = 52;
 
@@ -283,7 +287,15 @@ export function DiscoverTab() {
   // The first plugin is chosen until the person chooses another.
   const plugin = shown.find((candidate) => candidate.id === chosen) ?? shown[0] ?? null;
 
-  const problem = refresh.error ?? catalog.error;
+  const addOfficial = useMutation({
+    mutationFn: () => commands.addMarketplace(OFFICIAL_SOURCE),
+    onSettled: () => afterChange(queryClient),
+  });
+  // A newcomer whose Claude Code never opened its terminal has no marketplace yet.
+  const officialMissing =
+    catalog.data !== undefined &&
+    !catalog.data.some((offered) => offered.marketplace === OFFICIAL_MARKETPLACE);
+  const problem = refresh.error ?? addOfficial.error ?? catalog.error;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
@@ -310,6 +322,21 @@ export function DiscoverTab() {
           {t("plugins.discover.refresh")}
         </Button>
       </div>
+      {officialMissing ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border border-border px-3 py-2.5 text-sm">
+          <p>{t("plugins.discover.officialMissing")}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={addOfficial.isPending}
+            onClick={() => {
+              addOfficial.mutate();
+            }}
+          >
+            {t("plugins.discover.addOfficial")}
+          </Button>
+        </div>
+      ) : null}
       {problem ? <PluginsProblem error={toAppError(problem)} /> : null}
       {catalog.data ? (
         <div className="@container/discover">
