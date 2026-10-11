@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { Page } from "@playwright/test";
+import { z } from "zod";
 
 import { expect, launchApp, test } from "./fixtures";
 
@@ -13,6 +14,16 @@ async function openNotifications(page: Page) {
   await page.getByRole("link", { name: "Settings" }).click();
   await page.getByRole("link", { name: "Notifications", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Notifications" })).toBeVisible();
+}
+
+/** Whether the settings file in this data folder has notifications on, as Rust last saved it. */
+function savedDesktopNotifications(dataDir: string): boolean | undefined {
+  const file = path.join(dataDir, "config", "settings.json");
+  if (!existsSync(file)) return undefined;
+  const saved = z
+    .object({ notifications: z.object({ desktop: z.boolean() }) })
+    .safeParse(JSON.parse(readFileSync(file, "utf8")));
+  return saved.success ? saved.data.notifications.desktop : undefined;
 }
 
 const sent = (file: string) =>
@@ -61,6 +72,8 @@ test.describe("notifications in the real app", () => {
       await expect(
         first.page.getByRole("switch", { name: "Desktop notifications" }),
       ).not.toBeChecked();
+      // The page shows a change before Rust has saved it: closing at once could lose it.
+      await expect.poll(() => savedDesktopNotifications(data)).toBe(false);
       await first.close();
 
       const second = await launchApp({ dataDir: data, env: { [notificationsFile]: file } });

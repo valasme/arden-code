@@ -55,3 +55,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0045](0045-the-message-box-on-one-row.md) | The message box on one row | Accepted |
 | [0046](0046-the-message-box-keeps-its-draft.md) | The message box keeps its draft | Accepted |
 | [0047](0047-holding-the-smallest-window-size.md) | Holding the smallest window size | Accepted |
+| [0048](0048-the-restart-note-across-a-settings-row.md) | The restart note across a setting's row | Accepted |

@@ -10,7 +10,7 @@ export function SettingItem({ definition }: { definition: SettingDefinition }) {
   const settings = useSettings();
   const change = useChangeSetting();
   const reset = useResetSetting();
-  const { Control } = definition;
+  const { Control, Note } = definition;
 
   return (
     <SettingRow
@@ -19,6 +19,7 @@ export function SettingItem({ definition }: { definition: SettingDefinition }) {
       description={t(definition.descriptionKey)}
       modified={!definition.isDefault(settings)}
       onReset={() => reset.mutateAsync(definition.key).catch(() => {})}
+      note={Note ? <Note id={definition.id} settings={settings} change={change} /> : null}
     >
       <Control id={definition.id} settings={settings} change={change} />
     </SettingRow>

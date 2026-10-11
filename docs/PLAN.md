@@ -274,7 +274,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 
 Settings is a full page at `/settings/<tab>`, with search across every setting. Changes apply instantly, with inline validation, and each setting can be reset on its own.
 
-On a settings page the sidebar shows Back, the settings search and the tabs instead of the projects, so there is one sidebar; Back returns to the last page outside Settings. The page scrolls by itself, and the tabs stay put. Each tab is a centered column under its title, with every setting as one row of a list: name and description, then the control at the end of the row. A choice of a few options is a row of joined buttons, and on or off is a square switch.
+On a settings page the sidebar shows Back, the settings search and the tabs instead of the projects, so there is one sidebar; Back returns to the last page outside Settings. The page scrolls by itself, and the tabs stay put. Each tab is a centered column under its title, with every setting as one row of a list: name and description, then the control at the end of the row. A choice of a few options is a row of joined buttons, and on or off is a square switch. A setting that takes a restart says so in a strip across the foot of its row, with Restart now, until Arden Code starts again ([ADR 0048](adr/0048-the-restart-note-across-a-settings-row.md)).
 
 | Tab | Settings and actions (default in brackets) |
 |---|---|
