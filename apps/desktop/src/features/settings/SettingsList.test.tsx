@@ -10,6 +10,7 @@ import { z } from "zod";
 import { Toaster } from "@/components/Toaster";
 import type { SettingKey, Settings, SystemPreferences } from "@/ipc/bindings";
 import { defaultSettings } from "@/ipc/defaults.gen";
+import { animationsDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 import { settingsWith } from "@/test/settings";
 
@@ -134,6 +135,10 @@ const savedChange = (calls: { command: string; payload: unknown }[]) =>
 
 /** Where an element ends on the screen, in whole pixels. */
 const rightEdge = (element: HTMLElement) => Math.round(element.getBoundingClientRect().right);
+const middle = (element: HTMLElement) => {
+  const box = element.getBoundingClientRect();
+  return box.top + box.height / 2;
+};
 
 afterEach(() => {
   Reflect.deleteProperty(globalThis, "isTauri");
@@ -425,13 +430,17 @@ describe("Appearance → Smooth scrolling", () => {
     await user.click(await screen.findByRole("switch", { name: "Smooth scrolling" }));
 
     const dialog = await screen.findByRole("alertdialog", { name: "Restart Arden Code?" });
+    // The dialog fades in, and is not visible on its first frame: a busy machine can look then.
+    await animationsDone(dialog);
     expect(
       within(dialog).getByText("Smooth scrolling changes the next time Arden Code starts."),
     ).toBeVisible();
-    expect(savedChange(calls)).toEqual({ change: { appearanceSmoothScrolling: false } });
+    await waitFor(() => {
+      expect(savedChange(calls)).toEqual({ change: { appearanceSmoothScrolling: false } });
+    });
   });
 
-  it("keeps its switch at the end of the row, in line with the others, above the restart note", async () => {
+  it("keeps its switch in line with the others, and the restart note along the foot of the row (#130)", async () => {
     // A window wide enough for each control to sit beside its setting's text, not under it.
     await page.viewport(1280, 800);
     onTestFinished(async () => {
@@ -449,12 +458,20 @@ describe("Appearance → Smooth scrolling", () => {
     });
 
     const restart = await screen.findByRole("button", { name: "Restart now" });
+    const note = screen.getByText("Restart Arden Code to apply this.");
+    const label = screen.getByRole("heading", { name: "Smooth scrolling" });
+    const description = screen.getByText(/^Glide when scrolling/);
     const statusBar = screen.getByRole("switch", { name: "Show status bar" });
+    // The switch stays where every other switch is.
     expect(rightEdge(smooth)).toBe(rightEdge(statusBar));
-    expect(rightEdge(smooth)).toBe(rightEdge(restart));
-    expect(smooth.getBoundingClientRect().bottom).toBeLessThanOrEqual(
-      restart.getBoundingClientRect().top,
+    // The note is one line across the whole row, under its text and its switch: its words start
+    // under the setting's name, and Restart now ends under the switch.
+    expect(note.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      Math.max(description.getBoundingClientRect().bottom, smooth.getBoundingClientRect().bottom),
     );
+    expect(note.getBoundingClientRect().left).toBeLessThan(label.getBoundingClientRect().left + 40);
+    expect(rightEdge(restart)).toBeGreaterThanOrEqual(rightEdge(smooth) - 16);
+    expect(Math.abs(middle(note) - middle(restart))).toBeLessThan(2);
   });
 });
 

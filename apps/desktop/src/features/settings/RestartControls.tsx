@@ -1,3 +1,4 @@
+import { RotateCwIcon } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -16,14 +17,22 @@ export function restartApp() {
   });
 }
 
-/** Says a change waits for a restart, and offers to do it now. */
-export function RestartNote({ note }: { note: string }) {
+/**
+ * Says a setting's change waits for a restart, and offers to do it now: a quiet strip across the
+ * foot of the setting's row, the words under its name and Restart now under its control (#130).
+ * Nothing while the setting is as Arden Code started with it.
+ */
+export function RestartNote({ changed }: { changed: boolean }) {
   const { t } = useTranslation();
+  if (!changed) return null;
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <p className="text-xs text-muted-foreground">{note}</p>
-      <Button size="sm" variant="outline" onClick={restartApp}>
+    <div className="flex basis-full flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-muted py-1.5 ps-3 pe-1.5 forced-colors:border forced-colors:border-[CanvasText]">
+      <p className="flex items-center gap-2 text-xs">
+        <RotateCwIcon aria-hidden className="size-3.5 text-muted-foreground" strokeWidth={1.5} />
+        {t("settings.restart.note")}
+      </p>
+      <Button size="xs" variant="outline" className="bg-background" onClick={restartApp}>
         {t("settings.restart.now")}
       </Button>
     </div>
@@ -57,7 +66,8 @@ export function RestartPrompt({
 
 /**
  * A switch for a setting that only takes effect when Arden Code starts again: changing it away from
- * what the app started with asks whether to restart now, and a note stays until it does.
+ * what the app started with asks whether to restart now. The setting's `RestartNote` says so
+ * until it does.
  */
 export function RestartToggle({
   id,
@@ -74,12 +84,11 @@ export function RestartToggle({
   prompt: string;
   onChange: (checked: boolean) => void;
 }) {
-  const { t } = useTranslation();
   const [asking, setAsking] = useState(false);
 
-  // At the end of the row like every other control, with the note under it (ADR 0032).
+  // At the end of the row like every other control (ADR 0032).
   return (
-    <div className="flex flex-col items-end gap-2">
+    <>
       <ToggleControl
         id={id}
         checked={checked}
@@ -88,8 +97,7 @@ export function RestartToggle({
           setAsking(value !== startedWith);
         }}
       />
-      {checked === startedWith ? null : <RestartNote note={t("settings.restart.note")} />}
       <RestartPrompt open={asking} onOpenChange={setAsking} description={prompt} />
-    </div>
+    </>
   );
 }

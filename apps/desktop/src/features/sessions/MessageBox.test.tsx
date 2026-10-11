@@ -12,7 +12,7 @@ import "@/styles/global.css";
 
 /** A message box with the Ultrathink switch, wired as a session's is, and a way to turn it on. */
 function Harness() {
-  const { ultrathink, setUltrathink, carrying } = useUltrathink();
+  const { ultrathink, setUltrathink, carrying } = useUltrathink("session-1");
   return (
     <>
       <button
@@ -24,6 +24,7 @@ function Harness() {
         Switch on
       </button>
       <MessageBox
+        draft="session-1"
         agent="claude"
         busy={false}
         choices={null}
@@ -100,8 +101,17 @@ describe("The Ultrathink chip (ADR 0044)", () => {
   });
 });
 
-/** The welcome screen's Claude message box, with its five menus and the usage limits. */
-function ClaudeBox({ width = "40rem" }: { width?: string }) {
+/**
+ * The welcome screen's Claude message box, with its five menus and the usage limits, and the
+ * Ultrathink chip when its switch is on.
+ */
+function ClaudeBox({
+  width = "40rem",
+  ultrathink = false,
+}: {
+  width?: string;
+  ultrathink?: boolean;
+}) {
   const choices = [
     ["Agent", BotIcon, "Claude"],
     ["Project", FolderIcon, "arden-code"],
@@ -113,12 +123,14 @@ function ClaudeBox({ width = "40rem" }: { width?: string }) {
     // By default, the width of the welcome screen in the maintainer's screenshot.
     <div style={{ width }}>
       <MessageBox
+        draft="welcome"
         agent="claude"
         busy={false}
         choices={choices.map(([name, icon, value]) => (
           <ChoiceButton key={name} icon={icon} value={value} aria-label={`${name}: ${value}`} />
         ))}
         figures={<button type="button">5-hour 0% · Weekly 39%</button>}
+        {...(ultrathink ? { ultrathink: { on: true, onTurnOff: () => {} } } : {})}
         onSend={() => true}
         onStop={() => {}}
       />
@@ -155,6 +167,20 @@ describe("The message box's lower line (ADR 0045)", () => {
 
     expect(middle("Permission mode: Auto")).toBeGreaterThan(middle("Agent: Claude"));
     expect(Math.abs(middle("Send") - middle("Permission mode: Auto"))).toBeLessThan(2);
+  });
+
+  it("never puts Send on a row of its own, at any width (#127)", () => {
+    // In the maintainer's screenshot the five menus and the Ultrathink chip just filled the row,
+    // and Send went under them alone. Which width does that depends on the font, so try them all.
+    const { rerender } = render(<ClaudeBox ultrathink />);
+
+    for (let width = 320; width <= 760; width += 2) {
+      rerender(<ClaudeBox ultrathink width={`${width}px`} />);
+
+      expect
+        .soft(Math.abs(middle("Send") - middle("Turn off Ultrathink")), `at ${width}px`)
+        .toBeLessThan(2);
+    }
   });
 
   it("gives Send no fill while there is nothing to send, and fills it once there is", async () => {

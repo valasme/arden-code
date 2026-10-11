@@ -254,7 +254,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 - **The look** ([ADR 0032](adr/0032-the-redesign.md)): a quiet frame in the spirit of Linear, the session view in the spirit of Claude Desktop. New session is the sidebar's first row and Settings its last, each with its shortcut; each project is a small label over its sessions. Every enabled control shows the pointer cursor, except the window buttons, which keep the arrow as Windows' own do ([ADR 0037](adr/0037-the-window-buttons-keep-the-arrow.md)).
 - **No white flash:** the window starts hidden, with its background already in the current theme. It appears after the first frame is drawn.
 - **Window memory:** size, position, monitor and maximized state are restored. A position that would now be off-screen is corrected.
-- **Smallest size:** 500 × 560 px. Windows asks for 500 px or less, or the window does not fit the zones of Snap Layouts; the sidebar and the session view at their smallest fit in it.
+- **Smallest size:** 500 × 560 px. Windows asks for 500 px or less, or the window does not fit the zones of Snap Layouts; the sidebar and the session view at their smallest fit in it. It holds on every path: a smaller saved size opens at it, and a window made smaller by another program grows back. At that size a sidebar row stays on one line with its shortcut aside, and the search strip shows only its icon and shortcut ([ADR 0047](adr/0047-holding-the-smallest-window-size.md)).
 
 ### 6.2 Title bar and Snap Layouts
 
@@ -274,7 +274,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 
 Settings is a full page at `/settings/<tab>`, with search across every setting. Changes apply instantly, with inline validation, and each setting can be reset on its own.
 
-On a settings page the sidebar shows Back, the settings search and the tabs instead of the projects, so there is one sidebar; Back returns to the last page outside Settings. The page scrolls by itself, and the tabs stay put. Each tab is a centered column under its title, with every setting as one row of a list: name and description, then the control at the end of the row. A choice of a few options is a row of joined buttons, and on or off is a square switch.
+On a settings page the sidebar shows Back, the settings search and the tabs instead of the projects, so there is one sidebar; Back returns to the last page outside Settings. The page scrolls by itself, and the tabs stay put. Each tab is a centered column under its title, with every setting as one row of a list: name and description, then the control at the end of the row. A choice of a few options is a row of joined buttons, and on or off is a square switch. A setting that takes a restart says so in a strip across the foot of its row, with Restart now, until Arden Code starts again ([ADR 0048](adr/0048-the-restart-note-across-a-settings-row.md)).
 
 | Tab | Settings and actions (default in brackets) |
 |---|---|
@@ -335,13 +335,15 @@ The command palette is a wide panel high on the screen: a large search line, the
 
 - **Layout:** the turns sit in a centered reading column, at most 45rem wide. The person's message is a filled block at the end of the line; the reply follows under the agent's name with no box. Tool calls, file changes and thinking are quiet lines along a rule, and turns are separated by space.
 - **Message box:**
-  - A bordered block, at least two lines tall, with the agent and the project under the text, and Send at the end of that line. While the session is empty they are menus (§6.12). While a reply runs, Send becomes Stop. Send has no fill while there is nothing to send ([ADR 0045](adr/0045-the-message-box-on-one-row.md)).
+  - A bordered block, at least two lines tall, with the agent and the project under the text, and Send at the end of that line. While the session is empty they are menus (§6.12). While a reply runs, Send becomes Stop. Send has no fill while there is nothing to send ([ADR 0045](adr/0045-the-message-box-on-one-row.md)). The menus wrap among themselves when narrow, and Send keeps the end of their last row, never on a row of its own ([ADR 0046](adr/0046-the-message-box-keeps-its-draft.md)).
+  - Each message box keeps its draft (the text and the Ultrathink switch; on the welcome state, its menus too) while the person is away, until it is sent or Arden Code closes ([ADR 0046](adr/0046-the-message-box-keeps-its-draft.md)).
   - Enter sends; Shift+Enter adds a line.
   - Enter never sends while a character is still being composed (accent keys, input methods for other scripts).
   - Spellcheck is on.
 - **Demo agent:** clearly labeled as a demo.
   - It streams markdown, code blocks, thinking, tool-call cards, file-change cards and errors.
   - Everything goes through the real pipeline: Rust driver → channel → store → virtualized list → Streamdown.
+- **Streaming:** a reply's text is shown at a steady pace, a few characters on every frame, and the view keeps its end in view in the frame it grows ([ADR 0049](adr/0049-a-reply-streams-at-a-steady-pace.md)).
 - **What it proves:**
   - Scroll anchoring and "jump to latest" work.
   - Esc stops a reply.
@@ -411,7 +413,7 @@ The decisions and the options turned down are in [ADR 0036](adr/0036-managing-se
 The decisions and the options turned down are in [ADR 0039](adr/0039-working-with-claude.md).
 
 - **Starting a session:** while a session is empty, the message box's lower line holds an agent menu and a project menu; the project menu ends with Open folder. New session (Ctrl+N) starts in the open session's project, or the Playground, with the agent of that project's latest session, else of the latest session anywhere, else Claude when Claude Code is installed, else the Demo agent. Open folder (Ctrl+O) adds a folder as a project and starts a session in it. Claude may work in the Playground.
-- **Choosing ([ADR 0041](adr/0041-choosing-how-a-session-starts.md), [ADR 0042](adr/0042-slash-commands-and-exact-models.md), [ADR 0044](adr/0044-permission-modes-the-context-window-and-the-agents-icon.md), [ADR 0045](adr/0045-the-message-box-on-one-row.md)):** the agent, project, model, effort and permission mode are quiet menus with no border in the message box, on the welcome screen too, where the project starts as the latest session's. Each has an icon that says what it chooses, at 16 px and the label's color. Model, effort and permission mode are for Claude only, can change between messages, and are inherited by new and linked sessions. The lower line holds only what the next message can change, then Send, and wraps when narrow; once a session has its first message, its agent (with the agent's icon) and its project show in the header, by its title.
+- **Choosing ([ADR 0041](adr/0041-choosing-how-a-session-starts.md), [ADR 0042](adr/0042-slash-commands-and-exact-models.md), [ADR 0044](adr/0044-permission-modes-the-context-window-and-the-agents-icon.md), [ADR 0045](adr/0045-the-message-box-on-one-row.md), [ADR 0046](adr/0046-the-message-box-keeps-its-draft.md)):** the agent, project, model, effort and permission mode are quiet menus with no border in the message box, on the welcome screen too, where the project starts as the latest session's and the box is as wide as a session's. Each has an icon that says what it chooses, at 16 px and the label's color. Model, effort and permission mode are for Claude only, can change between messages, and are inherited by new and linked sessions. The lower line holds only what the next message can change, then Send, and wraps when narrow; once a session has its first message, its agent (with the agent's icon) and its project show in the header, by its title.
   - **Model:** Default (Claude Code's own setting), or any model Claude Code lists: the families first (Opus, Sonnet, Fable, Haiku), then the older versions under "Older models", by full id. A saved model Claude Code no longer lists is kept, shown as it is and marked. Until Claude Code has listed its models, the four families.
   - **Effort:** Default, or the efforts the chosen model takes, Low to Max; a model with none shows only Default and the Ultrathink switch.
   - **Ultrathink:** a switch at the end of the effort menu. The next message gets the word `ultrathink` at its end, once; Claude Code reasons more deeply on that turn only. While the next message will carry the word, switched on or typed, an Ultrathink chip shows in the lower line; with the switch on, it can turn it off.
