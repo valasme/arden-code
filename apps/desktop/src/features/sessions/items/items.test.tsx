@@ -38,6 +38,59 @@ function approval(overrides: Partial<Extract<Item, { type: "approval" }>> = {}):
   };
 }
 
+const textItem = (value: string): Item => ({ type: "text", id: "text-1", text: value });
+const nextFrame = () =>
+  new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      resolve();
+    });
+  });
+
+/** How many characters the item shows on each of the next frames. */
+async function shownOverFrames(container: HTMLElement, frames: number) {
+  const lengths: number[] = [];
+  for (let frame = 0; frame < frames; frame += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- each frame follows the one before
+    await nextFrame();
+    lengths.push(container.textContent.length);
+  }
+  return lengths;
+}
+
+describe("A reply's text as it streams (#132)", () => {
+  it("shows a piece that arrives at once a few characters on every frame, then catches up", async () => {
+    const { container, rerender } = renderItem(textItem("A hash map"), true);
+    await screen.findByText("A hash map");
+    // A piece of 50 characters arrives at once, as Claude Code can send.
+    const full = "A hash map keeps each value under a key, so a lookup is quick.";
+    rerender(
+      <ItemView
+        item={textItem(full)}
+        streaming
+        agent="claude"
+        onAnswer={vi.fn<AnswerHandler>()}
+        onAnswerQuestions={vi.fn<QuestionsHandler>()}
+        onAnswerPlan={vi.fn<PlanHandler>()}
+      />,
+    );
+
+    const lengths = await shownOverFrames(container, 24);
+    // Not all at once, but in steps of a few characters (about eight frames on a quiet machine; a
+    // busy one can draw a step a frame late), and then all of it.
+    expect(lengths[0]).toBeLessThan(full.length);
+    expect(new Set(lengths).size).toBeGreaterThanOrEqual(4);
+    expect(lengths.at(-1)).toBe(full.length);
+  });
+
+  it("shows a text that is already there at once, as when a session opens mid-reply", async () => {
+    const full = "A hash map keeps each value under a key, so a lookup is quick.";
+    const { container } = renderItem(textItem(full), true);
+
+    const [first] = await shownOverFrames(container, 1);
+    expect(first).toBe(full.length);
+  });
+});
+
 describe("Tool calls", () => {
   it.each([
     ["running", "Running…"],

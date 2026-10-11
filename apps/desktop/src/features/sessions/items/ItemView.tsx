@@ -7,6 +7,7 @@ import { MarkdownText } from "./MarkdownText";
 import { type PlanHandler, PlanItem } from "./PlanItem";
 import { type QuestionsHandler, QuestionsItem } from "./QuestionsItem";
 import { StatusItem } from "./StatusItem";
+import { useSteadyText } from "./steadyText";
 import { ThinkingItem } from "./ThinkingItem";
 import { ToolCallItem } from "./ToolCallItem";
 
@@ -24,6 +25,13 @@ interface ItemViewProps {
   onAnswerPlan: PlanHandler;
 }
 
+/** An agent's text, shown at a steady pace while it streams in (#132). */
+function TextItem({ text, streaming }: { text: string; streaming: boolean }) {
+  const shown = useSteadyText(text);
+  // Still drawn as streaming while it catches up, so unfinished Markdown is handled the same way.
+  return <MarkdownText text={shown} streaming={streaming || shown.length < text.length} />;
+}
+
 /** One part of an agent's reply, drawn as what it is. */
 export function ItemView({
   item,
@@ -35,7 +43,7 @@ export function ItemView({
 }: ItemViewProps) {
   switch (item.type) {
     case "text":
-      return <MarkdownText text={item.text} streaming={streaming} />;
+      return <TextItem text={item.text} streaming={streaming} />;
     case "thinking":
       return <ThinkingItem text={item.text} streaming={streaming} />;
     case "toolCall":
