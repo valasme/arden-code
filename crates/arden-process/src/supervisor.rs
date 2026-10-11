@@ -15,6 +15,9 @@ use crate::resolve::Resolved;
 
 /// How much of a program's output [`Supervisor::run`] keeps in memory. The log has all of it.
 const CAPTURE_LIMIT: usize = 64 * 1024;
+/// How much of a program's standard output [`Supervisor::run_in`] keeps: enough for a catalog of
+/// thousands of plugins (2.1 MB for 3,561, ADR 0053).
+const OUTPUT_LIMIT: usize = 64 * 1024 * 1024;
 /// How long to wait for a program's output to drain after it has ended.
 const DRAIN_TIME: Duration = Duration::from_millis(500);
 
@@ -46,6 +49,19 @@ pub struct Completed {
     pub exit_code: Option<i32>,
     /// What it wrote, without the end when there was a great deal.
     pub output: String,
+    pub timed_out: bool,
+    pub log: PathBuf,
+}
+
+/// What a program run in a folder did, its standard output apart from its errors.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Separated {
+    /// The exit code, or nothing when the program was ended for taking too long.
+    pub exit_code: Option<i32>,
+    /// What it wrote on its standard output, which its log never holds.
+    pub output: String,
+    /// What it wrote as errors, without the end when there was a great deal. The log has all of it.
+    pub errors: String,
     pub timed_out: bool,
     pub log: PathBuf,
 }
@@ -251,6 +267,57 @@ impl Supervisor {
         self.run_with(name, program, args, timeout, false)
     }
 
+    /// Runs a program in `folder`, with the variables named in `without` left out of its
+    /// environment, until it ends or takes longer than `timeout`. Its standard output comes back
+    /// apart from its errors and is never written to its log, which has its errors: for a program
+    /// whose answer can hold secrets, such as the settings of an agent's plugins (ADR 0053).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the program cannot be started, as [`Supervisor::spawn`] does.
+    pub fn run_in(
+        &self,
+        name: &str,
+        program: &Resolved,
+        args: &[Arg],
+        folder: &Path,
+        without: &[&str],
+        timeout: Duration,
+    ) -> Result<Separated, SpawnError> {
+        let mut command = command::build(program, args)?;
+        let (mut log, path) = self
+            .open_log(name, program, args)
+            .map_err(|error| SpawnError::Io(error.to_string()))?;
+        let _ = writeln!(
+            log,
+            "(what the program writes on its output is not kept here)"
+        );
+        command.current_dir(folder);
+        for variable in without {
+            command.env_remove(variable);
+        }
+        let mut child = self.start_captured(command)?;
+
+        let log = Arc::new(Mutex::new(log));
+        let output = Arc::new(Mutex::new(Vec::<u8>::new()));
+        let errors = Arc::new(Mutex::new(Vec::<u8>::new()));
+        let readers = Arc::new(AtomicUsize::new(0));
+        if let Some(stream) = child.stdout.take() {
+            copy_in_background(stream, None, &output, OUTPUT_LIMIT, &readers);
+        }
+        if let Some(stream) = child.stderr.take() {
+            copy_in_background(stream, Some(&log), &errors, CAPTURE_LIMIT, &readers);
+        }
+        let (exit_code, timed_out) = wait_for(&mut child, timeout, &readers)?;
+        Ok(Separated {
+            exit_code,
+            output: text_of(&output),
+            errors: text_of(&errors),
+            timed_out,
+            log: path,
+        })
+    }
+
     fn run_with(
         &self,
         name: &str,
@@ -259,13 +326,36 @@ impl Supervisor {
         timeout: Duration,
         logged: bool,
     ) -> Result<Completed, SpawnError> {
-        let mut command = command::build(program, args)?;
+        let command = command::build(program, args)?;
         let (mut log, path) = self
             .open_log(name, program, args)
             .map_err(|error| SpawnError::Io(error.to_string()))?;
         if !logged {
             let _ = writeln!(log, "(what the program writes is not kept here)");
         }
+        let mut child = self.start_captured(command)?;
+
+        let log = logged.then(|| Arc::new(Mutex::new(log)));
+        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+        let readers = Arc::new(AtomicUsize::new(0));
+        if let Some(stream) = child.stdout.take() {
+            copy_in_background(stream, log.as_ref(), &captured, CAPTURE_LIMIT, &readers);
+        }
+        if let Some(stream) = child.stderr.take() {
+            copy_in_background(stream, log.as_ref(), &captured, CAPTURE_LIMIT, &readers);
+        }
+        let (exit_code, timed_out) = wait_for(&mut child, timeout, &readers)?;
+        Ok(Completed {
+            exit_code,
+            output: text_of(&captured),
+            timed_out,
+            log: path,
+        })
+    }
+
+    /// Starts a program with no input and both its outputs piped to Arden Code, and puts it in
+    /// the job.
+    fn start_captured(&self, mut command: std::process::Command) -> Result<Child, SpawnError> {
         command
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -280,48 +370,7 @@ impl Supervisor {
                 "the program could not be put in the job: {error}"
             )));
         }
-
-        let log = logged.then(|| Arc::new(Mutex::new(log)));
-        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
-        let readers = Arc::new(AtomicUsize::new(0));
-        if let Some(stream) = child.stdout.take() {
-            copy_in_background(stream, log.as_ref(), &captured, &readers);
-        }
-        if let Some(stream) = child.stderr.take() {
-            copy_in_background(stream, log.as_ref(), &captured, &readers);
-        }
-
-        let started = Instant::now();
-        let mut timed_out = false;
-        let status = loop {
-            match child.try_wait() {
-                Ok(Some(status)) => break Some(status),
-                Ok(None) if started.elapsed() >= timeout => {
-                    timed_out = true;
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    break None;
-                }
-                Ok(None) => thread::sleep(Duration::from_millis(10)),
-                Err(error) => return Err(SpawnError::Io(error.to_string())),
-            }
-        };
-        // What a program that has ended still has in its pipes arrives a moment later. A program
-        // it started may still hold them open, so this does not wait for ever.
-        let drain_started = Instant::now();
-        while readers.load(Ordering::Acquire) > 0 && drain_started.elapsed() < DRAIN_TIME {
-            thread::sleep(Duration::from_millis(5));
-        }
-
-        let output =
-            String::from_utf8_lossy(&captured.lock().unwrap_or_else(PoisonError::into_inner))
-                .into_owned();
-        Ok(Completed {
-            exit_code: status.and_then(|status| status.code()),
-            output,
-            timed_out,
-            log: path,
-        })
+        Ok(child)
     }
 
     /// The folder the logs of the programs go to.
@@ -331,11 +380,49 @@ impl Supervisor {
     }
 }
 
-/// Copies everything a stream produces to the log and to a buffer, on a thread of its own.
+/// Waits for a program to end, ending it once it has taken longer than `timeout`, then for what
+/// is left in its pipes. Answers its exit code and whether it was ended.
+fn wait_for(
+    child: &mut Child,
+    timeout: Duration,
+    readers: &AtomicUsize,
+) -> Result<(Option<i32>, bool), SpawnError> {
+    let started = Instant::now();
+    let mut timed_out = false;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if started.elapsed() >= timeout => {
+                timed_out = true;
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            Ok(None) => thread::sleep(Duration::from_millis(10)),
+            Err(error) => return Err(SpawnError::Io(error.to_string())),
+        }
+    };
+    // What a program that has ended still has in its pipes arrives a moment later. A program it
+    // started may still hold them open, so this does not wait for ever.
+    let drain_started = Instant::now();
+    while readers.load(Ordering::Acquire) > 0 && drain_started.elapsed() < DRAIN_TIME {
+        thread::sleep(Duration::from_millis(5));
+    }
+    Ok((status.and_then(|status| status.code()), timed_out))
+}
+
+/// The text of what a stream produced.
+fn text_of(captured: &Mutex<Vec<u8>>) -> String {
+    String::from_utf8_lossy(&captured.lock().unwrap_or_else(PoisonError::into_inner)).into_owned()
+}
+
+/// Copies everything a stream produces to the log and to a buffer, up to `limit` bytes, on a
+/// thread of its own.
 fn copy_in_background(
     mut stream: impl Read + Send + 'static,
     log: Option<&Arc<Mutex<File>>>,
     captured: &Arc<Mutex<Vec<u8>>>,
+    limit: usize,
     readers: &Arc<AtomicUsize>,
 ) {
     let log = log.map(Arc::clone);
@@ -356,7 +443,7 @@ fn copy_in_background(
                     .write_all(bytes);
             }
             let mut kept = captured.lock().unwrap_or_else(PoisonError::into_inner);
-            let room = CAPTURE_LIMIT.saturating_sub(kept.len());
+            let room = limit.saturating_sub(kept.len());
             kept.extend_from_slice(&bytes[..count.min(room)]);
         }
         readers.fetch_sub(1, Ordering::AcqRel);
@@ -488,6 +575,104 @@ mod tests {
 
         let done = supervisor
             .run("ping", &ping, &args, Duration::from_millis(300))
+            .expect("the program starts");
+
+        assert!(done.timed_out);
+        assert_eq!(done.exit_code, None);
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[test]
+    fn a_program_runs_in_the_folder_given_without_the_variables_left_out() {
+        let (supervisor, _logs) = supervisor();
+        let folder = tempfile::tempdir().expect("a temporary folder");
+
+        let done = supervisor
+            .run_in(
+                "cmd",
+                &system("cmd"),
+                &[Arg::Literal("/c"), Arg::Literal("cd & echo %OS%")],
+                folder.path(),
+                &["OS"],
+                Duration::from_secs(20),
+            )
+            .expect("the program runs");
+
+        let lines: Vec<&str> = done.output.lines().collect();
+        assert_eq!(done.exit_code, Some(0));
+        assert_eq!(
+            fs::canonicalize(lines[0]).expect("a folder"),
+            fs::canonicalize(folder.path()).expect("a folder")
+        );
+        assert_eq!(lines[1], "%OS%", "the variable was left out");
+    }
+
+    #[test]
+    fn a_program_run_in_a_folder_keeps_its_output_apart_from_its_errors_and_out_of_the_log() {
+        let (supervisor, _logs) = supervisor();
+        let folder = tempfile::tempdir().expect("a temporary folder");
+
+        let done = supervisor
+            .run_in(
+                "cmd",
+                &system("cmd"),
+                &[
+                    Arg::Literal("/c"),
+                    Arg::Untrusted("echo token-1234& echo trouble 1>&2".into()),
+                ],
+                folder.path(),
+                &[],
+                Duration::from_secs(20),
+            )
+            .expect("the program runs");
+
+        assert_eq!(done.output.trim(), "token-1234");
+        assert_eq!(done.errors.trim(), "trouble");
+        let log = fs::read_to_string(&done.log).expect("the log");
+        assert!(log.contains("trouble"), "{log}");
+        assert!(!log.contains("token-1234"), "{log}");
+        assert!(log.contains("not kept here"), "{log}");
+    }
+
+    #[test]
+    fn a_program_run_in_a_folder_returns_a_long_output_whole() {
+        let (supervisor, _logs) = supervisor();
+        let folder = tempfile::tempdir().expect("a temporary folder");
+
+        let done = supervisor
+            .run_in(
+                "cmd",
+                &system("cmd"),
+                &[
+                    Arg::Literal("/c"),
+                    Arg::Literal("for /l %i in (1,1,20000) do @echo line %i"),
+                ],
+                folder.path(),
+                &[],
+                Duration::from_secs(60),
+            )
+            .expect("the program runs");
+
+        assert!(done.output.len() > CAPTURE_LIMIT, "{}", done.output.len());
+        assert_eq!(done.output.lines().last(), Some("line 20000"));
+    }
+
+    #[test]
+    fn a_program_run_in_a_folder_that_takes_too_long_is_ended() {
+        let (supervisor, _logs) = supervisor();
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let (ping, args) = long_running();
+        let started = Instant::now();
+
+        let done = supervisor
+            .run_in(
+                "ping",
+                &ping,
+                &args,
+                folder.path(),
+                &[],
+                Duration::from_millis(300),
+            )
             .expect("the program starts");
 
         assert!(done.timed_out);
