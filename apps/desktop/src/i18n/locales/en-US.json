@@ -775,6 +775,10 @@
         "light": "Light",
         "system": "Same as Windows"
       },
+      "transcriptView": {
+        "description": "How much of a reply sessions show. Thinking opens the agent's thinking; Verbose also shows each tool's input and output in full. Picking a view from a session's menu changes only that session.",
+        "label": "Default transcript view"
+      },
       "zoom": {
         "description": "Makes everything larger or smaller, from 80 to 200 percent.",
         "label": "Zoom",
@@ -892,6 +896,12 @@
     "search": "Search or run a command",
     "sidebar": "Sidebar",
     "statusBar": "Status bar"
+  },
+  "transcriptView": {
+    "label": "Transcript view",
+    "normal": "Normal",
+    "thinking": "Thinking",
+    "verbose": "Verbose"
   },
   "welcome": {
     "newSession": "New session",

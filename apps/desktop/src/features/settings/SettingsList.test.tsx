@@ -34,6 +34,7 @@ const places = {
   appearanceReduceMotion: ["appearance", "reduceMotion"],
   appearanceSmoothScrolling: ["appearance", "smoothScrolling"],
   appearanceShowStatusBar: ["appearance", "showStatusBar"],
+  appearanceTranscriptView: ["appearance", "transcriptView"],
   layoutSidebarWidth: ["layout", "sidebarWidth"],
   layoutInspectorWidth: ["layout", "inspectorWidth"],
   notificationsDesktop: ["notifications", "desktop"],
@@ -362,6 +363,28 @@ describe("Appearance → Zoom and Code font size", () => {
     renderTab("appearance");
 
     expect(await screen.findByText(/items\.filter/)).toBeVisible();
+  });
+});
+
+describe("Appearance → Default transcript view (ADR 0051)", () => {
+  it("is Normal by default, and saves Thinking or Verbose", async () => {
+    const calls = startApp();
+    const user = userEvent.setup();
+    renderTab("appearance");
+    const group = await screen.findByRole("radiogroup", { name: "Default transcript view" });
+    expect(within(group).getByRole("radio", { name: "Normal" })).toBeChecked();
+
+    await user.click(within(group).getByRole("radio", { name: "Verbose" }));
+    await user.click(within(group).getByRole("radio", { name: "Thinking" }));
+
+    await waitFor(() => {
+      expect(
+        calls.filter((call) => call.command === "change_setting").map((call) => call.payload),
+      ).toEqual([
+        { change: { appearanceTranscriptView: "verbose" } },
+        { change: { appearanceTranscriptView: "thinking" } },
+      ]);
+    });
   });
 });
 

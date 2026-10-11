@@ -68,6 +68,7 @@ test.describe("settings in the real app", () => {
           reduceMotion: "system",
           smoothScrolling: true,
           showStatusBar: true,
+          transcriptView: "normal",
         },
         layout: { sidebarWidth: 260, inspectorWidth: 320 },
         notifications: { desktop: true },

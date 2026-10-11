@@ -1,26 +1,34 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import type { Item } from "@/ipc/bindings";
+import type { Item, TranscriptView } from "@/ipc/bindings";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import type { AnswerHandler } from "./ApprovalItem";
+import { TranscriptViewContext } from "../transcriptView";
 import { ItemView } from "./ItemView";
 import type { PlanHandler } from "./PlanItem";
 import type { QuestionsHandler } from "./QuestionsItem";
 
 import "@/styles/global.css";
 
-function renderItem(item: Item, streaming = false, onAnswer = vi.fn<AnswerHandler>()) {
+function renderItem(
+  item: Item,
+  streaming = false,
+  onAnswer = vi.fn<AnswerHandler>(),
+  view: TranscriptView = "normal",
+) {
   return render(
-    <ItemView
-      item={item}
-      streaming={streaming}
-      agent="claude"
-      onAnswer={onAnswer}
-      onAnswerQuestions={vi.fn<QuestionsHandler>()}
-      onAnswerPlan={vi.fn<PlanHandler>()}
-    />,
+    <TranscriptViewContext value={view}>
+      <ItemView
+        item={item}
+        streaming={streaming}
+        agent="claude"
+        onAnswer={onAnswer}
+        onAnswerQuestions={vi.fn<QuestionsHandler>()}
+        onAnswerPlan={vi.fn<PlanHandler>()}
+      />
+    </TranscriptViewContext>,
   );
 }
 
@@ -116,7 +124,8 @@ describe("Tool calls", () => {
     expect(screen.getByText(label)).toBeVisible();
   });
 
-  it("show what the tool answered", () => {
+  it("show what the tool answered once opened (ADR 0051)", async () => {
+    const user = userEvent.setup();
     renderItem({
       type: "toolCall",
       id: "c",
@@ -125,8 +134,53 @@ describe("Tool calls", () => {
       status: "failed",
       output: "error: could not compile",
     });
+    expect(screen.getByText("error: could not compile")).not.toBeVisible();
+
+    await user.click(screen.getByText("run_command"));
 
     expect(screen.getByText("error: could not compile")).toBeVisible();
+  });
+});
+
+/** Whether a line of text is cut short with an ellipsis rather than shown whole. */
+const cutShort = (element: HTMLElement) => element.scrollWidth > element.clientWidth;
+
+describe("Transcript views (ADR 0051)", () => {
+  const thinking: Item = { type: "thinking", id: "t", text: "First I will read the file." };
+  const longInput = `{"command":"cargo test --workspace --all-features","description":"${"x".repeat(200)}"}`;
+  const toolCall: Item = {
+    type: "toolCall",
+    id: "c",
+    name: "Bash",
+    input: longInput,
+    status: "done",
+    output: "test result: ok",
+  };
+
+  it("Normal folds the thinking and each tool's output away", () => {
+    renderItem(thinking);
+    renderItem(toolCall);
+
+    expect(screen.getByText("First I will read the file.")).not.toBeVisible();
+    expect(screen.getByText("test result: ok")).not.toBeVisible();
+    expect(cutShort(screen.getByText(longInput))).toBe(true);
+  });
+
+  it("Thinking opens the thinking, and keeps each tool's output folded", () => {
+    renderItem(thinking, false, vi.fn<AnswerHandler>(), "thinking");
+    renderItem(toolCall, false, vi.fn<AnswerHandler>(), "thinking");
+
+    expect(screen.getByText("First I will read the file.")).toBeVisible();
+    expect(screen.getByText("test result: ok")).not.toBeVisible();
+  });
+
+  it("Verbose shows everything, each tool's input in full", () => {
+    renderItem(thinking, false, vi.fn<AnswerHandler>(), "verbose");
+    renderItem(toolCall, false, vi.fn<AnswerHandler>(), "verbose");
+
+    expect(screen.getByText("First I will read the file.")).toBeVisible();
+    expect(screen.getByText("test result: ok")).toBeVisible();
+    expect(cutShort(screen.getByText(longInput))).toBe(false);
   });
 });
 

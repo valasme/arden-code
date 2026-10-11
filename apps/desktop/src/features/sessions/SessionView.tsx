@@ -38,6 +38,7 @@ import { useTrustGate } from "./useTrustGate";
 import { effortsFor } from "./claudeCatalog";
 import { useClaudeCatalog } from "./useClaudeCatalog";
 import { useHandledSlashCommands } from "./useHandledSlashCommands";
+import { TranscriptViewContext, useTranscriptView } from "./transcriptView";
 import { useUltrathink } from "./ultrathink";
 import { useUnavailableAgents } from "./useUnavailableAgents";
 import { ReplyAnnouncer } from "./ReplyAnnouncer";
@@ -78,6 +79,7 @@ export function SessionView({ id }: { id: string }) {
   const { gate, dialog: trustDialog } = useTrustGate();
   const { ultrathink, setUltrathink, carrying } = useUltrathink(id);
   const bypassAllowed = useSettings().agents.allowBypassPermissions;
+  const transcriptView = useTranscriptView(id);
 
   const turns = session?.turns ?? [];
   const count = turns.length;
@@ -370,36 +372,38 @@ export function SessionView({ id }: { id: string }) {
               {t(`agents.${agent}.empty`)}
             </p>
           ) : (
-            <div
-              role="feed"
-              aria-label={t("sessions.messages")}
-              className="relative mx-auto w-full max-w-[45rem]"
-              style={{ height: total }}
-            >
-              {virtualizer.getVirtualItems().map((row) => {
-                const turn = turns[row.index];
-                if (!turn) return null;
-                return (
-                  <article
-                    key={row.key}
-                    ref={watchTurn}
-                    data-index={row.index}
-                    aria-posinset={row.index + 1}
-                    aria-setsize={count}
-                    className="absolute top-0 left-0 w-full"
-                    style={{ transform: `translateY(${row.start}px)` }}
-                  >
-                    <TurnView
-                      turn={turn}
-                      agent={agent}
-                      onAnswer={answer}
-                      onAnswerQuestions={answerQuestions}
-                      onAnswerPlan={answerPlan}
-                    />
-                  </article>
-                );
-              })}
-            </div>
+            <TranscriptViewContext value={transcriptView}>
+              <div
+                role="feed"
+                aria-label={t("sessions.messages")}
+                className="relative mx-auto w-full max-w-[45rem]"
+                style={{ height: total }}
+              >
+                {virtualizer.getVirtualItems().map((row) => {
+                  const turn = turns[row.index];
+                  if (!turn) return null;
+                  return (
+                    <article
+                      key={row.key}
+                      ref={watchTurn}
+                      data-index={row.index}
+                      aria-posinset={row.index + 1}
+                      aria-setsize={count}
+                      className="absolute top-0 left-0 w-full"
+                      style={{ transform: `translateY(${row.start}px)` }}
+                    >
+                      <TurnView
+                        turn={turn}
+                        agent={agent}
+                        onAnswer={answer}
+                        onAnswerQuestions={answerQuestions}
+                        onAnswerPlan={answerPlan}
+                      />
+                    </article>
+                  );
+                })}
+              </div>
+            </TranscriptViewContext>
           )}
         </main>
         {atEnd ? null : (

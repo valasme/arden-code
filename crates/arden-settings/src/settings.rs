@@ -65,6 +65,19 @@ pub enum ReduceMotion {
     Off,
 }
 
+/// How much of a reply a session shows (ADR 0051).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum TranscriptView {
+    /// The reply, with thinking and each tool call's output folded away.
+    #[default]
+    Normal,
+    /// The same, with the agent's thinking open.
+    Thinking,
+    /// Everything: thinking, and each tool call's input and output in full.
+    Verbose,
+}
+
 /// How the app behaves in general.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
 #[serde(rename_all = "camelCase")]
@@ -110,6 +123,8 @@ pub struct Appearance {
     pub smooth_scrolling: bool,
     /// Show the bar along the bottom of the window.
     pub show_status_bar: bool,
+    /// How much of a reply a session shows, until the session is given its own view (ADR 0051).
+    pub transcript_view: TranscriptView,
 }
 
 impl Default for Appearance {
@@ -123,6 +138,7 @@ impl Default for Appearance {
             reduce_motion: ReduceMotion::default(),
             smooth_scrolling: true,
             show_status_bar: true,
+            transcript_view: TranscriptView::default(),
         }
     }
 }
@@ -310,6 +326,7 @@ pub enum SettingChange {
     AppearanceReduceMotion(ReduceMotion),
     AppearanceSmoothScrolling(bool),
     AppearanceShowStatusBar(bool),
+    AppearanceTranscriptView(TranscriptView),
     LayoutSidebarWidth(u16),
     LayoutInspectorWidth(u16),
     NotificationsDesktop(bool),
@@ -336,6 +353,7 @@ pub enum SettingKey {
     AppearanceReduceMotion,
     AppearanceSmoothScrolling,
     AppearanceShowStatusBar,
+    AppearanceTranscriptView,
     LayoutSidebarWidth,
     LayoutInspectorWidth,
     NotificationsDesktop,
@@ -349,7 +367,7 @@ pub enum SettingKey {
 
 impl SettingKey {
     /// Every setting.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 21] = [
         Self::GeneralOnStartup,
         Self::GeneralCheckForUpdates,
         Self::GeneralRegionalFormat,
@@ -361,6 +379,7 @@ impl SettingKey {
         Self::AppearanceReduceMotion,
         Self::AppearanceSmoothScrolling,
         Self::AppearanceShowStatusBar,
+        Self::AppearanceTranscriptView,
         Self::LayoutSidebarWidth,
         Self::LayoutInspectorWidth,
         Self::NotificationsDesktop,
@@ -391,6 +410,9 @@ impl Settings {
             SettingChange::AppearanceReduceMotion(value) => self.appearance.reduce_motion = value,
             SettingChange::AppearanceSmoothScrolling(value) => {
                 self.appearance.smooth_scrolling = value;
+            }
+            SettingChange::AppearanceTranscriptView(value) => {
+                self.appearance.transcript_view = value;
             }
             SettingChange::AppearanceShowStatusBar(value) => {
                 self.appearance.show_status_bar = value;
@@ -465,6 +487,9 @@ impl Settings {
             }
             SettingKey::AppearanceSmoothScrolling => {
                 self.appearance.smooth_scrolling = defaults.appearance.smooth_scrolling;
+            }
+            SettingKey::AppearanceTranscriptView => {
+                self.appearance.transcript_view = defaults.appearance.transcript_view;
             }
             SettingKey::AppearanceShowStatusBar => {
                 self.appearance.show_status_bar = defaults.appearance.show_status_bar;
@@ -541,6 +566,7 @@ mod tests {
         assert_eq!(settings.appearance.reduce_motion, ReduceMotion::System);
         assert!(settings.appearance.smooth_scrolling);
         assert!(settings.appearance.show_status_bar);
+        assert_eq!(settings.appearance.transcript_view, TranscriptView::Normal);
         assert!(settings.notifications.desktop);
         assert!(settings.agents.show_usage_limits);
         assert!(!settings.agents.allow_bypass_permissions);
@@ -571,7 +597,8 @@ mod tests {
                     "codeLigatures": false,
                     "reduceMotion": "system",
                     "smoothScrolling": true,
-                    "showStatusBar": true
+                    "showStatusBar": true,
+                    "transcriptView": "normal"
                 },
                 "layout": { "sidebarWidth": 260, "inspectorWidth": 320 },
                 "notifications": { "desktop": true },
@@ -614,6 +641,9 @@ mod tests {
         settings.apply(SettingChange::AppearanceReduceMotion(ReduceMotion::On));
         settings.apply(SettingChange::AppearanceSmoothScrolling(false));
         settings.apply(SettingChange::AppearanceShowStatusBar(false));
+        settings.apply(SettingChange::AppearanceTranscriptView(
+            TranscriptView::Verbose,
+        ));
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
         settings.apply(SettingChange::NotificationsDesktop(false));
@@ -638,6 +668,7 @@ mod tests {
         assert_eq!(settings.appearance.code_font_size, 16);
         assert!(settings.appearance.code_ligatures);
         assert_eq!(settings.appearance.reduce_motion, ReduceMotion::On);
+        assert_eq!(settings.appearance.transcript_view, TranscriptView::Verbose);
         assert!(!settings.appearance.smooth_scrolling);
         assert!(!settings.appearance.show_status_bar);
         assert_eq!(settings.layout.sidebar_width, 300);
@@ -693,6 +724,9 @@ mod tests {
         settings.apply(SettingChange::AppearanceReduceMotion(ReduceMotion::On));
         settings.apply(SettingChange::AppearanceSmoothScrolling(false));
         settings.apply(SettingChange::AppearanceShowStatusBar(false));
+        settings.apply(SettingChange::AppearanceTranscriptView(
+            TranscriptView::Verbose,
+        ));
         settings.apply(SettingChange::LayoutSidebarWidth(300));
         settings.apply(SettingChange::LayoutInspectorWidth(400));
         settings.apply(SettingChange::NotificationsDesktop(false));
@@ -855,7 +889,7 @@ mod tests {
     #[test]
     fn unknown_keys_are_ignored_so_a_schema_reference_or_a_future_setting_does_no_harm() {
         let settings: Settings = serde_json::from_str(
-            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","smoothScrolling":true,"showStatusBar":true},"layout":{"sidebarWidth":260,"inspectorWidth":320},"notifications":{"desktop":true},"agents":{"showUsageLimits":true,"allowBypassPermissions":false},"keyboard":{"shortcuts":{}},"advanced":{"logLevel":"info","developerMode":false,"nativeTitleBar":false,"hardwareAcceleration":true},"extra":1}"#,
+            r#"{"$schema":"./settings.schema.json","version":1,"general":{"onStartup":"restore","checkForUpdates":true,"regionalFormat":"windows","future":1},"appearance":{"theme":"dark","zoom":100,"followTextSize":true,"codeFontSize":13,"codeLigatures":false,"reduceMotion":"system","smoothScrolling":true,"showStatusBar":true,"transcriptView":"normal"},"layout":{"sidebarWidth":260,"inspectorWidth":320},"notifications":{"desktop":true},"agents":{"showUsageLimits":true,"allowBypassPermissions":false},"keyboard":{"shortcuts":{}},"advanced":{"logLevel":"info","developerMode":false,"nativeTitleBar":false,"hardwareAcceleration":true},"extra":1}"#,
         )
         .unwrap();
 

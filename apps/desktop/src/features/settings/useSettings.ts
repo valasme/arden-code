@@ -57,6 +57,12 @@ function applyChange(settings: Settings, change: SettingChange): Settings {
       appearance: { ...appearance, reduceMotion: change.appearanceReduceMotion },
     };
   }
+  if (change.appearanceTranscriptView !== undefined) {
+    return {
+      ...settings,
+      appearance: { ...appearance, transcriptView: change.appearanceTranscriptView },
+    };
+  }
   if (change.appearanceSmoothScrolling !== undefined) {
     return {
       ...settings,

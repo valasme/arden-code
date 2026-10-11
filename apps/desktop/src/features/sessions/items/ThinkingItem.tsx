@@ -1,16 +1,26 @@
 import { ChevronRightIcon } from "lucide-react";
+import { use } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
 
+import { TranscriptViewContext } from "../transcriptView";
 import { itemLine } from "./itemLine";
 
-/** The agent's reasoning, folded away until the person opens it. */
+/**
+ * The agent's reasoning: folded away until the person opens it in the Normal view, and open in the
+ * Thinking and Verbose views (ADR 0051).
+ */
 export function ThinkingItem({ text, streaming }: { text: string; streaming: boolean }) {
   const { t } = useTranslation();
+  const view = use(TranscriptViewContext);
 
   return (
-    <details data-item="thinking" className={cn(itemLine, "group text-muted-foreground")}>
+    <details
+      data-item="thinking"
+      open={view !== "normal"}
+      className={cn(itemLine, "group text-muted-foreground")}
+    >
       <summary className="flex min-h-6 list-none items-center gap-2 select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
         <ChevronRightIcon
           aria-hidden
