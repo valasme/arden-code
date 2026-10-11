@@ -108,6 +108,22 @@ describe("File mentions in the message box (ADR 0052)", () => {
     expect(box).toHaveValue("@src/main.rs @gl");
   });
 
+  it("never sends with Enter while the list is open, even when nothing matches or the answer is on its way", async () => {
+    const { rust, user, box } = await inSession({
+      files: (_projectId, query) => (query === "wait" ? new Promise<never>(() => {}) : []),
+    });
+
+    await user.type(box, "Read @zzz");
+    expect((await screen.findAllByText("No matching files")).length).toBeGreaterThan(0);
+    await user.keyboard("{Enter}");
+    await user.clear(box);
+    await user.type(box, "Read @wait");
+    await screen.findByRole("listbox", { name: "Files" });
+    await user.keyboard("{Enter}");
+
+    expect(rust.sent()).toHaveLength(0);
+  });
+
   it("takes a file with a click", async () => {
     const { user, box } = await inSession();
 

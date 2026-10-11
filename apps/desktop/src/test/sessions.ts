@@ -108,7 +108,7 @@ interface Options {
   /** The default transcript view in the settings (ADR 0051). */
   transcriptView?: TranscriptView;
   /** The files Rust matches in a project for what was typed after `@` (ADR 0052). None by default. */
-  files?: (projectId: string, query: string) => FileMatch[];
+  files?: (projectId: string, query: string) => FileMatch[] | Promise<FileMatch[]>;
 }
 
 /**

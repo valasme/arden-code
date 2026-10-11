@@ -98,7 +98,8 @@ interface MessageBoxProps {
  * text. Filling in replaces only the word under the cursor.
  *
  * A word that starts with `@` lists the project's files the same way, and fills in `@` and the
- * path; Enter never sends while that list is open.
+ * path. While the list is open on a later word or a file mention, Enter never sends, even with
+ * nothing to fill in.
  */
 export function MessageBox({
   draft,
@@ -157,8 +158,12 @@ export function MessageBox({
   });
   // While a character is being composed, the list stays as it was when the composing began.
   const [composing, setComposing] = useState<{ word: CursorWord | null } | null>(null);
-  const seen = composing ? composing.word : wordAt(text, cursor);
-  const word = seen && ((seen.sign === "/" && slash) || (seen.sign === "@" && files)) ? seen : null;
+  const underCursor = composing ? composing.word : wordAt(text, cursor);
+  // A word of a kind this box does not list is no word for the list.
+  const word =
+    underCursor && ((underCursor.sign === "/" && slash) || (underCursor.sign === "@" && files))
+      ? underCursor
+      : null;
   const foundFiles = useFileMatches(files?.projectId, word?.sign === "@" ? word.query : null);
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
   const [chosen, setChosen] = useState({ query: "", index: 0 });
@@ -175,6 +180,19 @@ export function MessageBox({
           ).map((command) => ({ kind: "command" as const, command }))
         : [];
   const matches = options ?? [];
+  // What the list says, for the kind of word it lists.
+  const strings =
+    word?.sign === "@"
+      ? {
+          label: t("sessions.files.label"),
+          none: t("sessions.files.none"),
+          count: (count: number) => t("sessions.files.count", { count }),
+        }
+      : {
+          label: t("sessions.slash.label"),
+          none: t("sessions.slash.none"),
+          count: (count: number) => t("sessions.slash.count", { count }),
+        };
   const wordKey = word ? `${String(word.start)}:${text}` : null;
   const listing = word !== null && dismissedAt !== wordKey;
   const active = chosen.query === query ? Math.min(chosen.index, matches.length - 1) : 0;
@@ -186,21 +204,14 @@ export function MessageBox({
   const fill = (choice: Choice) => {
     if (!word) return;
     const after = text.slice(word.end);
-    if (choice.kind === "file") {
-      const filled = mention(choice.file.path);
-      if (choice.file.folder) {
-        placeCursor.current = word.start + filled.length - (filled.endsWith('"') ? 1 : 0);
-        setText(text.slice(0, word.start) + filled + after);
-        setCursor(placeCursor.current);
-        box.current?.focus();
-        return;
-      }
-    }
     const filled =
       choice.kind === "command" ? `/${choice.command.name}` : mention(choice.file.path);
-    const spaced = /^\s/.test(after) ? filled : `${filled} `;
-    placeCursor.current = word.start + filled.length + 1;
-    setText(text.slice(0, word.start) + spaced + after);
+    const staysOpen = choice.kind === "file" && choice.file.folder;
+    const inserted = staysOpen || /^\s/.test(after) ? filled : `${filled} `;
+    placeCursor.current = staysOpen
+      ? word.start + filled.length - (filled.endsWith('"') ? 1 : 0)
+      : word.start + filled.length + 1;
+    setText(text.slice(0, word.start) + inserted + after);
     setCursor(placeCursor.current);
     box.current?.focus();
   };
@@ -244,6 +255,13 @@ export function MessageBox({
         take(choice);
         return;
       }
+      // With nothing to take, Enter sends only from the first word's slash list, as before
+      // (ADR 0042): a later word or a file mention is half-written (ADR 0052).
+      const sendsAsBefore = word.sign === "/" && word.first;
+      if (event.key === "Enter" && !event.shiftKey && !sendsAsBefore) {
+        event.preventDefault();
+        return;
+      }
     }
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
@@ -262,8 +280,8 @@ export function MessageBox({
         {listing ? (
           <MessageBoxList
             id={listId}
-            label={t(word.sign === "@" ? "sessions.files.label" : "sessions.slash.label")}
-            none={t(word.sign === "@" ? "sessions.files.none" : "sessions.slash.none")}
+            label={strings.label}
+            none={strings.none}
             options={
               options?.map((choice) =>
                 choice.kind === "command"
@@ -321,13 +339,9 @@ export function MessageBox({
           <output className="sr-only">
             {!listing || options === null
               ? ""
-              : word.sign === "@"
-                ? matches.length === 0
-                  ? t("sessions.files.none")
-                  : t("sessions.files.count", { count: matches.length })
-                : matches.length === 0
-                  ? t("sessions.slash.none")
-                  : t("sessions.slash.count", { count: matches.length })}
+              : matches.length === 0
+                ? strings.none
+                : strings.count(matches.length)}
           </output>
         ) : null}
         {/*

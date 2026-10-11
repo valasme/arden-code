@@ -248,6 +248,17 @@ describe("Slash commands past the first word (ADR 0052)", () => {
     expect(rust.sent()).toHaveLength(0);
   });
 
+  it("never sends with Enter while a later word's list is open, even when nothing matches", async () => {
+    const { rust, user, box } = await open();
+
+    await user.type(box, "/tdd /zzz");
+    expect((await screen.findAllByText("No slash command matches")).length).toBeGreaterThan(0);
+    await user.keyboard("{Enter}");
+
+    expect(rust.sent()).toHaveLength(0);
+    expect(box).toHaveValue("/tdd /zzz");
+  });
+
   it("fills in only the word under the cursor, after moving back into an earlier word", async () => {
     const { user, box } = await open();
 
