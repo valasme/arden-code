@@ -117,6 +117,10 @@ _Avoid_: chat area, chat view
 Where the user writes the next message of a session.
 _Avoid_: composer, input, prompt box
 
+**Draft**:
+What is written in a message box and not sent yet, kept while the user is away from it. The welcome state's draft also holds what its menus were set to.
+_Avoid_: unsent message, pending input
+
 **Inspector**:
 The right-hand pane showing details of the open session. Hidden by default.
 _Avoid_: right panel, details pane

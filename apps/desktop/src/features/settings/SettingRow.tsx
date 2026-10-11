@@ -11,6 +11,8 @@ interface SettingRowProps {
   modified: boolean;
   /** Puts the setting back to its default. */
   onReset: () => Promise<unknown>;
+  /** A line along the foot of the row, under its text and its control, such as a restart note. */
+  note?: ReactNode;
   children: ReactNode;
 }
 
@@ -18,7 +20,8 @@ const controls = '[role="radio"][aria-checked="true"], [role="switch"], [role="s
 
 /**
  * One setting: its name, what it does, its control at the end of the row (under the text when the
- * row is narrow), and a way to put it back to its default.
+ * row is narrow), a way to put it back to its default, and a note across the foot of the row when
+ * there is one (#130).
  */
 export function SettingRow({
   id,
@@ -26,6 +29,7 @@ export function SettingRow({
   description,
   modified,
   onReset,
+  note,
   children,
 }: SettingRowProps) {
   const { t } = useTranslation();
@@ -65,6 +69,7 @@ export function SettingRow({
       <div ref={control} className="flex max-w-full flex-col items-end gap-2">
         {children}
       </div>
+      {note}
     </div>
   );
 }

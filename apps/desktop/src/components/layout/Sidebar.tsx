@@ -23,7 +23,7 @@ export function Sidebar({ hidden }: { hidden: boolean }) {
       data-area="sidebar"
       aria-label={t("regions.sidebar")}
       hidden={hidden}
-      className="flex h-full min-w-0 flex-col bg-sidebar text-sidebar-foreground"
+      className="@container/sidebar flex h-full min-w-0 flex-col bg-sidebar text-sidebar-foreground"
     >
       {inSettings ? (
         <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto p-2">

@@ -76,7 +76,7 @@ export function SessionView({ id }: { id: string }) {
   const heldAt = useRef(0);
   const [atEnd, setAtEnd] = useState(true);
   const { gate, dialog: trustDialog } = useTrustGate();
-  const { ultrathink, setUltrathink, carrying } = useUltrathink();
+  const { ultrathink, setUltrathink, carrying } = useUltrathink(id);
   const bypassAllowed = useSettings().agents.allowBypassPermissions;
 
   const turns = session?.turns ?? [];
@@ -416,6 +416,7 @@ export function SessionView({ id }: { id: string }) {
       <ReplyAnnouncer turn={lastTurn} agent={agent} />
       {session.archivedAt === null ? (
         <MessageBox
+          draft={id}
           agent={agent}
           busy={busy}
           choices={choices}
