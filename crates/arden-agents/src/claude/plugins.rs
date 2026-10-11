@@ -154,17 +154,20 @@ fn is_marketplace_source(source: &str) -> bool {
         && source.len() <= SOURCE_LIMIT
 }
 
-/// Whether `name` is a marketplace's name as Claude Code lists it: letters, digits, `.`, `_` and
-/// `-`, starting with a letter or digit.
-fn is_marketplace_name(name: &str) -> bool {
-    name.len() <= ID_LIMIT
-        && name
-            .chars()
-            .next()
-            .is_some_and(|first| first.is_ascii_alphanumeric())
+/// Whether `name` is a plain name, as Claude Code gives plugins and marketplaces: letters, digits,
+/// `.`, `_` and `-`, starting with a letter or digit, so that it cannot be read as a flag.
+fn is_plain_name(name: &str) -> bool {
+    name.chars()
+        .next()
+        .is_some_and(|first| first.is_ascii_alphanumeric())
         && name
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || "._-".contains(character))
+}
+
+/// Whether `name` is a marketplace's name Arden Code passes on.
+fn is_marketplace_name(name: &str) -> bool {
+    name.len() <= ID_LIMIT && is_plain_name(name)
 }
 
 /// The oldest Claude Code that takes `--accept-command`.
@@ -184,18 +187,10 @@ const ID_LIMIT: usize = 128;
 /// [`ID_LIMIT`] characters. It comes from the catalog or the page, so it is checked before it
 /// is passed.
 fn is_plugin_id(id: &str) -> bool {
-    let part = |text: &str| {
-        text.chars()
-            .next()
-            .is_some_and(|first| first.is_ascii_alphanumeric())
-            && text
-                .chars()
-                .all(|character| character.is_ascii_alphanumeric() || "._-".contains(character))
-    };
     id.len() <= ID_LIMIT
         && id
             .split_once('@')
-            .is_some_and(|(name, marketplace)| part(name) && part(marketplace))
+            .is_some_and(|(name, marketplace)| is_plain_name(name) && is_plain_name(marketplace))
 }
 
 /// A marketplace the person has added, with only what the page shows (ADR 0053).
@@ -354,14 +349,19 @@ impl ListedPlugin {
 fn source_text(source: &Value) -> String {
     match source {
         Value::String(path) => path.clone(),
-        Value::Object(fields) => ["url", "repo", "path", "ref"]
-            .iter()
-            .filter_map(|key| fields.get(*key).and_then(Value::as_str))
-            .filter(|part| !part.is_empty())
-            .collect::<Vec<_>>()
-            .join(" · "),
+        Value::Object(fields) => where_from(fields),
         _ => String::new(),
     }
+}
+
+/// The address or repository, the path and the version of a source Claude Code describes, joined.
+fn where_from(fields: &serde_json::Map<String, Value>) -> String {
+    ["url", "repo", "path", "ref"]
+        .iter()
+        .filter_map(|key| fields.get(*key).and_then(Value::as_str))
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" · ")
 }
 
 /// The words of a load error: the text itself, or its `message`.
@@ -497,20 +497,46 @@ impl ClaudePlugins {
         if !is_plugin_id(id) || accept.is_some_and(|sha256| !is_sha256(sha256)) {
             return Err(PluginError::InvalidId);
         }
-        let (scope_name, folder) = match (scope, project) {
-            (PluginScope::User, _) => ("user", self.playground.as_path()),
-            (PluginScope::Project, Some(project)) => ("project", project),
-            (PluginScope::Local, Some(project)) => ("local", project),
-            _ => return Err(PluginError::NotChangeable),
-        };
-        let mut args = vec![
-            Arg::Literal("plugin"),
-            Arg::Literal("install"),
-            Arg::Untrusted(id.to_owned()),
-            Arg::Literal("--scope"),
-            Arg::Literal(scope_name),
-        ];
-        // Only the command the person read is accepted; `--yes`, which accepts any, never is.
+        let (scope_name, folder) = self
+            .place(scope, project)
+            .ok_or(PluginError::NotChangeable)?;
+        self.run_accepting(
+            folder,
+            vec![
+                Arg::Literal("plugin"),
+                Arg::Literal("install"),
+                Arg::Untrusted(id.to_owned()),
+                Arg::Literal("--scope"),
+                Arg::Literal(scope_name),
+            ],
+            accept,
+        )
+    }
+
+    /// The `--scope` a plugin is installed at, and the folder its commands run in: the
+    /// Playground's for the person's, the project's for a project's. Nothing for a scope Arden
+    /// Code does not install at, or a project's without its folder.
+    fn place<'a>(
+        &'a self,
+        scope: PluginScope,
+        project: Option<&'a Path>,
+    ) -> Option<(&'static str, &'a Path)> {
+        match (scope, project) {
+            (PluginScope::User, _) => Some(("user", self.playground.as_path())),
+            (PluginScope::Project, Some(project)) => Some(("project", project)),
+            (PluginScope::Local, Some(project)) => Some(("local", project)),
+            _ => None,
+        }
+    }
+
+    /// Runs a change that a marketplace may declare a command for, accepting only the command
+    /// whose `sha256` the person accepted, if any. `--yes`, which accepts any, is never passed.
+    fn run_accepting(
+        &self,
+        folder: &Path,
+        mut args: Vec<Arg>,
+        accept: Option<&str>,
+    ) -> Result<PluginChange, PluginError> {
         if let Some(sha256) = accept {
             args.extend([
                 Arg::Literal("--accept-command"),
@@ -547,12 +573,7 @@ impl ClaudePlugins {
             .into_iter()
             .map(|listed| Marketplace {
                 agent: AgentKind::Claude,
-                source: ["repo", "url", "path", "ref"]
-                    .iter()
-                    .filter_map(|key| listed.fields.get(*key).and_then(Value::as_str))
-                    .filter(|part| !part.is_empty())
-                    .collect::<Vec<_>>()
-                    .join(" · "),
+                source: where_from(&listed.fields),
                 name: listed.name,
             })
             .collect())
@@ -617,51 +638,50 @@ impl ClaudePlugins {
     /// A plugin synced from claude.ai can only be turned off and on; one from the person's
     /// organization cannot be changed.
     ///
+    /// An update can answer with a command its marketplace declares, as an install can; `accept`
+    /// is the `sha256` of the one the person accepted, and only an update takes it.
+    ///
     /// # Errors
     ///
-    /// Says why it was not changed; nothing runs for an id that is not a plugin id or a change the
-    /// plugin does not allow.
+    /// Says why it was not changed; nothing runs for an id that is not a plugin id, a command
+    /// accepted for anything but an update, or a change the plugin does not allow.
     pub fn change(
         &self,
         action: PluginAction,
         id: &str,
         scope: PluginScope,
         project: Option<&Path>,
+        accept: Option<&str>,
     ) -> Result<PluginChange, PluginError> {
-        if !is_plugin_id(id) {
+        let accepts = action == PluginAction::Update;
+        if !is_plugin_id(id) || accept.is_some_and(|sha256| !accepts || !is_sha256(sha256)) {
             return Err(PluginError::InvalidId);
         }
-        let (scope_name, folder) = match (scope, project) {
-            (PluginScope::User, _) => (Some("user"), self.playground.as_path()),
-            (PluginScope::Project, Some(project)) => (Some("project"), project),
-            (PluginScope::Local, Some(project)) => (Some("local"), project),
-            (PluginScope::Synced, _)
-                if matches!(action, PluginAction::Enable | PluginAction::Disable) =>
-            {
-                (None, self.playground.as_path())
-            }
-            _ => return Err(PluginError::NotChangeable),
-        };
         let mut args = vec![
             Arg::Literal("plugin"),
             Arg::Literal(action.command()),
             Arg::Untrusted(id.to_owned()),
         ];
-        if let Some(scope_name) = scope_name {
-            args.extend([Arg::Literal("--scope"), Arg::Literal(scope_name)]);
-        }
-        args.push(Arg::Literal("--json"));
-        self.run_change(folder, &args)
+        let folder = match self.place(scope, project) {
+            Some((scope_name, folder)) => {
+                args.extend([Arg::Literal("--scope"), Arg::Literal(scope_name)]);
+                folder
+            }
+            // A plugin synced from claude.ai is turned off and on where Claude Code finds it.
+            None if scope == PluginScope::Synced
+                && matches!(action, PluginAction::Enable | PluginAction::Disable) =>
+            {
+                self.playground.as_path()
+            }
+            None => return Err(PluginError::NotChangeable),
+        };
+        self.run_accepting(folder, args, accept)
     }
 
-    /// Runs a command that changes plugins, and reads the result on the last line it printed. A
-    /// change that was there already counts as done. The catalog is read again next time.
-    fn run_change(&self, folder: &Path, args: &[Arg]) -> Result<PluginChange, PluginError> {
-        self.run_change_at(folder, args, PLUGINS_MINIMUM_VERSION)
-    }
-
-    /// [`Self::run_change`], with a Claude Code of `minimum` or later. A command a marketplace
-    /// declares, shown instead of run, is answered as one to accept.
+    /// Runs a command that changes plugins, with a Claude Code of `minimum` or later, and reads the
+    /// result on the last line it printed. A change that was there already counts as done, and a
+    /// command a marketplace declares, shown instead of run, is answered as one to accept. The
+    /// catalog is read again next time.
     fn run_change_at(
         &self,
         folder: &Path,

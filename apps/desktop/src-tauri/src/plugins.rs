@@ -1,8 +1,7 @@
 //! The commands for the Plugins page (ADR 0053): the agents' plugins, through their own commands.
 
-use std::sync::Arc;
-
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use arden_agents::claude::plugins::{
     AvailablePlugin, ClaudePlugins, InstalledPlugin, Marketplace, MarketplaceAction, PluginAction,
@@ -11,6 +10,16 @@ use arden_agents::claude::plugins::{
 use arden_agents::model::ProjectKind;
 use arden_core::error::{AppError, ErrorCode};
 use tauri::State;
+
+/// The plugin a command is for (ADR 0053): its id, the scope it is (or is to be) installed at,
+/// and the project, for a project's scope.
+#[derive(Debug, Clone, serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginTarget {
+    pub id: String,
+    pub scope: PluginScope,
+    pub project_id: Option<String>,
+}
 
 /// Claude's plugins, when programs can be supervised on this computer.
 pub struct Plugins(pub Option<Arc<ClaudePlugins>>);
@@ -27,12 +36,9 @@ impl Plugins {
 /// Code's own message goes to the page, never to the log: it can name a plugin's settings.
 fn plugin_error(error: PluginError) -> AppError {
     let shown = match error {
-        PluginError::InvalidId => AppError::new(ErrorCode::PluginCommandFailed)
-            .with_details("This is not the id of a plugin, so nothing was run."),
-        PluginError::InvalidSource => AppError::new(ErrorCode::PluginCommandFailed)
-            .with_details("This is not a marketplace source, so nothing was run."),
-        PluginError::NotChangeable => AppError::new(ErrorCode::PluginCommandFailed)
-            .with_details("This plugin cannot be changed that way here."),
+        PluginError::InvalidId | PluginError::InvalidSource | PluginError::NotChangeable => {
+            AppError::new(ErrorCode::PluginCommandRefused)
+        }
         PluginError::NotInstalled => AppError::new(ErrorCode::ClaudeNotInstalled),
         PluginError::NpmWrapperOnly => AppError::new(ErrorCode::ClaudeNpmWrapper),
         PluginError::TooOld(version) => {
@@ -45,7 +51,7 @@ fn plugin_error(error: PluginError) -> AppError {
         PluginError::TooLong => AppError::new(ErrorCode::PluginCommandTooLong),
         PluginError::CouldNotRun(why) => {
             tracing::warn!(%why, "a plugin command could not be started");
-            AppError::new(ErrorCode::PluginCommandFailed)
+            AppError::new(ErrorCode::ClaudeStopped)
         }
     };
     tracing::warn!(
@@ -131,21 +137,21 @@ pub async fn plugin_catalog(
 #[tauri::command]
 #[specta::specta]
 pub async fn install_plugin(
-    id: String,
-    scope: PluginScope,
-    project_id: Option<String>,
+    target: PluginTarget,
     accept_command: Option<String>,
     plugins: State<'_, Plugins>,
     claude: State<'_, crate::agents::Claude>,
     sessions: State<'_, crate::sessions::Sessions>,
 ) -> Result<PluginChange, AppError> {
     let module = plugins.claude()?;
-    let folder = match project_id {
-        Some(project_id) => Some(trusted_folder(&sessions, &project_id)?),
-        None => None,
-    };
+    let folder = project_folder(&sessions, &target)?;
     change_off_the_window(&claude, &sessions, move || {
-        module.install(&id, scope, folder.as_deref(), accept_command.as_deref())
+        module.install(
+            &target.id,
+            target.scope,
+            folder.as_deref(),
+            accept_command.as_deref(),
+        )
     })
     .await
 }
@@ -169,6 +175,18 @@ fn trusted_folder(
     Ok(PathBuf::from(project.path))
 }
 
+/// The folder of the target's project, when it names one, which must be trusted.
+fn project_folder(
+    sessions: &crate::sessions::Sessions,
+    target: &PluginTarget,
+) -> Result<Option<PathBuf>, AppError> {
+    target
+        .project_id
+        .as_deref()
+        .map(|project_id| trusted_folder(sessions, project_id))
+        .transpose()
+}
+
 /// Turns an installed plugin on or off, updates it or uninstalls it, at the scope it is installed
 /// at (ADR 0053). A project's plugin is changed in that project's folder, which must be a trusted
 /// folder project. Answers the agent's own message.
@@ -182,20 +200,22 @@ fn trusted_folder(
 #[specta::specta]
 pub async fn change_plugin(
     action: PluginAction,
-    id: String,
-    scope: PluginScope,
-    project_id: Option<String>,
+    target: PluginTarget,
+    accept_command: Option<String>,
     plugins: State<'_, Plugins>,
     claude: State<'_, crate::agents::Claude>,
     sessions: State<'_, crate::sessions::Sessions>,
 ) -> Result<PluginChange, AppError> {
     let module = plugins.claude()?;
-    let folder = match project_id {
-        Some(project_id) => Some(trusted_folder(&sessions, &project_id)?),
-        None => None,
-    };
+    let folder = project_folder(&sessions, &target)?;
     change_off_the_window(&claude, &sessions, move || {
-        module.change(action, &id, scope, folder.as_deref())
+        module.change(
+            action,
+            &target.id,
+            target.scope,
+            folder.as_deref(),
+            accept_command.as_deref(),
+        )
     })
     .await
 }

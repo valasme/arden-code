@@ -49,6 +49,7 @@ do), and add a row here. Never reuse or renumber a code.
 | `ARD-AGT-021` | A plugin command failed, for a reason Claude Code gave | The Plugins page |
 | `ARD-AGT-022` | A plugin command answered in a way Arden Code does not understand | The Plugins page |
 | `ARD-AGT-023` | A plugin command took too long, and was ended | The Plugins page |
+| `ARD-AGT-024` | Arden Code did not run a plugin command: what it names is not one it passes on | The Plugins page |
 | `ARD-PROC-001` | Programs cannot be started and supervised on this computer | Settings → Agents; starting an agent |
 | `ARD-UPD-001` | The update could not be installed | Choosing "Update ready: restart" |
 | `ARD-WIN-001` | Windows' window menu could not be opened | The title bar's Window menu button and Alt+Space |

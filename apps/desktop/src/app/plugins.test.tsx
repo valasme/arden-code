@@ -155,11 +155,22 @@ describe("The Plugins page (ADR 0053)", () => {
     expect(await screen.findByText("No plugins are installed.")).toBeVisible();
   });
 
-  it("says how to install Claude Code when it is missing", async () => {
+  it("says how to install Claude Code when it is missing, in this page's words", async () => {
     await openApp({ failing: { installed_plugins: "ARD-AGT-007" } }, "/plugins/installed");
 
     expect(await screen.findByText("Claude Code is not installed.")).toBeVisible();
+    expect(
+      screen.getByText("Install Claude Code (Settings → Agents shows how), then look again."),
+    ).toBeVisible();
+    expect(screen.queryByText(/send your message/)).toBeNull();
     expect(screen.getByText("ARD-AGT-007")).toBeVisible();
+  });
+
+  it("says when Arden Code ran nothing, without words of Claude Code's", async () => {
+    await openApp({ failing: { installed_plugins: "ARD-AGT-024" } }, "/plugins/installed");
+
+    expect(await screen.findByText("Arden Code did not run this.")).toBeVisible();
+    expect(screen.getByText("ARD-AGT-024")).toBeVisible();
   });
 
   it("asks for claude update when Claude Code is older than plugins need", async () => {
@@ -359,7 +370,10 @@ describe("Installing a plugin for you in every project (ADR 0053)", () => {
       ),
     ).toBeVisible();
     expect(rust.callsTo("install_plugin")).toEqual([
-      { id: "github@claude-plugins-official", scope: "user", projectId: null, acceptCommand: null },
+      {
+        target: { id: "github@claude-plugins-official", scope: "user", projectId: null },
+        acceptCommand: null,
+      },
     ]);
     // What the marketplaces offer is read again, and Installed reads what is installed now.
     await waitFor(() => {
@@ -462,9 +476,8 @@ describe("Changing installed plugins (ADR 0053)", () => {
     expect(rust.callsTo("change_plugin")).toEqual([
       {
         action: "disable",
-        id: "superpowers@claude-plugins-official",
-        scope: "user",
-        projectId: null,
+        target: { id: "superpowers@claude-plugins-official", scope: "user", projectId: null },
+        acceptCommand: null,
       },
     ]);
     // What is installed is read again.
@@ -484,9 +497,8 @@ describe("Changing installed plugins (ADR 0053)", () => {
       expect(rust.callsTo("change_plugin")).toEqual([
         {
           action: "update",
-          id: "superpowers@claude-plugins-official",
-          scope: "user",
-          projectId: null,
+          target: { id: "superpowers@claude-plugins-official", scope: "user", projectId: null },
+          acceptCommand: null,
         },
       ]);
     });
@@ -518,9 +530,8 @@ describe("Changing installed plugins (ADR 0053)", () => {
       expect(rust.callsTo("change_plugin")).toEqual([
         {
           action: "uninstall",
-          id: "superpowers@claude-plugins-official",
-          scope: "user",
-          projectId: null,
+          target: { id: "superpowers@claude-plugins-official", scope: "user", projectId: null },
+          acceptCommand: null,
         },
       ]);
     });
@@ -547,7 +558,11 @@ describe("Changing installed plugins (ADR 0053)", () => {
 
     await waitFor(() => {
       expect(rust.callsTo("change_plugin")).toEqual([
-        { action: "enable", id: "deploy@acme", scope: "project", projectId: "api" },
+        {
+          action: "enable",
+          target: { id: "deploy@acme", scope: "project", projectId: "api" },
+          acceptCommand: null,
+        },
       ]);
     });
   });
@@ -712,9 +727,7 @@ describe("Installing a plugin for a project (ADR 0053)", () => {
     await waitFor(() => {
       expect(rust.callsTo("install_plugin")).toEqual([
         {
-          id: "github@claude-plugins-official",
-          scope: "local",
-          projectId: "site",
+          target: { id: "github@claude-plugins-official", scope: "local", projectId: "site" },
           acceptCommand: null,
         },
       ]);
@@ -734,9 +747,7 @@ describe("Installing a plugin for a project (ADR 0053)", () => {
     await waitFor(() => {
       expect(rust.callsTo("install_plugin")).toEqual([
         {
-          id: "github@claude-plugins-official",
-          scope: "project",
-          projectId: "api",
+          target: { id: "github@claude-plugins-official", scope: "project", projectId: "api" },
           acceptCommand: null,
         },
       ]);
@@ -776,9 +787,7 @@ describe("Installing a plugin for a project (ADR 0053)", () => {
       expect(rust.callsTo("trust_project")).toEqual([{ projectId: "site" }]);
       expect(rust.callsTo("install_plugin")).toEqual([
         {
-          id: "github@claude-plugins-official",
-          scope: "local",
-          projectId: "site",
+          target: { id: "github@claude-plugins-official", scope: "local", projectId: "site" },
           acceptCommand: null,
         },
       ]);
@@ -1024,5 +1033,27 @@ describe("Anthropic's official marketplace on Discover (ADR 0053)", () => {
     expect(
       screen.queryByRole("button", { name: "Add Anthropic's official marketplace" }),
     ).toBeNull();
+  });
+});
+
+describe("Updating a plugin whose marketplace declares a command (ADR 0053)", () => {
+  it("shows the command first, and accepting updates with exactly its sha256", async () => {
+    const { rust, user } = await installedTab({ pluginChange: declaring() });
+
+    await user.click(
+      within(rowOf("superpowers")).getByRole("button", { name: "Update superpowers" }),
+    );
+    const asked = await screen.findByRole("alertdialog", { name: "Run a command for github?" });
+    await animationsDone(asked);
+    expect(within(asked).getByText(declared)).toBeVisible();
+    await user.click(within(asked).getByRole("button", { name: "Run it and install" }));
+
+    await waitFor(() => {
+      expect(rust.callsTo("change_plugin")).toHaveLength(2);
+    });
+    expect(rust.callsTo("change_plugin")[1]).toMatchObject({
+      action: "update",
+      acceptCommand: sha256,
+    });
   });
 });

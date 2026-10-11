@@ -44,7 +44,7 @@ test.describe("the Plugins page in the real app", () => {
     }
   });
 
-  test("a plugin installed from Discover is listed under Installed", async () => {
+  test("a plugin found by searching Discover and installed there is listed under Installed", async () => {
     const available = [
       {
         pluginId: "superpowers@claude-plugins-official",
@@ -70,7 +70,11 @@ test.describe("the Plugins page in the real app", () => {
       const { page } = app;
       const sidebar = page.getByRole("complementary", { name: "Sidebar" });
       await sidebar.getByRole("link", { name: "Plugins" }).click();
-      await page.getByRole("option", { name: /^github/u }).click({ timeout: 30_000 });
+      await expect(page.getByRole("option")).toHaveCount(2, { timeout: 30_000 });
+      // The sidebar search finds a plugin by its description.
+      await sidebar.getByRole("searchbox", { name: "Search plugins" }).fill("mcp server");
+      await expect(page.getByRole("option")).toHaveCount(1);
+      await page.getByRole("option", { name: /^github/u }).click();
       const details = page.getByRole("region", { name: "github" });
       await details.getByRole("button", { name: "Install…" }).click();
       const dialog = page.getByRole("dialog", { name: "Install github" });
@@ -80,6 +84,8 @@ test.describe("the Plugins page in the real app", () => {
         "Successfully installed plugin: github@claude-plugins-official (scope: user)",
         { timeout: 30_000 },
       );
+      // The search belongs to the whole page, so it is cleared before looking at Installed.
+      await sidebar.getByRole("searchbox", { name: "Search plugins" }).fill("");
       await sidebar.getByRole("link", { name: "Installed" }).click();
       const list = page.getByRole("list", { name: "Installed plugins" });
       await expect(list.getByRole("heading", { name: "github" })).toBeVisible();

@@ -7,12 +7,20 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useTrustGate } from "@/features/sessions/useTrustGate";
-import { commands, type InstalledPlugin, type PluginAction, type Project } from "@/ipc/bindings";
+import {
+  commands,
+  type InstalledPlugin,
+  type PluginAction,
+  type Project,
+  type ShownCommand,
+} from "@/ipc/bindings";
 import { installedPluginsQuery, sessionListQuery } from "@/ipc/queries";
 import { toAppError } from "@/lib/errors";
 import { usePluginsPageStore } from "@/state/pluginsPage";
 
 import { afterChange } from "./afterChange";
+import { ChangeOutcome } from "./ChangeOutcome";
+import { CommandDialog } from "./CommandDialog";
 import { PluginsProblem } from "./PluginsProblem";
 
 /** Whether a plugin matches what was typed in the sidebar's search: its name or marketplace. */
@@ -66,14 +74,23 @@ function InstalledRow({
     : undefined;
   const reachable = !forProject || project !== undefined;
   const can = allowed(plugin);
+  const [toAccept, setToAccept] = useState<ShownCommand | null>(null);
   const change = useMutation({
-    mutationFn: (action: PluginAction) =>
-      commands.changePlugin(action, plugin.id, plugin.scope, project?.id ?? null),
+    mutationFn: ({ action, accept }: { action: PluginAction; accept: string | null }) =>
+      commands.changePlugin(
+        action,
+        { id: plugin.id, scope: plugin.scope, projectId: project?.id ?? null },
+        accept,
+      ),
+    onSuccess: (done) => {
+      // An update can bring a command its marketplace declares, to be read before it runs.
+      if (done.shownCommand) setToAccept(done.shownCommand);
+    },
     onSettled: () => afterChange(queryClient),
   });
   const run = (action: PluginAction) => {
     void gate("claude", project, () => {
-      change.mutate(action);
+      change.mutate({ action, accept: null });
       return true;
     });
   };
@@ -157,14 +174,18 @@ function InstalledRow({
           </Button>
         </div>
       ) : null}
-      <div aria-live="polite" className="text-xs empty:hidden">
-        {change.isPending ? t("plugins.installed.changing", { name: plugin.name }) : null}
-        {change.isSuccess ? change.data.message : null}
-        {change.isSuccess && change.data.sessionsWaiting ? (
-          <p className="text-muted-foreground">{t("plugins.waiting")}</p>
-        ) : null}
-      </div>
-      {change.isError ? <PluginsProblem error={toAppError(change.error)} /> : null}
+      <ChangeOutcome
+        underWay={t("plugins.installed.changing", { name: plugin.name })}
+        change={change}
+      />
+      <CommandDialog
+        shown={toAccept}
+        marketplace={plugin.marketplace}
+        onAnswer={(accepted) => {
+          if (accepted && toAccept) change.mutate({ action: "update", accept: toAccept.sha256 });
+          setToAccept(null);
+        }}
+      />
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}

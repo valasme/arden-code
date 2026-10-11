@@ -119,6 +119,9 @@ pub enum ErrorCode {
     /// A plugin command took too long, and was ended.
     #[serde(rename = "ARD-AGT-023")]
     PluginCommandTooLong,
+    /// Arden Code did not run a plugin command: what it names is not one it passes on.
+    #[serde(rename = "ARD-AGT-024")]
+    PluginCommandRefused,
     /// Programs cannot be started and supervised on this computer.
     #[serde(rename = "ARD-PROC-001")]
     ProcessSupervisor,
@@ -174,6 +177,7 @@ impl ErrorCode {
             Self::PluginCommandFailed => "ARD-AGT-021",
             Self::PluginAnswerNotUnderstood => "ARD-AGT-022",
             Self::PluginCommandTooLong => "ARD-AGT-023",
+            Self::PluginCommandRefused => "ARD-AGT-024",
             Self::ProcessSupervisor => "ARD-PROC-001",
             Self::UpdateInstall => "ARD-UPD-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",

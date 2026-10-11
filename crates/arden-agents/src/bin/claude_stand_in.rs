@@ -159,7 +159,7 @@ fn plugin(settings: &Settings, args: &[String]) {
         Some("install") => install(plugins, args, installed),
         Some("marketplace") => marketplace(plugins, &args[1..], installed),
         Some(command @ ("enable" | "disable" | "update" | "uninstall")) => {
-            alter(command, args, installed);
+            alter(plugins, command, args, installed);
         }
         Some("list") if args.iter().any(|arg| arg == "--available") => {
             let available = match &plugins["available"] {
@@ -375,26 +375,8 @@ fn install(plugins: &Value, args: &[String], mut installed: Value) {
         );
         return;
     }
-    if let Some(command) = plugins["commands"][id].as_str() {
-        let sha256 = hash_of(command);
-        let accepted = flag(args, "--accept-command");
-        if accepted != Some(sha256.as_str()) {
-            println!("{command}");
-            let shown = json!({
-                "command": command, "pluginId": id, "sha256": sha256,
-                "acceptCommandMatched": accepted.map(|_| false)
-            });
-            let message =
-                format!("Plugin '{id}' declares a command; review it and accept it to install");
-            result(
-                "install",
-                id,
-                "failed",
-                &message,
-                &json!({ "failureCode": "command_not_accepted", "shownCommand": shown }),
-            );
-            return;
-        }
+    if shows_declared_command(plugins, "install", id, args) {
+        return;
     }
     let folder = std::env::current_dir()
         .map(|folder| folder.display().to_string())
@@ -433,9 +415,36 @@ fn install(plugins: &Value, args: &[String], mut installed: Value) {
     result("install", id, "ok", &message, &json!({ "scope": scope }));
 }
 
+/// Shows the command a plugin's marketplace declares, as Claude Code does, unless `--accept-command`
+/// gives its hash. Says whether it was shown, and so nothing was done.
+fn shows_declared_command(plugins: &Value, command: &str, id: &str, args: &[String]) -> bool {
+    let Some(declared) = plugins["commands"][id].as_str() else {
+        return false;
+    };
+    let sha256 = hash_of(declared);
+    let accepted = flag(args, "--accept-command");
+    if accepted == Some(sha256.as_str()) {
+        return false;
+    }
+    println!("{declared}");
+    let shown = json!({
+        "command": declared, "pluginId": id, "sha256": sha256,
+        "acceptCommandMatched": accepted.map(|_| false)
+    });
+    let message = format!("Plugin '{id}' declares a command; review it and accept it");
+    result(
+        command,
+        id,
+        "failed",
+        &message,
+        &json!({ "failureCode": "command_not_accepted", "shownCommand": shown }),
+    );
+    true
+}
+
 /// `plugin enable|disable|update|uninstall <id> [--scope <scope>] --json`, on the plugin listed at
 /// that scope (and, for a project's, in this folder), or the first with that id without one.
-fn alter(command: &str, args: &[String], mut installed: Value) {
+fn alter(plugins: &Value, command: &str, args: &[String], mut installed: Value) {
     let id = args.get(1).map_or("", String::as_str);
     let scope = flag(args, "--scope");
     let folder = std::env::current_dir()
@@ -483,6 +492,9 @@ fn alter(command: &str, args: &[String], mut installed: Value) {
             format!("Successfully {command}d plugin: {id}")
         }
         "update" => {
+            if shows_declared_command(plugins, command, id, args) {
+                return;
+            }
             let version = list[at]["version"].as_str().unwrap_or("1.0.0").to_owned();
             let (base, patch) = version.rsplit_once('.').unwrap_or(("1.0", "0"));
             let next = format!("{base}.{}", patch.parse::<u32>().unwrap_or(0) + 1);

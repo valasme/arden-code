@@ -11,6 +11,12 @@ import type { AppError } from "@/ipc/bindings";
 export function PluginsProblem({ error }: { error: AppError }) {
   const { t } = useTranslation();
   const ownWords = error.code === "ARD-AGT-021" ? error.details : null;
+  // Claude's own codes speak of sending a message; on this page, the step is to look again.
+  const actionHere: Partial<Record<string, string>> = {
+    "ARD-AGT-007": t("plugins.actions.notInstalled"),
+    "ARD-AGT-010": t("plugins.actions.stopped"),
+    "ARD-AGT-012": t("plugins.actions.npmWrapper"),
+  };
 
   return (
     <div
@@ -24,7 +30,7 @@ export function PluginsProblem({ error }: { error: AppError }) {
       />
       <div className="flex min-w-0 flex-col gap-1 break-words">
         <p className="font-medium">{t(`errors.${error.code}.what`)}</p>
-        <p>{t(`errors.${error.code}.action`)}</p>
+        <p>{actionHere[error.code] ?? t(`errors.${error.code}.action`)}</p>
         {ownWords ? <p className="font-mono text-muted-foreground">{ownWords}</p> : null}
         <p className="text-2xs text-muted-foreground">{error.code}</p>
       </div>

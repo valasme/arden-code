@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { usePluginsPageStore } from "@/state/pluginsPage";
 
 import { afterChange } from "./afterChange";
+import { ChangeOutcome } from "./ChangeOutcome";
 import { CommandDialog } from "./CommandDialog";
 import { InstallDialog } from "./InstallDialog";
 import { useInstallProjects } from "./useInstallProjects";
@@ -76,7 +77,7 @@ function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => vo
       scope: PluginScope;
       project: Project | undefined;
       accept: string | null;
-    }) => commands.installPlugin(plugin.id, scope, project?.id ?? null, accept),
+    }) => commands.installPlugin({ id: plugin.id, scope, projectId: project?.id ?? null }, accept),
     onSuccess: (change, asked) => {
       // A command the marketplace declares is read before anything runs.
       if (change.shownCommand) setToAccept({ shown: change.shownCommand, asked });
@@ -119,14 +120,10 @@ function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => vo
           {t("plugins.install.open")}
         </Button>
       </div>
-      <div aria-live="polite" className="text-sm empty:hidden">
-        {install.isPending ? t("plugins.install.underWay", { name: plugin.name }) : null}
-        {install.isSuccess && !install.data.shownCommand ? install.data.message : null}
-        {install.isSuccess && install.data.sessionsWaiting ? (
-          <p className="text-xs text-muted-foreground">{t("plugins.waiting")}</p>
-        ) : null}
-      </div>
-      {install.isError ? <PluginsProblem error={toAppError(install.error)} /> : null}
+      <ChangeOutcome
+        underWay={t("plugins.install.underWay", { name: plugin.name })}
+        change={install}
+      />
       {plugin.description ? <p className="text-sm">{plugin.description}</p> : null}
       <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs">
         <dt className="text-muted-foreground">{t("plugins.discover.marketplace")}</dt>

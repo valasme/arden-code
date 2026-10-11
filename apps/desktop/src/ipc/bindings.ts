@@ -660,7 +660,7 @@ export const commands = {
 	 *  not trusted, or a command that failed (with the agent's message and code), took too long, or
 	 *  answered in a way Arden Code does not understand.
 	 */
-	installPlugin: (id: string, scope: PluginScope, projectId: string | null, acceptCommand: string | null) => __TAURI_INVOKE<PluginChange>("install_plugin", { id, scope, projectId, acceptCommand }),
+	installPlugin: (target: PluginTarget, acceptCommand: string | null) => __TAURI_INVOKE<PluginChange>("install_plugin", { target, acceptCommand }),
 	/**
 	 *  Turns an installed plugin on or off, updates it or uninstalls it, at the scope it is installed
 	 *  at (ADR 0053). A project's plugin is changed in that project's folder, which must be a trusted
@@ -672,7 +672,7 @@ export const commands = {
 	 *  does not allow, or a command that failed (with the agent's message), took too long or answered
 	 *  in a way Arden Code does not understand.
 	 */
-	changePlugin: (action: PluginAction, id: string, scope: PluginScope, projectId: string | null) => __TAURI_INVOKE<PluginChange>("change_plugin", { action, id, scope, projectId }),
+	changePlugin: (action: PluginAction, target: PluginTarget, acceptCommand: string | null) => __TAURI_INVOKE<PluginChange>("change_plugin", { action, target, acceptCommand }),
 	/**
 	 *  The marketplaces the person has added (ADR 0053): for now Claude's, from
 	 *  `claude plugin marketplace list --json`.
@@ -1055,6 +1055,8 @@ export type ErrorCode =
 "ARD-AGT-022" | 
 /**  A plugin command took too long, and was ended. */
 "ARD-AGT-023" | 
+/**  Arden Code did not run a plugin command: what it names is not one it passes on. */
+"ARD-AGT-024" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -1328,6 +1330,16 @@ export type PluginScope =
 "session" | 
 /**  A scope this version of Arden Code does not know. */
 "other";
+
+/**
+ *  The plugin a command is for (ADR 0053): its id, the scope it is (or is to be) installed at,
+ *  and the project, for a project's scope.
+ */
+export type PluginTarget = {
+	id: string,
+	scope: PluginScope,
+	projectId: string | null,
+};
 
 /**  A folder on disk where agents work. */
 export type Project = {

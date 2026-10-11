@@ -469,21 +469,21 @@ fn an_installed_plugin_is_turned_off_and_on_updated_and_uninstalled_at_its_scope
     let id = "superpowers@claude-plugins-official";
 
     module
-        .change(PluginAction::Disable, id, PluginScope::User, None)
+        .change(PluginAction::Disable, id, PluginScope::User, None, None)
         .expect("off");
     assert!(!module.installed().expect("the list")[0].enabled);
     module
-        .change(PluginAction::Enable, id, PluginScope::User, None)
+        .change(PluginAction::Enable, id, PluginScope::User, None, None)
         .expect("on");
     module
-        .change(PluginAction::Update, id, PluginScope::User, None)
+        .change(PluginAction::Update, id, PluginScope::User, None, None)
         .expect("updated");
     assert_eq!(
         module.installed().expect("the list")[0].version.as_deref(),
         Some("4.3.2")
     );
     module
-        .change(PluginAction::Uninstall, id, PluginScope::User, None)
+        .change(PluginAction::Uninstall, id, PluginScope::User, None, None)
         .expect("gone");
     assert!(
         module
@@ -528,6 +528,7 @@ fn a_project_plugin_is_changed_in_its_projects_folder() {
             "deploy@acme",
             PluginScope::Project,
             Some(project.path()),
+            None,
         )
         .expect("off");
 
@@ -563,6 +564,7 @@ fn turning_on_a_plugin_that_is_on_reads_as_success() {
         "superpowers@claude-plugins-official",
         PluginScope::User,
         None,
+        None,
     );
 
     assert!(done.is_ok(), "{done:?}");
@@ -581,6 +583,7 @@ fn only_what_a_synced_or_managed_plugin_allows_is_run() {
             PluginAction::Uninstall,
             "notes@synced",
             PluginScope::Synced,
+            None,
             None
         ),
         Err(PluginError::NotChangeable)
@@ -590,6 +593,7 @@ fn only_what_a_synced_or_managed_plugin_allows_is_run() {
             PluginAction::Disable,
             "policy@corp",
             PluginScope::Managed,
+            None,
             None
         ),
         Err(PluginError::NotChangeable)
@@ -599,6 +603,7 @@ fn only_what_a_synced_or_managed_plugin_allows_is_run() {
             PluginAction::Disable,
             "deploy@acme",
             PluginScope::Project,
+            None,
             None
         ),
         Err(PluginError::NotChangeable),
@@ -610,6 +615,7 @@ fn only_what_a_synced_or_managed_plugin_allows_is_run() {
             PluginAction::Disable,
             "notes@synced",
             PluginScope::Synced,
+            None,
             None,
         )
         .expect("a synced plugin can be turned off");
@@ -966,5 +972,77 @@ fn the_marketplace_commands_need_claude_code_2_1_287() {
     assert_eq!(
         plugins(bin.path(), playground.path(), logs.path()).add_marketplace("owner/repo"),
         Err(PluginError::TooOld("2.1.286".into()))
+    );
+}
+
+#[test]
+fn an_update_that_declares_a_command_is_shown_and_accepting_it_updates() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let installed = json!([{ "id": "deploy@acme", "version": "0.9.2", "scope": "user", "enabled": true, "installPath": "x" }]);
+    let bin = claude_on_path(
+        &json!({ "log": log, "plugins": { "installed": installed, "commands": { "deploy@acme": DECLARED } } }),
+    );
+    let module = plugins(bin.path(), playground.path(), logs.path());
+
+    let shown = module
+        .change(
+            PluginAction::Update,
+            "deploy@acme",
+            PluginScope::User,
+            None,
+            None,
+        )
+        .expect("an answer")
+        .shown_command
+        .expect("the command to accept");
+    assert_eq!(shown.command, DECLARED);
+    assert_eq!(
+        module.installed().expect("the list")[0].version.as_deref(),
+        Some("0.9.2")
+    );
+
+    module
+        .change(
+            PluginAction::Update,
+            "deploy@acme",
+            PluginScope::User,
+            None,
+            Some(&shown.sha256),
+        )
+        .expect("updated");
+
+    assert_eq!(
+        module.installed().expect("the list")[0].version.as_deref(),
+        Some("0.9.3")
+    );
+    let start = plugin_starts(&log)
+        .into_iter()
+        .rfind(|start| start["args"][1] == "update")
+        .expect("the update");
+    assert_eq!(
+        start["args"],
+        json!([
+            "plugin",
+            "update",
+            "deploy@acme",
+            "--scope",
+            "user",
+            "--accept-command",
+            shown.sha256,
+            "--json"
+        ])
+    );
+    assert_eq!(
+        module.change(
+            PluginAction::Disable,
+            "deploy@acme",
+            PluginScope::User,
+            None,
+            Some(&shown.sha256)
+        ),
+        Err(PluginError::InvalidId),
+        "only an install or an update accepts a command"
     );
 }

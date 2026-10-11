@@ -191,6 +191,11 @@
       "what": "Claude Code took too long, so it was stopped.",
       "why": "A plugin command that runs for more than 5 minutes is ended, such as one waiting on a slow network."
     },
+    "ARD-AGT-024": {
+      "action": "Check what you chose or typed, then try again.",
+      "what": "Arden Code did not run this.",
+      "why": "The plugin, marketplace or scope it names is not one Arden Code passes on to Claude Code, so nothing was run."
+    },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
       "what": "Something unexpected went wrong inside Arden Code.",
@@ -430,6 +435,11 @@
     "title": "Command palette"
   },
   "plugins": {
+    "actions": {
+      "notInstalled": "Install Claude Code (Settings → Agents shows how), then look again.",
+      "npmWrapper": "Install Claude Code with its native installer (Settings → Agents shows how), then look again.",
+      "stopped": "Look again. If it keeps happening, check that claude runs in a terminal, and look at its log in Settings → Advanced → Open logs."
+    },
     "back": "Back",
     "command": {
       "accept": "Run it and install",

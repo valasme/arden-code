@@ -10,34 +10,8 @@ import { installedPluginsQuery, marketplacesQuery } from "@/ipc/queries";
 import { toAppError } from "@/lib/errors";
 
 import { afterChange } from "./afterChange";
+import { ChangeOutcome } from "./ChangeOutcome";
 import { PluginsProblem } from "./PluginsProblem";
-
-/** What a change to plugins or marketplaces came to: under way, Claude Code's words, or why not. */
-function ChangeOutcome({
-  pending,
-  pendingText,
-  message,
-  waiting,
-  error,
-}: {
-  pending: boolean;
-  pendingText: string;
-  message: string | undefined;
-  waiting: boolean;
-  error: unknown;
-}) {
-  const { t } = useTranslation();
-  return (
-    <>
-      <div aria-live="polite" className="text-xs empty:hidden">
-        {pending ? pendingText : null}
-        {message}
-        {waiting ? <p className="text-muted-foreground">{t("plugins.waiting")}</p> : null}
-      </div>
-      {error ? <PluginsProblem error={toAppError(error)} /> : null}
-    </>
-  );
-}
 
 /**
  * One marketplace: its name, where it comes from, Update, and Remove after a confirmation that
@@ -85,11 +59,8 @@ function MarketplaceRow({ marketplace }: { marketplace: Marketplace }) {
       </div>
       <p className="font-mono text-xs break-all text-muted-foreground">{marketplace.source}</p>
       <ChangeOutcome
-        pending={change.isPending}
-        pendingText={t("plugins.marketplaces.changing", { name: marketplace.name })}
-        message={change.data?.message}
-        waiting={change.data?.sessionsWaiting ?? false}
-        error={change.error}
+        underWay={t("plugins.marketplaces.changing", { name: marketplace.name })}
+        change={change}
       />
       <ConfirmDialog
         open={confirming}
@@ -145,13 +116,7 @@ export function AddMarketplace() {
           {t("plugins.marketplaces.add")}
         </Button>
       </div>
-      <ChangeOutcome
-        pending={add.isPending}
-        pendingText={t("plugins.marketplaces.adding")}
-        message={add.data?.message}
-        waiting={add.data?.sessionsWaiting ?? false}
-        error={add.error}
-      />
+      <ChangeOutcome underWay={t("plugins.marketplaces.adding")} change={add} />
     </form>
   );
 }
