@@ -309,3 +309,33 @@ export function killWebViewRenderers(profileFolder: string) {
 export function killAllApps() {
   powershell(`Get-Process arden-code -ErrorAction SilentlyContinue | Stop-Process -Force`);
 }
+
+/**
+ * Drags with the left button from one point of the screen to another, in the screen's pixels, as
+ * a person does on the window's edge to size it. Nothing is dragged unless the app's window really
+ * is in front. Returns whether the drag was made.
+ */
+export function dragOnScreen(
+  pid: number,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): boolean {
+  const dragged = powershell(`
+    $top = Main-Window ${pid}
+    if (-not (Bring-Forward $top)) { "no"; exit }
+    [void][W]::SetCursorPos(${Math.round(from.x)}, ${Math.round(from.y)})
+    Start-Sleep -Milliseconds 150
+    [W]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 150
+    for ($step = 1; $step -le 10; $step++) {
+      $x = ${Math.round(from.x)} + (${Math.round(to.x - from.x)} * $step / 10)
+      $y = ${Math.round(from.y)} + (${Math.round(to.y - from.y)} * $step / 10)
+      [void][W]::SetCursorPos([int]$x, [int]$y)
+      Start-Sleep -Milliseconds 30
+    }
+    Start-Sleep -Milliseconds 150
+    [W]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+    "yes"
+  `);
+  return dragged === "yes";
+}

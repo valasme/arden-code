@@ -3,9 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import type { Page } from "@playwright/test";
+
 import { appEnvironment, executable, expect, launchApp, test } from "./fixtures";
 import {
   countAppProcesses,
+  dragOnScreen,
   getWindow,
   moveWindow,
   showWindow,
@@ -116,6 +119,69 @@ test.describe("window memory", () => {
         await expect.poll(() => getWindow(second.pid)?.maximized).toBe(true);
       } finally {
         second.kill();
+      }
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+});
+
+/** The smallest size, 500 x 560 (ADR 0047), in the screen's pixels. */
+async function smallest(page: Page) {
+  const scale = await page.evaluate(() => globalThis.devicePixelRatio);
+  return { width: Math.round(500 * scale), height: Math.round(560 * scale) };
+}
+
+test.describe("the smallest size (#128)", () => {
+  test("dragging the window's corner stops at the smallest size", async () => {
+    const app = await launchApp();
+    try {
+      const window = await shownWindow(app.pid);
+      const corner = { x: window.x + window.width - 2, y: window.y + window.height - 2 };
+
+      expect(dragOnScreen(app.pid, corner, { x: window.x + 100, y: window.y + 100 })).toBe(true);
+
+      await expect.poll(() => getWindow(app.pid)).toMatchObject(await smallest(app.page));
+    } finally {
+      app.kill();
+    }
+  });
+
+  test("a window made smaller by another program, as a window tool can, grows back", async () => {
+    const app = await launchApp();
+    try {
+      const window = await shownWindow(app.pid);
+
+      moveWindow(app.pid, { x: window.x, y: window.y, width: 200, height: 200 });
+
+      await expect.poll(() => getWindow(app.pid)).toMatchObject(await smallest(app.page));
+    } finally {
+      app.kill();
+    }
+  });
+
+  test("opens at the smallest size when it was saved smaller", async () => {
+    const dataDir = newDataDir();
+    try {
+      mkdirSync(path.dirname(stateFile(dataDir)), { recursive: true });
+      writeFileSync(
+        stateFile(dataDir),
+        JSON.stringify({
+          x: 100,
+          y: 100,
+          width: 200,
+          height: 200,
+          scale_factor: 1,
+          maximized: false,
+        }),
+      );
+
+      const app = await launchApp({ dataDir });
+      try {
+        await shownWindow(app.pid);
+        await expect.poll(() => getWindow(app.pid)).toMatchObject(await smallest(app.page));
+      } finally {
+        app.kill();
       }
     } finally {
       rmSync(dataDir, { recursive: true, force: true });

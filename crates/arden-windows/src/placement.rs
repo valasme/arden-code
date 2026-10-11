@@ -96,12 +96,15 @@ fn physical(logical: f64, scale: f64) -> u32 {
 ///
 /// The first monitor in `monitors` is the primary one. A remembered position is kept when the
 /// window's title bar can still be reached on some monitor; otherwise the window is centered on the
-/// monitor it was mostly on, or on the primary one. A window bigger than its monitor is shrunk to fit.
+/// monitor it was mostly on, or on the primary one. A window bigger than its monitor is shrunk to fit,
+/// and one smaller than `smallest_logical_size` grows to it (it cannot be made smaller by hand,
+/// but a window tool can size it so, and that size is saved).
 #[must_use]
 pub fn restore(
     state: Option<&WindowState>,
     monitors: &[Monitor],
     default_logical_size: (u32, u32),
+    smallest_logical_size: (u32, u32),
 ) -> Placement {
     let Some(primary) = monitors.first() else {
         let (width, height) = default_logical_size;
@@ -136,6 +139,8 @@ pub fn restore(
             )
         },
     );
+    let logical_width = logical_width.max(f64::from(smallest_logical_size.0));
+    let logical_height = logical_height.max(f64::from(smallest_logical_size.1));
     let area = monitor.work_area;
     let width = physical(logical_width, monitor.scale_factor).min(area.width);
     let height = physical(logical_height, monitor.scale_factor).min(area.height);
@@ -186,6 +191,7 @@ mod tests {
     use super::*;
 
     const HD: Monitor = Monitor::new(Rect::new(0, 0, 1920, 1040), 1.0);
+    const SMALLEST: (u32, u32) = (500, 560);
 
     fn state(x: i32, y: i32, width: u32, height: u32) -> WindowState {
         WindowState {
@@ -200,7 +206,12 @@ mod tests {
 
     #[test]
     fn opens_where_it_was_when_that_is_still_on_screen() {
-        let placement = restore(Some(&state(200, 100, 1280, 800)), &[HD], (1280, 800));
+        let placement = restore(
+            Some(&state(200, 100, 1280, 800)),
+            &[HD],
+            (1280, 800),
+            SMALLEST,
+        );
 
         assert_eq!(placement.rect, Rect::new(200, 100, 1280, 800));
         assert!(!placement.maximized);
@@ -208,7 +219,7 @@ mod tests {
 
     #[test]
     fn opens_centered_at_the_default_size_the_first_time() {
-        let placement = restore(None, &[HD], (1280, 800));
+        let placement = restore(None, &[HD], (1280, 800), SMALLEST);
 
         assert_eq!(placement.rect, Rect::new(320, 120, 1280, 800));
     }
@@ -218,13 +229,18 @@ mod tests {
         let mut saved = state(200, 100, 1280, 800);
         saved.maximized = true;
 
-        assert!(restore(Some(&saved), &[HD], (1280, 800)).maximized);
+        assert!(restore(Some(&saved), &[HD], (1280, 800), SMALLEST).maximized);
     }
 
     #[test]
     fn moves_a_window_back_when_its_monitor_is_gone() {
         // It was on a second monitor to the right, which is no longer connected.
-        let placement = restore(Some(&state(2500, 200, 1000, 700)), &[HD], (1280, 800));
+        let placement = restore(
+            Some(&state(2500, 200, 1000, 700)),
+            &[HD],
+            (1280, 800),
+            SMALLEST,
+        );
 
         assert_eq!(placement.rect, Rect::new(460, 170, 1000, 700));
     }
@@ -232,7 +248,12 @@ mod tests {
     #[test]
     fn keeps_a_window_that_hangs_partly_off_screen_but_can_still_be_grabbed() {
         // Half of the window is off the right edge, but its title bar is easy to reach.
-        let placement = restore(Some(&state(1500, 100, 800, 600)), &[HD], (1280, 800));
+        let placement = restore(
+            Some(&state(1500, 100, 800, 600)),
+            &[HD],
+            (1280, 800),
+            SMALLEST,
+        );
 
         assert_eq!(placement.rect.x, 1500);
     }
@@ -240,14 +261,45 @@ mod tests {
     #[test]
     fn moves_a_window_whose_title_bar_is_off_screen() {
         // The title bar is above the top edge, so the window cannot be dragged.
-        let placement = restore(Some(&state(300, -400, 800, 600)), &[HD], (1280, 800));
+        let placement = restore(
+            Some(&state(300, -400, 800, 600)),
+            &[HD],
+            (1280, 800),
+            SMALLEST,
+        );
 
         assert_eq!(placement.rect, Rect::new(560, 220, 800, 600));
     }
 
     #[test]
+    fn grows_a_window_saved_smaller_than_the_smallest_size() {
+        // Something sized it below the smallest size, as a window tool can, and that was saved.
+        let placement = restore(
+            Some(&state(200, 100, 200, 200)),
+            &[HD],
+            (1280, 800),
+            SMALLEST,
+        );
+
+        assert_eq!(placement.rect, Rect::new(200, 100, 500, 560));
+    }
+
+    #[test]
+    fn grows_to_the_smallest_size_at_the_display_scaling() {
+        let monitor = Monitor::new(Rect::new(0, 0, 2880, 1560), 1.5);
+        let placement = restore(
+            Some(&state(200, 100, 300, 300)),
+            &[monitor],
+            (1280, 800),
+            SMALLEST,
+        );
+
+        assert_eq!((placement.rect.width, placement.rect.height), (750, 840));
+    }
+
+    #[test]
     fn shrinks_a_window_that_is_bigger_than_the_screen() {
-        let placement = restore(Some(&state(0, 0, 3000, 2000)), &[HD], (1280, 800));
+        let placement = restore(Some(&state(0, 0, 3000, 2000)), &[HD], (1280, 800), SMALLEST);
 
         assert_eq!(placement.rect, Rect::new(0, 0, 1920, 1040));
     }
@@ -256,7 +308,12 @@ mod tests {
     fn keeps_the_size_the_user_saw_when_the_display_scaling_changed() {
         // Saved at 100% as 1000 x 700; the monitor is now at 150%, so it needs 1500 x 1050 pixels.
         let monitor = Monitor::new(Rect::new(0, 0, 3840, 2120), 1.5);
-        let placement = restore(Some(&state(200, 100, 1000, 700)), &[monitor], (1280, 800));
+        let placement = restore(
+            Some(&state(200, 100, 1000, 700)),
+            &[monitor],
+            (1280, 800),
+            SMALLEST,
+        );
 
         assert_eq!((placement.rect.width, placement.rect.height), (1500, 1050));
     }
@@ -269,6 +326,7 @@ mod tests {
             Some(&state(-1500, 2000, 800, 600)),
             &[HD, left],
             (1280, 800),
+            SMALLEST,
         );
 
         assert!(
@@ -284,6 +342,7 @@ mod tests {
             Some(&state(-1700, 100, 1000, 700)),
             &[HD, left],
             (1280, 800),
+            SMALLEST,
         );
 
         assert_eq!(placement.rect, Rect::new(-1700, 100, 1000, 700));

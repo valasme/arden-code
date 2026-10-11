@@ -160,6 +160,7 @@ pub fn prepare_main_window(
     let state_file = paths.window_state_file();
     let placement = window_state::restore_window(app.handle(), &window, &state_file)?;
     window_state::remember_window(&window, placement, &state_file);
+    window_state::keep_smallest_size(&window);
 
     std::thread::spawn(move || {
         std::thread::sleep(SHOW_FALLBACK);
