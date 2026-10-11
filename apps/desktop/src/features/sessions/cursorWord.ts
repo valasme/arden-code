@@ -15,8 +15,33 @@ export interface CursorWord {
   first: boolean;
 }
 
+/**
+ * The quoted file mention the cursor is in, or ends: `@"` at the start of a word, up to its
+ * closing quote, or to the end of the line while there is none yet. Its query is what is typed
+ * inside the quotes, up to the cursor.
+ */
+function quotedWordAt(text: string, cursor: number): CursorWord | null {
+  const start = text.slice(0, cursor).lastIndexOf('@"');
+  if (start < 0 || (start > 0 && !/\s/.test(text.charAt(start - 1)))) return null;
+  const lineEnd = text.indexOf("\n", start);
+  const lineStop = lineEnd < 0 ? text.length : lineEnd;
+  const close = text.indexOf('"', start + 2);
+  const closed = close >= 0 && close < lineStop;
+  const end = closed ? close + 1 : lineStop;
+  if (cursor > end) return null;
+  return {
+    sign: "@",
+    query: text.slice(start + 2, closed ? Math.min(cursor, close) : cursor),
+    start,
+    end,
+    first: text.slice(0, start).trim() === "",
+  };
+}
+
 /** The word the cursor is in, or ends, when it starts with a slash or an `@`; else null. */
 export function wordAt(text: string, cursor: number): CursorWord | null {
+  const quoted = quotedWordAt(text, cursor);
+  if (quoted) return quoted;
   const before = text.slice(0, cursor);
   const start = before.search(/\S*$/);
   const sign = text[start];

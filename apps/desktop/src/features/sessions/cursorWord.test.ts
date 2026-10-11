@@ -60,3 +60,32 @@ describe("wordAt, for file mentions (ADR 0052)", () => {
     expect(at("ada@|")).toBeNull();
   });
 });
+
+describe("wordAt, for a quoted file mention (ADR 0052)", () => {
+  it('counts a quoted @"… word until its closing quote, spaces and all', () => {
+    expect(at('Read @"my no|')).toEqual({
+      sign: "@",
+      query: "my no",
+      start: 5,
+      end: 12,
+      first: false,
+    });
+    expect(at('@"my notes/a b.md"| then')).toEqual({
+      sign: "@",
+      query: "my notes/a b.md",
+      start: 0,
+      end: 18,
+      first: true,
+    });
+    expect(at('@"my no|tes/" then')).toMatchObject({ query: "my no", start: 0, end: 12 });
+  });
+
+  it("is nothing past the closing quote, or across a line break", () => {
+    expect(at('@"my notes" and |')).toBeNull();
+    expect(at('@"my notes\nand |')).toBeNull();
+  });
+
+  it("is nothing for a quote inside a word", () => {
+    expect(at('say@"hi |')).toBeNull();
+  });
+});

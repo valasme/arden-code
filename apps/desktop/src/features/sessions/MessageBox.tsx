@@ -25,6 +25,14 @@ import { useFileMatches } from "./useFileMatches";
 /** The key code some browsers report for a key that is part of an input method's composition. */
 const COMPOSING_KEY_CODE = 229;
 
+/**
+ * How a path is mentioned: `@path`, or `@"path"` when it holds a space, as Claude Code writes it. A
+ * path that holds a quote too is left unquoted: Claude Code has no escape for it.
+ */
+function mention(path: string): string {
+  return /\s/.test(path) && !path.includes('"') ? `@"${path}"` : `@${path}`;
+}
+
 /** An option of the list above the box: a slash command, or a file to mention. */
 type Choice = { kind: "command"; command: SlashCommand } | { kind: "file"; file: FileMatch };
 
@@ -170,11 +178,26 @@ export function MessageBox({
   const wordKey = word ? `${String(word.start)}:${text}` : null;
   const listing = word !== null && dismissedAt !== wordKey;
   const active = chosen.query === query ? Math.min(chosen.index, matches.length - 1) : 0;
-  /** Puts what was chosen in place of the word under the cursor, with a space after it. */
+  /**
+   * Puts what was chosen in place of the word under the cursor, with a space after it. A folder
+   * gets none, and the list stays open on what is in it; the cursor stays inside the quotes of a
+   * quoted one.
+   */
   const fill = (choice: Choice) => {
     if (!word) return;
     const after = text.slice(word.end);
-    const filled = choice.kind === "command" ? `/${choice.command.name}` : `@${choice.file.path}`;
+    if (choice.kind === "file") {
+      const filled = mention(choice.file.path);
+      if (choice.file.folder) {
+        placeCursor.current = word.start + filled.length - (filled.endsWith('"') ? 1 : 0);
+        setText(text.slice(0, word.start) + filled + after);
+        setCursor(placeCursor.current);
+        box.current?.focus();
+        return;
+      }
+    }
+    const filled =
+      choice.kind === "command" ? `/${choice.command.name}` : mention(choice.file.path);
     const spaced = /^\s/.test(after) ? filled : `${filled} `;
     placeCursor.current = word.start + filled.length + 1;
     setText(text.slice(0, word.start) + spaced + after);

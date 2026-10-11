@@ -983,10 +983,14 @@ export type ErrorCode =
 /**  What happened to a file. */
 export type FileChangeKind = "created" | "modified" | "deleted";
 
-/**  A file of a project that matches what was typed after `@`. */
+/**  A file or folder of a project that matches what was typed after `@`. */
 export type FileMatch = {
-	/**  The path relative to the project's folder, with `/` between its parts. */
+	/**
+	 *  The path relative to the project's folder, with `/` between its parts, and at the end of a
+	 *  folder's.
+	 */
 	path: string,
+	folder: boolean,
 };
 
 /**  How the app behaves in general. */

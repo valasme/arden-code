@@ -17,10 +17,10 @@ const projectFiles = ["GLOSSARY.md", "docs/adr/0052-file-mentions.md", "src/main
 
 /** Rust's matches, as far as these tests need them: the paths that hold what was typed. */
 function matching(projectId: string, query: string): FileMatch[] {
-  if (projectId === "elsewhere") return [{ path: "other/notes.md" }];
+  if (projectId === "elsewhere") return [{ path: "other/notes.md", folder: false }];
   return projectFiles
     .filter((path) => path.toLowerCase().includes(query.toLowerCase()))
-    .map((path) => ({ path }));
+    .map((path) => ({ path, folder: false }));
 }
 
 type Options = Parameters<typeof startSessionsRust>[0];
@@ -175,5 +175,80 @@ describe("File mentions on the welcome screen (ADR 0052)", () => {
     expect(await screen.findByRole("option", { name: "other/notes.md" })).toBeVisible();
     expect(rust.callsTo("find_files").at(-1)).toEqual({ projectId: "elsewhere", query: "" });
     expect(optionNames()).toEqual(["other/notes.md"]);
+  });
+});
+
+/** Rust's answers for a project with folders and spaces in its names. */
+function withFolders(_projectId: string, query: string): FileMatch[] {
+  const answers: Record<string, FileMatch[]> = {
+    doc: [
+      { path: "docs/", folder: true },
+      { path: "docs/adr.md", folder: false },
+    ],
+    "docs/": [
+      { path: "docs/adr/", folder: true },
+      { path: "docs/GLOSSARY.md", folder: false },
+    ],
+    my: [
+      { path: "my notes/", folder: true },
+      { path: "my notes/a b.md", folder: false },
+      { path: 'my "quoted" notes.md', folder: false },
+    ],
+    "my notes/": [{ path: "my notes/a b.md", folder: false }],
+  };
+  return answers[query] ?? [];
+}
+
+describe("Folders and quoted paths in file mentions (ADR 0052)", () => {
+  it("marks folders, and choosing one fills in @folder/ and lists what is in it", async () => {
+    const { user, box } = await inSession({ files: withFolders });
+
+    await user.type(box, "Read @doc");
+    const folder = await screen.findByRole("option", { name: "docs/ folder" });
+    expect(folder).toBeVisible();
+    await user.keyboard("{Enter}");
+
+    expect(box).toHaveValue("Read @docs/");
+    expect(await screen.findByRole("option", { name: "docs/GLOSSARY.md" })).toBeVisible();
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(box).toHaveValue("Read @docs/GLOSSARY.md ");
+  });
+
+  it("mentions the folder itself when a space follows it", async () => {
+    const { rust, user, box } = await inSession({ files: withFolders });
+
+    await user.type(box, "Read @doc");
+    await screen.findByRole("option", { name: "docs/ folder" });
+    await user.keyboard("{Tab} {Enter}");
+
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+    expect(rust.sent()[0]?.payload).toMatchObject({ text: "Read @docs/" });
+  });
+
+  it("quotes a path with a space, and follows the quoted word while it is typed", async () => {
+    const { rust, user, box } = await inSession({ files: withFolders });
+
+    await user.type(box, "@my");
+    await user.click(await screen.findByRole("option", { name: "my notes/a b.md" }));
+    expect(box).toHaveValue('@"my notes/a b.md" ');
+
+    await user.clear(box);
+    await user.type(box, "@my");
+    await user.click(await screen.findByRole("option", { name: "my notes/ folder" }));
+    expect(box).toHaveValue('@"my notes/"');
+    expect(box).toHaveProperty("selectionStart", '@"my notes/'.length);
+    expect(await screen.findByRole("option", { name: "my notes/a b.md" })).toBeVisible();
+    expect(rust.callsTo("find_files").at(-1)).toMatchObject({ query: "my notes/" });
+  });
+
+  it("leaves a path with both a space and a quote unquoted, as Claude Code has no escape for it", async () => {
+    const { user, box } = await inSession({ files: withFolders });
+
+    await user.type(box, "@my");
+    await user.click(await screen.findByRole("option", { name: 'my "quoted" notes.md' }));
+
+    expect(box).toHaveValue('@my "quoted" notes.md ');
   });
 });

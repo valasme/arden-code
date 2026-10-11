@@ -500,6 +500,7 @@
     "files": {
       "count_one": "{{count}} file",
       "count_other": "{{count}} files",
+      "folder": "folder",
       "label": "Files",
       "none": "No matching files"
     },

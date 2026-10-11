@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FileIcon, FolderIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { FileMatch, SlashCommand } from "@/ipc/bindings";
@@ -109,7 +110,15 @@ export function SlashCommandRow({ command }: { command: SlashCommand }) {
   );
 }
 
-/** A file's row: its path in the project. */
+/** A file's or folder's row: its path in the project, a folder marked as one. */
 export function FileRow({ file }: { file: FileMatch }) {
-  return <span className="truncate font-mono text-xs">{file.path}</span>;
+  const { t } = useTranslation();
+  const Icon = file.folder ? FolderIcon : FileIcon;
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+      <span className="truncate font-mono text-xs">{file.path}</span>
+      {file.folder ? <span className="sr-only"> {t("sessions.files.folder")}</span> : null}
+    </span>
+  );
 }

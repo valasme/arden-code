@@ -21,12 +21,14 @@ pub const FRESH_FOR: Duration = Duration::from_secs(10);
 /// How many matches a query answers at most, the best first.
 pub const MATCH_LIMIT: usize = 15;
 
-/// A file of a project that matches what was typed after `@`.
+/// A file or folder of a project that matches what was typed after `@`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FileMatch {
-    /// The path relative to the project's folder, with `/` between its parts.
+    /// The path relative to the project's folder, with `/` between its parts, and at the end of a
+    /// folder's.
     pub path: String,
+    pub folder: bool,
 }
 
 /// The listings of the projects' folders, kept between queries.
@@ -57,13 +59,17 @@ impl ProjectFiles {
         }
     }
 
-    /// The files of `folder` that match `query`, at most [`MATCH_LIMIT`], the best first. The
+    /// The files and folders of `folder` that match `query`, at most [`MATCH_LIMIT`], the best
+    /// first; for a query that ends with `/`, what is in that folder, its folders first. The
     /// folder is listed when it has no listing yet, or its listing was made more than
     /// [`FRESH_FOR`] before `now`.
     #[must_use]
     pub fn matches(&self, folder: &Path, query: &str, now: Instant) -> Vec<FileMatch> {
         let listing = self.listing(folder, now);
         let query = query.to_lowercase();
+        if let Some(inside) = query.strip_suffix('/') {
+            return contents(&listing.entries, inside.trim_end_matches('/'));
+        }
         let mut found: Vec<(u8, &Entry)> = listing
             .entries
             .iter()
@@ -78,9 +84,7 @@ impl ProjectFiles {
         found
             .into_iter()
             .take(MATCH_LIMIT)
-            .map(|(_, entry)| FileMatch {
-                path: entry.path.clone(),
-            })
+            .map(|(_, entry)| entry.shown())
             .collect()
     }
 
@@ -117,7 +121,27 @@ struct Listing {
     entries: Vec<Entry>,
 }
 
-/// A file of a listing.
+/// What is directly in the folder `inside` (a path in lower case, empty for the project's own
+/// folder), its folders first, then by name.
+fn contents(entries: &[Entry], inside: &str) -> Vec<FileMatch> {
+    let mut found: Vec<&Entry> = entries
+        .iter()
+        .filter(|entry| entry.lower[..entry.name_at].trim_end_matches('/') == inside)
+        .collect();
+    found.sort_by(|entry, other| {
+        other
+            .folder
+            .cmp(&entry.folder)
+            .then(entry.lower.cmp(&other.lower))
+    });
+    found
+        .into_iter()
+        .take(MATCH_LIMIT)
+        .map(Entry::shown)
+        .collect()
+}
+
+/// A file or folder of a listing.
 #[derive(Debug)]
 struct Entry {
     /// Its path relative to the project's folder, with `/`.
@@ -128,10 +152,24 @@ struct Entry {
     name_at: usize,
     /// How many folders down it is.
     depth: usize,
+    folder: bool,
 }
 
-/// The files of a folder, without what its ignore rules leave out and without `.git`, at most
-/// `limit` of them.
+impl Entry {
+    fn shown(&self) -> FileMatch {
+        FileMatch {
+            path: if self.folder {
+                format!("{}/", self.path)
+            } else {
+                self.path.clone()
+            },
+            folder: self.folder,
+        }
+    }
+}
+
+/// The files and folders in a folder, without what its ignore rules leave out and without `.git`,
+/// at most `limit` of them.
 fn list(folder: &Path, limit: usize) -> Vec<Entry> {
     let walk = ignore::WalkBuilder::new(folder)
         .hidden(false)
@@ -140,8 +178,13 @@ fn list(folder: &Path, limit: usize) -> Vec<Entry> {
         .filter_entry(|entry| entry.file_name() != ".git")
         .build();
     walk.filter_map(Result::ok)
-        .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
+        // The project's own folder is not one of its entries.
+        .filter(|entry| entry.depth() > 0)
         .filter_map(|entry| {
+            let kind = entry.file_type()?;
+            if !kind.is_file() && !kind.is_dir() {
+                return None;
+            }
             let relative = entry.path().strip_prefix(folder).ok()?;
             let parts: Vec<String> = relative
                 .components()
@@ -155,6 +198,7 @@ fn list(folder: &Path, limit: usize) -> Vec<Entry> {
                 path,
                 name_at,
                 depth: parts.len() - 1,
+                folder: kind.is_dir(),
             })
         })
         .take(limit)
@@ -248,11 +292,54 @@ mod tests {
         assert_eq!(
             found,
             [
+                ".github/",
+                ".github/workflows/",
                 ".github/workflows/ci.yml",
                 ".gitignore",
                 ".ignore",
+                "src/",
                 "src/main.rs"
             ]
+        );
+    }
+
+    #[test]
+    fn lists_folders_too_marked_as_folders_and_ending_with_a_slash() {
+        let folder = project(&["docs/adr/0052.md", "README.md"]);
+        let files = ProjectFiles::new();
+
+        let found = files.matches(folder.path(), "adr", Instant::now());
+
+        assert_eq!(
+            found,
+            [
+                FileMatch {
+                    path: "docs/adr/".into(),
+                    folder: true
+                },
+                FileMatch {
+                    path: "docs/adr/0052.md".into(),
+                    folder: false
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_query_that_ends_with_a_slash_lists_what_is_in_that_folder() {
+        let folder = project(&[
+            "docs/GLOSSARY.md",
+            "docs/adr/0052.md",
+            "docs/research/notes.md",
+            "src/docs/other.md",
+        ]);
+        let files = ProjectFiles::new();
+
+        let found = files.matches(folder.path(), "Docs/", Instant::now());
+
+        assert_eq!(
+            paths(&found),
+            ["docs/adr/", "docs/research/", "docs/GLOSSARY.md"]
         );
     }
 
@@ -286,8 +373,10 @@ mod tests {
             [
                 "src/catalog.ts",
                 "docs/catalogue.md",
+                "src/features/cat/",
                 "src/features/cat/view.ts",
                 "scattered.txt",
+                "src/features/",
                 "c/a/t.md",
             ]
         );
