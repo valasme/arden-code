@@ -660,7 +660,7 @@ export const commands = {
 	 *  not trusted, or a command that failed (with the agent's message and code), took too long, or
 	 *  answered in a way Arden Code does not understand.
 	 */
-	installPlugin: (id: string, scope: PluginScope, projectId: string | null) => __TAURI_INVOKE<PluginChange>("install_plugin", { id, scope, projectId }),
+	installPlugin: (id: string, scope: PluginScope, projectId: string | null, acceptCommand: string | null) => __TAURI_INVOKE<PluginChange>("install_plugin", { id, scope, projectId, acceptCommand }),
 	/**
 	 *  Turns an installed plugin on or off, updates it or uninstalls it, at the scope it is installed
 	 *  at (ADR 0053). A project's plugin is changed in that project's folder, which must be a trusted
@@ -1261,6 +1261,11 @@ export type PluginChange = {
 	 *  now would cost its prompt cache (ADR 0053). The app says so once it has asked them.
 	 */
 	sessionsWaiting: boolean,
+	/**
+	 *  A command the plugin's marketplace declares, which Claude Code showed instead of running:
+	 *  nothing was installed, and the person decides (ADR 0053).
+	 */
+	shownCommand: ShownCommand | null,
 };
 
 /**  Where a plugin is installed, as Claude Code says it. */
@@ -1479,6 +1484,21 @@ export type SettingsChanged = {
 	settings: Settings,
 	/**  Set when the file could not be used and the defaults took over (`ARD-SET-002`). */
 	notice: AppError | null,
+};
+
+/**
+ *  A command a marketplace declares for a plugin, as Claude Code showed it, to be read in full
+ *  before it runs.
+ */
+export type ShownCommand = {
+	/**  The command as Claude Code displays it. */
+	command: string,
+	/**  The plugin it belongs to. */
+	plugin: string,
+	/**  Accepting passes this, and only this command runs. */
+	sha256: string,
+	/**  Whether it is not the command that was accepted, which changed since it was shown. */
+	changed: boolean,
 };
 
 /**  An action Claude Code runs when a message starts with a slash and its name. */

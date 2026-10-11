@@ -431,6 +431,13 @@
   },
   "plugins": {
     "back": "Back",
+    "command": {
+      "accept": "Run it and install",
+      "changed": "The command changed since it was last shown.",
+      "description": "The {{marketplace}} marketplace asks to run this command on this computer to set the plugin up. Read it in full: only this command runs.",
+      "plugin": "For {{plugin}}",
+      "title": "Run a command for {{name}}?"
+    },
     "description": "Plugins bring skills, slash commands and tools to your agents.",
     "discover": {
       "back": "All plugins",

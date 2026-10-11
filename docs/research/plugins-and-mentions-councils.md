@@ -260,3 +260,18 @@ Arden Code. Changing one runs Claude Code in that folder, which Q12 allows only 
 
 **Verdict:** such a row shows no actions and says "Open <folder> as a project in Arden Code to change this plugin
 here." A project that is open but not trusted asks the trust question first; Cancel changes nothing.
+
+### Q32. Commands that need a newer Claude Code than the page (#154, #155)
+
+Claude Code's reference gives two later versions than the page's 2.1.268: `--accept-command` needs 2.1.271, and
+`--json` on `plugin marketplace add`, `update` and `remove` needs 2.1.287.
+
+- **Delivery:** D5 raising the page's minimum to 2.1.287 would refuse the whole page to a person whose Claude Code
+  installs and lists plugins well. **P3 dissents**: two minimums are harder to explain. Settled: the person meets the
+  later one only when they use that command, and the message is the same as the page's ("Plugins need a newer Claude
+  Code", `ARD-AGT-020`, with the version found).
+- **Reliability:** R1 the check runs before the command, as the page's does, so an older Claude Code never sees a flag
+  it would read as a mistake.
+
+**Verdict:** the page needs 2.1.268; accepting a declared command needs 2.1.271; adding, updating and removing a
+marketplace need 2.1.287. Each is checked before its command runs. ADR 0053 stands: its minimum is the page's.

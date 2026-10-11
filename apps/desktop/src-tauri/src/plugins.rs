@@ -66,7 +66,8 @@ async fn change_off_the_window(
     let playground = crate::sessions::playground_folder(sessions);
     off_the_window(move || {
         let mut change = work()?;
-        if let Some(playground) = playground {
+        // A command shown instead of run changed nothing yet.
+        if let (Some(playground), None) = (playground, &change.shown_command) {
             change.sessions_waiting = driver.reload_plugins(&playground).waiting;
         }
         Ok(change)
@@ -131,6 +132,7 @@ pub async fn install_plugin(
     id: String,
     scope: PluginScope,
     project_id: Option<String>,
+    accept_command: Option<String>,
     plugins: State<'_, Plugins>,
     claude: State<'_, crate::agents::Claude>,
     sessions: State<'_, crate::sessions::Sessions>,
@@ -141,7 +143,7 @@ pub async fn install_plugin(
         None => None,
     };
     change_off_the_window(&claude, &sessions, move || {
-        module.install(&id, scope, folder.as_deref())
+        module.install(&id, scope, folder.as_deref(), accept_command.as_deref())
     })
     .await
 }

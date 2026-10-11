@@ -7,13 +7,20 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useFormatters } from "@/features/settings/useFormatters";
 import { useTrustGate } from "@/features/sessions/useTrustGate";
-import { type AvailablePlugin, commands, type PluginScope, type Project } from "@/ipc/bindings";
+import {
+  type AvailablePlugin,
+  commands,
+  type PluginScope,
+  type Project,
+  type ShownCommand,
+} from "@/ipc/bindings";
 import { pluginCatalogQuery } from "@/ipc/queries";
 import { toAppError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { usePluginsPageStore } from "@/state/pluginsPage";
 
 import { afterChange } from "./afterChange";
+import { CommandDialog } from "./CommandDialog";
 import { InstallDialog } from "./InstallDialog";
 import { useInstallProjects } from "./useInstallProjects";
 import { PluginsProblem } from "./PluginsProblem";
@@ -51,10 +58,25 @@ function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => vo
   const queryClient = useQueryClient();
   const [choosing, setChoosing] = useState(false);
   const { gate, dialog } = useTrustGate();
+  const [toAccept, setToAccept] = useState<{
+    shown: ShownCommand;
+    asked: { scope: PluginScope; project: Project | undefined };
+  } | null>(null);
   const projects = useInstallProjects();
   const install = useMutation({
-    mutationFn: ({ scope, project }: { scope: PluginScope; project: Project | undefined }) =>
-      commands.installPlugin(plugin.id, scope, project?.id ?? null),
+    mutationFn: ({
+      scope,
+      project,
+      accept,
+    }: {
+      scope: PluginScope;
+      project: Project | undefined;
+      accept: string | null;
+    }) => commands.installPlugin(plugin.id, scope, project?.id ?? null, accept),
+    onSuccess: (change, asked) => {
+      // A command the marketplace declares is read before anything runs.
+      if (change.shownCommand) setToAccept({ shown: change.shownCommand, asked });
+    },
     onSettled: () => afterChange(queryClient),
   });
   const installs =
@@ -95,7 +117,7 @@ function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => vo
       </div>
       <div aria-live="polite" className="text-sm empty:hidden">
         {install.isPending ? t("plugins.install.underWay", { name: plugin.name }) : null}
-        {install.isSuccess ? install.data.message : null}
+        {install.isSuccess && !install.data.shownCommand ? install.data.message : null}
         {install.isSuccess && install.data.sessionsWaiting ? (
           <p className="text-xs text-muted-foreground">{t("plugins.waiting")}</p>
         ) : null}
@@ -124,12 +146,22 @@ function Details({ plugin, onBack }: { plugin: AvailablePlugin; onBack: () => vo
         onInstall={(scope, project) => {
           // A plugin for a project is installed only once the person trusts the project.
           void gate("claude", project, () => {
-            install.mutate({ scope, project });
+            install.mutate({ scope, project, accept: null });
             return true;
           });
         }}
       />
       {dialog}
+      <CommandDialog
+        shown={toAccept?.shown ?? null}
+        marketplace={plugin.marketplace}
+        onAnswer={(accepted) => {
+          if (accepted && toAccept) {
+            install.mutate({ ...toAccept.asked, accept: toAccept.shown.sha256 });
+          }
+          setToAccept(null);
+        }}
+      />
     </section>
   );
 }

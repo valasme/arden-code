@@ -14,8 +14,10 @@
 //! `stand-in.json`: `installed` and `available`, as Claude Code prints them, and `delayMs`, how
 //! long it takes first (ADR 0053). `plugin install` adds to what it lists, kept in
 //! `plugins-state.json` beside it, unless `failures` names the plugin with the `message` and
-//! `failureCode` to fail with; a plugin installed already answers `already_in_goal_state`. It
-//! writes `plugin-end` to its log when it is done.
+//! `failureCode` to fail with; a plugin installed already answers `already_in_goal_state`. A plugin
+//! that `commands` names installs only with `--accept-command` and that command's hash; without
+//! it, it shows the command (`shownCommand`), as Claude Code does. It writes `plugin-end` to its
+//! log when it is done.
 //!
 //! It applies the `--permission-mode` it is started with and changes it on `set_permission_mode`,
 //! refusing Bypass permissions unless started with `--allow-dangerously-skip-permissions`, as
@@ -178,6 +180,15 @@ fn plugin(settings: &Settings, args: &[String]) {
     }
 }
 
+/// A stand-in for the `sha256` Claude Code gives a declared command: 64 hex digits that change
+/// with the command.
+fn hash_of(command: &str) -> String {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    command.hash(&mut hasher);
+    format!("{:016x}", hasher.finish()).repeat(4)
+}
+
 /// Where the stand-in keeps the plugins it has installed, between runs.
 fn plugins_state() -> Option<PathBuf> {
     std::env::current_exe()
@@ -242,6 +253,27 @@ fn install(plugins: &Value, args: &[String], mut installed: Value) {
             &json!({ "failureCode": failure["failureCode"] }),
         );
         return;
+    }
+    if let Some(command) = plugins["commands"][id].as_str() {
+        let sha256 = hash_of(command);
+        let accepted = flag(args, "--accept-command");
+        if accepted != Some(sha256.as_str()) {
+            println!("{command}");
+            let shown = json!({
+                "command": command, "pluginId": id, "sha256": sha256,
+                "acceptCommandMatched": accepted.map(|_| false)
+            });
+            let message =
+                format!("Plugin '{id}' declares a command; review it and accept it to install");
+            result(
+                "install",
+                id,
+                "failed",
+                &message,
+                &json!({ "failureCode": "command_not_accepted", "shownCommand": shown }),
+            );
+            return;
+        }
     }
     let folder = std::env::current_dir()
         .map(|folder| folder.display().to_string())

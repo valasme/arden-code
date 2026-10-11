@@ -2,6 +2,7 @@ import { createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
+import { z } from "zod";
 
 import type { AvailablePlugin, InstalledPlugin } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
@@ -342,6 +343,7 @@ describe("Installing a plugin for you in every project (ADR 0053)", () => {
       pluginChange: () => ({
         message: "Successfully installed plugin: github@claude-plugins-official (scope: user)",
         sessionsWaiting: false,
+        shownCommand: null,
       }),
     });
 
@@ -357,7 +359,7 @@ describe("Installing a plugin for you in every project (ADR 0053)", () => {
       ),
     ).toBeVisible();
     expect(rust.callsTo("install_plugin")).toEqual([
-      { id: "github@claude-plugins-official", scope: "user", projectId: null },
+      { id: "github@claude-plugins-official", scope: "user", projectId: null, acceptCommand: null },
     ]);
     // What the marketplaces offer is read again, and Installed reads what is installed now.
     await waitFor(() => {
@@ -448,6 +450,7 @@ describe("Changing installed plugins (ADR 0053)", () => {
       pluginChange: () => ({
         message: "Successfully disabled plugin: superpowers",
         sessionsWaiting: false,
+        shownCommand: null,
       }),
     });
 
@@ -619,7 +622,7 @@ describe("Changing installed plugins (ADR 0053)", () => {
 describe("Giving running sessions a plugin change (ADR 0053)", () => {
   it("says when a session gets the change only when its Claude Code next starts", async () => {
     const { user } = await details({
-      pluginChange: () => ({ message: "Installed.", sessionsWaiting: true }),
+      pluginChange: () => ({ message: "Installed.", sessionsWaiting: true, shownCommand: null }),
     });
 
     await user.click(screen.getByRole("button", { name: "Install…" }));
@@ -708,7 +711,12 @@ describe("Installing a plugin for a project (ADR 0053)", () => {
 
     await waitFor(() => {
       expect(rust.callsTo("install_plugin")).toEqual([
-        { id: "github@claude-plugins-official", scope: "local", projectId: "site" },
+        {
+          id: "github@claude-plugins-official",
+          scope: "local",
+          projectId: "site",
+          acceptCommand: null,
+        },
       ]);
     });
   });
@@ -725,7 +733,12 @@ describe("Installing a plugin for a project (ADR 0053)", () => {
 
     await waitFor(() => {
       expect(rust.callsTo("install_plugin")).toEqual([
-        { id: "github@claude-plugins-official", scope: "project", projectId: "api" },
+        {
+          id: "github@claude-plugins-official",
+          scope: "project",
+          projectId: "api",
+          acceptCommand: null,
+        },
       ]);
     });
   });
@@ -762,7 +775,12 @@ describe("Installing a plugin for a project (ADR 0053)", () => {
     await waitFor(() => {
       expect(rust.callsTo("trust_project")).toEqual([{ projectId: "site" }]);
       expect(rust.callsTo("install_plugin")).toEqual([
-        { id: "github@claude-plugins-official", scope: "local", projectId: "site" },
+        {
+          id: "github@claude-plugins-official",
+          scope: "local",
+          projectId: "site",
+          acceptCommand: null,
+        },
       ]);
     });
   });
@@ -781,6 +799,84 @@ describe("Installing a plugin for a project (ADR 0053)", () => {
     const { user, dialog } = await fromSession();
 
     await user.click(within(dialog).getByRole("radio", { name: /For everyone in this project/ }));
+
+    await expectNoAccessibilityViolations(document.body);
+  });
+});
+
+/** A command the github plugin's marketplace declares (ADR 0053). */
+const sha256 = "ab".repeat(32);
+const declared = "npx -y @acme/deploy-cli@0.9.2 setup --cluster staging";
+
+/** Rust's answers: the command shown first, then installed once it is accepted. */
+function declaring(changed = false) {
+  return (_command: string, payload: unknown) => {
+    const { acceptCommand: accepted } = z
+      .object({ acceptCommand: z.string().nullable() })
+      .parse(payload);
+    return accepted === sha256
+      ? { message: "Installed github.", sessionsWaiting: false, shownCommand: null }
+      : {
+          message: "github declares a command.",
+          sessionsWaiting: false,
+          shownCommand: {
+            command: declared,
+            plugin: "github@claude-plugins-official",
+            sha256,
+            changed,
+          },
+        };
+  };
+}
+
+async function install(options: Options) {
+  const opened = await details(options);
+  await opened.user.click(screen.getByRole("button", { name: "Install…" }));
+  await opened.user.click(
+    within(await screen.findByRole("dialog", { name: "Install github" })).getByRole("button", {
+      name: "Install",
+    }),
+  );
+  const asked = await screen.findByRole("alertdialog", { name: "Run a command for github?" });
+  await animationsDone(asked);
+  return { ...opened, asked };
+}
+
+describe("Accepting a command a marketplace declares (ADR 0053)", () => {
+  it("shows the command in full, in the code font, and accepting passes exactly its sha256", async () => {
+    const { rust, user, asked } = await install({ pluginChange: declaring() });
+
+    const code = within(asked).getByText(declared);
+    expect(code.closest("pre, code")).not.toBeNull();
+    expect(asked).toHaveTextContent("github@claude-plugins-official");
+    await user.click(within(asked).getByRole("button", { name: "Run it and install" }));
+
+    expect(await screen.findByText("Installed github.")).toBeVisible();
+    const installs = z
+      .array(z.object({ acceptCommand: z.string().nullable() }))
+      .parse(rust.callsTo("install_plugin"));
+    expect(installs.map((call) => call.acceptCommand)).toEqual([null, sha256]);
+  });
+
+  it("runs nothing more when cancelled", async () => {
+    const { rust, user, asked } = await install({ pluginChange: declaring() });
+
+    await user.click(within(asked).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(rust.callsTo("install_plugin")).toHaveLength(1);
+  });
+
+  it("says when the command changed since it was accepted", async () => {
+    const { asked } = await install({ pluginChange: declaring(true) });
+
+    expect(asked).toHaveTextContent("The command changed since it was last shown.");
+  });
+
+  it("has no accessibility violations", async () => {
+    await install({ pluginChange: declaring() });
 
     await expectNoAccessibilityViolations(document.body);
   });

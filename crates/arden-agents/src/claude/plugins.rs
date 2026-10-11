@@ -107,6 +107,24 @@ pub struct PluginChange {
     /// Whether a session gets the change only when its Claude Code next starts, because applying it
     /// now would cost its prompt cache (ADR 0053). The app says so once it has asked them.
     pub sessions_waiting: bool,
+    /// A command the plugin's marketplace declares, which Claude Code showed instead of running:
+    /// nothing was installed, and the person decides (ADR 0053).
+    pub shown_command: Option<ShownCommand>,
+}
+
+/// A command a marketplace declares for a plugin, as Claude Code showed it, to be read in full
+/// before it runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ShownCommand {
+    /// The command as Claude Code displays it.
+    pub command: String,
+    /// The plugin it belongs to.
+    pub plugin: String,
+    /// Accepting passes this, and only this command runs.
+    pub sha256: String,
+    /// Whether it is not the command that was accepted, which changed since it was shown.
+    pub changed: bool,
 }
 
 /// The result a change prints on its last line with `--json`, as far as Arden Code reads it.
@@ -117,6 +135,17 @@ struct ChangeResult {
     #[serde(default)]
     message: String,
     failure_code: Option<String>,
+    #[serde(default)]
+    shown_command: Value,
+}
+
+/// The oldest Claude Code that takes `--accept-command`.
+const ACCEPT_MINIMUM_VERSION: &str = "2.1.271";
+
+/// Whether `text` is a sha256 as Claude Code gives one: 64 hexadecimal digits. It comes from Claude
+/// Code's answer by way of the page, so it is checked before it is passed back.
+fn is_sha256(text: &str) -> bool {
+    text.len() == 64 && text.chars().all(|character| character.is_ascii_hexdigit())
 }
 
 /// The longest plugin id Arden Code passes on.
@@ -404,8 +433,9 @@ impl ClaudePlugins {
         id: &str,
         scope: PluginScope,
         project: Option<&Path>,
+        accept: Option<&str>,
     ) -> Result<PluginChange, PluginError> {
-        if !is_plugin_id(id) {
+        if !is_plugin_id(id) || accept.is_some_and(|sha256| !is_sha256(sha256)) {
             return Err(PluginError::InvalidId);
         }
         let (scope_name, folder) = match (scope, project) {
@@ -414,17 +444,27 @@ impl ClaudePlugins {
             (PluginScope::Local, Some(project)) => ("local", project),
             _ => return Err(PluginError::NotChangeable),
         };
-        self.run_change(
-            folder,
-            &[
-                Arg::Literal("plugin"),
-                Arg::Literal("install"),
-                Arg::Untrusted(id.to_owned()),
-                Arg::Literal("--scope"),
-                Arg::Literal(scope_name),
-                Arg::Literal("--json"),
-            ],
-        )
+        let mut args = vec![
+            Arg::Literal("plugin"),
+            Arg::Literal("install"),
+            Arg::Untrusted(id.to_owned()),
+            Arg::Literal("--scope"),
+            Arg::Literal(scope_name),
+        ];
+        // Only the command the person read is accepted; `--yes`, which accepts any, never is.
+        if let Some(sha256) = accept {
+            args.extend([
+                Arg::Literal("--accept-command"),
+                Arg::Untrusted(sha256.to_owned()),
+            ]);
+        }
+        args.push(Arg::Literal("--json"));
+        let minimum = if accept.is_some() {
+            ACCEPT_MINIMUM_VERSION
+        } else {
+            PLUGINS_MINIMUM_VERSION
+        };
+        self.run_change_at(folder, &args, minimum)
     }
 
     /// Turns an installed plugin on or off, updates it or uninstalls it, at the scope it is
@@ -472,7 +512,18 @@ impl ClaudePlugins {
     /// Runs a command that changes plugins, and reads the result on the last line it printed. A
     /// change that was there already counts as done. The catalog is read again next time.
     fn run_change(&self, folder: &Path, args: &[Arg]) -> Result<PluginChange, PluginError> {
-        let done = self.run_to_end(folder, args)?;
+        self.run_change_at(folder, args, PLUGINS_MINIMUM_VERSION)
+    }
+
+    /// [`Self::run_change`], with a Claude Code of `minimum` or later. A command a marketplace
+    /// declares, shown instead of run, is answered as one to accept.
+    fn run_change_at(
+        &self,
+        folder: &Path,
+        args: &[Arg],
+        minimum: &str,
+    ) -> Result<PluginChange, PluginError> {
+        let done = self.run_to_end(folder, args, minimum)?;
         *self.catalog.lock().unwrap_or_else(PoisonError::into_inner) = None;
         let result = done
             .output
@@ -492,6 +543,14 @@ impl ClaudePlugins {
             return Ok(PluginChange {
                 message: result.message,
                 sessions_waiting: false,
+                shown_command: None,
+            });
+        }
+        if let Some(shown) = shown_command(&result.shown_command, &done.output) {
+            return Ok(PluginChange {
+                message: result.message,
+                sessions_waiting: false,
+                shown_command: Some(shown),
             });
         }
         Err(PluginError::Failed {
@@ -500,8 +559,8 @@ impl ClaudePlugins {
         })
     }
 
-    /// The person's Claude Code, when it is there and recent enough for plugin commands.
-    fn program(&self) -> Result<Resolved, PluginError> {
+    /// The person's Claude Code, when it is there and `minimum` or later.
+    fn program(&self, minimum: &str) -> Result<Resolved, PluginError> {
         let found = match &self.search_path {
             Some(search_path) => locate::find(search_path, ".COM;.EXE;.BAT;.CMD".as_ref()),
             None => locate::find_from_environment(),
@@ -514,7 +573,7 @@ impl ClaudePlugins {
             .versions
             .version_of(&self.supervisor, &program)
             .map_err(PluginError::CouldNotRun)?;
-        if !locate::at_least(&version, PLUGINS_MINIMUM_VERSION) {
+        if !locate::at_least(&version, minimum) {
             return Err(PluginError::TooOld(version));
         }
         Ok(program)
@@ -523,18 +582,23 @@ impl ClaudePlugins {
     /// Runs `claude` with `args` in `folder`, after any command still running, and answers what
     /// it wrote on its standard output, failing when it did.
     fn run(&self, folder: &Path, args: &[Arg]) -> Result<String, PluginError> {
-        let done = self.run_to_end(folder, args)?;
+        let done = self.run_to_end(folder, args, PLUGINS_MINIMUM_VERSION)?;
         if done.exit_code != Some(0) {
             return Err(failure(&done.errors));
         }
         Ok(done.output)
     }
 
-    /// Runs `claude` with `args` in `folder`, after any command still running, ending it after
-    /// its patience.
-    fn run_to_end(&self, folder: &Path, args: &[Arg]) -> Result<Separated, PluginError> {
+    /// Runs `claude` with `args` in `folder`, after any command still running, with a Claude Code
+    /// of `minimum` or later, ending it after its patience.
+    fn run_to_end(
+        &self,
+        folder: &Path,
+        args: &[Arg],
+        minimum: &str,
+    ) -> Result<Separated, PluginError> {
         let _turn = self.running.lock().unwrap_or_else(PoisonError::into_inner);
-        let program = self.program()?;
+        let program = self.program(minimum)?;
         let done = self
             .supervisor
             .run_in(
@@ -551,6 +615,37 @@ impl ClaudePlugins {
         }
         Ok(done)
     }
+}
+
+/// The command a failed install showed instead of running, from its `shownCommand`: the command
+/// itself, or the lines Claude Code printed before its result when the object does not hold it.
+fn shown_command(shown: &Value, output: &str) -> Option<ShownCommand> {
+    let sha256 = shown["sha256"]
+        .as_str()
+        .filter(|sha256| is_sha256(sha256))?;
+    let printed = || {
+        let lines: Vec<&str> = output
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .collect();
+        lines[..lines.len().saturating_sub(1)].join("\n")
+    };
+    let command = shown["command"]
+        .as_str()
+        .map_or_else(printed, str::to_owned);
+    if command.trim().is_empty() {
+        return None;
+    }
+    Some(ShownCommand {
+        command,
+        plugin: shown["pluginId"]
+            .as_str()
+            .or_else(|| shown["plugin"].as_str())
+            .unwrap_or_default()
+            .to_owned(),
+        sha256: sha256.to_owned(),
+        changed: shown["acceptCommandMatched"] == false,
+    })
 }
 
 /// A command that failed with no result: the last thing it wrote as an error.

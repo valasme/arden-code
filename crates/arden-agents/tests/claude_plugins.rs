@@ -7,7 +7,9 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use arden_agents::claude::plugins::{ClaudePlugins, PluginAction, PluginError, PluginScope};
+use arden_agents::claude::plugins::{
+    ClaudePlugins, PluginAction, PluginError, PluginScope, ShownCommand,
+};
 use arden_process::supervisor::Supervisor;
 use serde_json::{Value, json};
 
@@ -314,6 +316,7 @@ fn a_plugin_is_installed_for_the_person_in_every_project_from_the_playground() {
             "adobe-for-creativity@claude-plugins-official",
             PluginScope::User,
             None,
+            None,
         )
         .expect("installed");
 
@@ -366,7 +369,7 @@ fn an_id_that_is_not_a_plain_name_at_marketplace_is_refused_before_anything_runs
         too_long.as_str(),
     ] {
         assert_eq!(
-            module.install(id, PluginScope::User, None),
+            module.install(id, PluginScope::User, None, None),
             Err(PluginError::InvalidId),
             "{id} was not refused"
         );
@@ -377,6 +380,7 @@ fn an_id_that_is_not_a_plain_name_at_marketplace_is_refused_before_anything_runs
             .install(
                 &format!("{}@market", "a".repeat(121)),
                 PluginScope::User,
+                None,
                 None
             )
             .is_ok()
@@ -394,6 +398,7 @@ fn a_failed_install_says_claude_codes_message_and_code() {
     let refused = plugins(bin.path(), playground.path(), logs.path()).install(
         "missing@claude-plugins-official",
         PluginScope::User,
+        None,
         None,
     );
 
@@ -416,6 +421,7 @@ fn a_plugin_installed_already_reads_as_success() {
         .install(
             "superpowers@claude-plugins-official",
             PluginScope::User,
+            None,
             None,
         )
         .expect("success");
@@ -440,6 +446,7 @@ fn the_catalog_is_read_again_after_a_change() {
         .install(
             "agent-sdk-dev@claude-plugins-official",
             PluginScope::User,
+            None,
             None,
         )
         .expect("installed");
@@ -624,10 +631,10 @@ fn a_plugin_is_installed_for_a_project_in_its_folder_at_the_scope_chosen() {
     let id = "adobe-for-creativity@claude-plugins-official";
 
     module
-        .install(id, PluginScope::Project, Some(project.path()))
+        .install(id, PluginScope::Project, Some(project.path()), None)
         .expect("for everyone in the project");
     module
-        .install(id, PluginScope::Local, Some(project.path()))
+        .install(id, PluginScope::Local, Some(project.path()), None)
         .expect("for the person in the project");
 
     let installs: Vec<Value> = plugin_starts(&log)
@@ -668,13 +675,138 @@ fn a_project_install_needs_its_projects_folder_and_another_scope_is_refused() {
 
     for scope in [PluginScope::Project, PluginScope::Local] {
         assert_eq!(
-            module.install("x@market", scope, None),
+            module.install("x@market", scope, None, None),
             Err(PluginError::NotChangeable)
         );
     }
     assert_eq!(
-        module.install("x@market", PluginScope::Managed, Some(playground.path())),
+        module.install(
+            "x@market",
+            PluginScope::Managed,
+            Some(playground.path()),
+            None
+        ),
         Err(PluginError::NotChangeable)
     );
     assert!(plugin_starts(&log).is_empty());
+}
+
+const DECLARED: &str = "npx -y @acme/deploy-cli@0.9.2 setup --cluster staging";
+
+#[test]
+fn a_command_the_marketplace_declares_is_shown_and_nothing_is_installed() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let bin = claude_on_path(&json!({ "plugins": { "commands": { "deploy@acme": DECLARED } } }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+
+    let shown = module
+        .install("deploy@acme", PluginScope::User, None, None)
+        .expect("an answer");
+
+    let ShownCommand {
+        command,
+        plugin,
+        sha256,
+        changed,
+    } = shown.shown_command.expect("the command to accept");
+    assert_eq!(command, DECLARED);
+    assert_eq!(plugin, "deploy@acme");
+    assert_eq!(sha256.len(), 64);
+    assert!(!changed);
+    assert!(module.installed().expect("the list").is_empty());
+}
+
+#[test]
+fn accepting_passes_exactly_its_sha256_and_installs() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = claude_on_path(
+        &json!({ "log": log, "plugins": { "commands": { "deploy@acme": DECLARED } } }),
+    );
+    let module = plugins(bin.path(), playground.path(), logs.path());
+    let shown = module
+        .install("deploy@acme", PluginScope::User, None, None)
+        .expect("an answer")
+        .shown_command
+        .expect("the command");
+
+    let done = module
+        .install("deploy@acme", PluginScope::User, None, Some(&shown.sha256))
+        .expect("installed");
+
+    assert!(done.shown_command.is_none());
+    let start = plugin_starts(&log).pop().expect("the second install");
+    assert_eq!(
+        start["args"],
+        json!([
+            "plugin",
+            "install",
+            "deploy@acme",
+            "--scope",
+            "user",
+            "--accept-command",
+            shown.sha256,
+            "--json"
+        ])
+    );
+    assert!(
+        start["args"]
+            .as_array()
+            .is_some_and(|args| args.iter().all(|arg| arg != "--yes" && arg != "-y"))
+    );
+    assert_eq!(module.installed().expect("the list")[0].id, "deploy@acme");
+}
+
+#[test]
+fn a_sha256_that_no_longer_matches_shows_the_new_command_again() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let bin = claude_on_path(&json!({ "plugins": { "commands": { "deploy@acme": DECLARED } } }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+    let stale = "0123456789abcdef".repeat(4);
+
+    let shown = module
+        .install("deploy@acme", PluginScope::User, None, Some(&stale))
+        .expect("an answer")
+        .shown_command
+        .expect("shown again");
+
+    assert!(shown.changed);
+    assert_ne!(shown.sha256, stale);
+}
+
+#[test]
+fn a_sha256_that_is_not_one_is_refused_before_anything_runs() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let log = playground.path().join("stand-in.log");
+    let bin = claude_on_path(&json!({ "log": log }));
+    let module = plugins(bin.path(), playground.path(), logs.path());
+
+    for sha256 in ["--yes", "abc", &"g".repeat(64)] {
+        assert_eq!(
+            module.install("deploy@acme", PluginScope::User, None, Some(sha256)),
+            Err(PluginError::InvalidId)
+        );
+    }
+    assert!(plugin_starts(&log).is_empty());
+}
+
+#[test]
+fn accepting_a_command_needs_claude_code_2_1_271() {
+    let playground = tempfile::tempdir().expect("a folder");
+    let logs = tempfile::tempdir().expect("a folder");
+    let bin = claude_on_path(&json!({ "version": "2.1.270" }));
+
+    assert_eq!(
+        plugins(bin.path(), playground.path(), logs.path()).install(
+            "deploy@acme",
+            PluginScope::User,
+            None,
+            Some(&"a".repeat(64))
+        ),
+        Err(PluginError::TooOld("2.1.270".into()))
+    );
 }

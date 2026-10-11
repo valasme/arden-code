@@ -143,7 +143,7 @@ export function startSessionsRust({
   transcriptView = "normal",
   installedPlugins = [],
   pluginCatalog = [],
-  pluginChange = () => ({ message: "Done.", sessionsWaiting: false }),
+  pluginChange = () => ({ message: "Done.", sessionsWaiting: false, shownCommand: null }),
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
