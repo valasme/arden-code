@@ -11,11 +11,6 @@ const internal = (name: string) => name.startsWith("__") || name === "workflow-l
 /** The letters of a name without what separates its words, in lower case. */
 const compact = (text: string) => text.toLowerCase().replaceAll(/[:_-]/g, "");
 
-/** What follows the slash while the person is still typing the command's name, else null. */
-export function menuQuery(text: string): string | null {
-  return text.startsWith("/") && !/\s/.test(text) ? text.slice(1) : null;
-}
-
 /** How well a command's names match the letters typed: 0 is the best, null is no match. */
 function rank(command: SlashCommand, letters: string): number | null {
   if (letters === "") return 0;
@@ -63,6 +58,18 @@ export function sourceOf(command: SlashCommand): Source {
   const colon = command.name.indexOf(":");
   if (colon > 0) return { kind: "plugin", name: command.name.slice(0, colon) };
   return { kind: "skill" };
+}
+
+/**
+ * The commands that run on a later word of a message (ADR 0052): skills, the person's own and
+ * plugins', not Claude Code's built-in commands, which neither stack nor run after text, and not
+ * MCP prompts.
+ */
+export function skillsOf(commands: readonly SlashCommand[]): SlashCommand[] {
+  return commands.filter((command) => {
+    const kind = sourceOf(command).kind;
+    return kind === "skill" || kind === "plugin";
+  });
 }
 
 /** What Arden Code runs itself instead of sending it to Claude Code (ADR 0042). */

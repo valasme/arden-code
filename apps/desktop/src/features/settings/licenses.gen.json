@@ -1056,6 +1056,12 @@
     "kind": "npm"
   },
   {
+    "name": "bstr",
+    "version": "1.13.1",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "bumpalo",
     "version": "3.20.3",
     "license": "MIT OR Apache-2.0",
@@ -1353,6 +1359,18 @@
     "name": "crossbeam-channel",
     "version": "0.5.17",
     "license": "MIT OR Apache-2.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "crossbeam-deque",
+    "version": "0.8.8",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "crossbeam-epoch",
+    "version": "0.9.21",
+    "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
   {
@@ -2034,6 +2052,12 @@
     "kind": "npm"
   },
   {
+    "name": "globset",
+    "version": "0.4.20",
+    "license": "Unlicense OR MIT",
+    "kind": "crate"
+  },
+  {
     "name": "gopd",
     "version": "1.2.0",
     "license": "MIT",
@@ -2301,6 +2325,12 @@
     "name": "idna_adapter",
     "version": "1.2.2",
     "license": "Apache-2.0 OR MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "ignore",
+    "version": "0.4.33",
+    "license": "Unlicense OR MIT",
     "kind": "crate"
   },
   {

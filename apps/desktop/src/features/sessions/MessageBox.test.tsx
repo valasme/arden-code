@@ -1,6 +1,8 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BotIcon, BrainIcon, ChartNoAxesColumnIcon, FolderIcon, ShieldIcon } from "lucide-react";
+import { type ReactNode, useState } from "react";
 
 import { expectNoAccessibilityViolations } from "@/test/axe";
 
@@ -9,6 +11,14 @@ import { MessageBox } from "./MessageBox";
 import { useUltrathink } from "./ultrathink";
 
 import "@/styles/global.css";
+
+/** The query client the app gives every page: the box asks Rust for a project's files (ADR 0052). */
+function Queries({ children }: { children: ReactNode }) {
+  const [client] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  );
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
 
 /** A message box with the Ultrathink switch, wired as a session's is, and a way to turn it on. */
 function Harness() {
@@ -43,14 +53,14 @@ function Harness() {
 
 describe("The Ultrathink chip (ADR 0044)", () => {
   it("is not there while the next message will not carry the word", () => {
-    render(<Harness />);
+    render(<Harness />, { wrapper: Queries });
 
     expect(screen.queryByText("Ultrathink")).toBeNull();
   });
 
   it("shows while the switch is on, and its button turns the switch off", async () => {
     const user = userEvent.setup();
-    render(<Harness />);
+    render(<Harness />, { wrapper: Queries });
 
     await user.click(screen.getByRole("button", { name: "Switch on" }));
     expect(screen.getByText("Ultrathink")).toBeVisible();
@@ -61,7 +71,7 @@ describe("The Ultrathink chip (ADR 0044)", () => {
 
   it("shows, with no button, while the message holds the word", async () => {
     const user = userEvent.setup();
-    render(<Harness />);
+    render(<Harness />, { wrapper: Queries });
 
     await user.type(screen.getByRole("textbox", { name: "Message" }), "please ultrathink this");
 
@@ -71,7 +81,7 @@ describe("The Ultrathink chip (ADR 0044)", () => {
 
   it("is not there for a slash command, which never carries the word", async () => {
     const user = userEvent.setup();
-    render(<Harness />);
+    render(<Harness />, { wrapper: Queries });
 
     await user.click(screen.getByRole("button", { name: "Switch on" }));
     await user.type(screen.getByRole("textbox", { name: "Message" }), "/compact");
@@ -81,7 +91,7 @@ describe("The Ultrathink chip (ADR 0044)", () => {
 
   it("goes once the message that carried the word is sent", async () => {
     const user = userEvent.setup();
-    render(<Harness />);
+    render(<Harness />, { wrapper: Queries });
 
     await user.click(screen.getByRole("button", { name: "Switch on" }));
     await user.type(screen.getByRole("textbox", { name: "Message" }), "Why?{Enter}");
@@ -91,7 +101,7 @@ describe("The Ultrathink chip (ADR 0044)", () => {
 
   it("has no accessibility violations while it shows", async () => {
     const user = userEvent.setup();
-    const { container } = render(<Harness />);
+    const { container } = render(<Harness />, { wrapper: Queries });
     await user.click(screen.getByRole("button", { name: "Switch on" }));
     // The message box alone: the harness's own button is not part of it.
     const box = container.querySelector("[data-area=messagebox]");
@@ -146,7 +156,7 @@ function middle(name: string) {
 
 describe("The message box's lower line (ADR 0045)", () => {
   it("keeps Send on the row of the last menu, and the figures under the box", () => {
-    const { container } = render(<ClaudeBox />);
+    const { container } = render(<ClaudeBox />, { wrapper: Queries });
     const frame = container.querySelector("[data-message-frame]");
     if (!frame) throw new Error("no message frame");
 
@@ -163,7 +173,7 @@ describe("The message box's lower line (ADR 0045)", () => {
   });
 
   it("wraps Send with the last menu when the box is narrow", () => {
-    render(<ClaudeBox width="24rem" />);
+    render(<ClaudeBox width="24rem" />, { wrapper: Queries });
 
     expect(middle("Permission mode: Auto")).toBeGreaterThan(middle("Agent: Claude"));
     expect(Math.abs(middle("Send") - middle("Permission mode: Auto"))).toBeLessThan(2);
@@ -172,7 +182,7 @@ describe("The message box's lower line (ADR 0045)", () => {
   it("never puts Send on a row of its own, at any width (#127)", () => {
     // In the maintainer's screenshot the five menus and the Ultrathink chip just filled the row,
     // and Send went under them alone. Which width does that depends on the font, so try them all.
-    const { rerender } = render(<ClaudeBox ultrathink />);
+    const { rerender } = render(<ClaudeBox ultrathink />, { wrapper: Queries });
 
     for (let width = 320; width <= 760; width += 2) {
       rerender(<ClaudeBox ultrathink width={`${width}px`} />);
@@ -185,7 +195,7 @@ describe("The message box's lower line (ADR 0045)", () => {
 
   it("gives Send no fill while there is nothing to send, and fills it once there is", async () => {
     const user = userEvent.setup();
-    render(<ClaudeBox />);
+    render(<ClaudeBox />, { wrapper: Queries });
     const send = screen.getByRole("button", { name: "Send" });
 
     expect(getComputedStyle(send).backgroundColor).toBe("rgba(0, 0, 0, 0)");

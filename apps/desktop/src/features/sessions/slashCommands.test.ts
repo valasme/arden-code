@@ -2,7 +2,6 @@ import type { Catalog, ModelOption, SlashCommand } from "@/ipc/bindings";
 
 import {
   filterSlashCommands,
-  menuQuery,
   parseHandledSlashCommand,
   resolveEffort,
   resolveModel,
@@ -31,22 +30,6 @@ const commands: SlashCommand[] = [
 ];
 
 const names = (list: SlashCommand[]) => list.map((item) => item.name);
-
-describe("menuQuery", () => {
-  it("is what follows a slash at the start of a message that has no space yet", () => {
-    expect(menuQuery("/")).toBe("");
-    expect(menuQuery("/comp")).toBe("comp");
-    expect(menuQuery("/mattpocock-skills:td")).toBe("mattpocock-skills:td");
-  });
-
-  it("is nothing once the command has arguments, or for text that is not a command", () => {
-    expect(menuQuery("/compact now")).toBeNull();
-    expect(menuQuery("/compact\nnow")).toBeNull();
-    expect(menuQuery("hello /compact")).toBeNull();
-    expect(menuQuery("")).toBeNull();
-    expect(menuQuery(" /compact")).toBeNull();
-  });
-});
 
 describe("filterSlashCommands", () => {
   it("lists every command in Claude Code's order for a bare slash, without the ones that are not for this window", () => {

@@ -9,6 +9,7 @@ import type {
   Catalog,
   Effort,
   ErrorCode,
+  FileMatch,
   InstalledPlugin,
   Marketplace,
   Model,
@@ -121,6 +122,8 @@ interface Options {
     command: string,
     payload: unknown,
   ) => PluginChange | AppError | Promise<PluginChange>;
+  /** The files Rust matches in a project for what was typed after `@` (ADR 0052). None by default. */
+  files?: (projectId: string, query: string) => FileMatch[] | Promise<FileMatch[]>;
 }
 
 /**
@@ -148,6 +151,7 @@ export function startSessionsRust({
   pluginCatalog = [],
   marketplaces = [],
   pluginChange = () => ({ message: "Done.", sessionsWaiting: false, shownCommand: null }),
+  files = () => [],
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
@@ -467,6 +471,12 @@ export function startSessionsRust({
           const answer = pluginChange(command, payload);
           if ("code" in answer) throw failure(answer.code, answer.details);
           return answer;
+        }
+        case "find_files": {
+          const { projectId, query } = z
+            .object({ projectId: z.string(), query: z.string() })
+            .parse(payload);
+          return files(projectId, query);
         }
         case "send_message": {
           const { sessionId, text, onEvent } = z

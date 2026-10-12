@@ -9,6 +9,7 @@ use std::thread;
 use arden_agents::claude::catalog::Catalog;
 use arden_agents::demo::DemoDriver;
 use arden_agents::driver::{AgentDriver, Answer, PlanAnswer};
+use arden_agents::files::{FileMatch, ProjectFiles};
 use arden_agents::model::{
     AgentKind, ApprovalAction, ApprovalState, Effort, Item, Model, PermissionMode, PlanState,
     Project, ProjectKind, QuestionAnswer, QuestionState, Session, SessionList, SessionSummary,
@@ -174,6 +175,43 @@ pub fn claude_catalog(
         std::thread::spawn(move || driver.ensure_catalog(&folder));
     }
     Ok(catalog)
+}
+
+/// The listings of the projects' folders, for file mentions (ADR 0052).
+#[derive(Default)]
+pub struct Files(Arc<ProjectFiles>);
+
+/// The files of a project that match what was typed after `@` in the message box (ADR 0052): at
+/// most 15, the best first, with paths relative to the project. The folder is listed on a
+/// background thread, and again when its listing is more than 10 seconds old. Only the names of
+/// files are read. A project that is not known has none.
+///
+/// # Errors
+///
+/// Returns an unexpected error when the listing could not run.
+#[tauri::command]
+#[specta::specta]
+pub async fn find_files(
+    project_id: String,
+    query: String,
+    sessions: State<'_, Sessions>,
+    files: State<'_, Files>,
+) -> Result<Vec<FileMatch>, AppError> {
+    let Some(folder) = sessions
+        .list()
+        .projects
+        .into_iter()
+        .find(|listing| listing.project.id == project_id)
+        .map(|listing| std::path::PathBuf::from(listing.project.path))
+    else {
+        return Ok(Vec::new());
+    };
+    let files = Arc::clone(&files.0);
+    tauri::async_runtime::spawn_blocking(move || {
+        files.matches(&folder, &query, std::time::Instant::now())
+    })
+    .await
+    .map_err(|error| AppError::new(ErrorCode::Unexpected).with_details(error.to_string()))
 }
 
 /// The Playground's folder, where Claude Code is started when no session needs it, such as to hear

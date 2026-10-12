@@ -540,7 +540,8 @@ fn listing() -> Value {
         "commands": [
             { "name": "compact", "description": "Free up context by summarizing the conversation so far", "argumentHint": "<optional custom summarization instructions>", "builtin": true },
             { "name": "context", "description": "Show current context usage", "argumentHint": "", "builtin": true },
-            { "name": "stand-in-skill:greet", "description": "(stand-in-skill) Greets the person.", "argumentHint": "", "aliases": ["greet"] }
+            { "name": "stand-in-skill:greet", "description": "(stand-in-skill) Greets the person.", "argumentHint": "", "aliases": ["greet"] },
+            { "name": "stand-in-skill:wave", "description": "(stand-in-skill) Waves at the person.", "argumentHint": "", "aliases": ["wave"] }
         ],
         "models": [
             { "value": "default", "displayName": "Default (recommended)", "description": "The stand-in's own model", "supportsEffort": true, "supportedEffortLevels": ["low", "medium", "high"] },
