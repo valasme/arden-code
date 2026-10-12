@@ -424,6 +424,7 @@ export function SessionView({ id }: { id: string }) {
           agent={agent}
           busy={busy}
           choices={choices}
+          files={{ projectId: session.projectId }}
           figures={
             agent === "claude" ? <Figures contextWindow={session.contextWindow ?? null} /> : null
           }

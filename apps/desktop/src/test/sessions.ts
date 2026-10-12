@@ -8,6 +8,7 @@ import type {
   Catalog,
   Effort,
   ErrorCode,
+  FileMatch,
   Model,
   PermissionMode,
   Project,
@@ -106,6 +107,8 @@ interface Options {
   usageLimits?: UsageLimits;
   /** The default transcript view in the settings (ADR 0051). */
   transcriptView?: TranscriptView;
+  /** The files Rust matches in a project for what was typed after `@` (ADR 0052). None by default. */
+  files?: (projectId: string, query: string) => FileMatch[] | Promise<FileMatch[]>;
 }
 
 /**
@@ -129,6 +132,7 @@ export function startSessionsRust({
   pickedFolder = null,
   usageLimits = { report: "unknown", windows: [] },
   transcriptView = "normal",
+  files = () => [],
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
   Object.assign(globalThis, { isTauri: true });
@@ -431,6 +435,12 @@ export function startSessionsRust({
           );
           if (!waits) throw failure("ARD-AGT-015");
           return null;
+        }
+        case "find_files": {
+          const { projectId, query } = z
+            .object({ projectId: z.string(), query: z.string() })
+            .parse(payload);
+          return files(projectId, query);
         }
         case "send_message": {
           const { sessionId, text, onEvent } = z

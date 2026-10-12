@@ -1,4 +1,4 @@
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -519,6 +519,80 @@ test.describe("Claude in the real app", () => {
     } finally {
       app.kill();
       claude.remove();
+    }
+  });
+
+  test("two skills stack in one message, and reach Claude Code as typed", async () => {
+    const claude = claudeOnPath();
+    const app = await launchApp({ env: claude.env });
+    try {
+      const { page } = app;
+      const session = await claudeSession(page);
+      const box = page.getByRole("textbox", { name: "Message" });
+
+      await box.fill("/gre");
+      await expect(page.getByRole("option", { name: /stand-in-skill:greet/u })).toBeVisible({
+        timeout: 30_000,
+      });
+      await box.press("Tab");
+      // A later word lists only skills, and Enter fills one in instead of sending (ADR 0052).
+      await box.pressSequentially("/wav");
+      await expect(page.getByRole("option", { name: /stand-in-skill:wave/u })).toBeVisible();
+      await expect(page.getByRole("option", { name: /\/compact/u })).toBeHidden();
+      await box.press("Enter");
+      await expect(box).toHaveValue("/stand-in-skill:greet /stand-in-skill:wave ");
+      await box.pressSequentially("the team");
+      await box.press("Enter");
+
+      await expect(
+        session.getByText("You said: /stand-in-skill:greet /stand-in-skill:wave the team"),
+      ).toBeVisible({ timeout: 30_000 });
+    } finally {
+      app.kill();
+      claude.remove();
+    }
+  });
+
+  test("a file of the project is mentioned with @, before the project is trusted, and reaches Claude Code as typed", async () => {
+    const folder = mkdtempSync(path.join(tmpdir(), "arden-e2e-project-"));
+    writeFileSync(path.join(folder, "GLOSSARY.md"), "# Glossary\n");
+    writeFileSync(path.join(folder, ".gitignore"), "build/\n");
+    mkdirSync(path.join(folder, "build"));
+    writeFileSync(path.join(folder, "build", "glossary-copy.md"), "");
+    const claude = claudeOnPath();
+    const app = await launchApp({
+      env: { ...claude.env, ARDEN_CODE_FOLDER_DIALOG_ANSWER: folder },
+    });
+    try {
+      const { page } = app;
+      await expect(page.getByRole("main")).toBeVisible();
+      await page.keyboard.press("Control+O");
+      const name = path.basename(folder);
+      await expect(page.getByRole("button", { name: `Project: ${name}` })).toBeVisible();
+      const session = page.getByRole("main", { name: "Session" });
+      await expect(session).toBeVisible();
+      await page.getByRole("button", { name: /^Agent: / }).click();
+      await page.getByRole("menuitemradio", { name: "Claude" }).click();
+      const box = page.getByRole("textbox", { name: "Message" });
+
+      // Arden Code lists the folder itself, leaving out what .gitignore leaves out (ADR 0052).
+      await box.pressSequentially("Explain @glos");
+      const files = page.getByRole("listbox", { name: "Files" });
+      await expect(files.getByRole("option")).toHaveText(["GLOSSARY.md"]);
+      await box.press("Enter");
+      await expect(box).toHaveValue("Explain @GLOSSARY.md ");
+      await box.pressSequentially("please");
+      await box.press("Enter");
+      const question = page.getByRole("alertdialog", { name: `Trust “${name}”?` });
+      await question.getByRole("button", { name: "Trust folder" }).click();
+
+      await expect(session.getByText("You said: Explain @GLOSSARY.md please")).toBeVisible({
+        timeout: 30_000,
+      });
+    } finally {
+      app.kill();
+      claude.remove();
+      rmSync(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     }
   });
 

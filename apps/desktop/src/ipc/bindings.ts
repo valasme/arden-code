@@ -601,6 +601,17 @@ export const commands = {
 	 */
 	claudeCatalog: () => __TAURI_INVOKE<Catalog>("claude_catalog"),
 	/**
+	 *  The files of a project that match what was typed after `@` in the message box (ADR 0052): at
+	 *  most 15, the best first, with paths relative to the project. The folder is listed on a
+	 *  background thread, and again when its listing is more than 10 seconds old. Only the names of
+	 *  files are read. A project that is not known has none.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an unexpected error when the listing could not run.
+	 */
+	findFiles: (projectId: string, query: string) => __TAURI_INVOKE<FileMatch[]>("find_files", { projectId, query }),
+	/**
 	 *  What was found about the Claude Code and Codex programs: where they are, which version, and
 	 *  whether Claude Code is signed in. It changes nothing. What was found is kept; `fresh` looks
 	 *  again, as Look again does.
@@ -971,6 +982,16 @@ export type ErrorCode =
 
 /**  What happened to a file. */
 export type FileChangeKind = "created" | "modified" | "deleted";
+
+/**  A file or folder of a project that matches what was typed after `@`. */
+export type FileMatch = {
+	/**
+	 *  The path relative to the project's folder, with `/` between its parts, and at the end of a
+	 *  folder's.
+	 */
+	path: string,
+	folder: boolean,
+};
 
 /**  How the app behaves in general. */
 export type General = {
