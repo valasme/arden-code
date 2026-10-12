@@ -212,9 +212,9 @@ files itself, in Rust.
 
 ## Round 5: the prototype's pick (#146)
 
-The maintainer handed the pick to the councils. The prototype is kept on the `prototype/plugins-page` branch
-(`pnpm prototype:plugins`, then `?variant=A|B|C`): three variants of a plugin's details and the install choices, with
-stub data shaped like `claude plugin list --json --available`.
+The maintainer handed the pick to the councils. The prototype is kept under the `prototype/plugins-page-variants` tag,
+its branch since removed (`pnpm prototype:plugins`, then `?variant=A|B|C`): three variants of a plugin's details and the
+install choices, with stub data shaped like `claude plugin list --json --available`.
 
 - **A:** a list and a details pane side by side; Install… opens a dialog with the three scopes as radio buttons, the
   project menu under the two project scopes, and the warning; a marketplace's command is a confirmation of its own.
