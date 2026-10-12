@@ -5,19 +5,14 @@ use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Child;
-use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, SystemTime};
+use std::sync::Arc;
 
 use arden_process::command::Arg;
 use arden_process::resolve::Resolved;
 use arden_process::supervisor::Supervisor;
 
-use super::locate::{self, Missing};
-use crate::detect::parse_version;
+use super::locate::{self, Missing, VersionCache};
 use crate::model::{Effort, Model, PermissionMode};
-
-/// How long Claude Code gets to say its version.
-const VERSION_PATIENCE: Duration = Duration::from_secs(10);
 
 /// The variables that tie a process to a Claude Code session above it, such as a terminal inside
 /// Claude Code that Arden Code was started from. A session of Arden Code's is its own, so they are
@@ -98,19 +93,12 @@ pub trait Launcher: Send + Sync {
     fn launch(&self, start: &Start) -> Result<Connection, LaunchError>;
 }
 
-/// The version Claude Code gave, for the program file as it was when it was asked.
-struct Checked {
-    path: PathBuf,
-    modified: Option<SystemTime>,
-    version: String,
-}
-
 /// Starts the person's own `claude`, found on `PATH` (ADR 0038).
 pub struct ProgramLauncher {
     supervisor: Arc<Supervisor>,
     /// Where to look: this process's `PATH`, unless a test gives another.
     search_path: Option<OsString>,
-    checked: Mutex<Option<Checked>>,
+    versions: VersionCache,
 }
 
 impl ProgramLauncher {
@@ -120,7 +108,7 @@ impl ProgramLauncher {
         Self {
             supervisor,
             search_path: None,
-            checked: Mutex::new(None),
+            versions: VersionCache::default(),
         }
     }
 
@@ -130,7 +118,7 @@ impl ProgramLauncher {
         Self {
             supervisor,
             search_path: Some(search_path),
-            checked: Mutex::new(None),
+            versions: VersionCache::default(),
         }
     }
 
@@ -143,34 +131,9 @@ impl ProgramLauncher {
 
     /// Claude Code's version, asked once for each program file.
     fn version_of(&self, program: &Resolved) -> Result<String, LaunchError> {
-        let modified = std::fs::metadata(&program.path)
-            .and_then(|metadata| metadata.modified())
-            .ok();
-        let mut checked = self.checked.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(known) = checked.as_ref()
-            && known.path == program.path
-            && known.modified == modified
-        {
-            return Ok(known.version.clone());
-        }
-        let done = self
-            .supervisor
-            .run(
-                "claude-version",
-                program,
-                &[Arg::Literal("--version")],
-                VERSION_PATIENCE,
-            )
-            .map_err(|error| LaunchError::Failed(error.to_string()))?;
-        let version = parse_version(&done.output)
-            .filter(|_| !done.timed_out && done.exit_code == Some(0))
-            .ok_or_else(|| LaunchError::Failed("Claude Code's version could not be read".into()))?;
-        *checked = Some(Checked {
-            path: program.path.clone(),
-            modified,
-            version: version.clone(),
-        });
-        Ok(version)
+        self.versions
+            .version_of(&self.supervisor, program)
+            .map_err(LaunchError::Failed)
     }
 }
 

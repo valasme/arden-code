@@ -5,12 +5,16 @@ import { z } from "zod";
 import type {
   AgentKind,
   AppError,
+  AvailablePlugin,
   Catalog,
   Effort,
   ErrorCode,
   FileMatch,
+  InstalledPlugin,
+  Marketplace,
   Model,
   PermissionMode,
+  PluginChange,
   Project,
   Session,
   SessionList,
@@ -34,8 +38,8 @@ export const playground = {
 } as const;
 
 /** What a command that fails throws, as it reaches the UI through the isolation frame. */
-function failure(code: ErrorCode): string {
-  const error: AppError = { code, messageKey: `errors.${code}`, details: null };
+function failure(code: ErrorCode, details: string | null = null): string {
+  const error: AppError = { code, messageKey: `errors.${code}`, details };
   return JSON.stringify(error);
 }
 
@@ -107,6 +111,17 @@ interface Options {
   usageLimits?: UsageLimits;
   /** The default transcript view in the settings (ADR 0051). */
   transcriptView?: TranscriptView;
+  /** The plugins Claude Code has installed (ADR 0053). None by default. */
+  installedPlugins?: InstalledPlugin[];
+  /** The plugins the person's marketplaces offer (ADR 0053). None by default. */
+  pluginCatalog?: AvailablePlugin[];
+  /** The marketplaces the person has added (ADR 0053). None by default. */
+  marketplaces?: Marketplace[];
+  /** What a plugin change answers: Claude Code's message, or the error it fails with. */
+  pluginChange?: (
+    command: string,
+    payload: unknown,
+  ) => PluginChange | AppError | Promise<PluginChange>;
   /** The files Rust matches in a project for what was typed after `@` (ADR 0052). None by default. */
   files?: (projectId: string, query: string) => FileMatch[] | Promise<FileMatch[]>;
 }
@@ -132,6 +147,10 @@ export function startSessionsRust({
   pickedFolder = null,
   usageLimits = { report: "unknown", windows: [] },
   transcriptView = "normal",
+  installedPlugins = [],
+  pluginCatalog = [],
+  marketplaces = [],
+  pluginChange = () => ({ message: "Done.", sessionsWaiting: false, shownCommand: null }),
   files = () => [],
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
@@ -435,6 +454,23 @@ export function startSessionsRust({
           );
           if (!waits) throw failure("ARD-AGT-015");
           return null;
+        }
+        case "installed_plugins": {
+          return installedPlugins;
+        }
+        case "plugin_catalog": {
+          return pluginCatalog;
+        }
+        case "marketplaces": {
+          return marketplaces;
+        }
+        case "add_marketplace":
+        case "change_marketplace":
+        case "change_plugin":
+        case "install_plugin": {
+          const answer = pluginChange(command, payload);
+          if ("code" in answer) throw failure(answer.code, answer.details);
+          return answer;
         }
         case "find_files": {
           const { projectId, query } = z

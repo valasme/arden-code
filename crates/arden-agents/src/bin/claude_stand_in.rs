@@ -10,6 +10,19 @@
 //! It names a session when asked (`generate_session_title`, ADR 0050): "Named:" and the first four
 //! words of what it is given.
 //!
+//! It answers `plugin list --json` (with `--available`, the catalog too) from `plugins` in
+//! `stand-in.json`: `installed` and `available`, as Claude Code prints them, and `delayMs`, how
+//! long it takes first (ADR 0053). `plugin install` adds to what it lists, kept in
+//! `plugins-state.json` beside it, unless `failures` names the plugin with the `message` and
+//! `failureCode` to fail with; a plugin installed already answers `already_in_goal_state`. A plugin
+//! that `commands` names installs only with `--accept-command` and that command's hash; without
+//! it, it shows the command (`shownCommand`), as Claude Code does. It writes `plugin-end` to its
+//! log when it is done.
+//!
+//! It answers `plugin marketplace list --json` from `marketplaces` in `plugins`, and adds, updates
+//! and removes marketplaces, kept in `marketplaces-state.json` beside it; removing one uninstalls
+//! its plugins. A source named in `marketplaceFailures` fails with `invalid_source`.
+//!
 //! It applies the `--permission-mode` it is started with and changes it on `set_permission_mode`,
 //! refusing Bypass permissions unless started with `--allow-dangerously-skip-permissions`, as
 //! Claude Code does (ADR 0044). Asked "which mode", it says the mode it applies. Asked to "plan the
@@ -32,6 +45,8 @@ struct Settings {
     /// The answer to `get_context_usage`: by default, a window of 200,000 tokens, 13% full.
     context: Value,
     log: Option<PathBuf>,
+    /// What it answers `plugin` commands with (ADR 0053).
+    plugins: Value,
 }
 
 fn settings() -> Settings {
@@ -69,6 +84,7 @@ fn settings() -> Settings {
             context => context.clone(),
         },
         log: written["log"].as_str().map(PathBuf::from),
+        plugins: written["plugins"].clone(),
     }
 }
 
@@ -95,6 +111,11 @@ fn main() {
     );
     if args.iter().any(|arg| arg == "--version") {
         println!("{} (Claude Code)", settings.version);
+        return;
+    }
+    if args.first().map(String::as_str) == Some("plugin") {
+        plugin(&settings, &args[1..]);
+        log(&settings, "plugin-end");
         return;
     }
     if args.first().map(String::as_str) == Some("auth") {
@@ -125,6 +146,368 @@ fn main() {
         .iter()
         .any(|arg| arg == "--allow-dangerously-skip-permissions");
     Conversation::new(settings, session, mode, bypass_launched).run();
+}
+
+/// Answers a `claude plugin` command as Claude Code does with `--json` (ADR 0053).
+fn plugin(settings: &Settings, args: &[String]) {
+    let plugins = &settings.plugins;
+    if let Some(delay) = plugins["delayMs"].as_u64() {
+        thread::sleep(Duration::from_millis(delay));
+    }
+    let installed = installed_plugins(plugins);
+    match args.first().map(String::as_str) {
+        Some("install") => install(plugins, args, installed),
+        Some("marketplace") => marketplace(plugins, &args[1..], installed),
+        Some(command @ ("enable" | "disable" | "update" | "uninstall")) => {
+            alter(plugins, command, args, installed);
+        }
+        Some("list") if args.iter().any(|arg| arg == "--available") => {
+            let available = match &plugins["available"] {
+                Value::Null => json!([]),
+                available => available.clone(),
+            };
+            let answer = json!({ "installed": installed, "available": available });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&answer).unwrap_or_default()
+            );
+        }
+        Some("list") => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&installed).unwrap_or_default()
+            );
+        }
+        _ => {
+            eprintln!("error: unknown plugin command");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// A stand-in for the `sha256` Claude Code gives a declared command: 64 hex digits that change
+/// with the command.
+fn hash_of(command: &str) -> String {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    command.hash(&mut hasher);
+    format!("{:016x}", hasher.finish()).repeat(4)
+}
+
+/// Where the stand-in keeps the marketplaces it has added, between runs.
+fn marketplaces_state() -> Option<PathBuf> {
+    std::env::current_exe().ok().and_then(|exe| {
+        exe.parent()
+            .map(|folder| folder.join("marketplaces-state.json"))
+    })
+}
+
+/// The marketplaces it lists: those it changed itself, else those of its settings.
+fn known_marketplaces(plugins: &Value) -> Value {
+    marketplaces_state()
+        .and_then(|file| std::fs::read_to_string(file).ok())
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_else(|| match &plugins["marketplaces"] {
+            Value::Null => json!([]),
+            known => known.clone(),
+        })
+}
+
+fn save_marketplaces(known: &Value) {
+    if let Some(file) = marketplaces_state() {
+        let _ = std::fs::write(file, known.to_string());
+    }
+}
+
+/// Prints a marketplace command's result, as Claude Code does with `--json`, and fails with it
+/// when it failed.
+fn marketplace_result(command: &str, name: &str, outcome: &str, message: &str, code: Option<&str>) {
+    println!(
+        "{}",
+        json!({ "command": command, "outcome": outcome, "marketplace": name, "message": message, "failureCode": code })
+    );
+    if outcome != "ok" {
+        std::process::exit(1);
+    }
+}
+
+/// The name a marketplace added from `source` takes: the last part of its path.
+fn marketplace_name(source: &str) -> String {
+    source
+        .trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(source)
+        .trim_end_matches(".git")
+        .trim_end_matches(".json")
+        .to_owned()
+}
+
+/// `plugin marketplace list|add|update|remove … --json`.
+fn marketplace(plugins: &Value, args: &[String], mut installed: Value) {
+    let mut known = known_marketplaces(plugins);
+    let target = args.get(1).map_or("", String::as_str);
+    let listed = known
+        .as_array()
+        .is_some_and(|list| list.iter().any(|known| known["name"] == target));
+    match args.first().map(String::as_str) {
+        Some("list") => println!(
+            "{}",
+            serde_json::to_string_pretty(&known).unwrap_or_default()
+        ),
+        Some("add") if !plugins["marketplaceFailures"][target].is_null() => {
+            let message =
+                "Invalid marketplace source format. Try: owner/repo, https://..., or ./path";
+            marketplace_result(
+                "marketplace-add",
+                "",
+                "failed",
+                message,
+                Some("invalid_source"),
+            );
+        }
+        Some("add") => {
+            let name = marketplace_name(target);
+            if let Some(list) = known.as_array_mut() {
+                list.push(json!({ "name": name, "source": "github", "repo": target, "installLocation": "x" }));
+            }
+            save_marketplaces(&known);
+            let message = format!("Successfully added marketplace: {name}");
+            marketplace_result("marketplace-add", &name, "ok", &message, None);
+        }
+        Some("update") if listed => {
+            let message = format!("Successfully updated marketplace: {target}");
+            marketplace_result("marketplace-update", target, "ok", &message, None);
+        }
+        Some("remove") if listed => {
+            if let Some(list) = known.as_array_mut() {
+                list.retain(|known| known["name"] != target);
+            }
+            save_marketplaces(&known);
+            let suffix = format!("@{target}");
+            if let Some(plugins) = installed.as_array_mut() {
+                plugins.retain(|plugin| {
+                    !plugin["id"]
+                        .as_str()
+                        .is_some_and(|id| id.ends_with(&suffix))
+                });
+            }
+            save_installed(&installed);
+            let message = format!("Successfully removed marketplace: {target}");
+            marketplace_result("marketplace-remove", target, "ok", &message, None);
+        }
+        Some(command) => {
+            let message = format!("Marketplace '{target}' not found");
+            marketplace_result(
+                &format!("marketplace-{command}"),
+                target,
+                "failed",
+                &message,
+                Some("not_found"),
+            );
+        }
+        None => std::process::exit(1),
+    }
+}
+
+/// Where the stand-in keeps the plugins it has installed, between runs.
+fn plugins_state() -> Option<PathBuf> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|folder| folder.join("plugins-state.json")))
+}
+
+/// The plugins it lists as installed: those it installed itself, else those of its settings.
+fn installed_plugins(plugins: &Value) -> Value {
+    plugins_state()
+        .and_then(|file| std::fs::read_to_string(file).ok())
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_else(|| match &plugins["installed"] {
+            Value::Null => json!([]),
+            installed => installed.clone(),
+        })
+}
+
+fn save_installed(installed: &Value) {
+    if let Some(file) = plugins_state() {
+        let _ = std::fs::write(file, installed.to_string());
+    }
+}
+
+/// The value after a flag, such as the scope after `--scope`.
+fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
+    args.iter()
+        .position(|arg| arg == name)
+        .and_then(|at| args.get(at + 1))
+        .map(String::as_str)
+}
+
+/// Prints a command's result on its last line, as Claude Code does with `--json`, and fails with
+/// it when it failed.
+fn result(command: &str, id: &str, outcome: &str, message: &str, extra: &Value) {
+    let mut answer =
+        json!({ "command": command, "outcome": outcome, "message": message, "pluginId": id });
+    if let (Some(answer), Some(extra)) = (answer.as_object_mut(), extra.as_object()) {
+        for (key, value) in extra {
+            answer.insert(key.clone(), value.clone());
+        }
+    }
+    println!("Working on {id}…");
+    println!("{answer}");
+    if outcome != "ok" {
+        std::process::exit(1);
+    }
+}
+
+/// `plugin install <id> --scope <scope> --json`.
+fn install(plugins: &Value, args: &[String], mut installed: Value) {
+    let id = args.get(1).map_or("", String::as_str);
+    let scope = flag(args, "--scope").unwrap_or("user");
+    let failure = &plugins["failures"][id];
+    if !failure.is_null() {
+        let message = failure["message"].as_str().unwrap_or("It failed");
+        result(
+            "install",
+            id,
+            "failed",
+            message,
+            &json!({ "failureCode": failure["failureCode"] }),
+        );
+        return;
+    }
+    if shows_declared_command(plugins, "install", id, args) {
+        return;
+    }
+    let folder = std::env::current_dir()
+        .map(|folder| folder.display().to_string())
+        .unwrap_or_default();
+    let project = (scope != "user").then_some(folder);
+    let already = installed.as_array().is_some_and(|list| {
+        list.iter().any(|plugin| {
+            plugin["id"] == id
+                && plugin["scope"] == scope
+                && plugin["projectPath"].as_str() == project.as_deref()
+        })
+    });
+    if already {
+        let message = format!("Plugin '{id}' is already installed");
+        result(
+            "install",
+            id,
+            "failed",
+            &message,
+            &json!({ "failureCode": "already_in_goal_state", "scope": scope }),
+        );
+        return;
+    }
+    let version = plugins["available"]
+        .as_array()
+        .and_then(|list| list.iter().find(|plugin| plugin["pluginId"] == id))
+        .map_or(json!("1.0.0"), |plugin| plugin["version"].clone());
+    if let Some(list) = installed.as_array_mut() {
+        list.push(json!({
+            "id": id, "version": version, "scope": scope, "enabled": true,
+            "installPath": format!("C:\\stand-in\\cache\\{id}"), "projectPath": project
+        }));
+    }
+    save_installed(&installed);
+    let message = format!("Successfully installed plugin: {id} (scope: {scope})");
+    result("install", id, "ok", &message, &json!({ "scope": scope }));
+}
+
+/// Shows the command a plugin's marketplace declares, as Claude Code does, unless `--accept-command`
+/// gives its hash. Says whether it was shown, and so nothing was done.
+fn shows_declared_command(plugins: &Value, command: &str, id: &str, args: &[String]) -> bool {
+    let Some(declared) = plugins["commands"][id].as_str() else {
+        return false;
+    };
+    let sha256 = hash_of(declared);
+    let accepted = flag(args, "--accept-command");
+    if accepted == Some(sha256.as_str()) {
+        return false;
+    }
+    println!("{declared}");
+    let shown = json!({
+        "command": declared, "pluginId": id, "sha256": sha256,
+        "acceptCommandMatched": accepted.map(|_| false)
+    });
+    let message = format!("Plugin '{id}' declares a command; review it and accept it");
+    result(
+        command,
+        id,
+        "failed",
+        &message,
+        &json!({ "failureCode": "command_not_accepted", "shownCommand": shown }),
+    );
+    true
+}
+
+/// `plugin enable|disable|update|uninstall <id> [--scope <scope>] --json`, on the plugin listed at
+/// that scope (and, for a project's, in this folder), or the first with that id without one.
+fn alter(plugins: &Value, command: &str, args: &[String], mut installed: Value) {
+    let id = args.get(1).map_or("", String::as_str);
+    let scope = flag(args, "--scope");
+    let folder = std::env::current_dir()
+        .map(|folder| folder.display().to_string())
+        .unwrap_or_default();
+    let Some(list) = installed.as_array_mut() else {
+        return;
+    };
+    let at = list.iter().position(|plugin| {
+        plugin["id"] == id
+            && scope.is_none_or(|scope| {
+                plugin["scope"] == scope
+                    && (scope == "user"
+                        || plugin["projectPath"].as_str().is_some_and(|path| {
+                            std::fs::canonicalize(path).ok() == std::fs::canonicalize(&folder).ok()
+                        }))
+            })
+    });
+    let Some(at) = at else {
+        let message = format!("Plugin '{id}' is not installed in this scope");
+        result(
+            command,
+            id,
+            "failed",
+            &message,
+            &json!({ "failureCode": "not_installed" }),
+        );
+        return;
+    };
+    let message = match command {
+        "enable" | "disable" => {
+            let on = command == "enable";
+            if list[at]["enabled"] == on {
+                let message = format!("Plugin '{id}' is already {command}d");
+                result(
+                    command,
+                    id,
+                    "failed",
+                    &message,
+                    &json!({ "failureCode": "already_in_goal_state" }),
+                );
+                return;
+            }
+            list[at]["enabled"] = json!(on);
+            format!("Successfully {command}d plugin: {id}")
+        }
+        "update" => {
+            if shows_declared_command(plugins, command, id, args) {
+                return;
+            }
+            let version = list[at]["version"].as_str().unwrap_or("1.0.0").to_owned();
+            let (base, patch) = version.rsplit_once('.').unwrap_or(("1.0", "0"));
+            let next = format!("{base}.{}", patch.parse::<u32>().unwrap_or(0) + 1);
+            list[at]["version"] = json!(next);
+            format!("Plugin '{id}' updated from {version} to {next}")
+        }
+        _ => {
+            list.remove(at);
+            format!("Successfully uninstalled plugin: {id}")
+        }
+    };
+    save_installed(&installed);
+    result(command, id, "ok", &message, &json!({}));
 }
 
 /// Writes a frame on the stand-in's output.

@@ -1,4 +1,5 @@
 import { AlertDialog } from "radix-ui";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,8 @@ interface ConfirmDialogProps {
    * back to, so whoever opened it can say where the focus goes, and prevent the default.
    */
   onCloseAutoFocus?: (event: Event) => void;
+  /** What the person has to read before answering, under the description, such as a command. */
+  children?: ReactNode;
 }
 
 /**
@@ -36,6 +39,7 @@ export function ConfirmDialog({
   destructive = false,
   onConfirm,
   onCloseAutoFocus,
+  children,
 }: ConfirmDialogProps) {
   const { t } = useTranslation();
 
@@ -53,6 +57,7 @@ export function ConfirmDialog({
               {description}
             </AlertDialog.Description>
           </div>
+          {children}
           <div className="flex justify-end gap-2">
             <AlertDialog.Cancel asChild>
               <Button variant="outline">{cancelLabel ?? t("common.cancel")}</Button>

@@ -209,3 +209,69 @@ files itself, in Rust.
 |---|---|---|
 | 28 | The documents | D1, D2 the research, this record, ADR 0052 (the message box), ADR 0053 (plugins), the glossary (Plugin, Skill, Marketplace, File mention), the plan (sections 5.8, 6.1, 6.4, 6.12, a new 6.13 and 13), the vendors page and `PRIVACY.md`: one commit and one pull request, merged first. |
 | 29 | Specs and tickets | D1 two specs on the tracker, each split into vertical tickets with blocking edges, the plugins prototype first. One branch and pull request per spec, a commit and an issue per ticket. R1 every new or changed end-to-end or screenshot test runs 10 times before the merge. |
+
+## Round 5: the prototype's pick (#146)
+
+The maintainer handed the pick to the councils. The prototype is kept on the `prototype/plugins-page` branch
+(`pnpm prototype:plugins`, then `?variant=A|B|C`): three variants of a plugin's details and the install choices, with
+stub data shaped like `claude plugin list --json --available`.
+
+- **A:** a list and a details pane side by side; Install… opens a dialog with the three scopes as radio buttons, the
+  project menu under the two project scopes, and the warning; a marketplace's command is a confirmation of its own.
+- **B:** one list whose rows open in place, with the details, the scopes as joined buttons, the project menu and the
+  warning inline; a marketplace's command is confirmed inside the row.
+- **C:** a table, and a page per plugin with its details in a column and an install panel in numbered steps beside them;
+  the marketplace's command shows on the page before Install.
+
+### Q30. Which variant is built
+
+- **Product:** P2 a person browsing 3,561 plugins compares them; A keeps the list in view while the details change, B
+  makes them open and close one row at a time, and C leaves the list for every plugin. P5 C reads best for one plugin
+  the person already knows.
+- **Experience:** E3 Q23 already said Install opens a dialog that holds the focus: A and C's confirmations do, B's
+  inline form does not, and an inline command block is easier to scroll past than a dialog that must be answered.
+  **E1 dissents** for B: it is Settings' column, and Installed and Marketplaces will be rows. Settled: those tabs keep
+  rows; Discover alone gets the pane, because it is where plugins are compared. E4 at Arden Code's smallest window
+  (500 px, ADR 0047) two panes do not fit; below the width of both, the details take the list's place with a Back
+  button, as C does.
+- **Architecture:** A2 the list is virtualized (Q10); rows of one height, as in A and C, virtualize simply, while B's
+  rows that open in place change height. A4 the scope choice is the same component in the dialog whichever tab opens
+  it later.
+- **Reliability:** R3 C shows a marketplace's command before Install, but Claude Code tells it only in the answer to an
+  install (`shownCommand` in a `failed` result, Q14); the catalog does not hold it. C's layout promises what Arden Code
+  cannot know. R1 a dialog is the existing pattern for the trust question (ADR 0039), so both questions behave alike.
+- **Delivery:** D1 A is the least new code: a list, a pane, one dialog, and the trust and command confirmations as
+  alert dialogs.
+
+**Verdict: A**, with the details taking the list's place below the width of both panes. From B: each scope keeps its
+line saying who gets it. From C: nothing; its pre-shown command is not available.
+
+### Q31. A project's plugin whose folder is not a project in Arden Code (#151)
+
+Claude Code lists plugins installed for a project from its terminal too, and that folder may never have been opened in
+Arden Code. Changing one runs Claude Code in that folder, which Q12 allows only in a trusted project.
+
+- **Reliability:** R3 Arden Code may run Claude Code only in a folder the person trusts (ADR 0039); a folder that is not
+  a project has no trust to give.
+- **Product:** P1 adding that folder as a project for the person would make a project they never opened. **P3
+  dissents**: the row is then stuck. Settled: the row says to open the folder as a project, which Open folder does in
+  one step, and the trust question follows as for any change.
+- **Experience:** E3 the row keeps its name, scope, path and errors; only its switch and buttons are left out.
+
+**Verdict:** such a row shows no actions and says "Open <folder> as a project in Arden Code to change this plugin
+here." A project that is open but not trusted asks the trust question first; Cancel changes nothing.
+
+### Q32. Commands that need a newer Claude Code than the page (#154, #155)
+
+Claude Code's reference gives two later versions than the page's 2.1.268: `--accept-command` needs 2.1.271, and
+`--json` on `plugin marketplace add`, `update` and `remove` needs 2.1.287.
+
+- **Delivery:** D5 raising the page's minimum to 2.1.287 would refuse the whole page to a person whose Claude Code
+  installs and lists plugins well. **P3 dissents**: two minimums are harder to explain. Settled: the person meets the
+  later one only when they use that command, and the message is the same as the page's ("Plugins need a newer Claude
+  Code", `ARD-AGT-020`, with the version found).
+- **Reliability:** R1 the check runs before the command, as the page's does, so an older Claude Code never sees a flag
+  it would read as a mistake.
+
+**Verdict:** the page needs 2.1.268; accepting a declared command needs 2.1.271; adding, updating and removing a
+marketplace need 2.1.287. Each is checked before its command runs. ADR 0053 stands: its minimum is the page's.

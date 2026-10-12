@@ -1,6 +1,14 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +20,27 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 /** The debug build from `pnpm build:debug`. Set ARDEN_E2E_EXE to test another build. */
 export const executable =
   process.env["ARDEN_E2E_EXE"] ?? path.join(repoRoot, "target", "debug", "arden-code.exe");
+
+/** The workspace's stand-in for Claude Code (ADR 0038), built with the app. */
+const standIn =
+  process.env["ARDEN_E2E_CLAUDE"] ?? path.join(repoRoot, "target", "debug", "claude-stand-in.exe");
+
+/**
+ * A folder that holds the stand-in as `claude.exe`, with its settings beside it, and the
+ * environment that puts it first on the app's `PATH`. Windows spells the variable as it likes, so
+ * the one already there is replaced.
+ */
+export function claudeOnPath(settings: Record<string, unknown> = {}) {
+  const bin = mkdtempSync(path.join(tmpdir(), "arden-e2e-claude-"));
+  copyFileSync(standIn, path.join(bin, "claude.exe"));
+  writeFileSync(path.join(bin, "stand-in.json"), JSON.stringify(settings));
+  return {
+    env: { [pathKey]: `${bin};${pathWithoutAgents()}` },
+    remove: () => {
+      rmSync(bin, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    },
+  };
+}
 
 /** A port nothing is using, so each launch has its own debugging endpoint. */
 function freePort(): Promise<number> {

@@ -45,6 +45,11 @@ do), and add a row here. Never reuse or renumber a code.
 | `ARD-AGT-017` | The Playground was to be removed; it always stays | Removing a project |
 | `ARD-AGT-018` | The agent refused the permission mode chosen, and kept the one it was in | Choosing a permission mode |
 | `ARD-AGT-019` | Bypass permissions was chosen while Settings does not allow it | Choosing a permission mode |
+| `ARD-AGT-020` | Plugins need a newer Claude Code than the one installed | The Plugins page |
+| `ARD-AGT-021` | A plugin command failed, for a reason Claude Code gave | The Plugins page |
+| `ARD-AGT-022` | A plugin command answered in a way Arden Code does not understand | The Plugins page |
+| `ARD-AGT-023` | A plugin command took too long, and was ended | The Plugins page |
+| `ARD-AGT-024` | Arden Code did not run a plugin command: what it names is not one it passes on | The Plugins page |
 | `ARD-PROC-001` | Programs cannot be started and supervised on this computer | Settings → Agents; starting an agent |
 | `ARD-UPD-001` | The update could not be installed | Choosing "Update ready: restart" |
 | `ARD-WIN-001` | Windows' window menu could not be opened | The title bar's Window menu button and Alt+Space |

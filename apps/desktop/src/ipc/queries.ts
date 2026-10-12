@@ -17,6 +17,36 @@ import {
   type UsageLimits,
 } from "./bindings";
 
+/**
+ * The plugins the agents have installed (ADR 0053), read from the agent's own commands each time
+ * the page asks: the person may have changed them in a terminal.
+ */
+export const installedPluginsQuery = queryOptions({
+  queryKey: ["plugins", "installed"],
+  queryFn: () => commands.installedPlugins(),
+  staleTime: 0,
+  retry: false,
+});
+
+/**
+ * Every plugin the person's marketplaces offer (ADR 0053). Rust reads it once in a run of Arden
+ * Code and keeps it; Refresh asks for it afresh.
+ */
+export const pluginCatalogQuery = queryOptions({
+  queryKey: ["plugins", "catalog"],
+  queryFn: () => commands.pluginCatalog(false),
+  staleTime: Number.POSITIVE_INFINITY,
+  retry: false,
+});
+
+/** The marketplaces the person has added (ADR 0053), read from the agent each time it is shown. */
+export const marketplacesQuery = queryOptions({
+  queryKey: ["plugins", "marketplaces"],
+  queryFn: () => commands.marketplaces(),
+  staleTime: 0,
+  retry: false,
+});
+
 /** The product name and version. They never change while the app runs. */
 export const appInfoQuery = queryOptions({
   queryKey: ["app-info"],

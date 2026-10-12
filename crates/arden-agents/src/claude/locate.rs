@@ -2,12 +2,22 @@
 
 use std::ffi::OsStr;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
+use std::time::{Duration, SystemTime};
 
+use arden_process::command::Arg;
 use arden_process::resolve::{self, ProgramKind, Resolved};
+use arden_process::supervisor::Supervisor;
+
+use crate::detect::parse_version;
 
 /// The oldest Claude Code the driver works with: everything it uses is documented by then.
 pub const MINIMUM_VERSION: &str = "2.1.223";
+/// The oldest Claude Code whose plugin commands answer with `--json` (ADR 0053).
+pub const PLUGINS_MINIMUM_VERSION: &str = "2.1.268";
+/// How long Claude Code gets to say its version.
+const VERSION_PATIENCE: Duration = Duration::from_secs(10);
 
 /// Where npm's package keeps the program, from the folder of npm's `claude.cmd`.
 const NPM_PROGRAM: &str = r"node_modules\@anthropic-ai\claude-code\bin\claude.exe";
@@ -77,9 +87,70 @@ fn numbers(version: &str) -> Option<[u64; 3]> {
 /// Whether a Claude Code version is [`MINIMUM_VERSION`] or later.
 #[must_use]
 pub fn recent_enough(version: &str) -> bool {
-    match (numbers(version), numbers(MINIMUM_VERSION)) {
+    at_least(version, MINIMUM_VERSION)
+}
+
+/// Whether a Claude Code version is `minimum` or later.
+#[must_use]
+pub fn at_least(version: &str, minimum: &str) -> bool {
+    match (numbers(version), numbers(minimum)) {
         (Some(version), Some(minimum)) => version >= minimum,
         _ => false,
+    }
+}
+
+/// The version Claude Code gave, for the program file as it was when it was asked.
+struct Checked {
+    path: PathBuf,
+    modified: Option<SystemTime>,
+    version: String,
+}
+
+/// Claude Code's version, asked once for each program file and asked again when the file changes,
+/// such as after `claude update`.
+#[derive(Default)]
+pub struct VersionCache {
+    checked: Mutex<Option<Checked>>,
+}
+
+impl VersionCache {
+    /// The version of `program`, asked with `--version` unless it is known.
+    ///
+    /// # Errors
+    ///
+    /// Says, for the logs, why it could not be read.
+    pub fn version_of(
+        &self,
+        supervisor: &Supervisor,
+        program: &Resolved,
+    ) -> Result<String, String> {
+        let modified = std::fs::metadata(&program.path)
+            .and_then(|metadata| metadata.modified())
+            .ok();
+        let mut checked = self.checked.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(known) = checked.as_ref()
+            && known.path == program.path
+            && known.modified == modified
+        {
+            return Ok(known.version.clone());
+        }
+        let done = supervisor
+            .run(
+                "claude-version",
+                program,
+                &[Arg::Literal("--version")],
+                VERSION_PATIENCE,
+            )
+            .map_err(|error| error.to_string())?;
+        let version = parse_version(&done.output)
+            .filter(|_| !done.timed_out && done.exit_code == Some(0))
+            .ok_or_else(|| "Claude Code's version could not be read".to_owned())?;
+        *checked = Some(Checked {
+            path: program.path.clone(),
+            modified,
+            version: version.clone(),
+        });
+        Ok(version)
     }
 }
 

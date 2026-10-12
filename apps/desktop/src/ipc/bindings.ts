@@ -642,6 +642,77 @@ export const commands = {
 	 */
 	refreshUsageLimits: (onFocus: boolean) => __TAURI_INVOKE<null>("refresh_usage_limits", { onFocus }),
 	/**
+	 *  The plugins the agents have installed, in every scope, from their terminals too: for now
+	 *  Claude's, from `claude plugin list --json`.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why they could not be read: no Claude Code, one older than 2.1.268, or a command that
+	 *  failed, took too long or answered in a way Arden Code does not understand.
+	 */
+	installedPlugins: () => __TAURI_INVOKE<InstalledPlugin[]>("installed_plugins"),
+	/**
+	 *  Every plugin the person's marketplaces offer (ADR 0053): read from the agent the first time the
+	 *  page asks in a run of Arden Code, and again when `fresh`, as on Refresh.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why it could not be read, as [`installed_plugins`] does.
+	 */
+	pluginCatalog: (fresh: boolean) => __TAURI_INVOKE<AvailablePlugin[]>("plugin_catalog", { fresh }),
+	/**
+	 *  Installs a plugin (ADR 0053), once its id is checked: for the person in every project, or for
+	 *  the person or everyone in a project, which must be a trusted folder project. Answers the agent's
+	 *  own message.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why it was not installed: an id that is not a plugin id, a project that is unknown or
+	 *  not trusted, or a command that failed (with the agent's message and code), took too long, or
+	 *  answered in a way Arden Code does not understand.
+	 */
+	installPlugin: (target: PluginTarget, acceptCommand: string | null) => __TAURI_INVOKE<PluginChange>("install_plugin", { target, acceptCommand }),
+	/**
+	 *  Turns an installed plugin on or off, updates it or uninstalls it, at the scope it is installed
+	 *  at (ADR 0053). A project's plugin is changed in that project's folder, which must be a trusted
+	 *  folder project. Answers the agent's own message.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why it was not changed: a project that is unknown or not trusted, a change the plugin
+	 *  does not allow, or a command that failed (with the agent's message), took too long or answered
+	 *  in a way Arden Code does not understand.
+	 */
+	changePlugin: (action: PluginAction, target: PluginTarget, acceptCommand: string | null) => __TAURI_INVOKE<PluginChange>("change_plugin", { action, target, acceptCommand }),
+	/**
+	 *  The marketplaces the person has added (ADR 0053): for now Claude's, from
+	 *  `claude plugin marketplace list --json`.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why they could not be read, as [`installed_plugins`] does.
+	 */
+	marketplaces: () => __TAURI_INVOKE<Marketplace[]>("marketplaces"),
+	/**
+	 *  Adds a marketplace from a source the person typed (ADR 0053), once it is checked, and answers
+	 *  the agent's own message.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why it was not added: a source that could be read as a flag or holds a line break, a
+	 *  Claude Code older than 2.1.287, or a command that failed (with the agent's message and code),
+	 *  took too long or answered in a way Arden Code does not understand.
+	 */
+	addMarketplace: (source: string) => __TAURI_INVOKE<PluginChange>("add_marketplace", { source }),
+	/**
+	 *  Updates a marketplace's listing, or removes it with the plugins installed from it (ADR 0053).
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns why it was not changed, as [`add_marketplace`] does.
+	 */
+	changeMarketplace: (action: MarketplaceAction, name: string) => __TAURI_INVOKE<PluginChange>("change_marketplace", { action, name }),
+	/**
 	 *  Makes a session with `count` finished turns, to test long conversations. Debug builds only.
 	 * 
 	 *  # Errors
@@ -808,6 +879,22 @@ export type ApprovalState =
 /**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
 "cancelled";
 
+/**  A plugin a marketplace offers, with only what the page shows (ADR 0053). */
+export type AvailablePlugin = {
+	/**  The agent the plugin is for. */
+	agent: AgentKind,
+	/**  The agent's own id for it: `name@marketplace`. */
+	id: string,
+	name: string,
+	marketplace: string,
+	description: string | null,
+	version: string | null,
+	/**  How many times it was installed, when the marketplace counts it. */
+	installs: number | null,
+	/**  Where it comes from, as text: the repository or the path. */
+	source: string,
+};
+
 /**  The slash commands and models of the person's Claude Code, as it last said them. */
 export type Catalog = {
 	commands: SlashCommand[],
@@ -971,6 +1058,16 @@ export type ErrorCode =
 "ARD-AGT-018" | 
 /**  Bypass permissions was chosen while Settings does not allow it. */
 "ARD-AGT-019" | 
+/**  Plugins need a newer Claude Code than the one installed. */
+"ARD-AGT-020" | 
+/**  A plugin command failed, for a reason Claude Code gave. */
+"ARD-AGT-021" | 
+/**  A plugin command answered in a way Arden Code does not understand. */
+"ARD-AGT-022" | 
+/**  A plugin command took too long, and was ended. */
+"ARD-AGT-023" | 
+/**  Arden Code did not run a plugin command: what it names is not one it passes on. */
+"ARD-AGT-024" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -1001,6 +1098,23 @@ export type General = {
 	checkForUpdates: boolean,
 	/**  How dates and numbers are written. */
 	regionalFormat: RegionalFormat,
+};
+
+/**  An installed plugin, with only what the page shows. */
+export type InstalledPlugin = {
+	/**  The agent the plugin belongs to. */
+	agent: AgentKind,
+	/**  The agent's own id for it: `name@marketplace`. */
+	id: string,
+	name: string,
+	marketplace: string,
+	scope: PluginScope,
+	/**  The project's folder, for a plugin installed for a project. */
+	projectPath: string | null,
+	version: string | null,
+	enabled: boolean,
+	/**  What went wrong when it was loaded. */
+	errors: string[],
 };
 
 /**  One part of an agent's reply. */
@@ -1087,6 +1201,22 @@ export type LogLevel =
 "info" | 
 /**  Everything, for finding a bug. Files grow faster. */
 "debug";
+
+/**  A marketplace the person has added, with only what the page shows (ADR 0053). */
+export type Marketplace = {
+	/**  The agent whose marketplace it is. */
+	agent: AgentKind,
+	name: string,
+	/**  Where it comes from, as text: the repository, the address or the path, and its version. */
+	source: string,
+};
+
+/**  A change to a marketplace (ADR 0053). */
+export type MarketplaceAction = 
+/**  Reads its listing again from where it comes from. */
+"update" | 
+/**  Removes it, and with it every plugin installed from it. */
+"remove";
 
 /**  Where the page's Maximize button is, in physical pixels from the top left of the page. */
 export type MaximizeButtonArea = {
@@ -1185,6 +1315,52 @@ export type PlanState =
 "keptPlanning" | 
 /**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
 "cancelled";
+
+/**  A change to an installed plugin (ADR 0053). */
+export type PluginAction = "enable" | "disable" | "update" | "uninstall";
+
+/**  What a change to a plugin did, as Claude Code said it. */
+export type PluginChange = {
+	/**  Claude Code's own message. */
+	message: string,
+	/**
+	 *  Whether a session gets the change only when its Claude Code next starts, because applying it
+	 *  now would cost its prompt cache (ADR 0053). The app says so once it has asked them.
+	 */
+	sessionsWaiting: boolean,
+	/**
+	 *  A command the plugin's marketplace declares, which Claude Code showed instead of running:
+	 *  nothing was installed, and the person decides (ADR 0053).
+	 */
+	shownCommand: ShownCommand | null,
+};
+
+/**  Where a plugin is installed, as Claude Code says it. */
+export type PluginScope = 
+/**  For the person, in every project. */
+"user" | 
+/**  For everyone in a project, in its shared `.claude/settings.json`. */
+"project" | 
+/**  For the person, in one project. */
+"local" | 
+/**  By the person's organization: it cannot be changed here. */
+"managed" | 
+/**  From the person's claude.ai account: it is removed there. */
+"synced" | 
+/**  Loaded for one session only. */
+"session" | 
+/**  A scope this version of Arden Code does not know. */
+"other";
+
+/**
+ *  The plugin a command is for (ADR 0053): its id, the scope it is (or is to be) installed at,
+ *  and the project, for a project's scope.
+ */
+export type PluginTarget = {
+	id: string,
+	scope: PluginScope,
+	projectId: string | null,
+};
 
 /**  A folder on disk where agents work. */
 export type Project = {
@@ -1385,6 +1561,21 @@ export type SettingsChanged = {
 	settings: Settings,
 	/**  Set when the file could not be used and the defaults took over (`ARD-SET-002`). */
 	notice: AppError | null,
+};
+
+/**
+ *  A command a marketplace declares for a plugin, as Claude Code showed it, to be read in full
+ *  before it runs.
+ */
+export type ShownCommand = {
+	/**  The command as Claude Code displays it. */
+	command: string,
+	/**  The plugin it belongs to. */
+	plugin: string,
+	/**  Accepting passes this, and only this command runs. */
+	sha256: string,
+	/**  Whether it is not the command that was accepted, which changed since it was shown. */
+	changed: boolean,
 };
 
 /**  An action Claude Code runs when a message starts with a slash and its name. */

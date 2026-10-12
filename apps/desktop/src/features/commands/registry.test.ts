@@ -128,6 +128,7 @@ describe("the groups", () => {
     "archived.open": "goTo",
     "messageBox.focus": "session",
     "palette.open": "goTo",
+    "plugins.open": "goTo",
     "settings.open": "goTo",
     "shortcuts.show": "goTo",
     "navigate.back": "goTo",

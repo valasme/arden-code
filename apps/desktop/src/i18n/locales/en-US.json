@@ -41,6 +41,7 @@
     "navigateForward": "Forward",
     "paletteOpen": "Command palette",
     "permissionModeNext": "Next permission mode",
+    "pluginsOpen": "Plugins",
     "replyStop": "Stop the reply",
     "sessionArchive": "Archive session",
     "sessionDelete": "Delete session",
@@ -169,6 +170,31 @@
       "action": "Turn on Allow Bypass permissions in Settings → Agents first, if you accept the risk.",
       "what": "Bypass permissions is turned off.",
       "why": "In Bypass permissions, the agent runs every action without asking, so it has to be allowed in Settings."
+    },
+    "ARD-AGT-020": {
+      "action": "Run claude update in a terminal, then look again.",
+      "what": "Plugins need a newer Claude Code.",
+      "why": "Arden Code manages plugins through Claude Code's own plugin commands, which answer in a form it reads from Claude Code 2.1.268."
+    },
+    "ARD-AGT-021": {
+      "action": "Read Claude Code's message under this one, then try again.",
+      "what": "Claude Code could not do it.",
+      "why": "Claude Code refused or failed, for the reason in its own words under this message."
+    },
+    "ARD-AGT-022": {
+      "action": "Try again. If it keeps happening, run claude update, or report it with a diagnostics bundle.",
+      "what": "Claude Code answered in a way Arden Code does not understand.",
+      "why": "This version of Claude Code may print its plugins differently from what Arden Code expects."
+    },
+    "ARD-AGT-023": {
+      "action": "Check your connection and try again.",
+      "what": "Claude Code took too long, so it was stopped.",
+      "why": "A plugin command that runs for more than 5 minutes is ended, such as one waiting on a slow network."
+    },
+    "ARD-AGT-024": {
+      "action": "Check what you chose or typed, then try again.",
+      "what": "Arden Code did not run this.",
+      "why": "The plugin, marketplace or scope it names is not one Arden Code passes on to Claude Code, so nothing was run."
     },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
@@ -407,6 +433,113 @@
     "session": "{{session}}, in {{project}}",
     "sessions": "Sessions",
     "title": "Command palette"
+  },
+  "plugins": {
+    "actions": {
+      "notInstalled": "Install Claude Code (Settings → Agents shows how), then look again.",
+      "npmWrapper": "Install Claude Code with its native installer (Settings → Agents shows how), then look again.",
+      "stopped": "Look again. If it keeps happening, check that claude runs in a terminal, and look at its log in Settings → Advanced → Open logs."
+    },
+    "back": "Back",
+    "command": {
+      "accept": "Run it and install",
+      "changed": "The command changed since it was last shown.",
+      "description": "The {{marketplace}} marketplace asks to run this command on this computer to set the plugin up. Read it in full: only this command runs.",
+      "plugin": "For {{plugin}}",
+      "title": "Run a command for {{name}}?"
+    },
+    "description": "Plugins bring skills, slash commands and tools to your agents.",
+    "discover": {
+      "addOfficial": "Add Anthropic's official marketplace",
+      "back": "All plugins",
+      "choose": "Choose a plugin to see what it is.",
+      "count_one": "{{count}} plugin",
+      "count_other": "{{count}} plugins",
+      "installs_one": "{{formatted}} install",
+      "installs_other": "{{formatted}} installs",
+      "installsLabel": "Installs",
+      "label": "Plugins",
+      "marketplace": "Marketplace",
+      "noInstalls": "No install count",
+      "noMatch": "No plugin matches.",
+      "noVersion": "Not given",
+      "officialMissing": "Anthropic's official marketplace is not added, so its plugins are not listed.",
+      "reading": "Reading what your marketplaces offer…",
+      "refresh": "Refresh",
+      "source": "Source",
+      "version": "Version",
+      "warning": "A plugin can run programs on this computer through its hooks and servers. Install only plugins you trust."
+    },
+    "install": {
+      "cancel": "Cancel",
+      "confirm": "Install",
+      "localDetail": "Only you get it, and only in the project you choose.",
+      "noProject": "Open a folder as a project to install a plugin for it.",
+      "open": "Install…",
+      "project": "Project",
+      "projectDetail": "Everyone who works in the project gets it once you commit its .claude/settings.json, which this changes.",
+      "title": "Install {{name}}",
+      "underWay": "Installing {{name}}…",
+      "userDetail": "Only you get it, wherever you work.",
+      "who": "Who gets it?"
+    },
+    "installed": {
+      "changing": "Changing {{name}}…",
+      "label": "Installed plugins",
+      "noMatch": "No installed plugin matches.",
+      "none": "No plugins are installed.",
+      "off": "Off",
+      "on": "On",
+      "openProject": "Open {{path}} as a project in Arden Code to change this plugin here.",
+      "reading": "Reading the installed plugins…",
+      "synced": "Remove it on claude.ai.",
+      "toggle": "Use {{name}}",
+      "uninstall": "Uninstall",
+      "uninstallDescription": "Claude Code uninstalls it from “{{scope}}”.",
+      "uninstallLabel": "Uninstall {{name}}",
+      "uninstallTitle": "Uninstall {{name}}?",
+      "update": "Update",
+      "updateLabel": "Update {{name}}",
+      "version": "Version {{version}}"
+    },
+    "marketplaces": {
+      "add": "Add",
+      "adding": "Adding the marketplace…",
+      "changing": "Changing {{name}}…",
+      "label": "Marketplaces",
+      "none": "No marketplaces are added.",
+      "remove": "Remove",
+      "removeDescription_zero": "No plugin installed from it is uninstalled.",
+      "removeDescription_one": "It also uninstalls the {{count}} plugin installed from it.",
+      "removeDescription_other": "It also uninstalls the {{count}} plugins installed from it.",
+      "removeLabel": "Remove {{name}}",
+      "removeTitle": "Remove {{name}}?",
+      "source": "Source",
+      "sourceHint": "A GitHub owner/repo, a git address, a folder, or the address of a marketplace.json.",
+      "update": "Update",
+      "updateLabel": "Update {{name}}"
+    },
+    "scope": {
+      "local": "For you, in this project",
+      "managed": "From your organization",
+      "other": "Installed elsewhere",
+      "project": "For everyone in this project",
+      "session": "For one session only",
+      "synced": "From your claude.ai account",
+      "user": "For you, in every project"
+    },
+    "search": {
+      "label": "Search plugins",
+      "placeholder": "Search plugins"
+    },
+    "tabs": {
+      "discover": "Discover",
+      "installed": "Installed",
+      "marketplaces": "Marketplaces"
+    },
+    "tabsLabel": "Plugins tabs",
+    "title": "Plugins",
+    "waiting": "A session that is open gets it when its Claude Code next starts, so that its conversation is not read again at full price."
   },
   "projects": {
     "menu": "Actions for {{name}}",
@@ -881,6 +1014,7 @@
     "navigation": "Main navigation",
     "noSessions": "No sessions yet.",
     "pinned": "Pinned",
+    "plugins": "Plugins",
     "projects": "Projects",
     "settings": "Settings"
   },

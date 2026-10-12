@@ -308,6 +308,16 @@ pub fn get_usage(id: &str) -> String {
     )
 }
 
+/// Asks Claude Code to load its plugins again from disk, after a change, unless that would cost
+/// the conversation's prompt cache: then it holds the reload and says so (ADR 0053).
+#[must_use]
+pub fn reload_plugins(id: &str) -> String {
+    control_request(
+        id,
+        &json!({ "subtype": "reload_plugins", "hold_on_cache_impact": true }),
+    )
+}
+
 /// Asks Claude Code to name a session from what the person asked, as Claude's own apps name theirs
 /// (ADR 0050). The name is not kept in Claude Code's conversation: Arden Code keeps it.
 #[must_use]

@@ -3,6 +3,7 @@ import {
   ArchiveRestoreIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
+  BlocksIcon,
   CommandIcon,
   FolderOpenIcon,
   ChevronsLeftIcon,
@@ -43,6 +44,7 @@ export type CommandId =
   | "session.unarchive"
   | "session.delete"
   | "archived.open"
+  | "plugins.open"
   | "settings.open"
   | "sidebar.toggle"
   | "inspector.toggle"
@@ -80,6 +82,7 @@ export interface CommandDefinition {
     | "commands.sessionUnarchive"
     | "commands.sessionDelete"
     | "commands.archivedOpen"
+    | "commands.pluginsOpen"
     | "commands.settingsOpen"
     | "commands.sidebarToggle"
     | "commands.inspectorToggle"
@@ -198,6 +201,15 @@ export const commandDefinitions = [
     group: "goTo",
     labelKey: "commands.archivedOpen",
     icon: ArchiveIcon,
+    shortcuts: [],
+  },
+  {
+    id: "plugins.open",
+    group: "goTo",
+    labelKey: "commands.pluginsOpen",
+    icon: BlocksIcon,
+    // No default: Ctrl with a key that edits text is refused, and VS Code's Ctrl+Shift+X uses X
+    // (plan section 6.4). It can be bound.
     shortcuts: [],
   },
   {
