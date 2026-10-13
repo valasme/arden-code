@@ -149,6 +149,14 @@ _Avoid_: right panel, details pane
 What the session view shows when no session is open.
 _Avoid_: splash screen, empty page
 
+**Overlay**:
+Something drawn over the window for a short time, which then closes: a dialog, a menu, a popover, a tooltip or a notice. The command palette is one; the sidebar and the inspector are not.
+_Avoid_: modal (only some overlays hold the focus), flyout, popup
+
+**Notice**:
+A short message in a corner of the window that goes away on its own, sometimes with an action such as Undo.
+_Avoid_: toast, snackbar
+
 ### Control
 
 **Command**:

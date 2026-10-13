@@ -153,6 +153,7 @@ Versions are current at the time of writing. Renovate keeps them fresh.
 | UI state | Zustand 5 (sidebar, panels, palette) |
 | Forms | TanStack Form 1.x + Zod 4 |
 | Components | shadcn/ui CLI 4, Radix base, **Lyra** style; Tailwind CSS 4.3; tw-animate-css |
+| Motion | CSS for overlays and disclosures; Motion 14 (`LazyMotion`, `domMax`) for what React adds, removes or moves ([ADR 0054](adr/0054-what-moves-and-how.md)) |
 | Icons and toasts | Lucide; Sonner |
 | Shortcuts | TanStack Hotkeys (alpha), wrapped by our command registry so it can be swapped |
 | Long lists | shadcn MessageScroller and TanStack Virtual |
@@ -550,7 +551,11 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
 ### 7.4 Focus, motion and density
 
 - **Focus:** shown for keyboard focus only (`:focus-visible`), as a 1px `--ring` outline with a 1px offset. No glow, no animation. Mouse clicks never show a ring.
-- **Motion:** short fades and slides (120–160 ms), for overlays only. All motion stops when Windows "Animation effects" is off or Reduce motion is on. Nothing behind an overlay is blurred; its scrim is a flat tint.
+- **Motion** ([ADR 0054](adr/0054-what-moves-and-how.md), [the councils](research/motion-councils.md)):
+  - An overlay opens in 160 ms (Fluent 2's decelerate-mid curve) and closes in 120 ms (accelerate-min), from tokens. Menus, popovers and tooltips fade and slide 0.25rem from their anchor; dialogs fade and scale from 98%; closing is a fade. Nothing behind an overlay is blurred; its scrim is a flat tint.
+  - A disclosure opens and closes at the same pace when the person opens or closes it. A sidebar row moves to its new place, or fades out, when its session is pinned, unpinned, archived, unarchived, deleted, created or moved up by use.
+  - Nothing else moves: not the sidebar or the inspector, not pages or tabs, not a new turn, not controls.
+  - All motion stops when Windows "Animation effects" is off or Reduce motion is on, except a spinner, which keeps turning while something is waited on.
 - **Cursor:** every enabled button, link and control shows the pointer, except the window buttons (Minimize, Maximize or Restore, Close), which keep the arrow (ADR 0037).
 - **Density:** the Lyra style, tuned toward compact. The minimum pointer target is 24×24 px.
 
@@ -644,7 +649,7 @@ These are release gates: no release ships unless they all pass.
 - **Screen readers:** tested with NVDA and Narrator.
   - Every control has a name, role and state.
   - Streaming replies are announced politely and throttled.
-- **Windows settings honored:** contrast themes (forced colors), "Animation effects: off", and the text-size setting.
+- **Windows settings honored:** contrast themes (forced colors), "Animation effects: off" (only spinners keep turning), and the text-size setting.
 - **Zoom:** 80% to 200% without breaking the layout.
 - **Pointer targets:** at least 24×24 px.
 - **Contrast:** 4.5:1 for text, and 3:1 for control borders and focus outlines, verified for every token pair.
