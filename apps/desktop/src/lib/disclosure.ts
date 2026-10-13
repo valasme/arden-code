@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useCallback } from "react";
 
 /**
  * Opens or closes a disclosure without its move: marked still, the change is worked out once, so
@@ -17,14 +17,16 @@ function showAtOnce(details: HTMLDetailsElement, open: boolean) {
  * opens or closes it with `open`, as a transcript view change does (ADR 0054).
  *
  * The browser animates `::details-content` only from a state it has already drawn, so the move is
- * on from the start (base.css), and a change made here is held still.
+ * on from the start (base.css), and a change made here is held still. A ref that changes with
+ * `open` also reaches a `<details>` drawn later, such as a tool call's once its output comes back.
  */
 export function useDisclosure(open = false) {
-  const ref = useRef<HTMLDetailsElement>(null);
-
-  useLayoutEffect(() => {
-    if (ref.current) showAtOnce(ref.current, open);
-  }, [open]);
+  const ref = useCallback(
+    (details: HTMLDetailsElement | null) => {
+      if (details) showAtOnce(details, open);
+    },
+    [open],
+  );
 
   return { ref, "data-disclosure": "moving" } as const;
 }
