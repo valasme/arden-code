@@ -46,8 +46,8 @@ councils](../research/motion-councils.md) weighed each choice.
 
 ## Consequences
 
-- A disclosure moves only after the person's own click or key, so its transition is switched on by that event, not
-  by `open` changing; a transcript view change sets `open` without it.
+- The browser animates a disclosure's content only from a state it has already drawn, so its move is on from the
+  start, and code that opens or closes one, as a transcript view change does, holds it still for that change.
 - Motion is four packages from npm, held back two days like every other (ADR 0020), and about 33 kB at start.
 - The maintainer, who uses reduced motion, reviews this work with Reduce motion set to "Do not reduce".
 - A copied shadcn component that brings its own transition fails CI instead of waiting for a review to notice it.

@@ -69,8 +69,8 @@ virtualized. [CODE]
 
 ## What CSS can do in WebView2
 
-Evergreen WebView2 (ADR 0004) follows Chromium's stable release, which has the following. This is from Chromium's
-documentation, not tried in Arden Code yet; the disclosures ticket is the first to rely on it.
+Evergreen WebView2 (ADR 0004) follows Chromium's stable release, which has the following, from Chromium's
+documentation; the disclosures were tried in the app's test browser while building them (#164, below).
 
 - `@starting-style` and `transition-behavior: allow-discrete`: entering and leaving through `display` or
   `content-visibility`, as a disclosure or a popover does.
@@ -78,6 +78,19 @@ documentation, not tried in Arden Code yet; the disclosures ticket is the first 
   content's height.
 - Same-document View Transitions: a change drawn as a cross-fade or a move between two snapshots of the page, with a
   unique `view-transition-name` on every element that moves.
+
+What trying `::details-content` showed [TRY]:
+
+- **It moves only from a state the browser has drawn.** A rule given to a closed `<details>` in the same click that
+  opens it does nothing; the rule has to be there from the start, while the disclosure is drawn closed.
+- **Its transition is invisible to scripts.** `getAnimations()`, on the element or the document, does not list it,
+  and no `transitionrun`, `transitionstart` or `transitionend` event reaches the `<details>`. Tests read the height it
+  is drawn at instead, through `getComputedStyle(details, "::details-content")`.
+- **A change made in code shows at once when the move is held off for it:** with the transition property set to
+  `none`, the new state's style worked out once, then the transition put back, there is nothing left to animate.
+- **Tailwind's `duration-*` also sets `transition-duration`,** and an unset `transition-property` is `all`, so it made
+  every change to an overlay's own properties, its shadow among them, a transition too. tw-animate-css's
+  `animation-duration-*` times the animation alone.
 
 ## Windows' own pace
 
@@ -105,3 +118,4 @@ Fluent 2's motion tokens, from `@fluentui/react-motion` [FL]:
 - [PKG] `framer-motion` 14.1.1 `dist/index.d.ts` (`MotionConfigContext.skipAnimations`), `motion-dom` 14.1.1
   (`animation/interfaces/motion-value.mjs`), npm's publish times.
 - [FL] [Fluent UI `react-motion` API report](https://github.com/microsoft/fluentui/blob/master/packages/react-components/react-motion/library/etc/react-motion.api.md).
+- [TRY] Tried in Vitest's browser mode (Playwright's Chromium headless shell) while building #161 and #164.
