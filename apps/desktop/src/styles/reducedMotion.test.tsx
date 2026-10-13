@@ -15,6 +15,7 @@ describe("Reduced motion", () => {
       <>
         <output aria-label="Refreshing" className="animate-spin" />
         <p className="animate-in fade-in-0">Opening</p>
+        <p style={{ transition: "opacity 1s" }}>Fading</p>
       </>,
     );
 
@@ -26,5 +27,7 @@ describe("Reduced motion", () => {
     const other = getComputedStyle(screen.getByText("Opening"));
     expect(Number.parseFloat(other.animationDuration)).toBeLessThan(0.001);
     expect(other.animationIterationCount).toBe("1");
+    const fading = getComputedStyle(screen.getByText("Fading"));
+    expect(Number.parseFloat(fading.transitionDuration)).toBeLessThan(0.001);
   });
 });
