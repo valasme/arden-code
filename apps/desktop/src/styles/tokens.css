@@ -38,9 +38,14 @@
   --brand: oklch(0.737 0.126 47.7); /* the logo's orange: graphics only, never text */
   --brand-wordmark: oklch(0.375 0.051 42.9); /* the logo's brown */
   --selection: oklch(0.737 0.126 47.7 / 25%); /* warm tint behind selected text */
-  /* Motion (ADR 0054): an overlay opens in 160ms and closes, out of the way sooner, in 120ms. */
+  /*
+   * Motion (ADR 0054): an overlay opens in 160ms and closes, out of the way sooner, in 120ms, on
+   * Fluent 2's curves: decelerate-mid to open, accelerate-min to close.
+   */
   --motion-open-duration: 160ms;
   --motion-close-duration: 120ms;
+  --motion-open-curve: cubic-bezier(0, 0, 0, 1);
+  --motion-close-curve: cubic-bezier(0.8, 0, 0.78, 1);
 }
 
 .dark {
