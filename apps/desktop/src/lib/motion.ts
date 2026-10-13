@@ -22,3 +22,14 @@ export const listRow = {
   exit: { opacity: 0, transition: closing },
   transition: opening,
 } as const;
+
+/**
+ * A section of rows under its label, which slides to its new place as its rows do and fades out
+ * whole, its last rows with it, when it leaves. It comes at once, so a row moving into it, as into
+ * Pinned, shows its own move. Spread on an `m.section` inside `AnimatePresence`.
+ */
+export const listSection = {
+  layout: "position",
+  exit: { opacity: 0, transition: closing },
+  transition: opening,
+} as const;

@@ -430,7 +430,10 @@ describe("Deleting a session", () => {
     await user.keyboard("{Delete}");
     await user.click(await screen.findByRole("button", { name: "Delete session" }));
     await focusGoesTo(within(sidebar()).getByRole("button", { name: "New session" }));
-    expect(within(sidebar()).getByText("No sessions yet.")).toBeVisible();
+    // Once the last row has faded out (ADR 0054).
+    await waitFor(() => {
+      expect(within(sidebar()).getByText("No sessions yet.")).toBeVisible();
+    });
   });
 
   it("leaves no tooltip open on New session when the focus goes back to it after the last delete", async () => {
