@@ -184,6 +184,14 @@
 }
 
 /*
+ * Except a spinner, which keeps turning: it is the only sign that work is still going, and it turns
+ * in place (ADR 0054).
+ */
+:root[data-motion="reduce"] .animate-spin {
+  animation: var(--animate-spin) !important;
+}
+
+/*
  * The message box shows its focus on the block around it, which holds the text and its buttons,
  * rather than as a second outline inside that block.
  */
