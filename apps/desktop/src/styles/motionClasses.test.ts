@@ -29,11 +29,14 @@ function utility(name: string) {
   return name.slice(start);
 }
 
-/** A source's lines without its comments, whose words are not classes. */
+/**
+ * A source's lines without its comments, whose words are not classes. A comment's `*` is followed
+ * by a space, a `/` or nothing; a class's, as in `**:`, is not.
+ */
 const code = (text: string) =>
   text
     .split("\n")
-    .filter((line) => !/^\s*(?:\/\/|\/\*|\*)/.test(line))
+    .filter((line) => !/^\s*(?:\/\/|\/\*|\*(?:[\s/]|$))/.test(line))
     .join("\n");
 
 function movingClasses(text: string) {
@@ -57,6 +60,12 @@ describe("Motion classes", () => {
         '/**\n * Every transition comes from here.\n */\nclassName="transition-opacity"',
       ),
     ).toEqual(["transition-opacity"]);
+  });
+
+  it("are found on a line that starts with a descendant variant", () => {
+    expect(movingClasses("className={`\n**:data-[slot=kbd]:transition-colors\n`}")).toEqual([
+      "**:data-[slot=kbd]:transition-colors",
+    ]);
   });
 
   it("are found behind their variants, and a spinner is let through", () => {
