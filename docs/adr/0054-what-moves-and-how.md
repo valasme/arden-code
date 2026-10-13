@@ -4,7 +4,7 @@
 - Date: 2026-10-13
 - Changes "motion on overlays only" in [0010](0010-visual-design-system.md), [0022](0022-high-contrast-and-component-adjustments.md)
   and [0032](0032-the-redesign.md), and the reduced motion rule of [0023](0023-zoom-and-the-root-size.md); adds Motion
-  to [0006](0006-frontend-stack.md)'s stack and plan sections 5.3, 7.4 and 10.
+  to [0006](0006-frontend-stack.md)'s stack; changes plan sections 5.3, 7.4 and 10.
 
 ## Context
 
@@ -27,8 +27,9 @@ councils](../research/motion-councils.md) weighed each choice.
   zoom.
 - **Two more things move.** A disclosure (thinking and tool-call items, About's licenses) opens to its height and
   closes, when the person opens or closes it; a transcript view change and a session that opens show it as it is. A
-  sidebar row moves to its new place, or fades out, when its session is pinned, unpinned, archived, unarchived,
-  deleted, created or moved up by use, or its project removed; search results show at once. Nothing else moves: not
+  sidebar row moves to its new place when its session is pinned, unpinned or moved up by use; comes in when it is
+  created or unarchived; and fades out when it is archived or deleted, or its project removed. Search results show at
+  once. Nothing else moves: not
   the sidebar or the inspector, not pages or tabs, not a new turn (ADR 0049), not controls (ADR 0022).
 - **CSS animates what has an open or closed state in the page; Motion animates what React adds, removes or moves.**
   Overlays keep tw-animate-css, disclosures use `::details-content`, and the sidebar's rows use Motion (`motion`, with

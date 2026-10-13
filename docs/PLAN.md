@@ -553,7 +553,7 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
 - **Focus:** shown for keyboard focus only (`:focus-visible`), as a 1px `--ring` outline with a 1px offset. No glow, no animation. Mouse clicks never show a ring.
 - **Motion** ([ADR 0054](adr/0054-what-moves-and-how.md), [the councils](research/motion-councils.md)):
   - An overlay opens in 160 ms (Fluent 2's decelerate-mid curve) and closes in 120 ms (accelerate-min), from tokens. Menus, popovers and tooltips fade and slide 0.25rem from their anchor; dialogs fade and scale from 98%; closing is a fade. Nothing behind an overlay is blurred; its scrim is a flat tint.
-  - A disclosure opens and closes at the same pace when the person opens or closes it. A sidebar row moves to its new place, or fades out, when its session is pinned, unpinned, archived, unarchived, deleted, created or moved up by use.
+  - A disclosure opens and closes at the same pace when the person opens or closes it. A sidebar row moves to its new place when its session is pinned, unpinned or moved up by use; comes in when it is created or unarchived; and fades out when it is archived or deleted, or its project removed.
   - Nothing else moves: not the sidebar or the inspector, not pages or tabs, not a new turn, not controls.
   - All motion stops when Windows "Animation effects" is off or Reduce motion is on, except a spinner, which keeps turning while something is waited on.
 - **Cursor:** every enabled button, link and control shows the pointer, except the window buttons (Minimize, Maximize or Restore, Close), which keep the arrow (ADR 0037).

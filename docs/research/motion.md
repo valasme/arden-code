@@ -14,7 +14,7 @@
 - **Three controls carry `transition-colors`,** which ADR 0022 rules out: the input, the input group and the textarea.
   The classes came with the shadcn copies (`e591148` and later); ADR 0022's "review every copied component" is not
   checked by anything. [CODE]
-- **Two spinners turn.** One is in a toast; the other is on the Plugins page's Refresh button, a control outside any
+- **Two spinners turn.** One is in a notice; the other is on the Plugins page's Refresh button, a control outside any
   overlay. Under reduced motion both stop at once and show as a still icon. [CODE]
 - **Motion can follow the app's reduced motion, but not through its own reduced-motion option.** That option keeps
   fades; `skipAnimations` on `MotionConfig` stops everything. [MD] [PKG]
@@ -27,8 +27,8 @@
 | Menus, context menus (`ui/dropdown-menu.tsx`) | fade, zoom from 95%, 0.5rem slide from the anchor | 100 ms | ends at once |
 | Popovers (`ui/popover.tsx`) | as menus | 100 ms | ends at once |
 | Tooltips (`ui/tooltip.tsx`) | as menus | 150 ms (tw-animate-css's default) | ends at once |
-| Toasts (Sonner, `base.css`) | Sonner's slide and fade | 160 ms, both ways | ends at once |
-| Toast loading icon, Plugins → Refresh | `animate-spin` | 1 s per turn | stops at once |
+| Notices (Sonner, `base.css`) | Sonner's slide and fade | 160 ms, both ways | ends at once |
+| A notice's loading icon, Plugins → Refresh | `animate-spin` | 1 s per turn | stops at once |
 | Input, input group, textarea | `transition-colors` | 150 ms | ends at once |
 
 [CODE] [TW]. tw-animate-css's `animate-in` and `animate-out` take `--tw-duration` and default to 150 ms and `ease`. [TW]
@@ -69,7 +69,8 @@ virtualized. [CODE]
 
 ## What CSS can do in WebView2
 
-Evergreen WebView2 (ADR 0004) follows Chromium's stable release, which has:
+Evergreen WebView2 (ADR 0004) follows Chromium's stable release, which has the following. This is from Chromium's
+documentation, not tried in Arden Code yet; the disclosures ticket is the first to rely on it.
 
 - `@starting-style` and `transition-behavior: allow-discrete`: entering and leaving through `display` or
   `content-visibility`, as a disclosure or a popover does.
