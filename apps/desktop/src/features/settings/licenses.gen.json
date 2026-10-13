@@ -1902,6 +1902,12 @@
     "kind": "npm"
   },
   {
+    "name": "framer-motion",
+    "version": "14.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
     "name": "fresh",
     "version": "2.0.0",
     "license": "MIT",
@@ -3142,6 +3148,24 @@
     "version": "1.2.3",
     "license": "MIT",
     "kind": "crate"
+  },
+  {
+    "name": "motion",
+    "version": "14.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "motion-dom",
+    "version": "14.1.0",
+    "license": "MIT",
+    "kind": "npm"
+  },
+  {
+    "name": "motion-utils",
+    "version": "14.1.0",
+    "license": "MIT",
+    "kind": "npm"
   },
   {
     "name": "moxcms",

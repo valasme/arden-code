@@ -16,6 +16,7 @@ import type {
   PermissionMode,
   PluginChange,
   Project,
+  ReduceMotion,
   Session,
   SessionList,
   SessionSummary,
@@ -111,6 +112,8 @@ interface Options {
   usageLimits?: UsageLimits;
   /** The default transcript view in the settings (ADR 0051). */
   transcriptView?: TranscriptView;
+  /** The Reduce motion setting (ADR 0023). Same as Windows by default. */
+  reduceMotion?: ReduceMotion;
   /** The plugins Claude Code has installed (ADR 0053). None by default. */
   installedPlugins?: InstalledPlugin[];
   /** The plugins the person's marketplaces offer (ADR 0053). None by default. */
@@ -147,6 +150,7 @@ export function startSessionsRust({
   pickedFolder = null,
   usageLimits = { report: "unknown", windows: [] },
   transcriptView = "normal",
+  reduceMotion = "system",
   installedPlugins = [],
   pluginCatalog = [],
   marketplaces = [],
@@ -202,7 +206,7 @@ export function startSessionsRust({
         case "get_settings": {
           return settingsWith({
             general: { regionalFormat },
-            appearance: { transcriptView },
+            appearance: { transcriptView, reduceMotion },
             agents: { allowBypassPermissions },
           });
         }

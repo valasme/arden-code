@@ -1,15 +1,10 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect } from "react";
 
-import {
-  motionIsReduced,
-  paintAppearance,
-  paintMotion,
-  subscribeToWindowsMotion,
-  windowsReducesMotion,
-} from "@/lib/appearance";
+import { paintAppearance, paintMotion } from "@/lib/appearance";
 import { applyTheme } from "@/lib/theme";
 
 import { useSystemPreferences } from "./systemPreferences";
+import { useMotionReduced } from "./useMotionReduced";
 import { useSettings } from "./useSettings";
 
 /**
@@ -18,10 +13,8 @@ import { useSettings } from "./useSettings";
  * reduced. Draws nothing.
  */
 export function AppearanceFromSettings() {
-  const { theme, zoom, followTextSize, codeFontSize, codeLigatures, reduceMotion } =
-    useSettings().appearance;
+  const { theme, zoom, followTextSize, codeFontSize, codeLigatures } = useSettings().appearance;
   const { textScalePercent } = useSystemPreferences();
-  const systemReduces = useSyncExternalStore(subscribeToWindowsMotion, windowsReducesMotion);
 
   useEffect(() => applyTheme(theme), [theme]);
 
@@ -33,7 +26,7 @@ export function AppearanceFromSettings() {
     );
   }, [zoom, followTextSize, codeFontSize, codeLigatures, textScalePercent]);
 
-  const reduce = motionIsReduced(reduceMotion, systemReduces);
+  const reduce = useMotionReduced();
   useEffect(() => {
     paintMotion(document.documentElement, reduce);
   }, [reduce]);

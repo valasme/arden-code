@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { EllipsisIcon, SquarePenIcon } from "lucide-react";
+import { AnimatePresence, LayoutGroup, useIsPresent } from "motion/react";
+import * as m from "motion/react-m";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -10,6 +12,7 @@ import { CommandTooltip } from "@/features/commands/CommandTooltip";
 import { useCommands } from "@/features/commands/CommandsProvider";
 import type { SessionSummary } from "@/ipc/bindings";
 import { noSessions, sessionListQuery } from "@/ipc/queries";
+import { listRow } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useRowFocusStore } from "@/state/rowFocus";
 import { useSessionDialogsStore } from "@/state/sessionDialogs";
@@ -28,6 +31,9 @@ function SessionRow({ session }: { session: SessionSummary }) {
   const title = session.title ?? t("sessions.untitled");
   const link = useRef<HTMLAnchorElement>(null);
   const runAction = useSessionActions();
+  // On its way out, the row is out of reach and out of what is read at once: the focus has moved on
+  // (plan section 6.11).
+  const present = useIsPresent();
 
   // The row takes the focus that was asked for it, once it stands in the list it was asked for: the
   // row a pin moved away from is not this one.
@@ -40,7 +46,14 @@ function SessionRow({ session }: { session: SessionSummary }) {
   }, [request, session.id, session.pinned, done]);
 
   return (
-    <li data-session-id={session.id} className="group/row relative">
+    <m.li
+      {...listRow}
+      layoutId={`session-row-${session.id}`}
+      inert={!present}
+      aria-hidden={present ? undefined : true}
+      data-session-id={session.id}
+      className="group/row relative"
+    >
       <Link
         ref={link}
         to="/session/$id"
@@ -66,7 +79,7 @@ function SessionRow({ session }: { session: SessionSummary }) {
           <EllipsisIcon aria-hidden className="size-4" strokeWidth={1.5} />
         </button>
       </SessionMenu>
-    </li>
+    </m.li>
   );
 }
 
@@ -85,7 +98,8 @@ export function SessionsNav() {
   const askToRemove = useSessionDialogsStore((state) => state.askToRemove);
 
   return (
-    <>
+    // Rows move together, so a row that slides into Pinned moves the rows below it too.
+    <LayoutGroup>
       <CommandTooltip command="session.new">
         <button
           type="button"
@@ -106,9 +120,11 @@ export function SessionsNav() {
             {t("sidebar.pinned")}
           </h2>
           <ul className="flex flex-col gap-px">
-            {list.pinned.map((session) => (
-              <SessionRow key={session.id} session={session} />
-            ))}
+            <AnimatePresence initial={false}>
+              {list.pinned.map((session) => (
+                <SessionRow key={session.id} session={session} />
+              ))}
+            </AnimatePresence>
           </ul>
         </section>
       ) : null}
@@ -151,13 +167,15 @@ export function SessionsNav() {
               <p className="px-2 py-1 text-xs text-muted-foreground">{t("sidebar.noSessions")}</p>
             ) : (
               <ul className="flex flex-col gap-px">
-                {sessions.map((session) => (
-                  <SessionRow key={session.id} session={session} />
-                ))}
+                <AnimatePresence initial={false}>
+                  {sessions.map((session) => (
+                    <SessionRow key={session.id} session={session} />
+                  ))}
+                </AnimatePresence>
               </ul>
             )}
           </section>
         ))}
-    </>
+    </LayoutGroup>
   );
 }
