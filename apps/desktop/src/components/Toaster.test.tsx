@@ -131,18 +131,21 @@ describe("Toaster", () => {
     });
   });
 
-  it("moves for 160ms at most, and not at all with reduced motion", async () => {
+  it("comes in 160ms, leaves in 120ms, and does not move with reduced motion", async () => {
     render(<Toaster />);
 
     toast.success("Sent a test notification");
 
     const item = await shown("Sent a test notification");
     const style = getComputedStyle(item);
-    expect(longest(style.transitionDuration)).toBeGreaterThan(0);
-    expect(longest(style.transitionDuration)).toBeLessThanOrEqual(160);
-    // Swiped away, as Sonner marks a toast that is dragged off.
+    expect(longest(style.transitionDuration)).toBe(160);
+    // Leaving, as Sonner marks a notice that is dismissed or times out.
+    item.dataset["removed"] = "true";
+    expect(longest(style.transitionDuration)).toBe(120);
+    expect(longest(getComputedStyle(item.firstElementChild ?? item).transitionDuration)).toBe(120);
+    // Swiped away, as Sonner marks a notice that is dragged off.
     item.dataset["swipeOut"] = "true";
-    expect(longest(style.animationDuration)).toBeLessThanOrEqual(160);
+    expect(longest(style.animationDuration)).toBe(120);
     root.dataset["motion"] = "reduce";
     expect(longest(style.transitionDuration)).toBeLessThan(1);
     expect(longest(style.animationDuration)).toBeLessThan(1);
