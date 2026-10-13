@@ -14,9 +14,9 @@ plan section 7.4; three controls still carried `transition-colors`, which ADR 00
 one of them on a control, both stopped dead under reduced motion. Nothing checked any of it. ADR 0022's "review every
 copied component" had been missed by each shadcn copy since.
 
-Motion's own `reducedMotion` option stops transforms and layout animations but keeps fades, and it follows Windows'
-media query rather than the app's setting. Its `skipAnimations` flag stops everything. [The
-councils](../research/motion-councils.md) weighed each choice.
+Motion's own `reducedMotion` option stops transforms and layout animations but keeps fades, and by default it follows
+Windows' media query rather than the app's setting. Its `skipAnimations` flag sets values such as opacity at once, but
+does not reach a layout animation. [The councils](../research/motion-councils.md) weighed each choice.
 
 ## Decision
 
@@ -29,15 +29,17 @@ councils](../research/motion-councils.md) weighed each choice.
   closes, when the person opens or closes it; a transcript view change and a session that opens show it as it is. A
   sidebar row moves to its new place when its session is pinned, unpinned or moved up by use; comes in when it is
   created or unarchived; and fades out when it is archived or deleted, or its project removed. Search results show at
-  once. Nothing else moves: not
-  the sidebar or the inspector, not pages or tabs, not a new turn (ADR 0049), not controls (ADR 0022).
+  once. Nothing else moves: not the sidebar or the inspector, not pages or tabs, not a new turn (ADR 0049), not
+  controls (ADR 0022).
 - **CSS animates what has an open or closed state in the page; Motion animates what React adds, removes or moves.**
   Overlays keep tw-animate-css, disclosures use `::details-content`, and the sidebar's rows use Motion (`motion`, with
   `LazyMotion`, `domMax` and `strict`). A Motion transition is written only in `lib/motion.ts`, from the same values
   as the tokens.
 - **Reduced motion still ends every animation at once,** in CSS through `data-motion="reduce"` (with
-  `::details-content` added) and in Motion through `skipAnimations`, set from the same value at the root. Motion's
-  `reducedMotion` option is not used. A row on its way out is `inert`, and the focus moves on at once.
+  `::details-content` added) and in Motion through `MotionConfig`, set from the same value at the root: `skipAnimations`
+  for values such as opacity and `reducedMotion="always"` for layout, since neither stops both. With motion on,
+  `reducedMotion` is `"never"`, so Windows' own setting cannot overrule the app's. A row on its way out is `inert`, and
+  the focus moves on at once.
 - **Spinners are the one exception.** `animate-spin` turns wherever something is waited on, also under reduced motion:
   it is the only sign that work is still going, and it turns in place.
 - **The rules are checked.** A browser test checks every overlay's durations against the tokens and that nothing but a

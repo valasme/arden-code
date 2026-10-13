@@ -62,6 +62,9 @@ virtualized. [CODE]
 - **`skipAnimations` on `MotionConfig`:** "If true, all animations will be skipped and values will be set instantly.
   Useful for E2E tests and visual regression testing." Public in the package's types; the same flag exists on
   `animate()`'s options and as `MotionGlobalConfig.skipAnimations`. [PKG]
+- **But it does not reach a layout animation.** With it on, a sidebar row moved by `layout` still slid from 16 px to
+  its place over about ten frames. Motion makes a layout animation instant only when `reducedMotion` applies to the
+  element (`shouldReduceMotion` in `motion-dom`'s projection node), so stopping everything takes both. [TRY] [PKG]
 - **Where Motion runs its animations:** some through the browser's animation API, layout animations on its own frame
   loop. Neither is reached by `base.css`'s rule. [MD] [PKG]
 - **What it does that CSS cannot:** animate an element that React removes (`AnimatePresence`), and move an element
@@ -118,4 +121,4 @@ Fluent 2's motion tokens, from `@fluentui/react-motion` [FL]:
 - [PKG] `framer-motion` 14.1.1 `dist/index.d.ts` (`MotionConfigContext.skipAnimations`), `motion-dom` 14.1.1
   (`animation/interfaces/motion-value.mjs`), npm's publish times.
 - [FL] [Fluent UI `react-motion` API report](https://github.com/microsoft/fluentui/blob/master/packages/react-components/react-motion/library/etc/react-motion.api.md).
-- [TRY] Tried in Vitest's browser mode (Playwright's Chromium headless shell) while building #161 and #164.
+- [TRY] Tried in Vitest's browser mode (Playwright's Chromium headless shell) while building #161, #164 and #165.

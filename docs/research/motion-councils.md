@@ -190,3 +190,12 @@ React adds, removes or moves.
 | 17 | Tests | R1, in the browser test bed: each overlay's durations (Q8); the tokens against `lib/motion.ts` (Q10); a disclosure that moves on a click and not on a transcript view change; a row that moves when pinned. Under reduce, after an overlay opens, a disclosure toggles and a row moves, `document.getAnimations()` holds only spinners and every row is in place in the same frame. The source check (Q8). Any changed end-to-end or screenshot test runs 10 times before the merge (CLAUDE.md). |
 | 18 | Review with reduce on | P1: the maintainer reviews with Settings → Appearance → Reduce motion → "Do not reduce", which wins over Windows (ADR 0023), and compares a menu and a dialog with Windows 11's own. Each pull request lists what to try. |
 | 19 | Branches and tickets | D1: one spec on the tracker with five tickets and blocking edges: (1) overlays at the tokens' pace, the drift and the guard (Q2, Q3, Q8), in its own pull request; then, on one branch and pull request, a commit and an issue each: (2) how overlays move (Q4); (3) spinners under reduce (Q6); (4) disclosures (Q13); (5) Motion and the sidebar's rows (Q9 to Q12, Q14). Tickets 2 to 5 are blocked by 1. |
+
+## Round 4: what building it showed
+
+Two verdicts met the browser and changed in their means, not their outcome; ADR 0054 says how.
+
+| # | Question | Verdict and why |
+|---|---|---|
+| 20 | Moving a disclosure only on the person's toggle (Q13) | R1: a rule given to `::details-content` in the same click that opens it moves nothing, because the browser animates it only from a state it has drawn. A4: the move is on from the start, and `useDisclosure` holds it still for a change made in code, so a transcript view change still shows items as they are. |
+| 21 | Motion under reduced motion (Q11) | R1: `skipAnimations` alone left a moved row sliding, because Motion makes a layout animation instant only through `reducedMotion`. **A4 dissents** from Q11's "never `reducedMotion`": it was turned down for keeping fades. Settled: it is set together with `skipAnimations`, which stops the fades, both from the app's value, and `"never"` while motion is on, so Windows still cannot overrule the setting. |
