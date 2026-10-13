@@ -154,6 +154,34 @@
   box-shadow: none;
 }
 
+/*
+ * A disclosure (lib/disclosure.ts) opens to its content's height and closes at an overlay's pace
+ * when the person opens or closes it. When code does, as the Verbose view does, it is held still
+ * for that change and shows at once (ADR 0054).
+ */
+details[data-disclosure] {
+  interpolate-size: allow-keywords;
+}
+
+details[data-disclosure]::details-content {
+  height: 0;
+  overflow: clip;
+  transition-property: height, content-visibility;
+  transition-duration: var(--motion-close-duration);
+  transition-timing-function: var(--motion-close-curve);
+  transition-behavior: allow-discrete;
+}
+
+details[data-disclosure][open]::details-content {
+  height: auto;
+  transition-duration: var(--motion-open-duration);
+  transition-timing-function: var(--motion-open-curve);
+}
+
+details[data-disclosure="still"]::details-content {
+  transition-property: none;
+}
+
 /* In a Windows contrast theme, a selected item is underlined because fills are not available. */
 @media (forced-colors: active) {
   [aria-pressed="true"],
@@ -174,7 +202,8 @@
  */
 :root[data-motion="reduce"] *,
 :root[data-motion="reduce"] *::before,
-:root[data-motion="reduce"] *::after {
+:root[data-motion="reduce"] *::after,
+:root[data-motion="reduce"] *::details-content {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   animation-delay: 0s !important;

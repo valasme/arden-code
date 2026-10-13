@@ -2,6 +2,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { use } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useDisclosure } from "@/lib/disclosure";
 import { cn } from "@/lib/utils";
 
 import { TranscriptViewContext } from "../transcriptView";
@@ -14,11 +15,12 @@ import { itemLine } from "./itemLine";
 export function ThinkingItem({ text, streaming }: { text: string; streaming: boolean }) {
   const { t } = useTranslation();
   const view = use(TranscriptViewContext);
+  const disclosure = useDisclosure(view !== "normal");
 
   return (
     <details
+      {...disclosure}
       data-item="thinking"
-      open={view !== "normal"}
       className={cn(itemLine, "group text-muted-foreground")}
     >
       <summary className="flex min-h-6 list-none items-center gap-2 select-none hover:text-foreground [&::-webkit-details-marker]:hidden">

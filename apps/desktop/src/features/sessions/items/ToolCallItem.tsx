@@ -3,6 +3,7 @@ import { use } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ToolStatus } from "@/ipc/bindings";
+import { useDisclosure } from "@/lib/disclosure";
 import { cn } from "@/lib/utils";
 
 import { TranscriptViewContext } from "../transcriptView";
@@ -23,6 +24,7 @@ interface ToolCallItemProps {
 export function ToolCallItem({ name, input, status, output }: ToolCallItemProps) {
   const { t } = useTranslation();
   const verbose = use(TranscriptViewContext) === "verbose";
+  const disclosure = useDisclosure(verbose);
 
   const line = (
     <>
@@ -59,7 +61,7 @@ export function ToolCallItem({ name, input, status, output }: ToolCallItemProps)
     );
   }
   return (
-    <details data-item="toolCall" open={verbose} className={itemLine}>
+    <details {...disclosure} data-item="toolCall" className={itemLine}>
       <summary className="flex min-h-6 list-none items-center gap-2 select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
         {line}
       </summary>

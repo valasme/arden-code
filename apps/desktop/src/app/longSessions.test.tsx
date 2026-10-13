@@ -237,6 +237,37 @@ describe("Following a reply as it streams (#132)", () => {
   });
 });
 
+describe("Following a disclosure as it opens (ADR 0054)", () => {
+  it("keeps the end in view on every frame while the last turn's thinking opens", async () => {
+    const session = longSession(50);
+    session.turns.at(-1)?.items.push({
+      type: "thinking",
+      id: "thinking-50",
+      text: "First I will read the file.\nThen I will change it.\nThen I will run the tests.",
+    });
+    startRust(session);
+    render(<App history={createMemoryHistory({ initialEntries: ["/session/session-1"] })} />);
+    await screen.findByText("Message number 50");
+    const turn = [...rows()].at(-1);
+    if (!turn) throw new Error("no turn");
+
+    const behind: number[] = [];
+    const observer = new ResizeObserver(() => {
+      behind.push(distanceFromEnd());
+    });
+    observer.observe(turn);
+    onTestFinished(() => {
+      observer.disconnect();
+    });
+    screen.getByText("Thinking").click();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    expect(screen.getByText(/Then I will run the tests/)).toBeVisible();
+    expect(behind.length, "the turn grew over several frames").toBeGreaterThan(3);
+    expect(Math.max(...behind)).toBeLessThan(2);
+  });
+});
+
 describe("Benchmark: a session of 10,000 messages", () => {
   it("opens quickly, draws only a screenful, and scrolls without dropping many frames", async ({
     annotate,
