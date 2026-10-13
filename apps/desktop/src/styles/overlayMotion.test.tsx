@@ -32,6 +32,12 @@ function animationMs(element: Element) {
   return Number.parseFloat(duration) * (duration.endsWith("ms") ? 1 : 1000);
 }
 
+/** How long an element's transitions run, in milliseconds: an overlay moves by its animation. */
+function transitionMs(element: Element) {
+  const durations = getComputedStyle(element).transitionDuration.split(",");
+  return Math.max(...durations.map((duration) => Number.parseFloat(duration) * 1000));
+}
+
 function slot(name: string) {
   const element = document.querySelector(`[data-slot=${name}]`);
   if (!element) throw new Error(`nothing is drawn as ${name}`);
@@ -90,14 +96,16 @@ const tooltip = (
 );
 
 describe("An overlay", () => {
-  it("opens in 160ms, closes in 120ms, and does not move with reduced motion: a dialog and its scrim", async () => {
+  it("opens in 160ms and closes in 120ms with no transition, and does not move with reduced motion: a dialog and its scrim", async () => {
     const { rerender } = render(dialog(true));
     await screen.findByRole("dialog", { name: "Reset settings?" });
     await animationsDone(document.body);
     await expectNoAccessibilityViolations(document.body);
 
     expect(animationMs(slot("dialog-content"))).toBe(160);
+    expect(transitionMs(slot("dialog-content"))).toBe(0);
     expect(animationMs(slot("dialog-overlay"))).toBe(160);
+    expect(transitionMs(slot("dialog-overlay"))).toBe(0);
 
     rerender(dialog(false));
 
@@ -109,14 +117,16 @@ describe("An overlay", () => {
     expect(animationMs(slot("dialog-overlay"))).toBeLessThan(1);
   });
 
-  it("opens in 160ms, closes in 120ms, and does not move with reduced motion: a confirmation and its scrim", async () => {
+  it("opens in 160ms and closes in 120ms with no transition, and does not move with reduced motion: a confirmation and its scrim", async () => {
     const { rerender } = render(confirmation(true));
     await screen.findByRole("alertdialog", { name: "Delete the session?" });
     await animationsDone(document.body);
     await expectNoAccessibilityViolations(document.body);
 
     expect(animationMs(slot("confirm-dialog-content"))).toBe(160);
+    expect(transitionMs(slot("confirm-dialog-content"))).toBe(0);
     expect(animationMs(slot("confirm-dialog-overlay"))).toBe(160);
+    expect(transitionMs(slot("confirm-dialog-overlay"))).toBe(0);
 
     rerender(confirmation(false));
 
@@ -128,11 +138,12 @@ describe("An overlay", () => {
     expect(animationMs(slot("confirm-dialog-overlay"))).toBeLessThan(1);
   });
 
-  it("opens in 160ms, closes in 120ms, and does not move with reduced motion: a menu, as context menus are", async () => {
+  it("opens in 160ms and closes in 120ms with no transition, and does not move with reduced motion: a menu, as context menus are", async () => {
     const { rerender } = render(menu(true));
     await screen.findByRole("menu");
 
     expect(animationMs(slot("dropdown-menu-content"))).toBe(160);
+    expect(transitionMs(slot("dropdown-menu-content"))).toBe(0);
 
     rerender(menu(false));
 
@@ -142,11 +153,12 @@ describe("An overlay", () => {
     expect(animationMs(slot("dropdown-menu-content"))).toBeLessThan(1);
   });
 
-  it("opens in 160ms, closes in 120ms, and does not move with reduced motion: a submenu", async () => {
+  it("opens in 160ms and closes in 120ms with no transition, and does not move with reduced motion: a submenu", async () => {
     const { rerender } = render(menu(true, true));
     await screen.findByRole("menuitem", { name: "Playground" });
 
     expect(animationMs(slot("dropdown-menu-sub-content"))).toBe(160);
+    expect(transitionMs(slot("dropdown-menu-sub-content"))).toBe(0);
 
     rerender(menu(true, false));
 
@@ -156,11 +168,12 @@ describe("An overlay", () => {
     expect(animationMs(slot("dropdown-menu-sub-content"))).toBeLessThan(1);
   });
 
-  it("opens in 160ms, closes in 120ms, and does not move with reduced motion: a popover", async () => {
+  it("opens in 160ms and closes in 120ms with no transition, and does not move with reduced motion: a popover", async () => {
     const { rerender } = render(popover(true));
     await screen.findByText("42% of the context window is used.");
 
     expect(animationMs(slot("popover-content"))).toBe(160);
+    expect(transitionMs(slot("popover-content"))).toBe(0);
 
     rerender(popover(false));
 
@@ -170,7 +183,7 @@ describe("An overlay", () => {
     expect(animationMs(slot("popover-content"))).toBeLessThan(1);
   });
 
-  it("opens in 160ms, closes in 120ms, and does not move with reduced motion: a tooltip", async () => {
+  it("opens in 160ms and closes in 120ms with no transition, and does not move with reduced motion: a tooltip", async () => {
     const user = userEvent.setup();
     render(tooltip);
 
@@ -178,6 +191,7 @@ describe("An overlay", () => {
     await screen.findByRole("tooltip");
 
     expect(animationMs(slot("tooltip-content"))).toBe(160);
+    expect(transitionMs(slot("tooltip-content"))).toBe(0);
 
     await user.unhover(screen.getByRole("button", { name: "New session" }));
 

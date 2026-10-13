@@ -65,7 +65,11 @@
   --radius-3xl: var(--radius);
   --radius-4xl: var(--radius);
 
-  /* An overlay's pace (ADR 0054): `duration-open` while it opens, `duration-close` while it closes. */
-  --transition-duration-open: var(--motion-open-duration);
-  --transition-duration-close: var(--motion-close-duration);
+  /*
+   * An overlay's pace (ADR 0054): `animation-duration-open` while it opens, `-close` while it closes.
+   * They time its animation alone: Tailwind's `duration-*` would also make every change to the
+   * overlay's own properties a transition.
+   */
+  --animation-duration-open: var(--motion-open-duration);
+  --animation-duration-close: var(--motion-close-duration);
 }
