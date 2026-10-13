@@ -13,7 +13,8 @@ const overlays = new Set([
 ]);
 
 /** Utilities that make an element move. A spinner may turn anywhere (ADR 0054). */
-const moving = /^-?!?(?:transition(?:-.+)?|duration-.+|ease-.+|animate-(?!spin$).+)$/;
+const moving =
+  /^-?!?(?:transition(?:-[^!]+)?|duration-[^!]+|ease-[^!]+|animate-(?!spin!?$)[^!]+)!?$/;
 
 /** The utility a class names, without its variants: `data-[state=open]:animate-in` is `animate-in`. */
 function utility(name: string) {
@@ -44,9 +45,14 @@ describe("Motion classes", () => {
   it("are found behind their variants, and a spinner is let through", () => {
     expect(
       movingClasses(
-        'className="flex hover:transition-colors data-[state=open]:animate-in animate-spin duration-150"',
+        'className="flex hover:transition-colors data-[state=open]:animate-in animate-spin duration-150 ease-out!"',
       ),
-    ).toEqual(["hover:transition-colors", "data-[state=open]:animate-in", "duration-150"]);
+    ).toEqual([
+      "hover:transition-colors",
+      "data-[state=open]:animate-in",
+      "duration-150",
+      "ease-out!",
+    ]);
   });
 
   it("appear only in the overlays' components", () => {

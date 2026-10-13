@@ -142,7 +142,9 @@ describe("Toaster", () => {
     // Leaving, as Sonner marks a notice that is dismissed or times out.
     item.dataset["removed"] = "true";
     expect(longest(style.transitionDuration)).toBe(120);
-    expect(longest(getComputedStyle(item.firstElementChild ?? item).transitionDuration)).toBe(120);
+    const part = item.firstElementChild;
+    if (!part) throw new Error("the notice has no parts");
+    expect(longest(getComputedStyle(part).transitionDuration)).toBe(120);
     // Swiped away, as Sonner marks a notice that is dragged off.
     item.dataset["swipeOut"] = "true";
     expect(longest(style.animationDuration)).toBe(120);
