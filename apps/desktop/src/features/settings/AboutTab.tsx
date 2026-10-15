@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { writeClipboard } from "@/features/contextMenu/clipboard";
 import { commands, type ProjectPage } from "@/ipc/bindings";
 import { appInfoQuery, systemInfoQuery } from "@/ipc/queries";
+import { useDisclosure } from "@/lib/disclosure";
 import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 
@@ -40,6 +41,7 @@ function OpenSourceLicenses() {
   const [query, setQuery] = useState("");
   // Every package is listed, so the table is only drawn once the section has been opened.
   const [opened, setOpened] = useState(false);
+  const disclosure = useDisclosure();
 
   const matching = licenses.filter((item) =>
     matchesSearch({ label: item.name, description: `${item.license} ${item.version}` }, query),
@@ -47,6 +49,7 @@ function OpenSourceLicenses() {
 
   return (
     <details
+      {...disclosure}
       className="border-b border-border py-4"
       onToggle={(event) => {
         if (event.currentTarget.open) setOpened(true);

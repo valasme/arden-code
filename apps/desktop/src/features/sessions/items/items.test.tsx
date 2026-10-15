@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { userEvent as browserUser } from "vitest/browser";
 
 import type { Item, TranscriptView } from "@/ipc/bindings";
 import { expectNoAccessibilityViolations } from "@/test/axe";
@@ -12,13 +13,14 @@ import type { QuestionsHandler } from "./QuestionsItem";
 
 import "@/styles/global.css";
 
-function renderItem(
+/** An item as a turn draws it, in a transcript view. */
+function itemTree(
   item: Item,
   streaming = false,
   onAnswer = vi.fn<AnswerHandler>(),
   view: TranscriptView = "normal",
 ) {
-  return render(
+  return (
     <TranscriptViewContext value={view}>
       <ItemView
         item={item}
@@ -28,8 +30,12 @@ function renderItem(
         onAnswerQuestions={vi.fn<QuestionsHandler>()}
         onAnswerPlan={vi.fn<PlanHandler>()}
       />
-    </TranscriptViewContext>,
+    </TranscriptViewContext>
   );
+}
+
+function renderItem(...args: Parameters<typeof itemTree>) {
+  return render(itemTree(...args));
 }
 
 function approval(overrides: Partial<Extract<Item, { type: "approval" }>> = {}): Item {
@@ -182,6 +188,15 @@ describe("Transcript views (ADR 0051)", () => {
     expect(screen.getByText("test result: ok")).toBeVisible();
     expect(cutShort(screen.getByText(longInput))).toBe(false);
   });
+
+  it("Verbose shows a tool's output as soon as it comes back", () => {
+    const running: Item = { ...toolCall, status: "running", output: null };
+    const { rerender } = renderItem(running, true, vi.fn<AnswerHandler>(), "verbose");
+
+    rerender(itemTree(toolCall, true, vi.fn<AnswerHandler>(), "verbose"));
+
+    expect(screen.getByText("test result: ok")).toBeVisible();
+  });
 });
 
 describe("File changes", () => {
@@ -229,6 +244,125 @@ describe("Thinking", () => {
     renderItem({ type: "thinking", id: "t", text: "Hmm" }, true);
 
     expect(screen.getByText("Thinking…")).toBeVisible();
+  });
+});
+
+/** The different values in a computed list, such as one duration for each property. */
+function distinct(list: string) {
+  return [...new Set(list.split(/,\s*(?![^(]*\))/))];
+}
+
+/** How tall a disclosure's content is drawn right now, in pixels: it grows while it opens. */
+function drawnHeight(details: Element) {
+  return Number.parseFloat(getComputedStyle(details, "::details-content").height);
+}
+
+/** The height a disclosure's content settles at, once it has finished moving. */
+async function settledHeight(details: Element) {
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  return drawnHeight(details);
+}
+
+function thinkingNote() {
+  const note = screen.getByText("Thinking").closest("details");
+  if (!note) throw new Error("the thinking is not a disclosure");
+  return note;
+}
+
+describe("A disclosure", () => {
+  afterEach(() => {
+    document.documentElement.removeAttribute("data-motion");
+  });
+
+  it("opens to its height in 160ms and closes in 120ms when the person opens and closes it", async () => {
+    renderItem({ type: "thinking", id: "t", text: "First I will read the file." });
+    const note = thinkingNote();
+
+    expect(drawnHeight(note), "folded, it has no height").toBe(0);
+    // Clicked in this task, so what is drawn next is the move's first frame.
+    screen.getByText("Thinking").click();
+
+    const opening = getComputedStyle(note, "::details-content");
+    expect(distinct(opening.transitionDuration)).toEqual(["0.16s"]);
+    expect(distinct(opening.transitionTimingFunction)).toEqual(["cubic-bezier(0, 0, 0, 1)"]);
+    expect(drawnHeight(note), "it starts from nothing").toBe(0);
+    const height = await settledHeight(note);
+    expect(height, "and grows to its content").toBeGreaterThan(0);
+    await expectNoAccessibilityViolations(document.body);
+
+    screen.getByText("Thinking").click();
+
+    const closing = getComputedStyle(note, "::details-content");
+    expect(distinct(closing.transitionDuration)).toEqual(["0.12s"]);
+    expect(distinct(closing.transitionTimingFunction)).toEqual(["cubic-bezier(0.8, 0, 0.78, 1)"]);
+    expect(drawnHeight(note), "it starts from its height").toBe(height);
+    expect(await settledHeight(note), "and folds away").toBe(0);
+  });
+
+  it("moves when opened with Enter and closed with Space", async () => {
+    renderItem({ type: "thinking", id: "t", text: "First I will read the file." });
+    const note = thinkingNote();
+    screen.getByText("Thinking").focus();
+
+    // Real key presses: a summary opens and closes by its own activation, which only the browser runs.
+    await browserUser.keyboard("{Enter}");
+
+    expect(note).toHaveAttribute("open");
+    expect(note).toHaveAttribute("data-disclosure", "moving");
+    expect(distinct(getComputedStyle(note, "::details-content").transitionDuration)).toEqual([
+      "0.16s",
+    ]);
+
+    await browserUser.keyboard("[Space]");
+
+    expect(note).not.toHaveAttribute("open");
+    expect(distinct(getComputedStyle(note, "::details-content").transitionDuration)).toEqual([
+      "0.12s",
+    ]);
+  });
+
+  it("shows as it is when the transcript view changes to Verbose and back", async () => {
+    const item: Item = { type: "thinking", id: "t", text: "First I will read the file." };
+    const view = (transcript: TranscriptView) =>
+      itemTree(item, false, vi.fn<AnswerHandler>(), transcript);
+    const { rerender } = render(view("normal"));
+    const note = thinkingNote();
+    expect(drawnHeight(note), "folded, it has no height").toBe(0);
+
+    rerender(view("verbose"));
+
+    expect(note).toHaveAttribute("open");
+    const height = drawnHeight(note);
+    expect(height, "open at its full height at once").toBeGreaterThan(0);
+    expect(await settledHeight(note)).toBe(height);
+
+    rerender(view("normal"));
+
+    expect(note).not.toHaveAttribute("open");
+    expect(drawnHeight(note), "folded at once").toBe(0);
+  });
+
+  it("shows as it is when a session opens in a view that opens it", () => {
+    renderItem(
+      { type: "thinking", id: "t", text: "First I will read the file." },
+      false,
+      vi.fn<AnswerHandler>(),
+      "thinking",
+    );
+
+    expect(drawnHeight(thinkingNote())).toBeGreaterThan(0);
+  });
+
+  it("opens at once with reduced motion", async () => {
+    document.documentElement.dataset["motion"] = "reduce";
+    const user = userEvent.setup();
+    renderItem({ type: "thinking", id: "t", text: "First I will read the file." });
+    const note = thinkingNote();
+
+    await user.click(screen.getByText("Thinking"));
+
+    const durations = getComputedStyle(note, "::details-content").transitionDuration.split(",");
+    for (const duration of durations) expect(Number.parseFloat(duration)).toBeLessThan(0.001);
   });
 });
 

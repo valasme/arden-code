@@ -124,31 +124,62 @@
 /*
  * Notices (components/Toaster.tsx) are Sonner's toasts, drawn with the app's parts. Sonner's own
  * rules are outside any layer too, so these outweigh them with :root. A notice comes in at an
- * overlay's opening pace and leaves, dismissed or swiped away, at its closing pace, not Sonner's
- * 200ms to 500ms (ADR 0054). The leaving rule keeps the same weight through :where, so the reduced
- * motion rule below still wins. Keyboard focus on a notice shows the app's outline, not Sonner's
- * glow.
+ * overlay's opening pace and curve and leaves, dismissed or swiped away, at its closing ones, not
+ * at Sonner's 200ms to 500ms (ADR 0054). The leaving rule keeps the same weight through :where, so
+ * the reduced motion rule below still wins. Keyboard focus on a notice shows the app's outline, not
+ * Sonner's glow.
  */
 :root [data-sonner-toaster],
 :root [data-sonner-toast],
 :root [data-sonner-toast] > * {
   transition-duration: var(--motion-open-duration) !important;
+  transition-timing-function: var(--motion-open-curve) !important;
 }
 
 :root [data-sonner-toast]:where([data-removed="true"]),
 :root [data-sonner-toast]:where([data-removed="true"]) > * {
   transition-duration: var(--motion-close-duration) !important;
+  transition-timing-function: var(--motion-close-curve) !important;
 }
 
 /* A notice's only animation is the swipe that takes it away. */
 :root [data-sonner-toast] {
   animation-duration: var(--motion-close-duration) !important;
+  animation-timing-function: var(--motion-close-curve) !important;
 }
 
 :root [data-sonner-toast]:focus-visible {
   outline: 1px solid var(--ring);
   outline-offset: 1px;
   box-shadow: none;
+}
+
+/*
+ * A disclosure (lib/disclosure.ts) opens to its content's height and closes at an overlay's pace
+ * when the person opens or closes it. When code does, as the Verbose view does, it is held still
+ * for that change and shows at once (ADR 0054).
+ */
+details[data-disclosure] {
+  interpolate-size: allow-keywords;
+}
+
+details[data-disclosure]::details-content {
+  height: 0;
+  overflow: clip;
+  transition-property: height, content-visibility;
+  transition-duration: var(--motion-close-duration);
+  transition-timing-function: var(--motion-close-curve);
+  transition-behavior: allow-discrete;
+}
+
+details[data-disclosure][open]::details-content {
+  height: auto;
+  transition-duration: var(--motion-open-duration);
+  transition-timing-function: var(--motion-open-curve);
+}
+
+details[data-disclosure="still"]::details-content {
+  transition-property: none;
 }
 
 /* In a Windows contrast theme, a selected item is underlined because fills are not available. */
@@ -171,13 +202,22 @@
  */
 :root[data-motion="reduce"] *,
 :root[data-motion="reduce"] *::before,
-:root[data-motion="reduce"] *::after {
+:root[data-motion="reduce"] *::after,
+:root[data-motion="reduce"] *::details-content {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   animation-delay: 0s !important;
   transition-duration: 0.01ms !important;
   transition-delay: 0s !important;
   scroll-behavior: auto !important;
+}
+
+/*
+ * Except a spinner, which keeps turning: it is the only sign that work is still going, and it turns
+ * in place (ADR 0054).
+ */
+:root[data-motion="reduce"] .animate-spin {
+  animation: var(--animate-spin) !important;
 }
 
 /*

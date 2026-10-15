@@ -48,7 +48,7 @@ Turn on each theme in Windows' Settings → Accessibility → Contrast themes (A
 
 ## Motion
 
-- [ ] With "Animation effects" off in Windows, nothing in the app animates.
+- [ ] With "Animation effects" off in Windows, nothing in the app animates but a spinner, which keeps turning while something is waited on (ADR 0054).
 - [ ] With it on, the motion is short and never the only way to tell that something happened.
 
 ## Keyboard

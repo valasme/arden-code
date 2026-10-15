@@ -35,6 +35,8 @@ export default defineConfig({
       "cn",
       "i18next",
       "lucide-react",
+      "motion/react",
+      "motion/react-m",
       "radix-ui",
       "react",
       "react-dom/client",

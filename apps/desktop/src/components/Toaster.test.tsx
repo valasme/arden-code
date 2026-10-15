@@ -153,6 +153,20 @@ describe("Toaster", () => {
     expect(longest(style.animationDuration)).toBeLessThan(1);
   });
 
+  it("comes in and leaves on the overlays' curves", async () => {
+    render(<Toaster />);
+
+    toast.success("Sent a test notification");
+
+    const item = await shown("Sent a test notification");
+    const style = getComputedStyle(item);
+    expect(style.transitionTimingFunction).toBe("cubic-bezier(0, 0, 0, 1)");
+    item.dataset["removed"] = "true";
+    expect(style.transitionTimingFunction).toBe("cubic-bezier(0.8, 0, 0.78, 1)");
+    item.dataset["swipeOut"] = "true";
+    expect(style.animationTimingFunction).toBe("cubic-bezier(0.8, 0, 0.78, 1)");
+  });
+
   it("names its region in the app's words, with the shortcut that reaches it", async () => {
     render(<Toaster />);
 

@@ -7,7 +7,7 @@ import type { ErrorCode } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { useSessionDialogsStore } from "@/state/sessionDialogs";
-import { animationsDone } from "@/test/animations";
+import { animationsDone, motionDone } from "@/test/animations";
 import { expectNoAccessibilityViolations } from "@/test/axe";
 import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
@@ -430,7 +430,10 @@ describe("Deleting a session", () => {
     await user.keyboard("{Delete}");
     await user.click(await screen.findByRole("button", { name: "Delete session" }));
     await focusGoesTo(within(sidebar()).getByRole("button", { name: "New session" }));
-    expect(within(sidebar()).getByText("No sessions yet.")).toBeVisible();
+    // Once the last row has faded out (ADR 0054).
+    await waitFor(() => {
+      expect(within(sidebar()).getByText("No sessions yet.")).toBeVisible();
+    });
   });
 
   it("leaves no tooltip open on New session when the focus goes back to it after the last delete", async () => {
@@ -777,6 +780,7 @@ describe("Linked sessions", () => {
       expect(linkLines()).toEqual(["Linked from Fix the build"]);
     });
 
+    await motionDone(sidebar());
     await expectNoAccessibilityViolations(document.body);
   });
 });

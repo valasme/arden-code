@@ -11,6 +11,7 @@ import { WebEngineNotice } from "@/features/diagnostics/WebEngineNotice";
 import { SettingsSync } from "@/features/settings/SettingsSync";
 import { StartupSettingsProvider } from "@/features/settings/startup";
 import { AppearanceFromSettings } from "@/features/settings/AppearanceFromSettings";
+import { MotionFromSettings } from "@/features/settings/MotionFromSettings";
 import { ResetNotice } from "@/features/settings/ResetNotice";
 import { SystemPreferencesSync } from "@/features/settings/SystemPreferencesSync";
 import { UpdateSync } from "@/features/updates/UpdateSync";
@@ -55,9 +56,11 @@ export function App({ history, initialSettings, initialSystemPreferences }: AppP
         <WebEngineNotice />
         <ResetNotice />
         <AppearanceFromSettings />
-        <AppErrorBoundary>
-          <RouterProvider router={router} />
-        </AppErrorBoundary>
+        <MotionFromSettings>
+          <AppErrorBoundary>
+            <RouterProvider router={router} />
+          </AppErrorBoundary>
+        </MotionFromSettings>
         <Toaster />
         <CrashRecovery />
       </StartupSettingsProvider>
