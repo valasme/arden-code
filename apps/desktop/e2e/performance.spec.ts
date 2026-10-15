@@ -172,6 +172,10 @@ test.describe("performance of the release build", () => {
     );
 
     check("coldStartMs");
+    expect(
+      Number.isFinite(results.warmStartPageMs),
+      "no warm start logged when its page began loading, so the page's share cannot be measured",
+    ).toBe(true);
     check("warmStartPageMs");
   });
 
