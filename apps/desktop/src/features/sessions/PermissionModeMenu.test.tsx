@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 
 import type { PermissionMode } from "@/ipc/bindings";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { nextPermissionMode, PermissionModeMenu } from "./PermissionModeMenu";
 
@@ -142,13 +141,5 @@ describe("PermissionModeMenu", () => {
     const button = screen.getByRole("button", { name: "Permission mode: Bypass permissions" });
     expect(getComputedStyle(button).color).toBe(getComputedStyle(destructive).color);
     destructive.remove();
-  });
-
-  it("names the mode the session is in, and has no accessibility violations, closed or open", async () => {
-    const user = userEvent.setup();
-    const { container } = renderMenu("acceptEdits");
-
-    await expectNoAccessibilityViolations(container);
-    await expectNoAccessibilityViolations(await openMenu(user, "Permission mode: Accept edits"));
   });
 });

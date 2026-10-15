@@ -30,12 +30,12 @@ This is the single source of truth for the app foundation. The reasoning behind 
 ## 1. What we're building
 
 Arden Code is a Windows 11 desktop app for running and supervising coding agents, Claude Code and Codex,
-from one keyboard-first, accessible and private cockpit.
+from one keyboard-first and private cockpit.
 
 The first build is the **foundation**:
 - the window shell and settings
 - the keyboard and command system
-- diagnostics and accessibility
+- diagnostics
 - internationalization and updater plumbing
 - brand assets
 - a placeholder session view driven by a built-in **Demo agent**
@@ -71,9 +71,9 @@ All of it is production-grade, so real features plug into it later.
 
 1. **Private by default.** No telemetry. The only automatic network request is the update check to GitHub.
 2. **Hands off credentials.** Vendor CLIs handle sign-in. Arden Code never reads, stores or forwards tokens.
-3. **Native to Windows 11.** Snap Layouts, Windows keyboard conventions, regional formats, contrast themes and text scaling.
-4. **Keyboard-first and accessible.** WCAG 2.2 AA. Focus is always visible, never loud.
-5. **Calm.** A neutral palette, zero corner radius, no flashy effects. The brand color appears only in brand moments.
+3. **Native to Windows 11.** Snap Layouts, Windows keyboard conventions, regional formats and text scaling.
+4. **Keyboard-first.** Everything works by keyboard. Keyboard focus is visible, never loud.
+5. **Calm.** A neutral palette, softly rounded corners, no flashy effects. The brand color appears only in brand moments.
 6. **Fail safe.** Broken state falls back to defaults and keeps a backup. Every error has a code that also appears in the logs.
 7. **Typed end to end.** Rust types generate the TypeScript contract.
 8. **Reproducible.** Pinned toolchains, committed lockfiles, and generated files verified in CI.
@@ -392,7 +392,7 @@ The theme follows Windows.
 
 ### 6.10 Design system page (development builds only)
 
-A hidden page shows every design token, the type scale, colors, each component in every state, icons and brand assets. It has theme, contrast and zoom toggles.
+A hidden page shows every design token, the type scale, colors, each component in every state, icons and brand assets. It has theme and zoom toggles.
 
 It replaces a Figma library, stays in sync with the code, and is the target for screenshot (visual regression) tests.
 
@@ -451,7 +451,7 @@ The decisions and the options turned down are in [ADR 0053](adr/0053-plugins-thr
 
 ### 7.1 Theme tokens
 
-This is the maintainer's neutral OKLCH theme. `★` marks an accessibility correction and `＋` a new brand token. The corner radius is 0 everywhere; only the logo is rounded.
+This is the maintainer's neutral OKLCH theme, as supplied ([ADR 0056](adr/0056-the-stock-theme-and-a-lighter-accessibility-bar.md)), plus three brand tokens: the logo's orange and brown, and a warm tint behind selected text. Corners are rounded from `--radius`: `sm`, `md`, `lg` and `xl` are the radius less 4px, less 2px, itself and plus 4px.
 
 ```css
 :root {
@@ -466,19 +466,19 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.546 0 0);           /* ★ was 0.556: 4.5:1 on --muted */
+  --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);                     /* decorative: cards, dividers */
-  --input: oklch(0.646 0 0);                      /* ★ was 0.922: control borders 3:1 */
-  --ring: oklch(0.646 0 0);                       /* ★ was 0.708: focus outline 3:1 */
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0;
+  --radius: 0.45rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -486,10 +486,10 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.646 0 0);               /* ★ was 0.708 */
-  --brand: oklch(0.737 0.126 47.7);               /* ＋ logo orange: graphics only, never text */
-  --brand-wordmark: oklch(0.375 0.051 42.9);      /* ＋ logo brown */
-  --selection: oklch(0.737 0.126 47.7 / 25%);     /* ＋ warm text-selection tint */
+  --sidebar-ring: oklch(0.708 0 0);
+  --brand: oklch(0.737 0.126 47.7); /* the logo's orange: graphics only, never text */
+  --brand-wordmark: oklch(0.375 0.051 42.9); /* the logo's brown */
+  --selection: oklch(0.737 0.126 47.7 / 25%); /* warm tint behind selected text */
 }
 
 .dark {
@@ -509,7 +509,7 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 34%);                    /* ★ was 15%: control borders 3:1 */
+  --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
@@ -518,21 +518,20 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
   --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.922 0 0);            /* ★ was the stock blue oklch(0.488 0.243 264.376) */
-  --sidebar-primary-foreground: oklch(0.205 0 0); /* ★ was 0.985: needed after the line above (1.2:1 → 14.2:1) */
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
   --brand: oklch(0.737 0.126 47.7);
-  --brand-wordmark: oklch(0.937 0.014 57.6);      /* ＋ warm off-white, #F2E8E1 */
+  --brand-wordmark: oklch(0.937 0.014 57.6); /* warm off-white, #F2E8E1 */
   --selection: oklch(0.737 0.126 47.7 / 35%);
 }
 ```
 
-- **Destructive buttons in dark mode** keep shadcn's `bg-destructive/60` treatment, which gives white text 6.5:1.
-- **Form controls** (inputs, selects, checkboxes, switches) use `--input`. Cards and dividers use the lighter `--border`.
-- **Windows contrast themes** (`forced-colors: active`) switch everything to system colors. Borders and focus outlines stay visible.
+- **Form controls** (inputs, selects, checkboxes, switches) use `--input`. Cards and dividers use `--border`.
+- **Buttons** take shadcn's shapes: the destructive button is a red tint, and the link button is underlined on hover.
 
 ### 7.2 Typography
 
@@ -550,18 +549,18 @@ This is the maintainer's neutral OKLCH theme. `★` marks an accessibility corre
 
 ### 7.4 Focus, motion and density
 
-- **Focus:** shown for keyboard focus only (`:focus-visible`), as a 1px `--ring` outline with a 1px offset. No glow, no animation. Mouse clicks never show a ring.
+- **Focus:** shown for keyboard focus only (`:focus-visible`), as a 1px `--ring` outline with a 1px offset that follows the corners. No glow, no animation. Mouse clicks never show a ring.
 - **Motion** ([ADR 0054](adr/0054-what-moves-and-how.md), [the councils](research/motion-councils.md)):
   - An overlay opens in 160 ms (Fluent 2's decelerate-mid curve) and closes in 120 ms (accelerate-min), from tokens. Menus, popovers and tooltips fade and slide 0.25rem from their anchor; dialogs fade and scale from 98%; closing is a fade. Nothing behind an overlay is blurred; its scrim is a flat tint.
   - A disclosure opens and closes at the same pace when the person opens or closes it. A sidebar row moves to its new place when its session is pinned, unpinned or moved up by use; comes in when it is created or unarchived; and fades out when it is archived or deleted, or its project removed.
   - Nothing else moves: not the sidebar or the inspector, not pages or tabs, not a new turn, not controls.
   - All motion stops when Windows "Animation effects" is off or Reduce motion is on, except a spinner, which keeps turning while something is waited on.
 - **Cursor:** every enabled button, link and control shows the pointer, except the window buttons (Minimize, Maximize or Restore, Close), which keep the arrow (ADR 0037).
-- **Density:** the Lyra style, tuned toward compact. The minimum pointer target is 24×24 px.
+- **Density:** compact. Menus, lists and the command palette inset their rows, so a highlighted row shows its rounded corners.
 
 ### 7.5 Icons
 
-Lucide icons are 16 px with a 1.5 stroke in the UI, and 20 px in the title bar, at the color of the text beside them. Every icon-only button has an accessible label. The message box's menus use a bot for Claude (a flask for the Demo agent), a folder, a brain, rising bars and a shield for the permission mode; Ultrathink is a lightbulb. No vendor's logo is shown without its written permission ([ADR 0044](adr/0044-permission-modes-the-context-window-and-the-agents-icon.md)).
+Lucide icons are 16 px with a 1.5 stroke in the UI, and 20 px in the title bar, at the color of the text beside them. Every icon-only button has a name, which its tooltip shows. The message box's menus use a bot for Claude (a flask for the Demo agent), a folder, a brain, rising bars and a shield for the permission mode; Ultrathink is a lightbulb. No vendor's logo is shown without its written permission ([ADR 0044](adr/0044-permission-modes-the-context-window-and-the-agents-icon.md)).
 
 ## 8. Brand
 
@@ -641,19 +640,15 @@ The mark is a graphic, not text. It contrasts 2.4:1 against white and 8.2:1 agai
 
 ## 10. Accessibility
 
-These are release gates: no release ships unless they all pass.
+Accessibility is not a release gate ([ADR 0056](adr/0056-the-stock-theme-and-a-lighter-accessibility-bar.md)). What stays is what the product promises or the maintainer uses:
 
-- **Standard:** WCAG 2.2 AA.
 - **Keyboard:** everything works by keyboard, in a logical focus order, and F6 moves between areas.
-- **Focus:** visible but quiet (§7.4).
-- **Screen readers:** tested with NVDA and Narrator.
-  - Every control has a name, role and state.
-  - Streaming replies are announced politely and throttled.
-- **Windows settings honored:** contrast themes (forced colors), "Animation effects: off" (only spinners keep turning), and the text-size setting.
+- **Focus:** visible for the keyboard, quiet (§7.4).
+- **Windows settings honored:** "Animation effects: off" (only spinners keep turning) and the text-size setting.
 - **Zoom:** 80% to 200% without breaking the layout.
-- **Pointer targets:** at least 24×24 px.
-- **Contrast:** 4.5:1 for text, and 3:1 for control borders and focus outlines, verified for every token pair.
-- **Checks:** axe runs in the unit and end-to-end tests. A manual checklist ([accessibility-checklist.md](accessibility-checklist.md)) runs before each release.
+- **Names:** every control has the name, role and state Radix gives it, and every icon-only button has a name. The tests find controls by them.
+
+There is no contrast target, no axe check, no screen reader announcement of a streaming reply, no rules for Windows contrast themes beyond the web engine's own, and no manual checklist.
 
 ## 11. Performance targets
 
@@ -723,10 +718,10 @@ Every row is measured by CI on the release build, and the ones that can fail the
 |---|---|
 | Rust unit and integration | `cargo test` (see the addendum to ADR 0019) |
 | TypeScript unit | Vitest 5 (Node) |
-| Components | Vitest browser mode on Chromium (the same engine family as WebView2) + Testing Library + axe |
+| Components | Vitest browser mode on Chromium (the same engine family as WebView2) + Testing Library |
 | UI flows with a mocked backend | The same Vitest browser mode, with the calls to Rust answered by `mockIPC` |
 | End to end (the real app) | Playwright attached to the app's WebView2 over CDP (debug builds only). Input that must take the real path goes through Windows instead: key presses for the web engine's own shortcuts, and clicks, with Playwright detached, where timing matters (clicks while CDP is attached hid a bug that real clicks hit) |
-| Visual regression | Playwright screenshots of the design system page in light, dark, high contrast and 200% zoom |
+| Visual regression | Playwright screenshots of the design system page in light, dark and 200% zoom |
 | Contracts | Bindings drift check; hard-coded-text lint; brand outputs up to date |
 
 Every change must pass formatting, linting, type-checking and tests. Test coverage is tracked but not enforced.
@@ -738,7 +733,7 @@ Every change must pass formatting, linting, type-checking and tests. Test covera
   - `minimumReleaseAge: 2880`, meaning package releases must be at least 2 days old.
   - An `allowBuilds` list of packages allowed to run install scripts.
   - Catalogs for shared versions.
-- **Linting:** Oxlint in type-aware mode, with rules for TypeScript, React, React hooks, the React Compiler, accessibility (jsx-a11y), imports, unicorn and Vitest.
+- **Linting:** Oxlint in type-aware mode, with rules for TypeScript, React, React hooks, the React Compiler, imports, unicorn and Vitest.
 - **Formatting:** oxfmt, which also sorts Tailwind classes.
 - **Other checks:** knip (unused code) and typos (spelling).
 - **Rust:** rustfmt, clippy and cargo-deny.
@@ -767,7 +762,7 @@ The foundation is built in this order. Each milestone ends with green CI and a c
 | M4 | **Settings UI:** all seven tabs, search, instant apply, reset, shortcut rebinding | Every setting in §6.3 works and survives a restart |
 | M5 | **Commands:** command registry, palette, default shortcuts, F6 areas, context menus, cheat sheet | Everything is reachable by keyboard |
 | M6 | **Session view placeholder:** domain model, Demo agent, streaming pipeline, virtualized list, safe markdown, message box, welcome state | The Demo agent streams at 60 fps with 10,000 messages |
-| M7 | **Quality:** design system page, axe checks and screen-reader checklist, Playwright end-to-end tests, performance checks, pseudo-language | Every gate in §10, §11 and §15 is automated or on a checklist |
+| M7 | **Quality:** design system page, Playwright end-to-end tests, performance checks, pseudo-language | Every gate in §10, §11 and §15 is automated or on a checklist |
 | M8 | **Release pipeline (switched off):** update-signing keys, release-please, tauri-action, winget template, signing hook, installer PATH option | A dry-run release produces an installer and `latest.json` |
 
 ## 18. Risks and watch list
@@ -794,4 +789,3 @@ The foundation is built in this order. Each milestone ends with green CI and a c
 - [Codex app-server](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md) · [Claude Code headless mode](https://code.claude.com/docs/en/headless) · [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) · [the Claude research](research/claude-agent.md)
 - [Playwright with WebView2](https://playwright.dev/docs/webview2)
 - [SignPath Foundation terms](https://signpath.org/terms.html)
-- [WCAG 2.2](https://www.w3.org/TR/WCAG22/)

@@ -15,7 +15,7 @@ export function ArchivedBar({ sessionId }: { sessionId: string }) {
 
   return (
     <div data-area="messagebox" className="shrink-0 px-6 pb-4">
-      <div className="mx-auto flex max-w-[45rem] flex-wrap items-center gap-3 border border-border bg-muted px-3 py-2">
+      <div className="mx-auto flex max-w-[45rem] flex-wrap items-center gap-3 rounded-lg border border-border bg-muted px-3 py-2">
         <ArchiveIcon aria-hidden className="size-4 text-muted-foreground" strokeWidth={1.5} />
         <p className="text-sm">{t("sessions.archived.notice")}</p>
         <Button

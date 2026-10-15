@@ -25,7 +25,7 @@ export function MessageBoxChoicesSample() {
   return (
     <div
       data-message-choices-sample
-      className="flex max-w-[45rem] flex-col border border-input bg-background"
+      className="flex max-w-[45rem] flex-col rounded-xl border border-input bg-background shadow-xs"
     >
       <p className="px-3 pt-3 pb-1 text-base text-muted-foreground">Message Claude</p>
       <div className="flex flex-wrap items-center gap-1 ps-2 pe-2 pb-2 text-xs">

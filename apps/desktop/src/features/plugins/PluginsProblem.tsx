@@ -21,7 +21,7 @@ export function PluginsProblem({ error }: { error: AppError }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-2 border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm"
+      className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm"
     >
       <CircleAlertIcon
         aria-hidden

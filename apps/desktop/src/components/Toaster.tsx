@@ -22,7 +22,7 @@ const width: CSSProperties & { "--width": string } = { "--width": "22rem" };
 
 /**
  * Toasts, drawn with the app's own parts instead of Sonner's: the popover surface with a 1px border
- * and square corners, Inter, 16px icons (an error's in the destructive color), an action like the
+ * and the theme's radius, Inter, 16px icons (an error's in the destructive color), an action like the
  * app's outline button, and a close button inside each toast. They are 22rem wide, so they grow with
  * the zoom. Their motion and focus outline are set in base.css, where Sonner's own rules are.
  */
@@ -54,7 +54,7 @@ export function Toaster(props: ToasterProps) {
         classNames: {
           // Behind the front toast, a collapsed stack shows only its edges.
           toast:
-            "group/toast grid w-(--width) grid-cols-[auto_minmax(0,1fr)_auto] items-start border border-border bg-popover p-3 font-sans text-sm text-popover-foreground shadow-lg data-[expanded=false]:data-[front=false]:*:opacity-0",
+            "group/toast grid w-(--width) grid-cols-[auto_minmax(0,1fr)_auto] items-start rounded-lg border border-border bg-popover p-3 font-sans text-sm text-popover-foreground shadow-lg data-[expanded=false]:data-[front=false]:*:opacity-0",
           icon: "relative col-start-1 row-start-1 me-2.5 flex h-lh items-center group-data-[type=error]/toast:text-destructive",
           content: "col-start-2 row-start-1 flex min-w-0 flex-col gap-0.5",
           title: "font-medium",
@@ -64,7 +64,7 @@ export function Toaster(props: ToasterProps) {
             "col-start-2 row-start-2 mt-2 justify-self-start",
           ),
           closeButton:
-            "col-start-3 row-start-1 -me-1.5 -mt-0.5 ms-2 grid size-6 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground",
+            "col-start-3 row-start-1 -me-1.5 -mt-0.5 ms-2 grid size-6 place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground",
         },
       }}
       {...props}

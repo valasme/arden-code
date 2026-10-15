@@ -42,10 +42,9 @@ export function MessageBoxList({
       id={id}
       data-message-box-list
       // The list a text box controls, which a native select cannot be.
-      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/no-noninteractive-element-to-interactive-role
       role="listbox"
       aria-label={label}
-      className="absolute inset-x-0 bottom-full z-10 max-h-64 overflow-auto border border-input bg-popover py-1 text-popover-foreground"
+      className="absolute inset-x-0 bottom-full z-10 max-h-64 overflow-auto rounded-lg border border-input bg-popover p-1 text-popover-foreground"
     >
       {options === null ? null : options.length === 0 ? (
         <li role="presentation" className="px-3 py-1.5 text-xs text-muted-foreground">
@@ -56,7 +55,6 @@ export function MessageBoxList({
           <li
             key={option.key}
             id={optionId(id, index)}
-            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/no-noninteractive-element-to-interactive-role
             role="option"
             aria-selected={index === active}
             className={cn(

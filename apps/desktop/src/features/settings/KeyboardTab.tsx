@@ -46,7 +46,7 @@ function described(
 const idOf = (recording: Recording) => `shortcut-${recording.command}-${recording.slot}`;
 
 const chipClass =
-  "border border-border bg-muted px-1.5 py-0.5 font-sans text-xs hover:bg-border forced-colors:hover:outline forced-colors:hover:outline-1";
+  "rounded-sm border border-border bg-muted px-1.5 py-0.5 font-sans text-xs hover:bg-border";
 
 /**
  * Settings → Keyboard: every command with its shortcuts. Clicking a shortcut records a new one.
@@ -248,7 +248,7 @@ export function KeyboardTab() {
                               </button>
                               <button
                                 type="button"
-                                className="grid size-6 place-items-center hover:bg-muted"
+                                className="grid size-6 place-items-center rounded-sm hover:bg-muted"
                                 aria-label={t("settings.keyboard.remove", {
                                   shortcut: formatShortcut(shortcut),
                                   command: command.label,
@@ -270,7 +270,7 @@ export function KeyboardTab() {
                           <button
                             type="button"
                             id={idOf({ command: command.id, slot: "new" })}
-                            className="grid size-6 place-items-center hover:bg-muted"
+                            className="grid size-6 place-items-center rounded-sm hover:bg-muted"
                             aria-label={t("settings.keyboard.add", { command: command.label })}
                             aria-pressed={isRecording && recording.slot === "new"}
                             onClick={() => {

@@ -10,8 +10,7 @@ import { useRepliesStore } from "@/state/replies";
 /**
  * The bar along the bottom: what the open session's agent is doing, the update status and the
  * version; the usage limits are in the message box (ADR 0044). It only says things; the toggles
- * for the regions are in the title bar (ADR 0033). The agent's state is not a live region: the
- * reply announcer already speaks for the reply (ADR 0027).
+ * for the regions are in the title bar (ADR 0033).
  */
 export function StatusBar() {
   const { t } = useTranslation();

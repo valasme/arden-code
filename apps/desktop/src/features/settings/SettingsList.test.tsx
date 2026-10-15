@@ -11,7 +11,6 @@ import { Toaster } from "@/components/Toaster";
 import type { SettingKey, Settings, SystemPreferences } from "@/ipc/bindings";
 import { defaultSettings } from "@/ipc/defaults.gen";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { settingsWith } from "@/test/settings";
 
 import { SettingsList } from "./SettingsList";
@@ -551,24 +550,6 @@ describe("Resetting a setting", () => {
       expect(screen.getByRole("switch", { name: /Check for updates/ })).toBeChecked();
     });
     general.unmount();
-  });
-});
-
-describe("The settings tabs", () => {
-  it.each(["general", "appearance"] as const)("%s has no accessibility violations", async (tab) => {
-    startApp();
-    const { container } = renderTab(tab);
-    await screen.findAllByRole("heading", { level: 2 });
-
-    await expectNoAccessibilityViolations(container);
-  });
-
-  it("has none while a setting can be reset either", async () => {
-    startApp({ settings: settingsWith({ appearance: { zoom: 150, codeLigatures: true } }) });
-    const { container } = renderTab("appearance");
-    await screen.findByRole("button", { name: "Reset Zoom to its default" });
-
-    await expectNoAccessibilityViolations(container);
   });
 });
 

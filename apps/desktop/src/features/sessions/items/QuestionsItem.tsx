@@ -111,7 +111,7 @@ export function QuestionsItem({
     <form
       aria-labelledby={`${formId}-heading`}
       data-item="questions"
-      className="my-2 flex flex-col gap-3 border border-foreground/30 px-3 py-2.5 text-sm"
+      className="my-2 flex flex-col gap-3 rounded-lg border border-foreground/30 px-3 py-2.5 text-sm"
       onSubmit={submit}
     >
       <p id={`${formId}-heading`} className="flex items-center gap-2 font-medium">

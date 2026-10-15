@@ -12,7 +12,7 @@ export function ErrorItem({ message, code }: { message: string; code: ErrorCode 
 
   if (code !== null) {
     return (
-      <div className="my-2 flex items-start gap-2 border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm">
+      <div className="my-2 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm">
         <CircleAlertIcon
           aria-hidden
           className="mt-0.5 size-4 shrink-0 text-destructive"
@@ -31,7 +31,7 @@ export function ErrorItem({ message, code }: { message: string; code: ErrorCode 
   }
 
   return (
-    <div className="my-2 flex items-start gap-2 border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm">
+    <div className="my-2 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm">
       <CircleAlertIcon
         aria-hidden
         className="mt-0.5 size-4 shrink-0 text-destructive"

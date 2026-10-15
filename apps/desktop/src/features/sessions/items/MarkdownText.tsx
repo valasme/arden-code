@@ -51,9 +51,7 @@ function SafeLink({ href, children }: ComponentProps<"a">) {
         href={href}
         rel="noreferrer noopener"
         title={href}
-        // In a contrast theme --primary is a fill color (ButtonFace), the color of the background.
-        // A link takes the theme's own link color instead.
-        className="text-primary underline underline-offset-2 forced-colors:text-[LinkText]"
+        className="text-primary underline underline-offset-2"
         onClick={(event) => {
           event.preventDefault();
           if (kind === "open") open(false);
@@ -84,7 +82,7 @@ function BlockedImage({ alt }: ComponentProps<"img">) {
   const { t } = useTranslation();
 
   return (
-    <span className="inline-block border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
+    <span className="inline-block rounded-md border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
       {alt ? t("markdown.image.blockedWithName", { name: alt }) : t("markdown.image.blocked")}
     </span>
   );

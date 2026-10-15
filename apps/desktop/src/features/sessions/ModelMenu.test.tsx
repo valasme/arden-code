@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 
 import type { Model } from "@/ipc/bindings";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { ModelMenu } from "./ModelMenu";
 
@@ -72,13 +71,5 @@ describe("ModelMenu", () => {
     renderMenu("opus", true);
 
     expect(screen.getByRole("button", { name: "Model: Opus" })).toBeDisabled();
-  });
-
-  it("has no accessibility violations, closed or open", async () => {
-    const user = userEvent.setup();
-    const { container } = renderMenu(null);
-
-    await expectNoAccessibilityViolations(container);
-    await expectNoAccessibilityViolations(await openMenu(user, "Model: Default"));
   });
 });

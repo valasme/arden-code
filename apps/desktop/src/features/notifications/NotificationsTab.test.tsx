@@ -7,7 +7,6 @@ import { z } from "zod";
 
 import { Toaster } from "@/components/Toaster";
 import type { Settings } from "@/ipc/bindings";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { settingsWith } from "@/test/settings";
 
 import { NotificationsTab } from "./NotificationsTab";
@@ -130,13 +129,5 @@ describe("Settings → Notifications", () => {
     await user.click(await screen.findByRole("button", { name: "Send a test notification" }));
 
     expect(await screen.findByText("Something went wrong (ARD-APP-005)")).toBeInTheDocument();
-  });
-
-  it("has no accessibility violations", async () => {
-    startApp();
-    const { container } = renderTab();
-    await screen.findByRole("switch", { name: "Desktop notifications" });
-
-    await expectNoAccessibilityViolations(container);
   });
 });

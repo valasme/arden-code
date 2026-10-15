@@ -71,7 +71,7 @@ export function PlanItem({ id, agent, plan, feedback, state, onAnswer }: PlanIte
     <fieldset
       aria-labelledby={headingId}
       data-item="plan"
-      className="my-2 flex flex-col gap-2 border border-foreground/30 px-3 py-2.5 text-sm"
+      className="my-2 flex flex-col gap-2 rounded-lg border border-foreground/30 px-3 py-2.5 text-sm"
     >
       <p id={headingId} className="flex items-center gap-2 font-medium">
         <ListChecksIcon aria-hidden className="size-4 shrink-0" strokeWidth={1.5} />
@@ -122,7 +122,6 @@ export function PlanItem({ id, agent, plan, feedback, state, onAnswer }: PlanIte
             placeholder={t("items.plan.whatShouldChange")}
             value={words}
             // The field appears because the person asked for it: the focus goes there.
-            // oxlint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
             className="h-7 min-w-0 flex-1"
             onChange={(event) => {

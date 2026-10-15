@@ -7,7 +7,6 @@ import { z } from "zod";
 
 import type { Settings } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { settingsWith } from "@/test/settings";
 
 import { App } from "./App";
@@ -59,13 +58,6 @@ describe("the window's regions", () => {
     expect(screen.getByRole("main")).toBeVisible();
     expect(screen.getByRole("contentinfo")).toBeVisible();
     expect(screen.queryByRole("complementary", { name: "Inspector" })).toBeNull();
-  });
-
-  it("has no accessibility violations", async () => {
-    const { container } = renderApp();
-    await screen.findByRole("main");
-
-    await expectNoAccessibilityViolations(container);
   });
 
   it("opens the sidebar with New session and closes it with Settings, each showing its shortcut", async () => {

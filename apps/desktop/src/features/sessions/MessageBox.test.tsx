@@ -4,8 +4,6 @@ import userEvent from "@testing-library/user-event";
 import { BotIcon, BrainIcon, ChartNoAxesColumnIcon, FolderIcon, ShieldIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { expectNoAccessibilityViolations } from "@/test/axe";
-
 import { ChoiceButton } from "./ChoiceButton";
 import { MessageBox } from "./MessageBox";
 import { useUltrathink } from "./ultrathink";
@@ -97,17 +95,6 @@ describe("The Ultrathink chip (ADR 0044)", () => {
     await user.type(screen.getByRole("textbox", { name: "Message" }), "Why?{Enter}");
 
     expect(screen.queryByText("Ultrathink")).toBeNull();
-  });
-
-  it("has no accessibility violations while it shows", async () => {
-    const user = userEvent.setup();
-    const { container } = render(<Harness />, { wrapper: Queries });
-    await user.click(screen.getByRole("button", { name: "Switch on" }));
-    // The message box alone: the harness's own button is not part of it.
-    const box = container.querySelector("[data-area=messagebox]");
-    if (!box) throw new Error("no message box");
-
-    await expectNoAccessibilityViolations(box);
   });
 });
 

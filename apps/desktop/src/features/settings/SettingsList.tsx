@@ -8,7 +8,7 @@ import type { SettingsTab } from "./tabs";
 function CodePreview() {
   const { t } = useTranslation();
   return (
-    <figure className="mb-4 bg-muted p-4">
+    <figure className="mb-4 rounded-lg bg-muted p-4">
       <figcaption className="mb-2 text-xs text-muted-foreground">
         {t("settings.appearance.codePreview")}
       </figcaption>
@@ -25,7 +25,7 @@ export function SettingsList({ tab }: { tab: SettingsTab }) {
   return (
     <>
       {tab === "appearance" ? <CodePreview /> : null}
-      <ul aria-label={t(`settings.tabs.${tab}`)} className="border border-border">
+      <ul aria-label={t(`settings.tabs.${tab}`)} className="rounded-lg border border-border">
         {settingDefinitions
           .filter((definition) => definition.tab === tab)
           .map((definition) => (

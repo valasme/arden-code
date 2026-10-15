@@ -8,7 +8,6 @@ import type { AvailablePlugin, InstalledPlugin, Marketplace } from "@/ipc/bindin
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -180,15 +179,6 @@ describe("The Plugins page (ADR 0053)", () => {
     expect(screen.getByText("Run claude update in a terminal, then look again.")).toBeVisible();
     expect(screen.getByText("ARD-AGT-020")).toBeVisible();
   });
-
-  it("has no accessibility violations on Installed", async () => {
-    await openApp({}, "/plugins/installed");
-    await waitFor(() => {
-      expect(rows()).toHaveLength(4);
-    });
-
-    await expectNoAccessibilityViolations(document.body);
-  });
 });
 
 function offered(id: string, extra: Partial<AvailablePlugin> = {}): AvailablePlugin {
@@ -332,13 +322,6 @@ describe("Discover (ADR 0053)", () => {
     await user.click(screen.getByRole("button", { name: "All plugins" }));
     expect(screen.getByRole("listbox", { name: "Plugins" })).toBeVisible();
   });
-
-  it("has no accessibility violations", async () => {
-    const { user } = await openApp({ pluginCatalog: catalog }, "/plugins/discover");
-    await user.click(await screen.findByRole("option", { name: /^github/ }));
-
-    await expectNoAccessibilityViolations(document.body);
-  });
 });
 
 /** Opens github's details on Discover. */
@@ -431,15 +414,6 @@ describe("Installing a plugin for you in every project (ADR 0053)", () => {
     );
 
     expect(rust.callsTo("install_plugin")).toEqual([]);
-  });
-
-  it("has no accessibility violations while it asks", async () => {
-    const { user } = await details();
-
-    await user.click(screen.getByRole("button", { name: "Install…" }));
-    await animationsDone(await screen.findByRole("dialog", { name: "Install github" }));
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 
@@ -626,12 +600,6 @@ describe("Changing installed plugins (ADR 0053)", () => {
 
     expect(await screen.findByText("Plugin is required by another plugin")).toBeVisible();
   });
-
-  it("has no accessibility violations", async () => {
-    await installedTab({ folders: [folderProject("api", "billing-api", true)] });
-
-    await expectNoAccessibilityViolations(document.body);
-  });
 });
 
 describe("Giving running sessions a plugin change (ADR 0053)", () => {
@@ -803,14 +771,6 @@ describe("Installing a plugin for a project (ADR 0053)", () => {
     expect(within(dialog).getByRole("radio", { name: /For you, in this project/ })).toBeDisabled();
     expect(dialog).toHaveTextContent("Open a folder as a project to install a plugin for it.");
   });
-
-  it("has no accessibility violations with the project menu open", async () => {
-    const { user, dialog } = await fromSession();
-
-    await user.click(within(dialog).getByRole("radio", { name: /For everyone in this project/ }));
-
-    await expectNoAccessibilityViolations(document.body);
-  });
 });
 
 /** A command the github plugin's marketplace declares (ADR 0053). */
@@ -882,12 +842,6 @@ describe("Accepting a command a marketplace declares (ADR 0053)", () => {
     const { asked } = await install({ pluginChange: declaring(true) });
 
     expect(asked).toHaveTextContent("The command changed since it was last shown.");
-  });
-
-  it("has no accessibility violations", async () => {
-    await install({ pluginChange: declaring() });
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 
@@ -999,12 +953,6 @@ describe("Managing marketplaces (ADR 0053)", () => {
     await waitFor(() => {
       expect(rust.callsTo("change_marketplace")).toEqual([{ action: "remove", name: "acme" }]);
     });
-  });
-
-  it("has no accessibility violations", async () => {
-    await marketplacesTab();
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 

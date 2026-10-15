@@ -17,24 +17,24 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0007](0007-typescript-7-oxlint-oxfmt.md) | TypeScript 7 with Oxlint and oxfmt | Accepted |
 | [0008](0008-typed-ipc-and-error-codes.md) | Typed IPC and error codes | Accepted |
 | [0009](0009-custom-title-bar-and-snap-layouts.md) | Custom title bar with our own Snap Layouts module | Accepted |
-| [0010](0010-visual-design-system.md) | Visual design system | Accepted; motion superseded by [0054](0054-what-moves-and-how.md) |
+| [0010](0010-visual-design-system.md) | Visual design system | Accepted; motion superseded by [0054](0054-what-moves-and-how.md), tokens and radius by [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md) |
 | [0011](0011-brand-assets-from-code.md) | Brand assets generated from code | Accepted |
 | [0012](0012-settings-service.md) | Settings service | Accepted |
 | [0013](0013-logging-diagnostics-crash-handling.md) | Logging, diagnostics and crash handling | Accepted |
 | [0014](0014-internationalization-and-input.md) | Internationalization and input | Accepted |
-| [0015](0015-accessibility-bar.md) | Accessibility bar | Accepted |
+| [0015](0015-accessibility-bar.md) | Accessibility bar | Superseded by [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md) |
 | [0016](0016-chat-placeholder-and-demo-agent.md) | Chat placeholder and Demo agent | Accepted; storage superseded by [0035](0035-saving-sessions.md) |
 | [0017](0017-agent-integration-direction.md) | Agent integration direction | Accepted; Claude's approval route superseded by [0038](0038-claude-through-its-own-protocol.md) |
 | [0018](0018-distribution-updates-signing.md) | Distribution, updates and code signing | Accepted |
 | [0019](0019-testing-and-quality-gates.md) | Testing and quality gates | Accepted; the warm start's gate superseded by [0055](0055-the-warm-start-gate-is-on-the-pages-share.md) |
 | [0020](0020-security-and-supply-chain.md) | Security and supply chain | Accepted |
 | [0021](0021-terminal-command.md) | The `arden-code` terminal command | Accepted |
-| [0022](0022-high-contrast-and-component-adjustments.md) | High contrast and component adjustments | Accepted; motion superseded by [0054](0054-what-moves-and-how.md) |
+| [0022](0022-high-contrast-and-component-adjustments.md) | High contrast and component adjustments | Accepted; motion superseded by [0054](0054-what-moves-and-how.md), component adjustments and high contrast by [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md) |
 | [0023](0023-zoom-and-the-root-size.md) | Zoom, and the size of one rem | Accepted; reduced motion superseded by [0054](0054-what-moves-and-how.md) |
 | [0024](0024-areas-context-menus-and-browser-features.md) | Areas, context menus and the browser's own features | Accepted; resetting superseded by [0031](0031-restarts-and-reset.md) |
 | [0025](0025-diagnostics.md) | Diagnostics: logs, bundles and crash recovery | Accepted |
 | [0026](0026-markdown-links-and-images.md) | Markdown, links and images in an agent's reply | Accepted |
-| [0027](0027-long-sessions-and-announcements.md) | Long sessions, stopping a reply, and what screen readers hear | Accepted |
+| [0027](0027-long-sessions-and-announcements.md) | Long sessions, stopping a reply, and what screen readers hear | Accepted; announcements superseded by [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md) |
 | [0028](0028-process-supervisor.md) | The process supervisor and agent detection | Accepted; logging an agent's protocol changed by [0038](0038-claude-through-its-own-protocol.md) |
 | [0029](0029-notifications.md) | Notifications | Accepted |
 | [0030](0030-updates.md) | Updates | Accepted |
@@ -63,3 +63,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0053](0053-plugins-through-the-agent-cli.md) | Plugins through the agent CLI | Accepted |
 | [0054](0054-what-moves-and-how.md) | What moves, and how | Accepted |
 | [0055](0055-the-warm-start-gate-is-on-the-pages-share.md) | The warm start's gate is on the page's share | Accepted |
+| [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md) | The stock theme and a lighter accessibility bar | Accepted |

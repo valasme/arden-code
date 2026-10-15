@@ -22,8 +22,7 @@
    * Scrollbars are thin, with no arrow buttons: a muted thumb on a clear track, as in Windows 11's
    * own apps. They are drawn with the engine's scrollbar pseudo-elements, since the standard
    * scrollbar-width and scrollbar-color keep the arrows, and setting them would turn these off.
-   * Pixels, not rems: a scrollbar does not follow the zoom (ADR 0023). In a contrast theme the
-   * tokens are system colors, so the thumb stays visible.
+   * Pixels, not rems: a scrollbar does not follow the zoom (ADR 0023).
    */
   ::-webkit-scrollbar {
     width: 10px;
@@ -49,12 +48,6 @@
   ::-webkit-scrollbar-thumb:hover,
   ::-webkit-scrollbar-thumb:active {
     background-color: var(--muted-foreground);
-  }
-
-  @media (forced-colors: active) {
-    ::-webkit-scrollbar-thumb {
-      background-color: CanvasText;
-    }
   }
 
   /* A desktop app fills its window and never scrolls as a page: regions scroll inside themselves. */
@@ -180,19 +173,6 @@ details[data-disclosure][open]::details-content {
 
 details[data-disclosure="still"]::details-content {
   transition-property: none;
-}
-
-/* In a Windows contrast theme, a selected item is underlined because fills are not available. */
-@media (forced-colors: active) {
-  [aria-pressed="true"],
-  [aria-selected="true"],
-  [aria-current="page"],
-  [aria-checked="true"],
-  [data-state="checked"],
-  [data-state="active"] {
-    text-decoration: underline;
-    text-underline-offset: 0.25em;
-  }
 }
 
 /*

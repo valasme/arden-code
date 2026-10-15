@@ -1,6 +1,6 @@
 # 0015. Accessibility bar
 
-- Status: Accepted
+- Status: Superseded by [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md)
 - Date: 2026-09-29
 
 ## Context

@@ -190,7 +190,7 @@ export function AgentsTab() {
         </output>
       ) : null}
       {data ? (
-        <div className="border border-border">
+        <div className="rounded-lg border border-border">
           {data.map((agent) => (
             <AgentRow key={agent.cli} agent={agent} />
           ))}

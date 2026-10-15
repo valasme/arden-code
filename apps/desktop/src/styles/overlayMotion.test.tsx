@@ -16,7 +16,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import "@/styles/global.css";
 
@@ -125,7 +124,6 @@ describe("An overlay", () => {
     const { rerender } = render(dialog(true));
     await screen.findByRole("dialog", { name: "Reset settings?" });
     await animationsDone(document.body);
-    await expectNoAccessibilityViolations(document.body);
 
     expect(animationMs(slot("dialog-content"))).toBe(160);
     expect(transitionMs(slot("dialog-content"))).toBe(0);
@@ -146,7 +144,6 @@ describe("An overlay", () => {
     const { rerender } = render(confirmation(true));
     await screen.findByRole("alertdialog", { name: "Delete the session?" });
     await animationsDone(document.body);
-    await expectNoAccessibilityViolations(document.body);
 
     expect(animationMs(slot("confirm-dialog-content"))).toBe(160);
     expect(transitionMs(slot("confirm-dialog-content"))).toBe(0);
