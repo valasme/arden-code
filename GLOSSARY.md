@@ -157,6 +157,10 @@ _Avoid_: modal (only some overlays hold the focus), flyout, popup
 A short message in a corner of the window that goes away on its own, sometimes with an action such as Undo.
 _Avoid_: toast, snackbar
 
+**Disclosure**:
+A part of a page the user opens and closes in place to show more: a thinking item, a tool call, or the open source licenses in About.
+_Avoid_: accordion, collapsible, expander
+
 ### Control
 
 **Command**:
