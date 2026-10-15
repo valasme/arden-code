@@ -15,7 +15,8 @@ run's summary. The results are also written to `target/performance.json`.
 | Measurement | Target | How | Fails CI |
 |---|---|---|---|
 | Cold start to a usable window | ≤ 1.0 s | From starting the process to its window becoming visible (the app shows it once the first frame is drawn), seen from outside through Windows, on a new settings folder and a new web engine folder. The best of 4 starts. | Past the target × 2.5 |
-| Warm start | ≤ 0.4 s | The same, on the folders the first start left behind. The best of 4 starts. | Past the target × 2.5 |
+| Warm start | ≤ 0.4 s | The same, on the folders the first start left behind. The best of 4 starts. | Reported only |
+| Warm start, the page's share | ≤ 0.2 s | Of the warm starts, from the app's log saying the web engine began loading the page to the window being shown: the part the app controls. The best of 4 starts. A run with no such time fails. | Past the target × 2.5 |
 | Idle memory, web engine included | ≤ 200 MB | Private working set of the app and every process it started, after the window has been up for 8 s | Past the target × 2.5 |
 | Idle CPU | ≈ 0% | Processor time of the same processes over 20 s | Reported only |
 | Applying a settings change | < 50 ms | `src/app/settingsChange.test.tsx`, part of `pnpm test`: the real app in Chromium, from clicking a switch to the change being on screen. The median of 6 changes. The UI applies a change before Rust has saved it, so this is the whole of what a person waits for. | Past the target × 2.5 |
@@ -30,6 +31,16 @@ The margin on CI is that wide because of the GitHub runner, not the app. The sam
 loading the page on a new folder (0.35 s on the developer's machine). That part happens inside the web engine,
 before any of the app's code runs. With a margin of 1.5, the cold start failed on every run. The settings
 change took 43 and 81 ms in two runs there.
+
+### Why the warm start is gated on the page's share
+
+On the runner, the web engine takes 450 to 730 ms of a warm start just to begin loading the page, and more on a
+slow runner: on one run it took 856 to 1,538 ms, and the best warm start was 1,097 ms, past its 1,000 ms limit, on
+a pull request that changed only `Cargo.lock`. The rest of the start, the page loading, running and drawing its
+first frame and Rust showing the window, was 241 to 336 ms there, as on every other run. So the gate is on that
+share, which a slower page moves and a slower runner barely does, and the whole warm start is reported next to
+the plan's target ([ADR 0055](adr/0055-the-warm-start-gate-is-on-the-pages-share.md)). The arithmetic is in
+`e2e/startups.ts`.
 
 ### Why the start-up numbers are the best of several
 

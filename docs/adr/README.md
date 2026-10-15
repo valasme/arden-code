@@ -26,7 +26,7 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0016](0016-chat-placeholder-and-demo-agent.md) | Chat placeholder and Demo agent | Accepted; storage superseded by [0035](0035-saving-sessions.md) |
 | [0017](0017-agent-integration-direction.md) | Agent integration direction | Accepted; Claude's approval route superseded by [0038](0038-claude-through-its-own-protocol.md) |
 | [0018](0018-distribution-updates-signing.md) | Distribution, updates and code signing | Accepted |
-| [0019](0019-testing-and-quality-gates.md) | Testing and quality gates | Accepted |
+| [0019](0019-testing-and-quality-gates.md) | Testing and quality gates | Accepted; the warm start's gate superseded by [0055](0055-the-warm-start-gate-is-on-the-pages-share.md) |
 | [0020](0020-security-and-supply-chain.md) | Security and supply chain | Accepted |
 | [0021](0021-terminal-command.md) | The `arden-code` terminal command | Accepted |
 | [0022](0022-high-contrast-and-component-adjustments.md) | High contrast and component adjustments | Accepted; motion superseded by [0054](0054-what-moves-and-how.md) |
@@ -62,3 +62,4 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0052](0052-several-slash-commands-and-file-mentions.md) | Several slash commands and file mentions in a message | Accepted |
 | [0053](0053-plugins-through-the-agent-cli.md) | Plugins through the agent CLI | Accepted |
 | [0054](0054-what-moves-and-how.md) | What moves, and how | Accepted |
+| [0055](0055-the-warm-start-gate-is-on-the-pages-share.md) | The warm start's gate is on the page's share | Accepted |
