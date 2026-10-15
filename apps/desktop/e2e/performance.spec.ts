@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "./fixtures";
 import { measureUsage, median, type StartTimer, startTimer } from "./performance";
+import { type StartRound, summarizeStarts } from "./startups";
 
 // Measures the release build against the targets in the plan (section 11) and fails when a
 // measurement that has a gate is past its target by more than the safety margin. Run it with
@@ -29,10 +30,18 @@ const measurements = {
     target: 1000,
     gated: true,
   },
+  // The web engine's own start is most of a warm start, and on a slow CI runner it alone can take
+  // the whole margin, so the gate is on the part the app controls (ADR 0055).
   warmStartMs: {
     label: "Warm start to a shown window (best of the rounds)",
     unit: "ms",
     target: 400,
+    gated: false,
+  },
+  warmStartPageMs: {
+    label: "Warm start, from the page beginning to load to a shown window (best of the rounds)",
+    unit: "ms",
+    target: 200,
     gated: true,
   },
   idleMemoryMb: { label: "Idle memory, web engine included", unit: "MB", target: 200, gated: true },
@@ -43,6 +52,7 @@ type Name = keyof typeof measurements;
 const names = [
   "coldStartMs",
   "warmStartMs",
+  "warmStartPageMs",
   "idleMemoryMb",
   "idleCpuPercent",
 ] as const satisfies readonly Name[];
@@ -133,8 +143,7 @@ test.describe("performance of the release build", () => {
 
   test("starts, cold and warm, in the time the plan allows", async () => {
     test.setTimeout(180_000);
-    const cold: number[] = [];
-    const warm: number[] = [];
+    const starts: StartRound[] = [];
     for (let round = 0; round < rounds; round += 1) {
       const dataDir = newDataDir();
       try {
@@ -144,8 +153,7 @@ test.describe("performance of the release build", () => {
         // Again, with everything the first start left behind.
         const second = await timer.start(dataDir);
         await timer.close(second);
-        cold.push(first.milliseconds);
-        warm.push(second.milliseconds);
+        starts.push({ cold: first, warm: second });
         // Where the time goes: until the web engine begins to load the page, and the rest.
         console.log(
           `  round ${round + 1}: cold ${first.milliseconds} ms (page began after ${first.pageBeganAfter ?? "?"} ms), warm ${second.milliseconds} ms (page began after ${second.pageBeganAfter ?? "?"} ms)`,
@@ -156,14 +164,15 @@ test.describe("performance of the release build", () => {
     }
     // The best start is what the app can do. A slower one only says the machine was busy at that
     // moment (the virus scanner looks at every new file), so it must not fail the check.
-    results.coldStartMs = Math.min(...cold);
-    results.warmStartMs = Math.min(...warm);
+    Object.assign(results, summarizeStarts(starts));
+    const cold = starts.map((round) => round.cold.milliseconds);
+    const warm = starts.map((round) => round.warm.milliseconds);
     console.log(
       `cold starts: ${cold.join(", ")} ms (median ${Math.round(median(cold))}); warm starts: ${warm.join(", ")} ms (median ${Math.round(median(warm))})`,
     );
 
     check("coldStartMs");
-    check("warmStartMs");
+    check("warmStartPageMs");
   });
 
   test("sits idle without using much memory or the processor", async () => {
