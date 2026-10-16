@@ -47,7 +47,7 @@ export function BarButton({ className, ...props }: ComponentProps<"button">) {
     <button
       type="button"
       className={cn(
-        "grid h-8 place-items-center text-foreground hover:bg-muted active:bg-border disabled:pointer-events-none disabled:opacity-40 forced-colors:hover:outline forced-colors:hover:outline-1",
+        "grid h-8 place-items-center text-foreground hover:bg-muted active:bg-border disabled:pointer-events-none disabled:opacity-40",
         className,
       )}
       {...props}
@@ -158,7 +158,7 @@ export function TitleBar({
       <button
         type="button"
         onClick={onSearch}
-        className="@container/search mx-auto my-1 flex max-w-md min-w-0 flex-1 items-center gap-2 bg-muted px-2.5 text-xs text-muted-foreground hover:bg-border hover:text-foreground forced-colors:border forced-colors:border-[ButtonBorder]"
+        className="@container/search mx-auto my-1 flex max-w-md min-w-0 flex-1 items-center gap-2 rounded-md bg-muted px-2.5 text-xs text-muted-foreground hover:bg-border hover:text-foreground"
       >
         <SearchIcon aria-hidden className="size-3.5 shrink-0" strokeWidth={1.5} />
         {/* All of it or none of it: a narrow strip shows only the icon and the shortcut, and keeps
@@ -193,7 +193,7 @@ export function TitleBar({
             ref={maximizeButton}
             data-look={maximizeLook}
             aria-label={maximized ? t("titleBar.restore") : t("titleBar.maximize")}
-            className="w-[46px] cursor-default data-[look=hover]:bg-muted data-[look=pressed]:bg-border forced-colors:data-[look=hover]:outline forced-colors:data-[look=hover]:outline-1"
+            className="w-[46px] cursor-default data-[look=hover]:bg-muted data-[look=pressed]:bg-border"
             onClick={() => void windowControls.toggleMaximize()}
           >
             {maximized ? <RestoreGlyph /> : <MaximizeGlyph />}

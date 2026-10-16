@@ -89,7 +89,7 @@ const items: readonly Item[] = [
  */
 export function SessionItemsSample() {
   return (
-    <div className="max-w-2xl border border-border p-4">
+    <div className="max-w-2xl rounded-lg border border-border p-4">
       {items.map((item) => (
         <ItemView
           key={item.id}

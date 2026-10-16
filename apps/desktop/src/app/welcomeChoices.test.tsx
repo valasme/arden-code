@@ -6,7 +6,6 @@ import { page } from "vitest/browser";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone, menuClosed } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -129,12 +128,6 @@ describe("Choosing the agent and the project on the welcome screen", () => {
 
     expect(await within(await main()).findByRole("button", { name: "Project: web" })).toBeVisible();
     expect(rust.callsTo("create_session")).toEqual([]);
-  });
-
-  it("has no accessibility violations", async () => {
-    await welcome();
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 

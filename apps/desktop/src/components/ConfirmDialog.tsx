@@ -53,7 +53,7 @@ export function ConfirmDialog({
         <AlertDialog.Content
           data-slot="confirm-dialog-content"
           {...(onCloseAutoFocus ? { onCloseAutoFocus } : {})}
-          className="fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 bg-popover p-4 text-xs/relaxed text-popover-foreground ring-1 ring-foreground/10 outline-none sm:max-w-sm data-[state=closed]:animation-duration-close data-[state=closed]:ease-close data-[state=open]:animation-duration-open data-[state=open]:ease-open data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-98 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
+          className="fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-xs/relaxed text-popover-foreground ring-1 ring-foreground/10 outline-none sm:max-w-sm data-[state=closed]:animation-duration-close data-[state=closed]:ease-close data-[state=open]:animation-duration-open data-[state=open]:ease-open data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-98 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
         >
           <div className="flex flex-col gap-1 text-left">
             <AlertDialog.Title className="text-sm font-medium">{title}</AlertDialog.Title>

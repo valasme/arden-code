@@ -65,13 +65,13 @@ export function ApprovalItem({
     <fieldset
       aria-labelledby={headingId}
       data-item="approval"
-      className="my-2 flex flex-col gap-2 border border-foreground/30 px-3 py-2.5 text-sm"
+      className="my-2 flex flex-col gap-2 rounded-lg border border-foreground/30 px-3 py-2.5 text-sm"
     >
       <p id={headingId} className="flex items-center gap-2 font-medium">
         <ShieldQuestionIcon aria-hidden className="size-4 shrink-0" strokeWidth={1.5} />
         {t(`items.approval.asks.${action}`, { agent: t(`agents.${agent}.name`) })}
       </p>
-      <code className="block bg-muted px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap">
+      <code className="block rounded-md bg-muted px-2 py-1.5 font-mono text-xs break-words whitespace-pre-wrap">
         {subject}
       </code>
       {detail === null ? null : (

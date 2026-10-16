@@ -81,7 +81,7 @@ function SessionRow({ session }: { session: SessionSummary }) {
           type="button"
           tabIndex={-1}
           aria-label={t("sessions.menu.label", { title })}
-          className="absolute end-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center text-muted-foreground opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:bg-sidebar-border hover:text-sidebar-accent-foreground data-[state=open]:opacity-100 forced-colors:hover:outline forced-colors:hover:outline-1"
+          className="absolute end-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-sm text-muted-foreground opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:bg-sidebar-border hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
         >
           <EllipsisIcon aria-hidden className="size-4" strokeWidth={1.5} />
         </button>
@@ -191,7 +191,7 @@ export function SessionsNav() {
                     <button
                       type="button"
                       aria-label={t("projects.menu", { name: project.name })}
-                      className="absolute end-1 -top-1 grid size-6 place-items-center text-muted-foreground opacity-0 group-focus-within/project:opacity-100 group-hover/project:opacity-100 hover:bg-sidebar-border hover:text-sidebar-accent-foreground focus-visible:opacity-100 data-[state=open]:opacity-100 forced-colors:hover:outline forced-colors:hover:outline-1"
+                      className="absolute end-1 -top-1 grid size-6 place-items-center rounded-sm text-muted-foreground opacity-0 group-focus-within/project:opacity-100 group-hover/project:opacity-100 hover:bg-sidebar-border hover:text-sidebar-accent-foreground focus-visible:opacity-100 data-[state=open]:opacity-100"
                     >
                       <EllipsisIcon aria-hidden className="size-4" strokeWidth={1.5} />
                     </button>

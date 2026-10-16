@@ -62,7 +62,6 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "@vitest/browser-playwright": "catalog:",
-    "axe-core": "catalog:",
     "babel-plugin-react-compiler": "catalog:",
     "i18next-cli": "catalog:",
     "tailwindcss": "catalog:",

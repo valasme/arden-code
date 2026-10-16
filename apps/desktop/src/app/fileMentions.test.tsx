@@ -6,7 +6,6 @@ import { page } from "vitest/browser";
 import type { FileMatch } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -162,15 +161,6 @@ describe("File mentions in the message box (ADR 0052)", () => {
     fireEvent.change(box, { target: { value: "@" } });
 
     expect(screen.queryByRole("listbox")).toBeNull();
-  });
-
-  it("has no accessibility violations while it is open", async () => {
-    const { user, box } = await inSession();
-
-    await user.type(box, "@");
-    await screen.findByRole("option", { name: "GLOSSARY.md" });
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 

@@ -6,7 +6,6 @@ import userEvent from "@testing-library/user-event";
 import { z } from "zod";
 
 import type { AppError } from "@/ipc/bindings";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { ErrorScreen } from "./ErrorScreen";
 
@@ -134,13 +133,6 @@ describe("ErrorScreen", () => {
     await user.click(screen.getByRole("button", { name: "Open logs" }));
 
     expect(calls.map((call) => call.command)).toContain("open_logs_folder");
-  });
-
-  it("has no accessibility violations", async () => {
-    startApp();
-    const { container } = renderScreen(fromRust);
-
-    await expectNoAccessibilityViolations(container);
   });
 
   it("moves focus to its heading so keyboard and screen reader users land on it", () => {

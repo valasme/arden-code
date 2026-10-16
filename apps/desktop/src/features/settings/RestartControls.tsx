@@ -27,7 +27,7 @@ export function RestartNote({ changed }: { changed: boolean }) {
   if (!changed) return null;
 
   return (
-    <div className="flex basis-full flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-muted py-1.5 ps-3 pe-1.5 forced-colors:border forced-colors:border-[CanvasText]">
+    <div className="flex basis-full flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md bg-muted py-1.5 ps-3 pe-1.5">
       <p className="flex items-center gap-2 text-xs">
         <RotateCwIcon aria-hidden className="size-3.5 text-muted-foreground" strokeWidth={1.5} />
         {t("settings.restart.note")}

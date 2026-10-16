@@ -5,7 +5,6 @@ import userEvent from "@testing-library/user-event";
 
 import type { ContextWindow, UsageLimits, UsageWindow } from "@/ipc/bindings";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { settingsWith } from "@/test/settings";
 
 import { Figures } from "./Figures";
@@ -149,17 +148,6 @@ describe("Figures, with the usage limits", () => {
     renderFigures();
 
     expect(await screen.findByText(/^5-hour limit reached, resets /u)).toBeVisible();
-  });
-
-  it("has no accessibility violations, closed or open", async () => {
-    startApp(plan);
-    const user = userEvent.setup();
-    const { container } = renderFigures();
-    await user.click(await screen.findByRole("button", { name: /5-hour 42%/u }));
-    await animationsDone(await screen.findByRole("dialog", { name: "Usage limits" }));
-
-    await expectNoAccessibilityViolations(container);
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 

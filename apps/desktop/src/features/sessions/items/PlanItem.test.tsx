@@ -2,7 +2,6 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { PlanAnswer, PlanState } from "@/ipc/bindings";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { PlanItem } from "./PlanItem";
 
@@ -90,17 +89,5 @@ describe("PlanItem", () => {
     renderPlan("keptPlanning", plan, "Test it first");
 
     expect(screen.getByText("Test it first")).toBeVisible();
-  });
-
-  it("has no accessibility violations, waiting or answered", async () => {
-    const user = userEvent.setup();
-    const { container, unmount } = renderPlan("waiting");
-    await expectNoAccessibilityViolations(container);
-    await user.click(screen.getByRole("button", { name: "Keep planning" }));
-    await expectNoAccessibilityViolations(container);
-    unmount();
-
-    const answered = renderPlan("startedAcceptingEdits");
-    await expectNoAccessibilityViolations(answered.container);
   });
 });

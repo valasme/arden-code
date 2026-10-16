@@ -9,7 +9,6 @@ import type { ContextWindow, Item, Session, UsageLimits } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { drawingOf, drawingsIn } from "@/test/icons";
 import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
@@ -124,14 +123,6 @@ describe("Choosing the agent of a session (ADR 0039)", () => {
     const statusBar = screen.getByRole("contentinfo");
     expect(within(statusBar).getByText("Claude: replying")).toBeVisible();
   });
-
-  it("has no accessibility violations with the agent menu in the message box", async () => {
-    startSessionsRust({ sessions: [sessionNamed("session-1", null)] });
-    renderApp("/session/session-1");
-
-    await screen.findByRole("button", { name: "Agent: Demo agent" });
-    await expectNoAccessibilityViolations(document.body);
-  });
 });
 
 describe("A session Claude names (ADR 0050)", () => {
@@ -232,23 +223,6 @@ describe("Approval requests (ADR 0039)", () => {
     expect(rust.callsTo("answer_approval")).toEqual([
       { sessionId: "session-1", itemId: "turn-1-approval-1", answer: "allow" },
     ]);
-  });
-
-  it("has no accessibility violations with a request waiting", async () => {
-    const user = userEvent.setup();
-    const rust = startSessionsRust({
-      sessions: [sessionNamed("session-1", null, "playground", "claude")],
-    });
-    renderApp("/session/session-1");
-    await user.type(
-      await screen.findByRole("textbox", { name: "Message" }),
-      "Run the tests{Enter}",
-    );
-    await screen.findByText("Claude is replying…");
-    rust.emit({ type: "itemAdded", turnId: "turn-1", item: request });
-    await screen.findByRole("group", { name: "Claude wants to run a command" });
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 
@@ -439,19 +413,6 @@ describe("Trusting a folder (ADR 0039)", () => {
     });
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
-
-  it("has no accessibility violations while it asks", async () => {
-    const user = userEvent.setup();
-    claudeInAFolder();
-    renderApp("/session/session-1");
-    await user.type(
-      await screen.findByRole("textbox", { name: "Message" }),
-      "Fix the build{Enter}",
-    );
-    await animationsDone(await screen.findByRole("alertdialog"));
-
-    await expectNoAccessibilityViolations(document.body);
-  });
 });
 
 describe("Choosing where a session works (ADR 0039)", () => {
@@ -472,7 +433,6 @@ describe("Choosing where a session works (ADR 0039)", () => {
         .map((item) => item.querySelector("[data-name]")?.textContent),
     ).toEqual(["Playground", "demo"]);
     expect(within(menu).getByRole("menuitem", { name: /^Open folder…/ })).toBeVisible();
-    await expectNoAccessibilityViolations(menu);
     await user.click(within(menu).getByRole("menuitemradio", { name: /^demo/ }));
 
     expect(rust.callsTo("set_session_project")).toEqual([

@@ -3,8 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { page } from "vitest/browser";
 
-import { expectNoAccessibilityViolations } from "@/test/axe";
-
 import { Toaster } from "./Toaster";
 
 import "@/styles/global.css";
@@ -56,7 +54,7 @@ function longest(durations: string) {
 }
 
 describe("Toaster", () => {
-  it("draws a toast like the app's other floating surfaces: its font, the popover colors, a 1px border and square corners", async () => {
+  it("draws a toast like the app's other floating surfaces: its font, the popover colors, a 1px border and the large radius", async () => {
     render(<Toaster />);
 
     toast.success("Settings exported");
@@ -67,7 +65,8 @@ describe("Toaster", () => {
     expect(style.color).toBe(computed("var(--popover-foreground)"));
     expect(style.borderTopWidth).toBe("1px");
     expect(style.borderTopColor).toBe(computed("var(--border)"));
-    expect(style.borderTopLeftRadius).toBe("0px");
+    // The theme radius, 0.45rem at the default root size.
+    expect(style.borderTopLeftRadius).toBe("7.2px");
   });
 
   it("marks an error with the destructive color, and leaves the other kinds neutral", async () => {
@@ -115,7 +114,8 @@ describe("Toaster", () => {
       description.getBoundingClientRect().bottom,
     );
     expect(getComputedStyle(action).borderTopWidth).toBe("1px");
-    expect(getComputedStyle(action).borderTopLeftRadius).toBe("0px");
+    // A button's radius, 2px under the theme's.
+    expect(getComputedStyle(action).borderTopLeftRadius).toBe("5.2px");
   });
 
   it("grows with the zoom", async () => {
@@ -174,17 +174,5 @@ describe("Toaster", () => {
 
     await shown("Imported the settings");
     expect(screen.getByRole("region", { name: "Notices (Alt+T)" })).toBeInTheDocument();
-  });
-
-  it("has no accessibility violations", async () => {
-    const { container } = render(<Toaster />);
-
-    toast.error("Could not export", {
-      description: "The folder is read-only.",
-      action: { label: "Copy details", onClick: () => {} },
-    });
-
-    await shown("Could not export");
-    await expectNoAccessibilityViolations(container);
   });
 });

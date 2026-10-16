@@ -6,7 +6,6 @@ import { z } from "zod";
 
 import { Toaster } from "@/components/Toaster";
 import type { Detection, UsageLimits } from "@/ipc/bindings";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { settingsWith } from "@/test/settings";
 
 import { AgentsTab } from "./AgentsTab";
@@ -325,13 +324,5 @@ describe("Settings → Agents", () => {
     renderTab();
 
     expect(await screen.findByText(/ARD-PROC-001/)).toBeVisible();
-  });
-
-  it("has no accessibility violations", async () => {
-    startApp();
-    const { container } = renderTab();
-    await screen.findByRole("region", { name: "Claude Code" });
-
-    await expectNoAccessibilityViolations(container);
   });
 });

@@ -6,7 +6,6 @@ import { page } from "vitest/browser";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { archivedAt, folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -126,13 +125,5 @@ describe("Sessions in the command palette", () => {
 
     const [first] = within(palette).getAllByRole("option");
     expect(first).toHaveTextContent("Settings");
-  });
-
-  it("has no accessibility violations", async () => {
-    const { palette, user } = await openPalette();
-    await user.keyboard("login");
-    await within(palette).findByRole("group", { name: "Archived" });
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });

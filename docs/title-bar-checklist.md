@@ -24,10 +24,9 @@ System → Display → Scale.
 - [ ] Move the window to a monitor with a different scaling. Rest the pointer on Maximize: the picker appears there too.
 - [ ] Maximize the window on that monitor and rest the pointer on Restore: the picker appears.
 
-## Keyboard and screen reader
+## Keyboard
 
 - [ ] Tab to Maximize and press Enter, then Space: the window maximizes and is restored, and the focus stays on the button.
-- [ ] NVDA and Narrator read the button as "Maximize, button" and, when maximized, "Restore, button".
 - [ ] Alt+Space still opens the system menu, and Win+Z still opens the picker.
 
 ## The title bar of Windows

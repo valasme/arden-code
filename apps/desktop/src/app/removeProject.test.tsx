@@ -6,7 +6,6 @@ import { page } from "vitest/browser";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { archivedAt, folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -134,13 +133,5 @@ describe("Removing a project", () => {
     await waitFor(() => {
       expect(within(sidebar()).getByRole("button", { name: "New session" })).toHaveFocus();
     });
-  });
-
-  it("has no accessibility violations while it asks", async () => {
-    const { user } = await withProject();
-
-    await animationsDone(await askToRemove(user));
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });

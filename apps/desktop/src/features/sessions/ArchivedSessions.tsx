@@ -61,7 +61,7 @@ export function ArchivedSessions() {
           <ul
             ref={rows}
             aria-label={t("sessions.archived.title")}
-            className="divide-y divide-border border border-border"
+            className="divide-y divide-border rounded-lg border border-border"
           >
             {archived.map((session, place) => {
               const titleId = `archived-${session.id}`;

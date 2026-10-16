@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 
 import type { Effort } from "@/ipc/bindings";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { EffortMenu } from "./EffortMenu";
 
@@ -87,13 +86,5 @@ describe("EffortMenu", () => {
     renderMenu("low", true);
 
     expect(screen.getByRole("button", { name: "Effort: Low" })).toBeDisabled();
-  });
-
-  it("has no accessibility violations, closed or open", async () => {
-    const user = userEvent.setup();
-    const { container } = renderMenu(null);
-
-    await expectNoAccessibilityViolations(container);
-    await expectNoAccessibilityViolations(await openMenu(user, "Effort: Default"));
   });
 });

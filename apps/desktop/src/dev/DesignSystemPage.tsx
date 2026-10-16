@@ -203,7 +203,7 @@ export function DesignSystemPage({
           A text field
           <input
             className="h-8 border border-input bg-background px-2.5 text-sm"
-            defaultValue="Control borders are 3:1"
+            defaultValue="A rounded field"
           />
         </label>
         <div className="flex flex-wrap items-center gap-6 text-sm">

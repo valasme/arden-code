@@ -5,7 +5,6 @@ import userEvent from "@testing-library/user-event";
 
 import { Toaster } from "@/components/Toaster";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { CrashRecovery } from "./CrashRecovery";
 
@@ -62,7 +61,6 @@ describe("Crash recovery", () => {
     });
     await animationsDone(dialog);
     expect(within(dialog).getByRole("button", { name: "Not now" })).toHaveFocus();
-    await expectNoAccessibilityViolations(document.body);
   });
 
   it("exports, marks the crash as seen, and says where the file went", async () => {

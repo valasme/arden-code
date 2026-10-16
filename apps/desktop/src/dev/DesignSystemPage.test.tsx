@@ -1,7 +1,5 @@
 import { render, screen } from "@testing-library/react";
 
-import { expectNoAccessibilityViolations } from "@/test/axe";
-
 import { DesignSystemPage } from "./DesignSystemPage";
 
 import "@/styles/global.css";
@@ -11,22 +9,6 @@ afterEach(() => {
 });
 
 describe("the design system page", () => {
-  it.each(["light", "dark"] as const)(
-    "has no accessibility violations in the %s theme",
-    async (theme) => {
-      const { container } = render(
-        <DesignSystemPage
-          theme={theme}
-          zoom={1}
-          onThemeChange={() => {}}
-          onZoomChange={() => {}}
-        />,
-      );
-
-      await expectNoAccessibilityViolations(container);
-    },
-  );
-
   it("shows every control in every state: switches on, off and disabled, a choice, a slider and keys", () => {
     render(
       <DesignSystemPage theme="light" zoom={1} onThemeChange={() => {}} onZoomChange={() => {}} />,

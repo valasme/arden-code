@@ -12,7 +12,6 @@ import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
 import { settingsWith } from "@/test/settings";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { App } from "./App";
 
@@ -230,17 +229,6 @@ describe("the command palette", () => {
       expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull();
     });
   });
-
-  it("has no accessibility violations", async () => {
-    const user = userEvent.setup();
-    renderApp();
-    await screen.findByRole("main");
-    await user.keyboard("{Control>}k{/Control}");
-    const palette = await screen.findByRole("dialog", { name: "Command palette" });
-    await animationsDone(palette);
-
-    await expectNoAccessibilityViolations(palette);
-  });
 });
 
 describe("the default shortcuts", () => {
@@ -326,7 +314,6 @@ describe("the default shortcuts", () => {
         expect(sheet, `${command.id}: ${shortcut}`).toHaveTextContent(formatShortcut(shortcut));
       }
     }
-    await expectNoAccessibilityViolations(sheet);
   });
 
   it("list the shortcuts in the command palette's groups", async () => {

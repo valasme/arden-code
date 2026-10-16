@@ -275,7 +275,7 @@ export function MessageBox({
     >
       <div
         data-message-frame
-        className="relative mx-auto flex max-w-[45rem] flex-col border border-input bg-background"
+        className="relative mx-auto flex max-w-[45rem] flex-col rounded-xl border border-input bg-background shadow-xs"
       >
         {listing ? (
           <MessageBoxList
@@ -367,7 +367,7 @@ export function MessageBox({
                   <XIcon aria-hidden className="size-3.5 text-muted-foreground" strokeWidth={1.5} />
                 </Button>
               ) : (
-                <span className="flex h-6 items-center gap-1 border border-border px-2 text-foreground">
+                <span className="flex h-6 items-center gap-1 rounded-md border border-border px-2 text-foreground">
                   <LightbulbIcon aria-hidden className="size-4" strokeWidth={1.5} />
                   {t("sessions.messageBox.ultrathink")}
                 </span>

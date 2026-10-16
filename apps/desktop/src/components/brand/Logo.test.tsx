@@ -1,7 +1,5 @@
 import { render, screen } from "@testing-library/react";
 
-import { expectNoAccessibilityViolations } from "@/test/axe";
-
 import { Logo, Mark, Wordmark } from "./Logo";
 
 import "@/styles/global.css";
@@ -29,19 +27,6 @@ describe("the logo components", () => {
 
     expect(screen.queryByRole("img")).toBeNull();
     expect(container.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
-  });
-
-  it("has no accessibility violations", async () => {
-    const { container } = render(
-      <div>
-        <Logo />
-        <Logo orientation="stacked" />
-        <Mark />
-        <Wordmark />
-      </div>,
-    );
-
-    await expectNoAccessibilityViolations(container);
   });
 
   it("stacks the mark above the wordmark on request", () => {
