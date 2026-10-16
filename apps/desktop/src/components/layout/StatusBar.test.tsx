@@ -102,13 +102,15 @@ describe("The status bar and the open session", () => {
     useRepliesStore.setState(useRepliesStore.getInitialState());
   });
 
-  it("says when the open session's agent is replying", async () => {
+  it("says when the open session's agent is replying, without speaking it to screen readers", async () => {
     startApp({ state: "idle" });
     useRepliesStore.setState({ sessionId: "session-1", busy: true });
     renderBar();
 
     const replying = await screen.findByText("Demo agent: replying");
     expect(replying).toBeVisible();
+    // The reply announcer speaks for the reply (ADR 0027); the bar must not say it twice.
+    expect(replying.closest("[aria-live], [role=status], output")).toBeNull();
   });
 
   it("says when the open session's agent waits for an answer", async () => {

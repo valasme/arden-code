@@ -573,6 +573,11 @@
       "label": "Agent: {{agent}}",
       "notInstalled": "Not installed"
     },
+    "announce": {
+      "done": "Reply finished.",
+      "failed": "Reply failed.",
+      "stopped": "Reply stopped."
+    },
     "archived": {
       "description": "Sessions you put away. Open one to read it, unarchive it to carry on with it, or delete it.",
       "done": "Session archived",

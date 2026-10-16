@@ -451,7 +451,7 @@ The decisions and the options turned down are in [ADR 0053](adr/0053-plugins-thr
 
 ### 7.1 Theme tokens
 
-This is the maintainer's neutral OKLCH theme, as supplied ([ADR 0056](adr/0056-the-stock-theme-and-a-lighter-accessibility-bar.md)), plus three brand tokens: the logo's orange and brown, and a warm tint behind selected text. Corners are rounded from `--radius`: `sm`, `md`, `lg` and `xl` are the radius less 4px, less 2px, itself and plus 4px.
+This is the maintainer's neutral OKLCH theme, as supplied and weighed by [the councils](research/ui-and-accessibility-councils.md) ([ADR 0056](adr/0056-the-stock-theme-and-a-lighter-accessibility-bar.md)), with the dark sidebar kept neutral, plus three brand tokens: the logo's orange and brown, and a warm tint behind selected text. Corners are rounded from `--radius`: `sm`, `md`, `lg` and `xl` are the radius less 4px, less 2px, itself and plus 4px.
 
 ```css
 :root {
@@ -518,8 +518,8 @@ This is the maintainer's neutral OKLCH theme, as supplied ([ADR 0056](adr/0056-t
   --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.922 0 0); /* neutral, not shadcn's stock blue (ADR 0056) */
+  --sidebar-primary-foreground: oklch(0.205 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
@@ -647,8 +647,9 @@ Accessibility is not a release gate ([ADR 0056](adr/0056-the-stock-theme-and-a-l
 - **Windows settings honored:** "Animation effects: off" (only spinners keep turning) and the text-size setting.
 - **Zoom:** 80% to 200% without breaking the layout.
 - **Names:** every control has the name, role and state Radix gives it, and every icon-only button has a name. The tests find controls by them.
+- **Screen readers:** a streaming reply is announced politely, in whole sentences ([ADR 0027](adr/0027-long-sessions-and-announcements.md)).
 
-There is no contrast target, no axe check, no screen reader announcement of a streaming reply, no rules for Windows contrast themes beyond the web engine's own, and no manual checklist.
+There is no contrast target, no axe check, no rules for Windows contrast themes beyond the web engine's own, and no manual checklist.
 
 ## 11. Performance targets
 

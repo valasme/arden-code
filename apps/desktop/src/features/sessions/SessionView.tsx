@@ -41,6 +41,7 @@ import { useHandledSlashCommands } from "./useHandledSlashCommands";
 import { TranscriptViewContext, useTranscriptView } from "./transcriptView";
 import { useUltrathink } from "./ultrathink";
 import { useUnavailableAgents } from "./useUnavailableAgents";
+import { ReplyAnnouncer } from "./ReplyAnnouncer";
 import { SessionLinks } from "./SessionLinks";
 import { SessionMenu } from "./SessionMenu";
 import { TurnView } from "./TurnView";
@@ -415,6 +416,7 @@ export function SessionView({ id }: { id: string }) {
           </Button>
         )}
       </div>
+      <ReplyAnnouncer turn={lastTurn} agent={agent} />
       {session.archivedAt === null ? (
         <MessageBox
           draft={id}

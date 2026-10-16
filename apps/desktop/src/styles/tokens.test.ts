@@ -17,7 +17,7 @@ const css = readFileSync(new URL("./tokens.css", import.meta.url), "utf8");
 const themes = { light: readTokens(css, ":root"), dark: readTokens(css, ".dark") } as const;
 
 describe("the maintainer's theme, as supplied (ADR 0056)", () => {
-  it("keeps the stock values that the old accessibility bar had changed", () => {
+  it("takes the supplied values that the old accessibility bar had changed", () => {
     expect(themes.light).toMatchObject({
       "--muted-foreground": "oklch(0.556 0 0)",
       "--input": "oklch(0.922 0 0)",
@@ -26,8 +26,13 @@ describe("the maintainer's theme, as supplied (ADR 0056)", () => {
     });
     expect(themes.dark).toMatchObject({
       "--input": "oklch(1 0 0 / 15%)",
-      "--sidebar-primary": "oklch(0.488 0.243 264.376)",
-      "--sidebar-primary-foreground": "oklch(0.985 0 0)",
+    });
+  });
+
+  it("keeps the dark sidebar neutral instead of the supplied blue (the councils, Q2)", () => {
+    expect(themes.dark).toMatchObject({
+      "--sidebar-primary": "oklch(0.922 0 0)",
+      "--sidebar-primary-foreground": "oklch(0.205 0 0)",
     });
   });
 
