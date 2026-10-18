@@ -602,16 +602,14 @@ impl SessionStore {
         if inner.projects[position].kind == ProjectKind::Playground {
             return Err(StoreError::Playground);
         }
-        let removed: Vec<String> = inner
+        let removed: Vec<(String, AgentKind)> = inner
             .sessions
             .iter()
             .filter(|entry| entry.session.project_id == project_id)
-            .map(|entry| entry.session.id.clone())
+            .map(|entry| (entry.session.id.clone(), entry.session.agent))
             .collect();
-        let forget = inner
-            .last_open
-            .as_ref()
-            .is_some_and(|open| removed.contains(open));
+        let gone = |id: &String| removed.iter().any(|(removed, _)| removed == id);
+        let forget = inner.last_open.as_ref().is_some_and(gone);
         let last_id = inner.last_id;
         inner
             .database
@@ -633,19 +631,21 @@ impl SessionStore {
         });
         // The file drops the links to them by itself; the sessions in memory follow.
         for other in &mut inner.sessions {
-            if other
-                .session
-                .linked_from
-                .as_ref()
-                .is_some_and(|from| removed.contains(from))
-            {
+            if other.session.linked_from.as_ref().is_some_and(gone) {
                 other.session.linked_from = None;
             }
         }
         if forget {
             inner.last_open = None;
         }
-        Ok(removed)
+        drop(inner);
+        for (session_id, agent) in &removed {
+            self.agents.of(*agent).end(session_id);
+        }
+        Ok(removed
+            .into_iter()
+            .map(|(session_id, _)| session_id)
+            .collect())
     }
 
     /// Remembers that a session was opened, so that it can be opened again at the next start.
@@ -823,8 +823,14 @@ impl SessionStore {
         entry.session.pinned = header.pinned;
         entry.session.archived_at = header.archived_at;
         entry.order = order;
+        let agent = entry.session.agent;
         if archived {
             stop_running(&entry.session, stopping, controls);
+        }
+        drop(inner);
+        // An archived session needs no agent running until it is used again (ADR 0039).
+        if archived {
+            self.agents.of(agent).end(session_id);
         }
         Ok(())
     }
@@ -863,6 +869,8 @@ impl SessionStore {
         if forget {
             inner.last_open = None;
         }
+        drop(inner);
+        self.agents.of(entry.session.agent).end(session_id);
         Ok(())
     }
 
@@ -1714,6 +1722,156 @@ mod tests {
 
         assert_eq!(claude.heard(), vec![Heard::Reply(session.id.clone())]);
         assert_eq!(demo.heard(), Vec::new());
+    }
+
+    #[test]
+    fn archiving_a_session_ends_its_agent_and_unarchiving_it_does_not() {
+        let (store, demo, claude) = recorded();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+
+        store.set_archived(&session.id, true).expect("archived");
+        store.set_archived(&session.id, false).expect("unarchived");
+
+        assert_eq!(claude.heard(), vec![Heard::End(session.id.clone())]);
+        assert_eq!(demo.heard(), Vec::new());
+    }
+
+    #[test]
+    fn deleting_a_session_ends_its_agent() {
+        let (store, _demo, claude) = recorded();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+
+        store.delete(&session.id).expect("deleted");
+
+        assert_eq!(claude.heard(), vec![Heard::End(session.id)]);
+    }
+
+    #[test]
+    fn removing_a_project_ends_the_agent_of_each_of_its_sessions_archived_ones_too() {
+        let (store, demo, claude) = recorded();
+        let project = store
+            .open_folder(Path::new(r"C:\Work\my-app"))
+            .expect("a project");
+        let talking = store
+            .create_session(&project.id, AgentKind::Claude)
+            .expect("a session");
+        let put_away = store
+            .create_session(&project.id, AgentKind::Claude)
+            .expect("a session");
+        store.set_archived(&put_away.id, true).expect("archived");
+        let trying = store
+            .create_session(&project.id, AgentKind::Demo)
+            .expect("a session");
+        store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session elsewhere");
+
+        store.remove_project(&project.id).expect("removed");
+
+        assert_eq!(
+            claude.heard(),
+            vec![
+                Heard::End(put_away.id.clone()),
+                Heard::End(talking.id),
+                Heard::End(put_away.id),
+            ],
+            "archiving ended one, then removing ended both"
+        );
+        assert_eq!(demo.heard(), vec![Heard::End(trying.id)]);
+    }
+
+    /// Has the file refuse every change from now on, as a full disk would.
+    fn refuse_writes(file: &Path) {
+        rusqlite::Connection::open(file)
+            .expect("the file")
+            .execute_batch(
+                "CREATE TRIGGER refuse_insert BEFORE INSERT ON meta
+                 BEGIN SELECT RAISE(ABORT, 'the disk is full'); END;
+                 CREATE TRIGGER refuse_update BEFORE UPDATE ON meta
+                 BEGIN SELECT RAISE(ABORT, 'the disk is full'); END;",
+            )
+            .expect("the file refuses changes");
+    }
+
+    #[test]
+    fn a_change_that_cannot_be_written_reaches_no_agent() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let claude = Arc::new(Recording::default());
+        let store = store_in_with(&file, with_claude(claude.clone()));
+        let project = store
+            .open_folder(Path::new(r"C:\Work\my-app"))
+            .expect("a project");
+        let session = store
+            .create_session(&project.id, AgentKind::Claude)
+            .expect("a session");
+        refuse_writes(&file);
+
+        assert!(matches!(
+            store.set_archived(&session.id, true),
+            Err(StoreError::NotSaved(_))
+        ));
+        assert!(matches!(
+            store.delete(&session.id),
+            Err(StoreError::NotSaved(_))
+        ));
+        assert!(matches!(
+            store.remove_project(&project.id),
+            Err(StoreError::NotSaved(_))
+        ));
+        assert_eq!(claude.heard(), Vec::new());
+    }
+
+    /// An agent that reads the store's list while it ends a session, as a driver that reports
+    /// back while it closes its program would.
+    #[derive(Default)]
+    struct CallingBack {
+        store: std::sync::OnceLock<std::sync::Weak<SessionStore>>,
+    }
+
+    impl AgentDriver for CallingBack {
+        fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+            emit(TurnEvent::Finished {
+                turn_id: request.turn_id.to_owned(),
+            });
+        }
+
+        fn end(&self, _session_id: &str) {
+            if let Some(store) = self.store.get().and_then(std::sync::Weak::upgrade) {
+                store.list();
+            }
+        }
+    }
+
+    #[test]
+    fn an_agent_that_calls_back_into_the_store_while_it_ends_a_session_does_not_hold_it_up() {
+        let claude = Arc::new(CallingBack::default());
+        let store = Arc::new(store_with(Arc::new(DemoDriver::instant()), claude.clone()));
+        claude
+            .store
+            .set(Arc::downgrade(&store))
+            .expect("the store is set once");
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+
+        let (done, finished) = mpsc::channel();
+        std::thread::spawn(move || {
+            store.set_archived(&session.id, true).expect("archived");
+            store.delete(&session.id).expect("deleted");
+            let _ = done.send(());
+        });
+
+        assert!(
+            finished
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .is_ok(),
+            "the store called the agent while it held its lock"
+        );
     }
 
     #[test]
