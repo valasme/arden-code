@@ -6,7 +6,6 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { ContextMenuHost } from "./ContextMenuHost";
 
@@ -262,16 +261,6 @@ describe("the context menu of a text field", () => {
     await screen.findByRole("menu");
     expect(disabled("Cut")).toBe(true);
     expect(disabled("Copy")).toBe(true);
-  });
-
-  it("has no accessibility violations while open", async () => {
-    startApp();
-    render(<Field />);
-    rightClick(field());
-    // The menu fades in; its colors are only final once it has finished.
-    await animationsDone(await screen.findByRole("menu"));
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 

@@ -35,7 +35,7 @@ export function CommandDialog({
     >
       {shown ? (
         <div className="flex flex-col gap-2">
-          <pre className="max-h-48 overflow-auto border border-border bg-muted px-3 py-2 font-mono text-xs break-all whitespace-pre-wrap">
+          <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted px-3 py-2 font-mono text-xs break-all whitespace-pre-wrap">
             <code>{shown.command}</code>
           </pre>
           <p className="text-muted-foreground">

@@ -352,7 +352,6 @@ export function SessionView({ id }: { id: string }) {
           aria-label={t("sessions.transcript")}
           aria-busy={busy}
           // A region that scrolls must be reachable by keyboard, to scroll it with the arrow keys.
-          // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
           tabIndex={0}
           className="absolute inset-0 overflow-auto px-6"
           onScroll={(event) => {

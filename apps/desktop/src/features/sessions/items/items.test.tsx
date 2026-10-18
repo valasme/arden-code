@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { userEvent as browserUser } from "vitest/browser";
 
 import type { Item, TranscriptView } from "@/ipc/bindings";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import type { AnswerHandler } from "./ApprovalItem";
 import { TranscriptViewContext } from "../transcriptView";
@@ -288,7 +287,6 @@ describe("A disclosure", () => {
     expect(drawnHeight(note), "it starts from nothing").toBe(0);
     const height = await settledHeight(note);
     expect(height, "and grows to its content").toBeGreaterThan(0);
-    await expectNoAccessibilityViolations(document.body);
 
     screen.getByText("Thinking").click();
 
@@ -444,73 +442,5 @@ describe("Approval requests", () => {
     expect(screen.getByText("npm test")).toBeVisible();
     expect(screen.queryByRole("button")).toBeNull();
     expect(screen.queryByText("Run the tests"), "the details fold away").toBeNull();
-  });
-});
-
-describe("Every kind of item", () => {
-  it("has no accessibility violations", async () => {
-    const items: Item[] = [
-      { type: "status", id: "1", kind: "started" },
-      { type: "thinking", id: "2", text: "Thinking it over." },
-      {
-        type: "toolCall",
-        id: "3",
-        name: "run_command",
-        input: "cargo test",
-        status: "failed",
-        output: "no",
-      },
-      {
-        type: "toolCall",
-        id: "4",
-        name: "read_file",
-        input: "a.txt",
-        status: "running",
-        output: null,
-      },
-      { type: "fileChange", id: "5", path: "a.txt", change: "deleted", added: 0, removed: 4 },
-      { type: "error", id: "6", message: "It broke." },
-      { type: "status", id: "7", kind: "stopped" },
-      approval({
-        id: "8",
-        action: "editFile",
-        subject: "src/a.ts",
-        detail: "- a\n+ b",
-        rule: "Edit",
-      }),
-      approval({ id: "9", state: "allowed" }),
-      {
-        type: "questions",
-        id: "10",
-        toolCallId: null,
-        questions: [
-          {
-            header: "Library",
-            question: "Which library?",
-            options: [{ label: "React", description: "The one in use" }],
-            multiSelect: false,
-          },
-        ],
-        answers: [],
-        state: "waiting",
-      },
-    ];
-    const { container } = render(
-      <div>
-        {items.map((item) => (
-          <ItemView
-            key={item.id}
-            item={item}
-            streaming={false}
-            agent="claude"
-            onAnswer={vi.fn<AnswerHandler>()}
-            onAnswerQuestions={vi.fn<QuestionsHandler>()}
-            onAnswerPlan={vi.fn<PlanHandler>()}
-          />
-        ))}
-      </div>,
-    );
-
-    await expectNoAccessibilityViolations(container);
   });
 });

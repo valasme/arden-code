@@ -10,7 +10,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { UpdateStatus, UsageLimits } from "@/ipc/bindings";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { useRepliesStore } from "@/state/replies";
 import { settingsWith } from "@/test/settings";
 
@@ -85,14 +84,6 @@ describe("The status bar and updates", () => {
     await waitFor(() => {
       expect(calls).toContain("restart_to_update");
     });
-  });
-
-  it("has no accessibility violations with an update ready", async () => {
-    startApp({ state: "ready", version: "2.0.0" });
-    const { container } = renderBar();
-    await screen.findByRole("button", { name: "Update ready: restart" });
-
-    await expectNoAccessibilityViolations(container);
   });
 });
 

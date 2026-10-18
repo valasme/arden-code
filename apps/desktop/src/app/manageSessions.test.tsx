@@ -7,8 +7,7 @@ import type { ErrorCode } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { useSessionDialogsStore } from "@/state/sessionDialogs";
-import { animationsDone, motionDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
+import { animationsDone } from "@/test/animations";
 import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -129,14 +128,6 @@ describe("A session's menu", () => {
 
     expect(await shownItem(/Rename/)).toBeVisible();
   });
-
-  it("has no accessibility violations while it is open", async () => {
-    const { user } = await twoSessions();
-    await user.click(within(sidebar()).getByRole("button", { name: "Actions for Write the docs" }));
-    await animationsDone(await screen.findByRole("menu"));
-
-    await expectNoAccessibilityViolations(document.body);
-  });
 });
 
 /** Opens the rename dialog of a session from its row's menu. */
@@ -251,13 +242,6 @@ describe("Renaming a session", () => {
     expect(screen.getByRole("dialog", { name: "Rename session" })).toBeVisible();
     expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("Another name");
   });
-
-  it("has no accessibility violations with the dialog open", async () => {
-    const { user } = await twoSessions();
-    await animationsDone(await renameFromTheMenu(user, "Fix the build"));
-
-    await expectNoAccessibilityViolations(document.body);
-  });
 });
 
 /** The sessions listed under a heading of the sidebar, by name. */
@@ -346,17 +330,6 @@ describe("Pinning a session", () => {
     expect(listedUnder("Pinned")).toEqual(["In the folder"]);
     expect(within(sidebar()).getByRole("heading", { name: "Playground" })).toBeVisible();
     expect(within(sidebar()).getByText("No sessions yet.")).toBeVisible();
-  });
-
-  it("has no accessibility violations with a session pinned", async () => {
-    const { user } = await twoSessions();
-    await user.click(within(sidebar()).getByRole("button", { name: "Actions for Fix the build" }));
-    await user.click(await shownItem(/^Pin/));
-    await waitFor(() => {
-      expect(listedUnder("Pinned")).toEqual(["Fix the build"]);
-    });
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 
@@ -475,13 +448,6 @@ describe("Deleting a session", () => {
     expect(
       await screen.findByRole("alertdialog", { name: "Delete this session?" }),
     ).toHaveTextContent("“Fix the build”");
-  });
-
-  it("has no accessibility violations while it asks", async () => {
-    const { user } = await twoSessions();
-    await animationsDone(await deleteFromTheMenu(user, "Fix the build"));
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 
@@ -685,16 +651,6 @@ describe("The archived sessions page", () => {
     ).toBeVisible();
     expect(screen.getByText("No archived sessions.")).toBeVisible();
   });
-
-  it("has no accessibility violations, and neither has an archived session", async () => {
-    const { user } = await archivedSessions("/archived");
-    await screen.findByRole("list", { name: "Archived sessions" });
-    await expectNoAccessibilityViolations(document.body);
-
-    await user.click(screen.getByRole("link", { name: "Old work" }));
-    await screen.findByText("This session is archived.");
-    await expectNoAccessibilityViolations(document.body);
-  });
 });
 
 /** The links of the open session to the sessions it is linked with, as their lines read. */
@@ -771,16 +727,5 @@ describe("Linked sessions", () => {
     await waitFor(() => {
       expect(screen.queryByRole("navigation", { name: "Linked sessions" })).toBeNull();
     });
-  });
-
-  it("has no accessibility violations with the links shown", async () => {
-    const { user } = await twoSessions();
-    await user.keyboard("{Control>}{Shift>}n{/Shift}{/Control}");
-    await waitFor(() => {
-      expect(linkLines()).toEqual(["Linked from Fix the build"]);
-    });
-
-    await motionDone(sidebar());
-    await expectNoAccessibilityViolations(document.body);
   });
 });

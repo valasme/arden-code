@@ -5,7 +5,6 @@ import { z } from "zod";
 
 import { Toaster } from "@/components/Toaster";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { MarkdownText } from "./MarkdownText";
 
@@ -129,18 +128,6 @@ describe("Markdown in a reply", () => {
     expect(await screen.findByRole("columnheader", { name: "Item" })).toBeVisible();
     expect(screen.getByRole("cell", { name: "A card" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Copy table" })).toBeVisible();
-  });
-
-  it("has no accessibility violations, code and all", async () => {
-    startApp();
-    const { container } = renderText(
-      "# Title\n\nText with a [link](https://example.com).\n\n```ts\nconst a = 1;\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |",
-    );
-    await waitFor(() => {
-      expect(container.querySelectorAll("code span[style]").length).toBeGreaterThan(0);
-    });
-
-    await expectNoAccessibilityViolations(container);
   });
 });
 

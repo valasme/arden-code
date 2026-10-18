@@ -79,7 +79,7 @@ export function AdvancedTab({ onViewLogs }: { onViewLogs: () => void }) {
       <h2 className="mt-8 mb-2 text-xs font-medium text-muted-foreground">
         {t("settings.advanced.diagnostics.title")}
       </h2>
-      <div className="border border-border">
+      <div className="rounded-lg border border-border">
         <ActionRow
           id="view-logs"
           label={t("settings.advanced.logs.view.label")}
@@ -105,7 +105,7 @@ export function AdvancedTab({ onViewLogs }: { onViewLogs: () => void }) {
       <h2 className="mt-8 mb-2 text-xs font-medium text-muted-foreground">
         {t("settings.advanced.files")}
       </h2>
-      <div className="border border-border">
+      <div className="rounded-lg border border-border">
         <ActionRow
           id="open-settings-file"
           label={t("settings.advanced.openFile.label")}
@@ -131,7 +131,7 @@ export function AdvancedTab({ onViewLogs }: { onViewLogs: () => void }) {
       <h2 className="mt-8 mb-2 text-xs font-medium text-muted-foreground">
         {t("settings.advanced.reset.title")}
       </h2>
-      <div className="border border-border">
+      <div className="rounded-lg border border-border">
         <ActionRow
           id="reset-settings"
           label={t("settings.advanced.reset.label")}

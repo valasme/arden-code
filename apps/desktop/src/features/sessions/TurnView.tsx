@@ -34,7 +34,7 @@ export const TurnView = memo(function TurnView({
     <div className="flex flex-col gap-3 py-5">
       <div className="flex flex-col items-end gap-1">
         <h3 className="sr-only">{t("sessions.you")}</h3>
-        <p className="max-w-[85%] bg-muted px-3 py-2 text-base break-words whitespace-pre-wrap">
+        <p className="max-w-[85%] rounded-xl bg-muted px-3 py-2 text-base break-words whitespace-pre-wrap">
           {turn.prompt}
         </p>
         <time dateTime={turn.startedAt} className="text-2xs text-muted-foreground">

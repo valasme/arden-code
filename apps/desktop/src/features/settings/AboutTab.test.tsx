@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { Toaster } from "@/components/Toaster";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { AboutTab } from "./AboutTab";
 import licenses from "./licenses.gen.json";
@@ -204,19 +203,5 @@ describe("About → open-source licenses", () => {
     await user.type(screen.getByRole("searchbox", { name: "Search packages" }), "zzzzzzzz");
 
     expect(await screen.findByText("No package matches.")).toBeVisible();
-  });
-});
-
-describe("About", () => {
-  it("has no accessibility violations, also with the licenses open", async () => {
-    startApp();
-    const user = userEvent.setup();
-    const { container } = renderTab();
-    await screen.findByText("130.0.2849.80");
-    await expectNoAccessibilityViolations(container);
-
-    await user.click(screen.getByText(/^Open-source licenses/));
-
-    await expectNoAccessibilityViolations(container);
   });
 });

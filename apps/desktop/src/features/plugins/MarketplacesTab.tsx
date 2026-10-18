@@ -139,7 +139,7 @@ export function MarketplacesTab() {
       ) : (
         <ul
           aria-label={t("plugins.marketplaces.label")}
-          className="divide-y divide-border border border-border"
+          className="divide-y divide-border rounded-lg border border-border"
         >
           {known.data.map((marketplace) => (
             <MarketplaceRow

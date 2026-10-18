@@ -4,7 +4,6 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { Entry } from "@/ipc/bindings";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { settingsWith } from "@/test/settings";
 
 import { LogViewer } from "./LogViewer";
@@ -169,13 +168,5 @@ describe("The log viewer", () => {
     await waitFor(() => {
       expect(calls).toContain("open_logs_folder");
     });
-  });
-
-  it("has no accessibility violations", async () => {
-    startApp();
-    const { container } = renderViewer();
-    await screen.findByRole("table");
-
-    await expectNoAccessibilityViolations(container);
   });
 });

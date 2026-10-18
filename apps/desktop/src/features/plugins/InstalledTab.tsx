@@ -230,7 +230,7 @@ export function InstalledTab() {
   return (
     <ul
       aria-label={t("plugins.installed.label")}
-      className="divide-y divide-border border border-border"
+      className="divide-y divide-border rounded-lg border border-border"
     >
       {shown.map((plugin) => (
         <InstalledRow

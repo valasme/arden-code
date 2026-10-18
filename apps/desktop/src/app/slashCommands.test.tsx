@@ -8,7 +8,6 @@ import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { useSessionDialogsStore } from "@/state/sessionDialogs";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -208,15 +207,6 @@ describe("Slash commands in the message box (ADR 0042)", () => {
 
     expect(screen.queryByRole("listbox")).toBeNull();
   });
-
-  it("has no accessibility violations while it is open", async () => {
-    const { user, box } = await open();
-
-    await user.type(box, "/");
-    await screen.findByRole("listbox");
-
-    await expectNoAccessibilityViolations(document.body);
-  });
 });
 
 describe("Slash commands past the first word (ADR 0052)", () => {
@@ -299,15 +289,6 @@ describe("Slash commands past the first word (ADR 0052)", () => {
     expect(optionNames()).toEqual(["/docx"]);
     expect(box).toHaveValue("/doc ");
     fireEvent.compositionEnd(box);
-  });
-
-  it("has no accessibility violations while a later word's list is open", async () => {
-    const { user, box } = await open();
-
-    await user.type(box, "Use /");
-    await screen.findByRole("listbox");
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 

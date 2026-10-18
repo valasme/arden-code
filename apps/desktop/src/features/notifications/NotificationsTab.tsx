@@ -27,7 +27,7 @@ export function NotificationsTab() {
   return (
     <div>
       <SettingsList tab="notifications" />
-      <div className="mt-4 border border-border">
+      <div className="mt-4 rounded-lg border border-border">
         <ActionRow
           id="test-notification"
           label={t("settings.notifications.test.label")}

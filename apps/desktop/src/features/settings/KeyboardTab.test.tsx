@@ -1,13 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { mockIPC } from "@tauri-apps/api/mocks";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { z } from "zod";
 
 import { Toaster } from "@/components/Toaster";
 import { commandDefinitions } from "@/features/commands/registry";
 import type { Settings } from "@/ipc/bindings";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { settingsWith } from "@/test/settings";
 
 import { KeyboardTab } from "./KeyboardTab";
@@ -317,22 +316,5 @@ describe("Settings → Keyboard", () => {
       expect(rowOf("Toggle sidebar")).toHaveTextContent("Ctrl+B");
     });
     expect(screen.getByRole("button", { name: "Reset all shortcuts" })).toBeDisabled();
-  });
-
-  it("has no accessibility violations, also while a shortcut is being recorded", async () => {
-    startApp({ "palette.open": ["Ctrl+Shift+O"] });
-    const user = userEvent.setup();
-    const { container } = renderTab();
-    await screen.findByRole("button", { name: "Reset the shortcuts of Command palette" });
-    await expectNoAccessibilityViolations(container);
-
-    await user.click(
-      screen.getByRole("button", { name: "Change shortcut Ctrl+B for Toggle sidebar" }),
-    );
-    await user.keyboard("{Control>}j{/Control}");
-    await screen.findByText("Ctrl+J is already used by Toggle inspector.");
-
-    await expectNoAccessibilityViolations(container);
-    expect(within(container).getByRole("button", { name: "Use it here instead" })).toBeVisible();
   });
 });

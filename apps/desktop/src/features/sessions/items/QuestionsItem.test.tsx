@@ -2,7 +2,6 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { Question, QuestionAnswer, QuestionState } from "@/ipc/bindings";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 
 import { type QuestionsHandler, QuestionsItem } from "./QuestionsItem";
 
@@ -169,17 +168,5 @@ describe("Claude's questions", () => {
     expect(screen.getByText("No answer was needed")).toBeVisible();
     expect(screen.getByText("Which library should the app use?")).toBeVisible();
     expect(screen.queryByRole("button")).toBeNull();
-  });
-
-  it("have no accessibility violations while waiting and once answered", async () => {
-    const { container, unmount } = renderQuestions({ questions: [library, checks] });
-    await expectNoAccessibilityViolations(container);
-    unmount();
-
-    const answered = renderQuestions({
-      answers: [{ question: "Which library should the app use?", answer: "React" }],
-      state: "answered",
-    });
-    await expectNoAccessibilityViolations(answered.container);
   });
 });

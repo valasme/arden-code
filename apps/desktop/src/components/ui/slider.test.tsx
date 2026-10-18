@@ -5,7 +5,7 @@ import { Slider } from "./slider";
 import "@/styles/global.css";
 
 describe("Slider", () => {
-  it("is a thin track with an upright thumb, half as wide as it is tall", () => {
+  it("is a thin rounded track with a round thumb", () => {
     render(
       <>
         <span id="zoom">Zoom</span>
@@ -15,7 +15,10 @@ describe("Slider", () => {
     const thumb = screen.getByRole("slider", { name: "Zoom" }).getBoundingClientRect();
     const track = document.querySelector("[data-slot=slider-track]")?.getBoundingClientRect();
 
-    expect(thumb.height).toBe(thumb.width * 2);
-    expect(track?.height).toBeLessThanOrEqual(2);
+    const thumbStyle = getComputedStyle(screen.getByRole("slider", { name: "Zoom" }));
+
+    expect(thumb.height).toBe(thumb.width);
+    expect(thumbStyle.borderTopLeftRadius).not.toBe("0px");
+    expect(track?.height).toBeLessThanOrEqual(4);
   });
 });

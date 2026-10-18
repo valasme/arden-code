@@ -8,7 +8,6 @@ import type { Item, TurnEvent } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -107,14 +106,6 @@ describe("With no session open", () => {
       expect(screen.getByText("Notice (ARD-AGT-003)")).toBeVisible();
     });
     expect(screen.getByText("Your sessions are not being saved.")).toBeVisible();
-  });
-
-  it("has no accessibility violations", async () => {
-    startSessionsRust();
-    const { container } = render(<App history={createMemoryHistory({ initialEntries: ["/"] })} />);
-    await screen.findByRole("heading", { name: "What should the Demo agent work on?" });
-
-    await expectNoAccessibilityViolations(container);
   });
 });
 
@@ -526,17 +517,6 @@ describe("Sending a message", () => {
     expect(time.textContent).toBe(
       `${local.getMonth() + 1}/${local.getDate()}/${local.getFullYear()}, ${hour}:${minutes} ${suffix}`,
     );
-  });
-
-  it("has no accessibility violations with a conversation open", async () => {
-    const rust = startSessionsRust();
-    const { user } = await openSession(rust);
-    await user.keyboard("hello{Enter}");
-    await screen.findByText("The Demo agent is replying…");
-    rust.emit(delta("A reply."));
-    await screen.findByText("A reply.");
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
 

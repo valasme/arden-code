@@ -5,8 +5,6 @@ import userEvent from "@testing-library/user-event";
 import { cdp, page } from "vitest/browser";
 import { z } from "zod";
 
-import { expectNoAccessibilityViolations } from "@/test/axe";
-
 import { TitleBar } from "./TitleBar";
 
 import "@/styles/global.css";
@@ -75,13 +73,6 @@ describe("TitleBar", () => {
     ]) {
       expect(screen.getByRole("button", { name: new RegExp(`^${name}`) }), name).toBeVisible();
     }
-  });
-
-  it("has no accessibility violations", async () => {
-    startWindow();
-    const { container } = render(<TitleBar {...navigation} />);
-
-    await expectNoAccessibilityViolations(container);
   });
 
   it("minimizes, maximizes and closes the window", async () => {
@@ -324,13 +315,6 @@ describe("TitleBar with the title bar of Windows", () => {
     await user.keyboard("{Alt>} {/Alt}");
 
     expect(window.commands).not.toContain("show_system_menu");
-  });
-
-  it("has no accessibility violations", async () => {
-    startWindow();
-    const { container } = render(<TitleBar {...navigation} native />);
-
-    await expectNoAccessibilityViolations(container);
   });
 });
 

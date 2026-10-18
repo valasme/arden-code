@@ -215,7 +215,6 @@ function PluginList({
       ref={scroller}
       id={listId}
       // A list the keyboard moves through, with thousands of rows, which a native select cannot be.
-      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="listbox"
       tabIndex={0}
       aria-label={t("plugins.discover.label")}
@@ -231,7 +230,6 @@ function PluginList({
             <div
               key={row.key}
               id={`${listId}-${String(row.index)}`}
-              // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
               role="option"
               aria-selected={plugin.id === chosen}
               // The list holds the focus and names the chosen row; a row takes it only from a click.
@@ -320,7 +318,7 @@ export function DiscoverTab() {
         </Button>
       </div>
       {officialMissing ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 border border-border px-3 py-2.5 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5 text-sm">
           <p>{t("plugins.discover.officialMissing")}</p>
           <Button
             variant="outline"
@@ -337,7 +335,7 @@ export function DiscoverTab() {
       {problem ? <PluginsProblem error={toAppError(problem)} /> : null}
       {catalog.data ? (
         <div className="@container/discover">
-          <div className="grid h-[max(20rem,calc(100vh-17rem))] grid-cols-1 border border-border @min-[40rem]/discover:grid-cols-[minmax(0,18rem)_1fr]">
+          <div className="grid h-[max(20rem,calc(100vh-17rem))] grid-cols-1 overflow-hidden rounded-lg border border-border @min-[40rem]/discover:grid-cols-[minmax(0,18rem)_1fr]">
             <div
               className={cn(
                 "flex min-h-0 flex-col @min-[40rem]/discover:border-e @min-[40rem]/discover:border-border",

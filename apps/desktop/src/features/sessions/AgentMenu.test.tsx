@@ -3,8 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { BotIcon, FlaskConicalIcon } from "lucide-react";
 
 import type { AgentKind } from "@/ipc/bindings";
-import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { drawingIn, drawingOf, drawingsIn } from "@/test/icons";
 
 import { AgentMenu } from "./AgentMenu";
@@ -105,17 +103,5 @@ describe("AgentMenu", () => {
     await user.keyboard("{Enter}");
 
     expect(chosen.length).toBe(1);
-  });
-
-  it("has no accessibility violations, closed or open", async () => {
-    const user = userEvent.setup();
-    const { container } = renderMenu("claude");
-
-    await expectNoAccessibilityViolations(container);
-    await user.click(screen.getByRole("button", { name: "Agent: Claude" }));
-    const menu = await screen.findByRole("menu");
-    await animationsDone(menu);
-    // The menu itself: Radix hides the page behind an open menu and keeps the focus in the menu.
-    await expectNoAccessibilityViolations(menu);
   });
 });

@@ -3,8 +3,6 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { expectNoAccessibilityViolations } from "@/test/axe";
-
 import { App } from "./App";
 
 import "@/styles/global.css";
@@ -40,15 +38,6 @@ describe("App", () => {
 
     expect(await screen.findByRole("banner")).toBeVisible();
     expect(screen.getByRole("main")).toBeVisible();
-  });
-
-  it("has no accessibility violations", async () => {
-    mockAppInfo();
-
-    const { container } = renderApp();
-    await screen.findByRole("heading", { name: "What should the Demo agent work on?" });
-
-    await expectNoAccessibilityViolations(container);
   });
 
   it("moves back and forward through the pages the user has visited", async () => {

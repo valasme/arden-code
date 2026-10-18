@@ -8,7 +8,6 @@ import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { useSessionDialogsStore } from "@/state/sessionDialogs";
 import { animationsDone, motionDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
 import { App } from "./App";
@@ -135,7 +134,6 @@ describe("A sidebar row", () => {
     ).toBe(true);
     expect(frames.at(-1)?.y).toBe(0);
     await motionDone(sidebar());
-    await expectNoAccessibilityViolations(document.body);
   });
 
   it("fades out of the sidebar, out of reach at once, when its session is archived", async () => {

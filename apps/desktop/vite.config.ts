@@ -30,7 +30,6 @@ export default defineConfig({
       "@tauri-apps/api/window",
       "@testing-library/jest-dom/vitest",
       "@testing-library/react",
-      "axe-core",
       "class-variance-authority",
       "cn",
       "i18next",

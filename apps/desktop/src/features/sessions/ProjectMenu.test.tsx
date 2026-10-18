@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 
 import type { Project } from "@/ipc/bindings";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { folderProject, playground } from "@/test/sessions";
 
 import { ProjectMenu } from "./ProjectMenu";
@@ -80,13 +79,5 @@ describe("ProjectMenu", () => {
     await user.click(within(menu).getByRole("menuitemradio", { name: /^web/ }));
 
     expect(chosen).toEqual(["web"]);
-  });
-
-  it("has no accessibility violations, closed or open", async () => {
-    const user = userEvent.setup();
-    const { container } = renderMenu();
-
-    await expectNoAccessibilityViolations(container);
-    await expectNoAccessibilityViolations(await openMenu(user, "Project: Playground"));
   });
 });

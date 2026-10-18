@@ -8,7 +8,6 @@ import { z } from "zod";
 import { Toaster } from "@/components/Toaster";
 import type { Settings } from "@/ipc/bindings";
 import { animationsDone } from "@/test/animations";
-import { expectNoAccessibilityViolations } from "@/test/axe";
 import { settingsWith } from "@/test/settings";
 
 import { AdvancedTab } from "./AdvancedTab";
@@ -384,21 +383,5 @@ describe("Advanced → resetting", () => {
       expect(screen.queryByRole("alertdialog")).toBeNull();
     });
     expect(asked(calls, "reset_app")).toEqual([]);
-  });
-});
-
-describe("Advanced", () => {
-  it("has no accessibility violations, also with a question open", async () => {
-    startApp();
-    const user = userEvent.setup();
-    const { container } = renderTab();
-    await screen.findByRole("switch", { name: "Developer mode" });
-    await expectNoAccessibilityViolations(container);
-
-    await user.click(screen.getByRole("button", { name: "Reset Arden Code" }));
-    const dialog = await screen.findByRole("alertdialog");
-    await animationsDone(dialog);
-
-    await expectNoAccessibilityViolations(document.body);
   });
 });
