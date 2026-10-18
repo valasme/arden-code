@@ -49,7 +49,21 @@ export default defineConfig({
     ],
   },
   clearScreen: false,
-  server: { port: devPort, strictPort: true, watch: { ignored: ["**/src-tauri/**"] } },
+  server: {
+    port: devPort,
+    strictPort: true,
+    watch: { ignored: ["**/src-tauri/**"] },
+    // Vite compiles a module the first time the page asks for it, and finds its imports only then.
+    // A page's code loads when it is first opened, so the first new session after `pnpm dev` waited
+    // for its modules to compile one level of imports at a time: over a second (#176). The dev
+    // server compiles the app's own modules as it starts instead. Tests load pages up front anyway.
+    warmup: {
+      clientFiles:
+        process.env["VITEST"] === undefined
+          ? ["./src/**/*.{ts,tsx}", "!./src/**/*.test.{ts,tsx}", "!./src/test/**"]
+          : [],
+    },
+  },
   build: { target: "chrome120", sourcemap: true },
   test: {
     globals: true,
