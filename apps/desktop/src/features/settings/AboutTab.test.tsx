@@ -205,5 +205,3 @@ describe("About → open-source licenses", () => {
     expect(await screen.findByText("No package matches.")).toBeVisible();
   });
 });
-
-describe("About", () => {});

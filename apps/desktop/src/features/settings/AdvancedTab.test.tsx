@@ -385,5 +385,3 @@ describe("Advanced → resetting", () => {
     expect(asked(calls, "reset_app")).toEqual([]);
   });
 });
-
-describe("Advanced", () => {});

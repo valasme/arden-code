@@ -763,7 +763,7 @@ The foundation is built in this order. Each milestone ends with green CI and a c
 | M4 | **Settings UI:** all seven tabs, search, instant apply, reset, shortcut rebinding | Every setting in §6.3 works and survives a restart |
 | M5 | **Commands:** command registry, palette, default shortcuts, F6 areas, context menus, cheat sheet | Everything is reachable by keyboard |
 | M6 | **Session view placeholder:** domain model, Demo agent, streaming pipeline, virtualized list, safe markdown, message box, welcome state | The Demo agent streams at 60 fps with 10,000 messages |
-| M7 | **Quality:** design system page, Playwright end-to-end tests, performance checks, pseudo-language | Every gate in §10, §11 and §15 is automated or on a checklist |
+| M7 | **Quality:** design system page, Playwright end-to-end tests, performance checks, pseudo-language | Every gate in §11 and §15 is automated or on a checklist |
 | M8 | **Release pipeline (switched off):** update-signing keys, release-please, tauri-action, winget template, signing hook, installer PATH option | A dry-run release produces an installer and `latest.json` |
 
 ## 18. Risks and watch list

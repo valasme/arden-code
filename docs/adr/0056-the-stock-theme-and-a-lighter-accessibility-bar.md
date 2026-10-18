@@ -4,7 +4,8 @@
 - Date: 2026-10-15
 - Supersedes [0015](0015-accessibility-bar.md). Changes the token corrections and the radius of
   [0010](0010-visual-design-system.md), the component adjustments and high contrast of
-  [0022](0022-high-contrast-and-component-adjustments.md), and axe in [0019](0019-testing-and-quality-gates.md); changes plan
+  [0022](0022-high-contrast-and-component-adjustments.md), axe in [0019](0019-testing-and-quality-gates.md), and the jsx-a11y rules
+  of [0007](0007-typescript-7-oxlint-oxfmt.md); changes plan
   sections 1, 7 and 10.
 
 ## Context

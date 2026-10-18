@@ -444,5 +444,3 @@ describe("Approval requests", () => {
     expect(screen.queryByText("Run the tests"), "the details fold away").toBeNull();
   });
 });
-
-describe("Every kind of item", () => {});
