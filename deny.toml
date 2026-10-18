@@ -8,7 +8,6 @@ version = 2
 yanked = "deny"
 ignore = [
   { id = "RUSTSEC-2024-0436", reason = "paste is only a compile-time macro used by specta (typed IPC); unmaintained, not vulnerable. Revisit when specta moves to pastey." },
-  { crate = "zip@4.6.1", reason = "zip yanked every release before 9.0.3 on 2026-10-13; tauri-plugin-updater (2.14 and 3.0 alphas) still requires zip ^4, so no unyanked version fits. No advisory. Revisit when the updater moves to zip 9." },
 ]
 
 [licenses]
