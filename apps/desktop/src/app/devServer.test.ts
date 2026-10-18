@@ -1,14 +1,14 @@
 import path from "node:path";
 
 import { type ViteDevServer, createServer } from "vite";
+import { onTestFinished } from "vitest";
 
 /**
  * The dev server as `pnpm dev` starts it, not as Vitest does: pages are split out, to load when
  * they are first opened, and the server warms up.
  */
 async function startDevServer(): Promise<ViteDevServer> {
-  const vitest = process.env["VITEST"];
-  delete process.env["VITEST"];
+  vi.stubEnv("VITEST", undefined);
   try {
     const server = await createServer({
       configFile: path.resolve(import.meta.dirname, "../../vite.config.ts"),
@@ -18,7 +18,7 @@ async function startDevServer(): Promise<ViteDevServer> {
     await server.listen();
     return server;
   } finally {
-    process.env["VITEST"] = vitest;
+    vi.unstubAllEnvs();
   }
 }
 
@@ -48,21 +48,15 @@ function notCompiled(server: ViteDevServer, root: string): string[] {
 }
 
 describe("the dev server", () => {
-  let server: ViteDevServer | undefined;
-
-  afterEach(async () => {
-    await server?.close();
-  });
-
   // The page asks for a module's imports only once it has it, so on demand, the first new session
   // after `pnpm dev` waited for its modules to compile one level at a time: over a second (#176).
   test("has compiled a session's modules before the first session is opened", async () => {
-    server = await startDevServer();
-    const started = server;
+    const server = await startDevServer();
+    onTestFinished(() => server.close());
 
     await vi.waitFor(
       () => {
-        expect(notCompiled(started, "/src/features/sessions/SessionView.tsx")).toEqual([]);
+        expect(notCompiled(server, "/src/features/sessions/SessionView.tsx")).toEqual([]);
       },
       { timeout: 30_000, interval: 100 },
     );
