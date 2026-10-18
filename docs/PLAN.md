@@ -205,7 +205,8 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 
 ### 5.8 Agent integration
 
-- **Common interface:** an `AgentDriver` trait with these operations: start or resume a session, send a turn, stream items, answer approval requests, cancel.
+- **Common interface:** an `AgentDriver` trait with these operations: start or resume a session, send a turn, stream items, answer approval requests, cancel, end what it keeps running for a session, apply a permission mode at once, allow Bypass permissions or not, and report what it says about a session outside its replies (the mode it applies, a mode it refused, the name it suggests).
+- **The session store holds the agents** ([#172](https://github.com/valasme/arden-code/issues/172)): one driver per agent, and it calls the session's own. A reply goes to the driver of the session's agent; archiving, deleting and removing a project end the agents of the sessions they touch; a chosen permission mode and the Bypass permissions setting reach the agents. It keeps what the agents report and tells one listener, which the app turns into its events. It calls a driver only once the change is written and its lock is let go. What is not about one session, such as the slash commands, the usage limits and plugins, the app asks of the Claude driver itself.
 - **Demo driver (in the foundation):** streams realistic fake output through the real pipeline.
 - **Codex (later):** `codex app-server`, JSON-RPC over stdio. This is the protocol OpenAI's own clients use.
 - **Claude** ([ADR 0038](adr/0038-claude-through-its-own-protocol.md), from [the research](research/claude-agent.md) and [the councils](research/claude-agent-councils.md)):

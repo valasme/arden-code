@@ -669,33 +669,6 @@ impl ClaudeDriver {
         self.usage.limits()
     }
 
-    /// Hears what Claude Code says about a session outside its replies: the permission mode it
-    /// applies, whoever changed it, and a mode it refused (ADR 0044).
-    pub fn on_session_changes(&self, listener: SessionListener) {
-        *lock(&self.listening) = Some(listener);
-    }
-
-    /// Asks a session's running Claude Code to apply a permission mode at once, during a reply or
-    /// not (ADR 0044). What becomes of it is told to [`Self::on_session_changes`]. A session with
-    /// no Claude Code running takes its mode when its next one starts.
-    pub fn set_permission_mode(&self, session_id: &str, mode: PermissionMode) {
-        let running = lock(&self.live).get(session_id).map(Arc::clone);
-        let Some(live) = running else { return };
-        if live.can_apply(mode) {
-            self.ask_for_mode(&live, mode);
-        } else if !live.busy.load(Ordering::Acquire) {
-            // Claude Code would refuse it: the next message starts one that takes it, carrying on
-            // the conversation, and this one has nothing left to do.
-            self.forget(session_id);
-        }
-    }
-
-    /// Whether Claude Codes are started so that Bypass permissions can be chosen in them, as
-    /// Settings says (ADR 0044). One already running keeps how it was started.
-    pub fn allow_bypass_permissions(&self, allowed: bool) {
-        self.bypass_allowed.store(allowed, Ordering::Release);
-    }
-
     /// Asks a Claude Code for a permission mode, unless it applies it already and was asked for
     /// no other since.
     fn ask_for_mode(&self, live: &Live, mode: PermissionMode) {
@@ -1443,5 +1416,30 @@ impl AgentDriver for ClaudeDriver {
 
     fn end(&self, session_id: &str) {
         self.forget(session_id);
+    }
+
+    /// Asks a session's running Claude Code to apply a permission mode at once. One that would
+    /// refuse it, and is not answering, is ended: the next message starts one that takes it.
+    fn set_permission_mode(&self, session_id: &str, mode: PermissionMode) {
+        let running = lock(&self.live).get(session_id).map(Arc::clone);
+        let Some(live) = running else { return };
+        if live.can_apply(mode) {
+            self.ask_for_mode(&live, mode);
+        } else if !live.busy.load(Ordering::Acquire) {
+            // Claude Code would refuse it: the next message starts one that takes it, carrying on
+            // the conversation, and this one has nothing left to do.
+            self.forget(session_id);
+        }
+    }
+
+    fn allow_bypass_permissions(&self, allowed: bool) {
+        self.bypass_allowed.store(allowed, Ordering::Release);
+    }
+
+    /// Hears what Claude Code says about a session outside its replies: the permission mode it
+    /// applies, whoever changed it, a mode it refused (ADR 0044), and the name it suggests
+    /// (ADR 0050).
+    fn on_session_changes(&self, listener: SessionListener) {
+        *lock(&self.listening) = Some(listener);
     }
 }

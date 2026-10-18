@@ -3,12 +3,12 @@
 // Tauri hands commands their arguments by value; a command that only reads one cannot borrow it.
 #![allow(clippy::needless_pass_by_value)]
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
 use arden_agents::claude::catalog::Catalog;
-use arden_agents::demo::DemoDriver;
-use arden_agents::driver::{AgentDriver, Answer, PlanAnswer};
+use arden_agents::driver::{Answer, PlanAnswer};
 use arden_agents::files::{FileMatch, ProjectFiles};
 use arden_agents::model::{
     AgentKind, ApprovalAction, ApprovalState, Effort, Item, Model, PermissionMode, PlanState,
@@ -16,8 +16,9 @@ use arden_agents::model::{
     TurnEvent,
 };
 use arden_agents::playground::PLAYGROUND_ID;
-use arden_agents::store::{OpenProblem, SessionStore, StoreError};
+use arden_agents::store::{OpenProblem, SessionEvent, SessionStore, StoreError};
 use arden_core::error::{AppError, ErrorCode};
+use arden_settings::service::SettingsService;
 use arden_settings::settings::OnStartup;
 use tauri::State;
 use tauri::ipc::Channel;
@@ -327,10 +328,8 @@ pub fn set_session_permission_mode(
     id: String,
     mode: PermissionMode,
     sessions: State<'_, Sessions>,
-    claude: State<'_, crate::agents::Claude>,
 ) -> Result<(), AppError> {
     sessions.set_permission_mode(&id, mode).map_err(app_error)?;
-    claude.0.set_permission_mode(&id, mode);
     tracing::info!(session = %id, ?mode, "the session's permission mode changed");
     Ok(())
 }
@@ -352,6 +351,47 @@ pub struct SessionChanged {
 pub struct SessionNamed {
     pub session_id: String,
     pub title: String,
+}
+
+/// Tells the page what the store tells about its sessions.
+pub fn report_events_to(app: &tauri::AppHandle, sessions: &SessionStore) {
+    use tauri_specta::Event;
+
+    let page = app.clone();
+    sessions.on_events(Arc::new(move |event| match event {
+        SessionEvent::PermissionModeChanged {
+            session_id,
+            mode,
+            refused,
+        } => {
+            let _ = SessionChanged {
+                session_id,
+                permission_mode: mode,
+                notice: refused.map(|reason| {
+                    AppError::new(ErrorCode::PermissionModeRefused).with_details(reason)
+                }),
+            }
+            .emit(&page);
+        }
+        SessionEvent::Named { session_id, title } => {
+            let _ = SessionNamed { session_id, title }.emit(&page);
+        }
+    }));
+}
+
+/// Lets Bypass permissions be chosen while Settings → Agents allows it (ADR 0044), from now on.
+pub fn follow_bypass_setting(settings: &SettingsService, sessions: &Sessions) {
+    let allowed = settings.get().agents.allow_bypass_permissions;
+    sessions.allow_bypass_permissions(allowed);
+    let sessions = Arc::clone(sessions);
+    let was_allowed = AtomicBool::new(allowed);
+    settings.subscribe(move |settings, _| {
+        let allowed = settings.agents.allow_bypass_permissions;
+        // Only a change of this setting is acted on.
+        if was_allowed.swap(allowed, Ordering::AcqRel) != allowed {
+            sessions.allow_bypass_permissions(allowed);
+        }
+    });
 }
 
 /// Starts an empty session in a project, the Playground when none is given, with the agent given,
@@ -514,14 +554,8 @@ pub fn set_session_archived(
     id: String,
     archived: bool,
     sessions: State<'_, Sessions>,
-    claude: State<'_, crate::agents::Claude>,
 ) -> Result<(), AppError> {
-    sessions.set_archived(&id, archived).map_err(app_error)?;
-    // An archived session needs no Claude Code until it is used again (ADR 0039).
-    if archived {
-        claude.0.end(&id);
-    }
-    Ok(())
+    sessions.set_archived(&id, archived).map_err(app_error)
 }
 
 /// Deletes a session for good, after the person confirmed it (ADR 0036). A reply that is still
@@ -532,13 +566,8 @@ pub fn set_session_archived(
 /// Returns an error when there is no such session, or the file cannot be written.
 #[tauri::command]
 #[specta::specta]
-pub fn delete_session(
-    id: String,
-    sessions: State<'_, Sessions>,
-    claude: State<'_, crate::agents::Claude>,
-) -> Result<(), AppError> {
+pub fn delete_session(id: String, sessions: State<'_, Sessions>) -> Result<(), AppError> {
     sessions.delete(&id).map_err(app_error)?;
-    claude.0.end(&id);
     tracing::info!(session = %id, "session deleted");
     Ok(())
 }
@@ -552,15 +581,8 @@ pub fn delete_session(
 /// be written, in which case nothing is removed.
 #[tauri::command]
 #[specta::specta]
-pub fn remove_project(
-    project_id: String,
-    sessions: State<'_, Sessions>,
-    claude: State<'_, crate::agents::Claude>,
-) -> Result<(), AppError> {
+pub fn remove_project(project_id: String, sessions: State<'_, Sessions>) -> Result<(), AppError> {
     let removed = sessions.remove_project(&project_id).map_err(app_error)?;
-    for id in &removed {
-        claude.0.end(id);
-    }
     tracing::info!(project = %project_id, sessions = removed.len(), "project removed");
     Ok(())
 }
@@ -742,23 +764,16 @@ pub fn send_message(
     text: String,
     on_event: Channel<TurnEvent>,
     sessions: State<'_, Sessions>,
-    claude: State<'_, crate::agents::Claude>,
 ) -> Result<Session, AppError> {
     let turn = sessions.start_turn(&session_id, &text).map_err(app_error)?;
     // Taken before the reply starts, so the events that follow never overlap with it.
     let snapshot = sessions.session(&session_id).map_err(app_error)?;
 
     let store = Arc::clone(sessions.inner());
-    let claude = Arc::clone(&claude.0);
     let agent = snapshot.agent;
     let running = turn.clone();
     thread::spawn(move || {
-        let demo = DemoDriver::new();
-        let driver: &dyn AgentDriver = match agent {
-            AgentKind::Demo => &demo,
-            AgentKind::Claude => claude.as_ref(),
-        };
-        let saved = store.stream_reply(driver, &session_id, &running, |event| {
+        let saved = store.stream_reply(&session_id, &running, |event| {
             if let Some(body) = waiting_notice(agent, event) {
                 crate::notifications::notify_when_away(&app, arden_core::APP_NAME, &body);
             }
@@ -867,12 +882,26 @@ pub fn take_pending_open(pending: State<'_, PendingOpen>) -> Result<Option<Strin
 mod tests {
     use std::path::Path;
 
+    use arden_agents::demo::DemoDriver;
+    use arden_agents::driver::Agents;
     use arden_agents::playground;
 
     use super::*;
 
+    /// A store kept in memory, with its Playground in `folder`.
+    fn store_in(folder: &str) -> SessionStore {
+        let demo = Arc::new(DemoDriver::instant());
+        SessionStore::new(
+            vec![playground::describe(Path::new(folder))],
+            Agents {
+                demo: demo.clone(),
+                claude: demo,
+            },
+        )
+    }
+
     fn store_with_a_session_opened() -> (SessionStore, String) {
-        let store = SessionStore::new(vec![playground::describe(Path::new(r"C:\Playground"))]);
+        let store = store_in(r"C:\Playground");
         let session = store
             .create_session(PLAYGROUND_ID, AgentKind::Demo)
             .expect("a session");
@@ -907,7 +936,7 @@ mod tests {
 
     #[test]
     fn with_no_session_at_all_a_new_session_takes_claude_when_it_is_installed() {
-        let store = SessionStore::new(vec![playground::describe(Path::new(r"C:Playground"))]);
+        let store = store_in(r"C:Playground");
 
         assert_eq!(
             new_session_agent(&store, PLAYGROUND_ID, true),

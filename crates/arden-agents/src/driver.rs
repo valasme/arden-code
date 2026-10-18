@@ -7,7 +7,7 @@ use std::sync::mpsc::Receiver;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::model::{Choices, PermissionMode, QuestionAnswer, TurnEvent};
+use crate::model::{AgentKind, Choices, PermissionMode, QuestionAnswer, TurnEvent};
 
 /// Whether the driver should carry on after an event, or stop because nobody is listening.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,4 +112,40 @@ pub trait AgentDriver: Send + Sync {
     /// Lets go of whatever the agent keeps running for a session, as when it is archived or
     /// deleted. Its conversation is kept, to carry on in.
     fn end(&self, _session_id: &str) {}
+
+    /// Asks a session's running agent to apply a permission mode at once, during a reply or not
+    /// (ADR 0044). What becomes of it is told to [`Self::on_session_changes`]. A session with no
+    /// agent running takes its mode when its next one starts.
+    fn set_permission_mode(&self, _session_id: &str, _mode: PermissionMode) {}
+
+    /// Whether agents are started so that Bypass permissions can be chosen in them, as Settings
+    /// says (ADR 0044). One already running keeps how it was started.
+    fn allow_bypass_permissions(&self, _allowed: bool) {}
+
+    /// Has `listener` hear what the agent says about its sessions outside the items of its
+    /// replies, in place of whoever heard it before.
+    fn on_session_changes(&self, _listener: SessionListener) {}
+}
+
+/// The driver of each agent. The session store hands each session's work to its agent's driver.
+#[derive(Clone)]
+pub struct Agents {
+    pub demo: Arc<dyn AgentDriver>,
+    pub claude: Arc<dyn AgentDriver>,
+}
+
+impl Agents {
+    /// The driver of an agent.
+    #[must_use]
+    pub fn of(&self, agent: AgentKind) -> &dyn AgentDriver {
+        match agent {
+            AgentKind::Demo => self.demo.as_ref(),
+            AgentKind::Claude => self.claude.as_ref(),
+        }
+    }
+
+    /// Every agent's driver.
+    pub fn all(&self) -> impl Iterator<Item = &dyn AgentDriver> {
+        [self.demo.as_ref(), self.claude.as_ref()].into_iter()
+    }
 }

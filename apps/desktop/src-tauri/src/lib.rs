@@ -23,6 +23,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use arden_agents::claude::plugins::ClaudePlugins;
+use arden_agents::demo::DemoDriver;
+use arden_agents::driver::Agents;
 use arden_agents::playground;
 use arden_agents::store::SessionStore;
 use arden_core::error::ErrorCode;
@@ -359,38 +361,39 @@ fn create_main_window(
 
 /// Makes the Playground folder on the first launch, and opens the sessions kept in the sessions
 /// file (ADR 0035), keeping what went wrong with it, if anything, for the page. The session that
-/// was open last time waits for the page, when the person asked for it to be restored.
-fn manage_sessions(app: &tauri::App, paths: &AppPaths, on_startup: OnStartup) {
+/// was open last time waits for the page, when the person asked for it to be restored. Each
+/// session's work goes to its agent in `agents`.
+fn manage_sessions(app: &tauri::App, paths: &AppPaths, on_startup: OnStartup, agents: &Agents) {
     let folder = paths.playground_dir();
     let playground = playground::ensure(&folder).unwrap_or_else(|error| {
         tracing::error!(%error, "could not create the Playground folder");
         playground::describe(&folder)
     });
-    let opened = SessionStore::open(&paths.sessions_file(), &playground);
+    let opened = SessionStore::open(&paths.sessions_file(), &playground, agents);
     app.manage(sessions::SessionsNotice::after(opened.problem.as_ref()));
     app.manage(sessions::PendingOpen::at_start(on_startup, &opened.store));
     let store: sessions::Sessions = Arc::new(opened.store);
+    sessions::report_events_to(app.handle(), &store);
+    sessions::follow_bypass_setting(&app.state::<SettingsService>(), &store);
     app.manage(store);
     app.manage(sessions::Files::default());
 }
 
-/// Starts the supervisor that keeps the agent programs in a job with the app.
-fn manage_programs(app: &tauri::App, paths: &AppPaths) {
-    let supervisor = match Supervisor::new(paths.logs_dir().join("agents")) {
+/// Makes the supervisor that keeps the agent programs in a job with the app, when Windows lets it.
+fn make_supervisor(paths: &AppPaths) -> Option<Arc<Supervisor>> {
+    match Supervisor::new(paths.logs_dir().join("agents")) {
         Ok(supervisor) => Some(Arc::new(supervisor)),
         Err(error) => {
             tracing::error!(%error, "could not make the job for agent programs");
             None
         }
-    };
-    let claude = agents::Claude::with(supervisor.as_ref());
+    }
+}
+
+/// Keeps the supervisor and the Claude driver for what is not about one session, and has the
+/// driver report the usage limits to the page.
+fn manage_programs(app: &tauri::App, supervisor: Option<Arc<Supervisor>>, claude: agents::Claude) {
     claude.report_usage_to(app.handle(), &app.state::<SettingsService>());
-    claude.report_session_changes_to(app.handle(), &app.state::<sessions::Sessions>());
-    claude.follow_bypass_setting(
-        app.handle(),
-        &app.state::<SettingsService>(),
-        &app.state::<sessions::Sessions>(),
-    );
     app.manage(claude);
     let playground = sessions::playground_folder(&app.state::<sessions::Sessions>());
     app.manage(plugins::Plugins(supervisor.as_ref().zip(playground).map(
@@ -569,8 +572,14 @@ pub fn run() {
             window::prepare_main_window(app, &paths, &started_with)?;
             app.manage(snap_layouts::add_overlay(app));
             app.manage(settings);
-            manage_sessions(app, &paths, started_with.general.on_startup);
-            manage_programs(app, &paths);
+            let supervisor = make_supervisor(&paths);
+            let claude = agents::Claude::with(supervisor.as_ref());
+            let agents = Agents {
+                demo: Arc::new(DemoDriver::new()),
+                claude: claude.0.clone(),
+            };
+            manage_sessions(app, &paths, started_with.general.on_startup, &agents);
+            manage_programs(app, supervisor, claude);
             app.manage(updates::Updates::default());
             app.manage(paths);
             app.manage(watch_system_preferences(app.handle().clone()));

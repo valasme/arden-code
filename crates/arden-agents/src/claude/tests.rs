@@ -11,7 +11,8 @@ use serde_json::{Value, json};
 use super::driver::ClaudeDriver;
 use super::launch::{Conversation, LaunchError};
 use super::script::{Scripted, Step, handshake};
-use crate::driver::{AgentDriver, Answer, PlanAnswer, SessionChange};
+use crate::demo::DemoDriver;
+use crate::driver::{AgentDriver, Agents, Answer, PlanAnswer, SessionChange};
 use crate::model::{
     AgentKind, ApprovalAction, ApprovalState, Effort, FileChangeKind, Item, Model, PermissionMode,
     PlanState, Question, QuestionAnswer, QuestionOption, QuestionState, StatusKind, ToolStatus,
@@ -23,17 +24,36 @@ use crate::usage::{UsageReport, UsageStatus, UsageWindow, UsageWindowKind};
 
 const FOLDER: &str = r"C:\Projects\demo";
 
-fn store() -> SessionStore {
-    SessionStore::new(vec![playground::describe(Path::new(FOLDER))])
+/// A store whose Claude sessions are answered by `driver`, working in `folder`'s Playground.
+fn store_in(folder: &Path, driver: &Arc<ClaudeDriver>) -> SessionStore {
+    SessionStore::new(
+        vec![playground::describe(folder)],
+        Agents {
+            demo: Arc::new(DemoDriver::instant()),
+            claude: driver.clone(),
+        },
+    )
 }
 
-fn claude(scripts: Vec<Result<Vec<Step>, LaunchError>>) -> (Arc<Scripted>, ClaudeDriver) {
+fn store(driver: &Arc<ClaudeDriver>) -> SessionStore {
+    store_in(Path::new(FOLDER), driver)
+}
+
+fn claude(scripts: Vec<Result<Vec<Step>, LaunchError>>) -> (Arc<Scripted>, Arc<ClaudeDriver>) {
+    claude_with(scripts, |driver| driver)
+}
+
+/// [`claude`], with the driver set up by `setup` first.
+fn claude_with(
+    scripts: Vec<Result<Vec<Step>, LaunchError>>,
+    setup: impl FnOnce(ClaudeDriver) -> ClaudeDriver,
+) -> (Arc<Scripted>, Arc<ClaudeDriver>) {
     let scripted = Arc::new(Scripted::new(scripts));
     // A script that does not answer the driver's question about the context window, as most do not,
     // holds no reply up for long.
     let driver =
         ClaudeDriver::new(scripted.clone()).with_context_patience(Duration::from_millis(20));
-    (scripted, driver)
+    (scripted, Arc::new(setup(driver)))
 }
 
 fn claude_session(store: &SessionStore) -> String {
@@ -44,16 +64,11 @@ fn claude_session(store: &SessionStore) -> String {
 }
 
 /// Sends a message and lets the driver answer it, as the app does. Answers what the UI was sent.
-fn send(
-    store: &SessionStore,
-    driver: &ClaudeDriver,
-    session: &str,
-    prompt: &str,
-) -> Vec<TurnEvent> {
+fn send(store: &SessionStore, session: &str, prompt: &str) -> Vec<TurnEvent> {
     let turn = store.start_turn(session, prompt).expect("a turn");
     let mut events = Vec::new();
     store
-        .stream_reply(driver, session, &turn, |event| {
+        .stream_reply(session, &turn, |event| {
             events.push(event.clone());
             true
         })
@@ -119,10 +134,10 @@ fn claude_streams_its_thinking_and_text_and_ends_with_its_result() {
         success("Good morning!"),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    let events = send(&store, &driver, &session, "Say hello");
+    let events = send(&store, &session, "Say hello");
 
     scripted.assert_followed();
     let turn = turn(&store, &session, 0);
@@ -168,10 +183,10 @@ fn a_tool_call_shows_what_claude_asked_for_and_ends_with_what_the_tool_answered(
         success("The build failed."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    let events = send(&store, &driver, &session, "Build it");
+    let events = send(&store, &session, "Build it");
 
     scripted.assert_followed();
     assert!(
@@ -267,10 +282,10 @@ fn files_claude_edits_and_writes_show_as_file_changes_with_the_lines_added_and_r
         success("Tidied."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Tidy up");
+    send(&store, &session, "Tidy up");
 
     scripted.assert_followed();
     let turn = turn(&store, &session, 0);
@@ -319,10 +334,10 @@ fn a_failed_edit_changes_no_file() {
         success("It did not work."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Edit it");
+    send(&store, &session, "Edit it");
 
     scripted.assert_followed();
     assert!(
@@ -351,10 +366,10 @@ fn the_real_claude_code_signed_out_fails_the_reply_and_says_how_to_sign_in() {
     ];
     script.extend(recorded[3..].iter().cloned().map(Step::Play));
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Say hello");
+    send(&store, &session, "Say hello");
 
     scripted.assert_followed();
     let turn = turn(&store, &session, 0);
@@ -385,10 +400,10 @@ fn claude_codes_own_error_fails_the_reply_with_its_words() {
         Step::Play(json!({ "type": "result", "subtype": "success", "is_error": true, "result": "API Error: Overloaded" })),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     scripted.assert_followed();
     let turn = turn(&store, &session, 0);
@@ -413,10 +428,10 @@ fn questions_that_cannot_be_read_are_answered_no() {
         success("I will decide myself."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Plan it");
+    send(&store, &session, "Plan it");
 
     scripted.assert_followed();
     let turn = turn(&store, &session, 0);
@@ -531,11 +546,11 @@ fn questions_show_with_their_options_and_the_answers_go_back_keyed_by_each_quest
         success("React it is."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let store = Arc::new(store(&driver));
     let session = claude_session(&store);
     let replying = {
-        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
-        std::thread::spawn(move || send(&store, &driver, &session, "Set it up"))
+        let (store, session) = (Arc::clone(&store), session.clone());
+        std::thread::spawn(move || send(&store, &session, "Set it up"))
     };
 
     let waiting = until_questions(&store, &session);
@@ -624,11 +639,11 @@ fn stopping_while_questions_wait_answers_no_and_cancels_them() {
         Step::Expect(json!({ "type": "control_request", "request": { "subtype": "interrupt" } })),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let store = Arc::new(store(&driver));
     let session = claude_session(&store);
     let replying = {
-        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
-        std::thread::spawn(move || send(&store, &driver, &session, "Set it up"))
+        let (store, session) = (Arc::clone(&store), session.clone());
+        std::thread::spawn(move || send(&store, &session, "Set it up"))
     };
 
     let waiting = until_questions(&store, &session);
@@ -712,19 +727,13 @@ fn until_waiting(store: &SessionStore, session: &str) -> String {
 /// waits for the reply to end.
 fn answer_while_replying(
     store: &Arc<SessionStore>,
-    driver: &Arc<ClaudeDriver>,
     session: &str,
     prompt: &str,
     answer: Option<Answer>,
 ) {
     let replying = {
-        let (store, driver, session, prompt) = (
-            Arc::clone(store),
-            Arc::clone(driver),
-            session.to_owned(),
-            prompt.to_owned(),
-        );
-        std::thread::spawn(move || send(&store, &driver, &session, &prompt))
+        let (store, session, prompt) = (Arc::clone(store), session.to_owned(), prompt.to_owned());
+        std::thread::spawn(move || send(&store, &session, &prompt))
     };
     let waiting = until_waiting(store, session);
     match answer {
@@ -754,16 +763,10 @@ fn an_approval_request_shows_under_its_tool_call_and_allow_lets_the_tool_run() {
         success("The tests passed."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let store = Arc::new(store(&driver));
     let session = claude_session(&store);
 
-    answer_while_replying(
-        &store,
-        &driver,
-        &session,
-        "Run the tests",
-        Some(Answer::Allow),
-    );
+    answer_while_replying(&store, &session, "Run the tests", Some(Answer::Allow));
 
     scripted.assert_followed();
     let turn = turn(&store, &session, 0);
@@ -808,16 +811,10 @@ fn always_allow_hands_back_the_rule_claude_code_suggested() {
         success("The tests passed."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let store = Arc::new(store(&driver));
     let session = claude_session(&store);
 
-    answer_while_replying(
-        &store,
-        &driver,
-        &session,
-        "Run the tests",
-        Some(Answer::AlwaysAllow),
-    );
+    answer_while_replying(&store, &session, "Run the tests", Some(Answer::AlwaysAllow));
 
     scripted.assert_followed();
     assert!(matches!(
@@ -843,17 +840,11 @@ fn deny_refuses_and_stops_the_reply_and_the_next_message_is_answered() {
         success("Done."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let store = Arc::new(store(&driver));
     let session = claude_session(&store);
 
-    answer_while_replying(
-        &store,
-        &driver,
-        &session,
-        "Run the tests",
-        Some(Answer::Deny),
-    );
-    send(&store, &driver, &session, "Do something else");
+    answer_while_replying(&store, &session, "Run the tests", Some(Answer::Deny));
+    send(&store, &session, "Do something else");
 
     scripted.assert_followed();
     let denied = turn(&store, &session, 0);
@@ -887,11 +878,11 @@ fn archiving_while_claude_waits_answers_no_and_interrupts() {
         Step::Expect(json!({ "type": "control_request", "request": { "subtype": "interrupt" } })),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let store = Arc::new(store(&driver));
     let session = claude_session(&store);
     let replying = {
-        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
-        std::thread::spawn(move || send(&store, &driver, &session, "Run the tests"))
+        let (store, session) = (Arc::clone(&store), session.clone());
+        std::thread::spawn(move || send(&store, &session, "Run the tests"))
     };
 
     until_waiting(&store, &session);
@@ -919,10 +910,10 @@ fn stopping_while_claude_waits_answers_no_and_interrupts() {
         Step::Expect(json!({ "type": "control_request", "request": { "subtype": "interrupt" } })),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let store = Arc::new(store(&driver));
     let session = claude_session(&store);
 
-    answer_while_replying(&store, &driver, &session, "Run the tests", None);
+    answer_while_replying(&store, &session, "Run the tests", None);
 
     scripted.assert_followed();
     let stopped = turn(&store, &session, 0);
@@ -944,10 +935,10 @@ fn a_request_claude_code_gives_up_on_is_cancelled() {
         success("Never mind."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Run the tests");
+    send(&store, &session, "Run the tests");
 
     scripted.assert_followed();
     let turn = turn(&store, &session, 0);
@@ -975,9 +966,9 @@ fn described(folder: &Path, tool: &str, input: &Value) -> Item {
         success("Never mind."),
     ]);
     let (_scripted, driver) = claude(vec![Ok(script)]);
-    let store = SessionStore::new(vec![playground::describe(folder)]);
+    let store = store_in(folder, &driver);
     let session = claude_session(&store);
-    send(&store, &driver, &session, "Change it");
+    send(&store, &session, "Change it");
     approval_of(&turn(&store, &session, 0))
 }
 
@@ -1050,10 +1041,10 @@ fn a_request_arden_code_does_not_serve_is_answered_with_an_error() {
         success("Hello."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     scripted.assert_followed();
     assert_eq!(turn(&store, &session, 0).status, TurnStatus::Done);
@@ -1070,11 +1061,11 @@ fn a_claude_code_that_ends_in_the_middle_fails_the_reply_and_the_next_message_st
     let mut second = handshake();
     second.extend([message("Again"), success("Hello again.")]);
     let (scripted, driver) = claude(vec![Ok(first), Ok(second)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Hello");
-    send(&store, &driver, &session, "Again");
+    send(&store, &session, "Hello");
+    send(&store, &session, "Again");
 
     scripted.assert_followed();
     let failed = turn(&store, &session, 0);
@@ -1101,11 +1092,11 @@ fn a_sessions_messages_go_to_one_claude_code_in_its_project_with_a_conversation_
         success("Two."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "First");
-    send(&store, &driver, &session, "Second");
+    send(&store, &session, "First");
+    send(&store, &session, "Second");
 
     scripted.assert_followed();
     assert_eq!(turn(&store, &session, 1).status, TurnStatus::Done);
@@ -1141,14 +1132,14 @@ fn claude_code_starts_with_the_session_s_model_and_keeps_running_while_it_stays(
     let mut script = answers("First", "One.");
     script.extend([asks_for_context(), message("Second"), success("Two.")]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
     store
         .set_model(&session, Some(Model::new("opus")))
         .expect("chosen");
 
-    send(&store, &driver, &session, "First");
-    send(&store, &driver, &session, "Second");
+    send(&store, &session, "First");
+    send(&store, &session, "Second");
 
     scripted.assert_followed();
     let starts = scripted.starts.lock().expect("starts");
@@ -1162,14 +1153,14 @@ fn a_new_effort_starts_claude_code_again_with_it() {
         Ok(answers("First", "One.")),
         Ok(answers("Second", "Two.")),
     ]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "First");
+    send(&store, &session, "First");
     store
         .set_effort(&session, Some(Effort::Max))
         .expect("changed");
-    send(&store, &driver, &session, "Second");
+    send(&store, &session, "Second");
 
     scripted.assert_followed();
     let starts = scripted.starts.lock().expect("starts");
@@ -1186,14 +1177,14 @@ fn a_new_model_starts_claude_code_again_in_the_same_conversation() {
         Ok(answers("First", "One.")),
         Ok(answers("Second", "Two.")),
     ]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "First");
+    send(&store, &session, "First");
     store
         .set_model(&session, Some(Model::new("sonnet")))
         .expect("changed");
-    send(&store, &driver, &session, "Second");
+    send(&store, &session, "Second");
 
     scripted.assert_followed();
     assert_eq!(turn(&store, &session, 1).status, TurnStatus::Done);
@@ -1219,13 +1210,13 @@ fn a_session_whose_claude_code_ended_carries_on_its_conversation_in_the_next() {
         Ok(answers("First", "One.")),
         Ok(answers("Second", "Two.")),
     ]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "First");
+    send(&store, &session, "First");
     // Archiving or deleting the session ends its Claude Code.
     driver.end(&session);
-    send(&store, &driver, &session, "Second");
+    send(&store, &session, "Second");
 
     scripted.assert_followed();
     assert_eq!(turn(&store, &session, 1).status, TurnStatus::Done);
@@ -1245,14 +1236,14 @@ fn a_conversation_claude_code_cannot_find_goes_on_in_a_new_one_and_the_reply_say
         Ok(answers("Second", "Two.")),
         Ok(answers("Third", "Three.")),
     ]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "First");
+    send(&store, &session, "First");
     driver.end(&session);
-    send(&store, &driver, &session, "Second");
+    send(&store, &session, "Second");
     driver.end(&session);
-    send(&store, &driver, &session, "Third");
+    send(&store, &session, "Third");
 
     scripted.assert_followed();
     let second = turn(&store, &session, 1);
@@ -1292,13 +1283,16 @@ fn a_claude_code_with_nothing_to_do_for_a_while_is_ended() {
         Ok(answers("First", "One.")),
         Ok(answers("Second", "Two.")),
     ]));
-    let driver = ClaudeDriver::with_idle_end(scripted.clone(), Duration::from_millis(40));
-    let store = store();
+    let driver = Arc::new(ClaudeDriver::with_idle_end(
+        scripted.clone(),
+        Duration::from_millis(40),
+    ));
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "First");
+    send(&store, &session, "First");
     std::thread::sleep(Duration::from_millis(400));
-    send(&store, &driver, &session, "Second");
+    send(&store, &session, "Second");
 
     scripted.assert_followed();
     assert!(matches!(
@@ -1319,11 +1313,11 @@ fn a_reply_that_takes_longer_than_the_idle_end_keeps_its_claude_code() {
         let driver = ClaudeDriver::with_idle_end(scripted.clone(), Duration::from_millis(40));
         (scripted, Arc::new(driver))
     };
-    let store = Arc::new(store());
+    let store = Arc::new(store(&driver));
     let session = claude_session(&store);
     let replying = {
-        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
-        std::thread::spawn(move || send(&store, &driver, &session, "Take your time"))
+        let (store, session) = (Arc::clone(&store), session.clone());
+        std::thread::spawn(move || send(&store, &session, "Take your time"))
     };
 
     // Long after the idle end, the reply still runs: its Claude Code is still there to stop.
@@ -1365,10 +1359,10 @@ fn a_claude_code_that_cannot_start_fails_the_reply_with_what_to_do() {
         ),
     ] {
         let (_scripted, driver) = claude(vec![Err(problem.clone())]);
-        let store = store();
+        let store = store(&driver);
         let session = claude_session(&store);
 
-        send(&store, &driver, &session, "Hello");
+        send(&store, &session, "Hello");
 
         let turn = turn(&store, &session, 0);
         assert_eq!(turn.status, TurnStatus::Failed, "{problem:?}");
@@ -1389,10 +1383,10 @@ fn a_claude_code_that_refuses_to_start_the_conversation_is_not_understood() {
         ),
     ];
     let (_scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     assert!(matches!(
         &turn(&store, &session, 0).items[..],
@@ -1422,10 +1416,10 @@ fn a_subagents_own_steps_are_not_shown() {
         success("Done."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Look around");
+    send(&store, &session, "Look around");
 
     scripted.assert_followed();
     let items = turn(&store, &session, 0).items;
@@ -1446,10 +1440,10 @@ fn a_line_that_is_not_a_frame_is_skipped() {
         success("Hello."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     scripted.assert_followed();
     let turn = turn(&store, &session, 0);
@@ -1494,12 +1488,11 @@ fn stopping_interrupts_claude_and_the_late_frames_of_the_stopped_reply_change_no
         success("Two."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = Arc::new(store());
+    let store = Arc::new(store(&driver));
     let session = claude_session(&store);
-    let driver = Arc::new(driver);
     let replying = {
-        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
-        std::thread::spawn(move || send(&store, &driver, &session, "Write a lot"))
+        let (store, session) = (Arc::clone(&store), session.clone());
+        std::thread::spawn(move || send(&store, &session, "Write a lot"))
     };
     until_text(&store, &session);
 
@@ -1511,7 +1504,7 @@ fn stopping_interrupts_claude_and_the_late_frames_of_the_stopped_reply_change_no
     assert_eq!(stopped.status, TurnStatus::Stopped);
     assert_eq!(texts(&stopped), vec![("text", "Once upon ".to_owned())]);
 
-    send(&store, &driver, &session, "Next");
+    send(&store, &session, "Next");
 
     scripted.assert_followed();
     assert_eq!(
@@ -1541,13 +1534,13 @@ fn a_stop_that_comes_after_claude_finished_does_not_stop_the_next_reply() {
         success("Two."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "First");
+    send(&store, &session, "First");
     // Too late: the reply is over, so there is nothing to stop.
     store.stop_turn(&session).expect("nothing to stop");
-    send(&store, &driver, &session, "Second");
+    send(&store, &session, "Second");
 
     scripted.assert_followed();
     assert_eq!(turn(&store, &session, 1).status, TurnStatus::Done);
@@ -1594,14 +1587,14 @@ fn the_driver_keeps_the_commands_and_models_claude_code_lists_and_the_commands_i
         success("Hi."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
     assert!(
         driver.catalog().is_empty(),
         "nothing is known before Claude Code has said it"
     );
 
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     scripted.assert_followed();
     let catalog = driver.catalog();
@@ -1707,12 +1700,12 @@ fn a_new_conversation_that_claude_code_starts_is_the_one_carried_on_after_a_rest
     let mut second = handshake();
     second.extend([message("Go on"), success("Going on.")]);
     let (scripted, driver) = claude(vec![Ok(first), Ok(second)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Accept the plan");
+    send(&store, &session, "Accept the plan");
     driver.end(&session);
-    send(&store, &driver, &session, "Go on");
+    send(&store, &session, "Go on");
 
     scripted.assert_followed();
     assert!(
@@ -1771,7 +1764,9 @@ fn window(kind: UsageWindowKind, percent: u32, resets_at: Option<&str>) -> Usage
     }
 }
 
-fn asking_claude(scripts: Vec<Result<Vec<Step>, LaunchError>>) -> (Arc<Scripted>, ClaudeDriver) {
+fn asking_claude(
+    scripts: Vec<Result<Vec<Step>, LaunchError>>,
+) -> (Arc<Scripted>, Arc<ClaudeDriver>) {
     let (scripted, driver) = claude(scripts);
     driver.ask_for_usage(true);
     (scripted, driver)
@@ -1957,10 +1952,10 @@ fn when_a_claude_reply_ends_its_claude_code_is_asked_for_the_usage_limits() {
         usage_answer(&plan_usage()),
     ]);
     let (scripted, driver) = asking_claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     until_usage(&driver, |limits| limits.report == UsageReport::Reported);
     scripted.assert_followed();
@@ -1983,10 +1978,10 @@ fn a_rate_limit_event_updates_the_window_it_names_and_says_when_it_is_near_its_l
         success("Hi."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     until_usage(&driver, |limits| !limits.windows.is_empty());
     scripted.assert_followed();
@@ -2016,11 +2011,11 @@ fn a_refused_window_is_at_its_limit_and_other_windows_stay_as_they_were() {
         success("Hi."),
     ]);
     let (scripted, driver) = asking_claude(vec![Ok(listening), Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
     driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
 
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     until_usage(&driver, |limits| {
         limits
@@ -2062,11 +2057,13 @@ fn asking_again_uses_a_claude_code_that_is_running_and_has_nothing_to_do() {
         asks_for_usage(),
         usage_answer(&newer),
     ]);
-    let (scripted, driver) = asking_claude(vec![Ok(script)]);
-    let driver = driver.with_usage_floor(Duration::ZERO);
-    let store = store();
+    let (scripted, driver) = claude_with(vec![Ok(script)], |driver| {
+        driver.with_usage_floor(Duration::ZERO)
+    });
+    driver.ask_for_usage(true);
+    let store = store(&driver);
     let session = claude_session(&store);
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
     until_usage(&driver, |limits| limits.report == UsageReport::Reported);
 
     driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
@@ -2082,8 +2079,10 @@ fn asking_again_uses_a_claude_code_that_is_running_and_has_nothing_to_do() {
 fn usage_limits_younger_than_asked_for_are_not_asked_for_again() {
     let mut script = handshake();
     script.extend([asks_for_usage(), usage_answer(&plan_usage())]);
-    let (scripted, driver) = asking_claude(vec![Ok(script), Ok(handshake())]);
-    let driver = driver.with_usage_floor(Duration::ZERO);
+    let (scripted, driver) = claude_with(vec![Ok(script), Ok(handshake())], |driver| {
+        driver.with_usage_floor(Duration::ZERO)
+    });
+    driver.ask_for_usage(true);
 
     driver.refresh_usage(Path::new(FOLDER), Duration::ZERO);
     driver.refresh_usage(Path::new(FOLDER), Duration::from_mins(5));
@@ -2107,10 +2106,10 @@ fn a_claude_code_that_cannot_answer_get_usage_keeps_what_its_rate_limit_events_s
         rate_limit(&json!({ "status": "allowed", "rateLimitType": "seven_day", "utilization": 0.1 })),
     ]);
     let (scripted, driver) = asking_claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     until_usage(&driver, |limits| limits.windows.len() == 2);
     scripted.assert_followed();
@@ -2169,10 +2168,12 @@ fn context_answer() -> Step {
 }
 
 /// A Claude driver that waits as long as a real Claude Code needs to report its context window.
-fn reporting_claude(scripts: Vec<Result<Vec<Step>, LaunchError>>) -> (Arc<Scripted>, ClaudeDriver) {
-    let scripted = Arc::new(Scripted::new(scripts));
-    let driver = ClaudeDriver::new(scripted.clone()).with_context_patience(Duration::from_secs(5));
-    (scripted, driver)
+fn reporting_claude(
+    scripts: Vec<Result<Vec<Step>, LaunchError>>,
+) -> (Arc<Scripted>, Arc<ClaudeDriver>) {
+    claude_with(scripts, |driver| {
+        driver.with_context_patience(Duration::from_secs(5))
+    })
 }
 
 #[test]
@@ -2185,10 +2186,10 @@ fn when_a_claude_reply_ends_the_session_keeps_how_full_its_context_window_is() {
         context_answer(),
     ]);
     let (scripted, driver) = reporting_claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    let events = send(&store, &driver, &session, "Hello");
+    let events = send(&store, &session, "Hello");
 
     scripted.assert_followed();
     assert_eq!(turn(&store, &session, 0).status, TurnStatus::Done);
@@ -2228,10 +2229,10 @@ fn a_claude_code_that_cannot_report_its_context_window_leaves_the_reply_as_it_wa
         })),
     ]);
     let (scripted, driver) = reporting_claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    let events = send(&store, &driver, &session, "Hello");
+    let events = send(&store, &session, "Hello");
 
     scripted.assert_followed();
     let kept = store.session(&session).expect("the session");
@@ -2260,7 +2261,8 @@ fn status(mode: &str) -> Step {
     }))
 }
 
-/// What the driver says about sessions outside their replies' items, as it says it.
+/// What the driver says about sessions outside their replies' items, as it says it. The test hears
+/// it in place of the store, which no longer does: listen after the store is made.
 fn hear_changes(driver: &ClaudeDriver) -> Arc<std::sync::Mutex<Vec<(String, SessionChange)>>> {
     let heard = Arc::new(std::sync::Mutex::new(Vec::new()));
     let hearing = Arc::clone(&heard);
@@ -2301,13 +2303,13 @@ fn until_heard(
 #[test]
 fn claude_code_starts_in_the_session_s_permission_mode() {
     let (scripted, driver) = claude(vec![Ok(answers("Hello", "Hi."))]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
     store
         .set_permission_mode(&session, PermissionMode::AcceptEdits)
         .expect("chosen");
 
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     scripted.assert_followed();
     let starts = scripted.starts.lock().expect("starts");
@@ -2327,10 +2329,10 @@ fn a_new_permission_mode_goes_to_the_running_claude_code_at_once_and_is_heard_ba
         status("plan"),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store(&driver);
     let heard = hear_changes(&driver);
-    let store = store();
     let session = claude_session(&store);
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     driver.set_permission_mode(&session, PermissionMode::Plan);
 
@@ -2359,10 +2361,10 @@ fn a_permission_mode_claude_code_refuses_leaves_the_one_it_is_in() {
         })),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store(&driver);
     let heard = hear_changes(&driver);
-    let store = store();
     let session = claude_session(&store);
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     driver.set_permission_mode(&session, PermissionMode::Auto);
 
@@ -2382,11 +2384,11 @@ fn a_permission_mode_claude_code_takes_itself_during_a_reply_is_heard() {
     let mut script = handshake();
     script.extend([message("Plan it"), status("plan"), success("Planned.")]);
     let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store(&driver);
     let heard = hear_changes(&driver);
-    let store = store();
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "Plan it");
+    send(&store, &session, "Plan it");
 
     until_heard(
         &heard,
@@ -2407,14 +2409,14 @@ fn the_mode_claude_code_says_it_started_in_is_followed_when_it_is_not_the_one_as
     ];
     script.extend([message("Hello"), success("Hi.")]);
     let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store(&driver);
     let heard = hear_changes(&driver);
-    let store = store();
     let session = claude_session(&store);
     store
         .set_permission_mode(&session, PermissionMode::Auto)
         .expect("chosen");
 
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     until_heard(
         &heard,
@@ -2431,18 +2433,15 @@ fn bypass_permissions_starts_claude_code_again_with_the_flag_when_it_was_started
     let mut second = handshake();
     second.extend([message("Second"), success("Two.")]);
     let (scripted, driver) = claude(vec![Ok(first), Ok(second)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
-    send(&store, &driver, &session, "First");
+    send(&store, &session, "First");
     store.allow_bypass_permissions(true);
-    driver.allow_bypass_permissions(true);
+    // Claude Code refuses the switch without the flag, so it is not asked (ADR 0044).
     store
         .set_permission_mode(&session, PermissionMode::BypassPermissions)
         .expect("allowed");
-
-    // Claude Code refuses the switch without the flag, so it is not asked (ADR 0044).
-    driver.set_permission_mode(&session, PermissionMode::BypassPermissions);
-    send(&store, &driver, &session, "Second");
+    send(&store, &session, "Second");
 
     scripted.assert_followed();
     let starts = scripted.starts.lock().expect("starts");
@@ -2470,9 +2469,9 @@ fn going_back_to_the_mode_claude_code_applies_while_another_is_asked_is_sent_too
         sets_permission_mode("default"),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     driver.set_permission_mode(&session, PermissionMode::Plan);
     driver.set_permission_mode(&session, PermissionMode::Manual);
@@ -2506,15 +2505,15 @@ fn a_reply_brings_a_running_claude_code_to_the_session_s_permission_mode_first()
         success("Two."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
-    send(&store, &driver, &session, "First");
+    send(&store, &session, "First");
     // Changed where the driver did not hear it, as when nothing was running to tell.
     store
         .set_permission_mode(&session, PermissionMode::AcceptEdits)
         .expect("chosen");
 
-    send(&store, &driver, &session, "Second");
+    send(&store, &session, "Second");
 
     scripted.assert_followed();
     assert_eq!(scripted.starts.lock().expect("starts").len(), 1);
@@ -2598,15 +2597,15 @@ fn a_plan_started_accepting_edits_is_allowed_with_the_mode_and_the_session_follo
         success("Fixed."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = Arc::new(store(&driver));
     let heard = hear_changes(&driver);
-    let (store, driver) = (Arc::new(store()), Arc::new(driver));
     let session = claude_session(&store);
     store
         .set_permission_mode(&session, PermissionMode::Plan)
         .expect("planning");
     let replying = {
-        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
-        std::thread::spawn(move || send(&store, &driver, &session, "Plan the fix"))
+        let (store, session) = (Arc::clone(&store), session.clone());
+        std::thread::spawn(move || send(&store, &session, "Plan the fix"))
     };
 
     let waiting = until_plan(&store, &session);
@@ -2663,11 +2662,11 @@ fn keep_planning_denies_with_the_person_s_words_and_the_reply_goes_on() {
         success("I will add a test step."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let store = Arc::new(store(&driver));
     let session = claude_session(&store);
     let replying = {
-        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
-        std::thread::spawn(move || send(&store, &driver, &session, "Plan the fix"))
+        let (store, session) = (Arc::clone(&store), session.clone());
+        std::thread::spawn(move || send(&store, &session, "Plan the fix"))
     };
 
     let waiting = until_plan(&store, &session);
@@ -2701,11 +2700,11 @@ fn a_plan_without_its_text_still_waits_and_stopping_denies_it() {
         Step::Expect(json!({ "type": "control_request", "request": { "subtype": "interrupt" } })),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let (store, driver) = (Arc::new(store()), Arc::new(driver));
+    let store = Arc::new(store(&driver));
     let session = claude_session(&store);
     let replying = {
-        let (store, driver, session) = (Arc::clone(&store), Arc::clone(&driver), session.clone());
-        std::thread::spawn(move || send(&store, &driver, &session, "Plan the fix"))
+        let (store, session) = (Arc::clone(&store), session.clone());
+        std::thread::spawn(move || send(&store, &session, "Plan the fix"))
     };
 
     let waiting = until_plan(&store, &session);
@@ -2755,11 +2754,11 @@ fn claude_code_names_a_session_from_its_first_message() {
         success("It is the clock."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store(&driver);
     let heard = hear_changes(&driver);
-    let store = store();
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, prompt);
+    send(&store, &session, prompt);
 
     until_heard(
         &heard,
@@ -2784,11 +2783,11 @@ fn only_the_first_message_asks_claude_code_for_a_name() {
         success("Two."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "First");
-    send(&store, &driver, &session, "Second");
+    send(&store, &session, "First");
+    send(&store, &session, "Second");
 
     scripted.assert_followed();
     let asked = scripted
@@ -2814,11 +2813,11 @@ fn a_claude_code_that_cannot_name_a_session_changes_nothing() {
         success("One."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
+    let store = store(&driver);
     let heard = hear_changes(&driver);
-    let store = store();
     let session = claude_session(&store);
 
-    send(&store, &driver, &session, "First");
+    send(&store, &session, "First");
 
     scripted.assert_followed();
     std::thread::sleep(Duration::from_millis(100));
@@ -2877,9 +2876,9 @@ fn a_running_claude_code_reloads_its_plugins_and_its_commands_replace_the_list()
         ],
         "error_count": 0
     })))]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     let reloaded = driver.reload_plugins(Path::new(FOLDER));
 
@@ -2899,9 +2898,9 @@ fn a_reload_held_for_the_prompt_cache_leaves_the_commands_and_says_the_session_w
         "held": true,
         "cache_impact": { "tools_changed": true }
     })))]);
-    let store = store();
+    let store = store(&driver);
     let session = claude_session(&store);
-    send(&store, &driver, &session, "Hello");
+    send(&store, &session, "Hello");
 
     let reloaded = driver.reload_plugins(Path::new(FOLDER));
 
@@ -2915,11 +2914,11 @@ fn every_running_claude_code_is_asked_to_reload() {
     let applied = json!({ "held": false, "commands": [{ "name": "compact", "description": "", "argumentHint": "" }] });
     let held = json!({ "held": true });
     let (scripted, driver) = claude(vec![Ok(reloading(&applied)), Ok(reloading(&held))]);
-    let store = store();
+    let store = store(&driver);
     let first = claude_session(&store);
     let second = claude_session(&store);
-    send(&store, &driver, &first, "Hello");
-    send(&store, &driver, &second, "Hello");
+    send(&store, &first, "Hello");
+    send(&store, &second, "Hello");
 
     let reloaded = driver.reload_plugins(Path::new(FOLDER));
 
