@@ -7,12 +7,11 @@ import type {
   AppError,
   AvailablePlugin,
   Catalog,
-  Effort,
   ErrorCode,
   FileMatch,
   InstalledPlugin,
   Marketplace,
-  Model,
+  NewSession,
   PermissionMode,
   PluginChange,
   Project,
@@ -94,14 +93,12 @@ interface Options {
   failing?: Partial<Record<string, ErrorCode>>;
   /** Folders opened as projects, after the Playground. */
   folders?: Project[];
-  /** The agent a new session takes when none is asked for (ADR 0039). */
-  newSessionAgent?: AgentKind;
-  /** The model a new session takes (ADR 0041), null for the agent's own setting. */
-  newSessionModel?: Model | null;
-  /** The effort a new session takes (ADR 0041), null for the agent's own setting. */
-  newSessionEffort?: Effort | null;
-  /** The permission mode a new session takes (ADR 0044). */
-  newSessionPermissionMode?: PermissionMode;
+  /**
+   * What a new session starts with when no agent is asked for (ADR 0039, 0041 and 0044): the Demo
+   * agent on its own model and effort, in Manual, unless said. Another agent asked for starts on
+   * its own model and effort, in Manual.
+   */
+  newSession?: Partial<NewSession>;
   /** Whether Settings → Agents allows Bypass permissions (ADR 0044). */
   allowBypassPermissions?: boolean;
   /** The folder the person picks in Windows' dialog, or null when they cancel. */
@@ -141,10 +138,7 @@ export function startSessionsRust({
   sessions: kept = [],
   failing = {},
   folders: opened = [],
-  newSessionAgent = "demo",
-  newSessionModel = null,
-  newSessionEffort = null,
-  newSessionPermissionMode = "manual",
+  newSession: inherited = {},
   allowBypassPermissions = false,
   catalog = { commands: [], models: [], terminalCommands: [] },
   pickedFolder = null,
@@ -158,6 +152,13 @@ export function startSessionsRust({
   files = () => [],
 }: Options = {}) {
   const folders: Project[] = structuredClone(opened);
+  const newSession: NewSession = {
+    agent: "demo",
+    model: null,
+    effort: null,
+    permissionMode: "manual",
+    ...inherited,
+  };
   Object.assign(globalThis, { isTauri: true });
   mockWindows("main");
   const sessions: Session[] = structuredClone(kept);
@@ -218,25 +219,49 @@ export function startSessionsRust({
           notice = null;
           return taken;
         }
-        case "agent_for_new_session": {
-          return newSessionAgent;
+        case "new_session": {
+          const { agent } = z
+            .object({ agent: z.enum(["demo", "claude"]).nullable().optional() })
+            .parse(payload ?? {});
+          if (!agent || agent === newSession.agent) return newSession;
+          return { agent, model: null, effort: null, permissionMode: "manual" };
         }
         case "create_session": {
           if (failCreate) throw failure("ARD-AGT-001");
-          const { agent, projectId } = z
+          const { projectId, start } = z
             .object({
-              agent: z.enum(["demo", "claude"]).nullable().optional(),
               projectId: z.string().nullable().optional(),
+              start: z
+                .object({
+                  agent: z.enum(["demo", "claude"]),
+                  model: z.string().nullable(),
+                  effort: z.enum(["low", "medium", "high", "extraHigh", "max"]).nullable(),
+                  permissionMode: z.enum([
+                    "manual",
+                    "acceptEdits",
+                    "plan",
+                    "auto",
+                    "bypassPermissions",
+                  ]),
+                })
+                .nullable()
+                .optional(),
             })
             .parse(payload ?? {});
           const project = projectId ?? playground.id;
           if (project !== playground.id && !folders.some((folder) => folder.id === project)) {
             throw failure("ARD-AGT-001");
           }
+          const { agent, model, effort, permissionMode } = start ?? newSession;
+          if (permissionMode === "bypassPermissions" && !allowBypassPermissions) {
+            throw failure("ARD-AGT-019");
+          }
           made += 1;
           const session = {
-            ...sessionNamed(`session-${made}`, null, project, agent ?? newSessionAgent),
-            permissionMode: newSessionPermissionMode,
+            ...sessionNamed(`session-${made}`, null, project, agent),
+            model,
+            effort,
+            permissionMode,
           };
           sessions.push(session);
           return summaryOf(session);
@@ -260,20 +285,11 @@ export function startSessionsRust({
           find(withId.parse(payload).id);
           return null;
         }
-        case "model_for_new_session": {
-          return newSessionModel;
-        }
         case "claude_catalog": {
           return structuredClone(catalog);
         }
         case "usage_limits": {
           return structuredClone(usageLimits);
-        }
-        case "effort_for_new_session": {
-          return newSessionEffort;
-        }
-        case "permission_mode_for_new_session": {
-          return newSessionPermissionMode;
         }
         case "set_session_permission_mode": {
           const { id, mode } = z

@@ -387,18 +387,22 @@ export const commands = {
 	 */
 	deleteSession: (id: string) => __TAURI_INVOKE<null>("delete_session", { id }),
 	/**
-	 *  Starts an empty session in a project, the Playground when none is given, with the agent given,
-	 *  or the one a new session there takes (ADR 0039).
+	 *  Starts an empty session in a project, the Playground when none is given, as `start` says, or as
+	 *  a new session there starts (ADR 0039, 0041 and 0044).
 	 * 
 	 *  # Errors
 	 * 
-	 *  Returns an error when the project does not exist, or the session cannot be saved.
+	 *  Returns an error when the project does not exist, Bypass permissions is asked for while Settings
+	 *  does not allow it, or the session cannot be saved.
 	 */
-	createSession: (agent: 
-/**  The built-in demonstration agent. */
-"demo" | 
-/**  Claude, through the person's own Claude Code (ADR 0038). */
-"claude" | null, projectId: string | null) => __TAURI_INVOKE<SessionSummary>("create_session", { agent, projectId }),
+	createSession: (projectId: string | null, start: {
+	agent: AgentKind,
+	/**  None for the agent's own setting. */
+	model: Model | null,
+	/**  None for the agent's own setting. */
+	effort: Effort | null,
+	permissionMode: PermissionMode,
+} | null) => __TAURI_INVOKE<SessionSummary>("create_session", { projectId, start }),
 	/**
 	 *  Starts an empty session linked to another one, in its project and with its agent (ADR 0036).
 	 * 
@@ -506,15 +510,6 @@ export const commands = {
 	 */
 	setSessionModel: (id: string, model: string | null) => __TAURI_INVOKE<null>("set_session_model", { id, model }),
 	/**
-	 *  The model a new session in a project would take, the Playground when none is given (ADR 0041):
-	 *  that of the session the agent rule follows. None for the agent's own setting.
-	 * 
-	 *  # Errors
-	 * 
-	 *  Never fails today; it returns a `Result` like every command.
-	 */
-	modelForNewSession: (projectId: string | null) => __TAURI_INVOKE<string | null>("model_for_new_session", { projectId }),
-	/**
 	 *  Changes how much a session's agent thinks, none for its own setting (ADR 0041). It applies from
 	 *  the next message.
 	 * 
@@ -525,15 +520,6 @@ export const commands = {
 	 */
 	setSessionEffort: (id: string, effort: "low" | "medium" | "high" | "extraHigh" | "max" | null) => __TAURI_INVOKE<null>("set_session_effort", { id, effort }),
 	/**
-	 *  The effort a new session in a project would take, the Playground when none is given, as
-	 *  [`model_for_new_session`] says its model (ADR 0041).
-	 * 
-	 *  # Errors
-	 * 
-	 *  Never fails today; it returns a `Result` like every command.
-	 */
-	effortForNewSession: (projectId: string | null) => __TAURI_INVOKE<"low" | "medium" | "high" | "extraHigh" | "max" | null>("effort_for_new_session", { projectId }),
-	/**
 	 *  Changes how far a session's agent may go without asking (ADR 0044), also while a reply runs: a
 	 *  running Claude Code takes it at once, and says so through [`SessionChanged`].
 	 * 
@@ -543,15 +529,6 @@ export const commands = {
 	 *  while Settings does not allow it, or the change cannot be saved.
 	 */
 	setSessionPermissionMode: (id: string, mode: PermissionMode) => __TAURI_INVOKE<null>("set_session_permission_mode", { id, mode }),
-	/**
-	 *  The permission mode a new session in a project would take, the Playground when none is given
-	 *  (ADR 0044): that of the session the agent rule follows, except Bypass permissions.
-	 * 
-	 *  # Errors
-	 * 
-	 *  Never fails today; it returns a `Result` like every command.
-	 */
-	permissionModeForNewSession: (projectId: string | null) => __TAURI_INVOKE<PermissionMode>("permission_mode_for_new_session", { projectId }),
 	/**
 	 *  Moves a session that has had no message yet to another project (ADR 0039).
 	 * 
@@ -583,13 +560,19 @@ export const commands = {
 	trusted: boolean,
 } | null>("pick_folder"),
 	/**
-	 *  The agent a new session in a project would have, the Playground when none is given (ADR 0039).
+	 *  What a new session in a project would start with, the Playground when none is given: the agent
+	 *  given or the one the agent rule picks, and its model, effort and permission mode (ADR 0039, 0041
+	 *  and 0044).
 	 * 
 	 *  # Errors
 	 * 
 	 *  Never fails today; it returns a `Result` like every command.
 	 */
-	agentForNewSession: (projectId: string | null) => __TAURI_INVOKE<AgentKind>("agent_for_new_session", { projectId }),
+	newSession: (projectId: string | null, agent: 
+/**  The built-in demonstration agent. */
+"demo" | 
+/**  Claude, through the person's own Claude Code (ADR 0038). */
+"claude" | null) => __TAURI_INVOKE<NewSession>("new_session", { projectId, agent }),
 	/**
 	 *  The slash commands and models of the person's Claude Code, as it last said them (ADR 0042):
 	 *  nothing yet before it has been heard. When nothing is known and Claude Code is installed, one
@@ -1257,6 +1240,19 @@ export type ModelOption = {
 	resolvedModel: string | null,
 	/**  The efforts it takes, in order. None for a model that has no effort. */
 	efforts: Effort[],
+};
+
+/**
+ *  What a new session starts with: its agent, model, effort and permission mode (ADR 0039, 0041
+ *  and 0044).
+ */
+export type NewSession = {
+	agent: AgentKind,
+	/**  None for the agent's own setting. */
+	model: Model | null,
+	/**  None for the agent's own setting. */
+	effort: Effort | null,
+	permissionMode: PermissionMode,
 };
 
 /**  Whether Arden Code may show Windows notifications. */

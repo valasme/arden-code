@@ -470,7 +470,7 @@ describe("Choosing where a session works (ADR 0039)", () => {
     await user.keyboard("{Control>}o{/Control}");
 
     expect(await screen.findByRole("button", { name: "Project: api" })).toBeVisible();
-    expect(rust.callsTo("create_session")).toEqual([{ agent: null, projectId: "folder-2" }]);
+    expect(rust.callsTo("create_session")).toEqual([{ projectId: "folder-2", start: null }]);
   });
 
   it("does nothing when the folder dialog is cancelled", async () => {
@@ -499,7 +499,7 @@ describe("Choosing where a session works (ADR 0039)", () => {
     await user.keyboard("{Control>}n{/Control}");
 
     expect(await screen.findByRole("button", { name: "Project: demo" })).toBeVisible();
-    expect(rust.callsTo("create_session")).toEqual([{ agent: null, projectId: "folder-1" }]);
+    expect(rust.callsTo("create_session")).toEqual([{ projectId: "folder-1", start: null }]);
   });
 });
 
@@ -525,7 +525,7 @@ describe("Deleting a Claude session (ADR 0039)", () => {
 describe("The welcome state (ADR 0039)", () => {
   it("asks what the agent a new session takes should work on, and starts the session with it", async () => {
     const user = userEvent.setup();
-    const rust = startSessionsRust({ newSessionAgent: "claude" });
+    const rust = startSessionsRust({ newSession: { agent: "claude" } });
     renderApp();
 
     expect(
@@ -538,7 +538,10 @@ describe("The welcome state (ADR 0039)", () => {
 
     await waitFor(() => {
       expect(rust.callsTo("create_session")).toEqual([
-        { agent: "claude", projectId: "playground" },
+        {
+          projectId: "playground",
+          start: { agent: "claude", model: null, effort: null, permissionMode: "manual" },
+        },
       ]);
     });
   });
@@ -665,7 +668,7 @@ describe("The figures in the message box (ADR 0044)", () => {
   });
 
   it("shows the usage limits on the welcome screen while Claude is chosen", async () => {
-    startSessionsRust({ newSessionAgent: "claude", usageLimits: plan });
+    startSessionsRust({ newSession: { agent: "claude" }, usageLimits: plan });
     renderApp();
 
     expect(await screen.findByRole("button", { name: "5-hour 42% Weekly 18%" })).toBeVisible();

@@ -11,9 +11,9 @@ use arden_agents::claude::catalog::Catalog;
 use arden_agents::driver::{Answer, PlanAnswer};
 use arden_agents::files::{FileMatch, ProjectFiles};
 use arden_agents::model::{
-    AgentKind, ApprovalAction, ApprovalState, Effort, Item, Model, PermissionMode, PlanState,
-    Project, ProjectKind, QuestionAnswer, QuestionState, Session, SessionList, SessionSummary,
-    TurnEvent,
+    AgentKind, ApprovalAction, ApprovalState, Effort, Item, Model, NewSession, PermissionMode,
+    PlanState, Project, ProjectKind, QuestionAnswer, QuestionState, Session, SessionList,
+    SessionSummary, TurnEvent,
 };
 use arden_agents::playground::PLAYGROUND_ID;
 use arden_agents::store::{OpenProblem, SessionEvent, SessionStore, StoreError};
@@ -113,24 +113,9 @@ pub fn list_sessions(sessions: State<'_, Sessions>) -> Result<SessionList, AppEr
     Ok(sessions.list())
 }
 
-/// The agent for a new session in a project (ADR 0039): the agent of that project's latest
-/// session, else of the latest session anywhere, else Claude when Claude Code is installed, else
-/// the Demo agent.
-fn new_session_agent(
-    sessions: &SessionStore,
-    project_id: &str,
-    claude_installed: bool,
-) -> AgentKind {
-    sessions
-        .agent_for_new_session(project_id)
-        .unwrap_or(if claude_installed {
-            AgentKind::Claude
-        } else {
-            AgentKind::Demo
-        })
-}
-
-/// The agent a new session in a project would have, the Playground when none is given (ADR 0039).
+/// What a new session in a project would start with, the Playground when none is given: the agent
+/// given or the one the agent rule picks, and its model, effort and permission mode (ADR 0039, 0041
+/// and 0044).
 ///
 /// # Errors
 ///
@@ -139,14 +124,15 @@ fn new_session_agent(
 #[allow(clippy::unnecessary_wraps)]
 #[tauri::command]
 #[specta::specta]
-pub fn agent_for_new_session(
+pub fn new_session(
     project_id: Option<String>,
+    agent: Option<AgentKind>,
     sessions: State<'_, Sessions>,
     detections: State<'_, crate::agents::Detections>,
-) -> Result<AgentKind, AppError> {
-    Ok(new_session_agent(
-        &sessions,
+) -> Result<NewSession, AppError> {
+    Ok(sessions.new_session(
         project_id.as_deref().unwrap_or(PLAYGROUND_ID),
+        agent,
         detections.claude_installed(),
     ))
 }
@@ -226,23 +212,6 @@ pub fn playground_folder(sessions: &Sessions) -> Option<std::path::PathBuf> {
         .map(|listing| std::path::PathBuf::from(listing.project.path))
 }
 
-/// The model a new session in a project would take, the Playground when none is given (ADR 0041):
-/// that of the session the agent rule follows. None for the agent's own setting.
-///
-/// # Errors
-///
-/// Never fails today; it returns a `Result` like every command.
-// Every command returns a `Result` (ADR 0008).
-#[allow(clippy::unnecessary_wraps)]
-#[tauri::command]
-#[specta::specta]
-pub fn model_for_new_session(
-    project_id: Option<String>,
-    sessions: State<'_, Sessions>,
-) -> Result<Option<Model>, AppError> {
-    Ok(sessions.model_for_new_session(project_id.as_deref().unwrap_or(PLAYGROUND_ID)))
-}
-
 /// Changes the model a session works with, none for the agent's own setting (ADR 0041). It applies
 /// from the next message.
 ///
@@ -262,23 +231,6 @@ pub fn set_session_model(
     Ok(())
 }
 
-/// The effort a new session in a project would take, the Playground when none is given, as
-/// [`model_for_new_session`] says its model (ADR 0041).
-///
-/// # Errors
-///
-/// Never fails today; it returns a `Result` like every command.
-// Every command returns a `Result` (ADR 0008).
-#[allow(clippy::unnecessary_wraps)]
-#[tauri::command]
-#[specta::specta]
-pub fn effort_for_new_session(
-    project_id: Option<String>,
-    sessions: State<'_, Sessions>,
-) -> Result<Option<Effort>, AppError> {
-    Ok(sessions.effort_for_new_session(project_id.as_deref().unwrap_or(PLAYGROUND_ID)))
-}
-
 /// Changes how much a session's agent thinks, none for its own setting (ADR 0041). It applies from
 /// the next message.
 ///
@@ -296,23 +248,6 @@ pub fn set_session_effort(
     sessions.set_effort(&id, effort).map_err(app_error)?;
     tracing::info!(session = %id, ?effort, "the session's effort changed");
     Ok(())
-}
-
-/// The permission mode a new session in a project would take, the Playground when none is given
-/// (ADR 0044): that of the session the agent rule follows, except Bypass permissions.
-///
-/// # Errors
-///
-/// Never fails today; it returns a `Result` like every command.
-// Every command returns a `Result` (ADR 0008).
-#[allow(clippy::unnecessary_wraps)]
-#[tauri::command]
-#[specta::specta]
-pub fn permission_mode_for_new_session(
-    project_id: Option<String>,
-    sessions: State<'_, Sessions>,
-) -> Result<PermissionMode, AppError> {
-    Ok(sessions.permission_mode_for_new_session(project_id.as_deref().unwrap_or(PLAYGROUND_ID)))
 }
 
 /// Changes how far a session's agent may go without asking (ADR 0044), also while a reply runs: a
@@ -394,24 +329,26 @@ pub fn follow_bypass_setting(settings: &SettingsService, sessions: &Sessions) {
     });
 }
 
-/// Starts an empty session in a project, the Playground when none is given, with the agent given,
-/// or the one a new session there takes (ADR 0039).
+/// Starts an empty session in a project, the Playground when none is given, as `start` says, or as
+/// a new session there starts (ADR 0039, 0041 and 0044).
 ///
 /// # Errors
 ///
-/// Returns an error when the project does not exist, or the session cannot be saved.
+/// Returns an error when the project does not exist, Bypass permissions is asked for while Settings
+/// does not allow it, or the session cannot be saved.
 #[tauri::command]
 #[specta::specta]
 pub fn create_session(
-    agent: Option<AgentKind>,
     project_id: Option<String>,
+    start: Option<NewSession>,
     sessions: State<'_, Sessions>,
     detections: State<'_, crate::agents::Detections>,
 ) -> Result<SessionSummary, AppError> {
     let project = project_id.as_deref().unwrap_or(PLAYGROUND_ID);
-    let agent = agent
-        .unwrap_or_else(|| new_session_agent(&sessions, project, detections.claude_installed()));
-    let session = sessions.create_session(project, agent).map_err(app_error)?;
+    let start =
+        start.unwrap_or_else(|| sessions.new_session(project, None, detections.claude_installed()));
+    let agent = start.agent;
+    let session = sessions.create_session(project, start).map_err(app_error)?;
     tracing::info!(session = %session.id, ?agent, "session created");
     Ok(session)
 }
@@ -720,7 +657,7 @@ pub fn debug_fill_session(
     sessions: State<'_, Sessions>,
 ) -> Result<SessionSummary, AppError> {
     let session = sessions
-        .create_session(PLAYGROUND_ID, AgentKind::Demo)
+        .create_session(PLAYGROUND_ID, AgentKind::Demo.into())
         .map_err(app_error)?;
     let replies = (1..=count)
         .map(|number| {
@@ -827,7 +764,7 @@ pub struct SessionRequested {
     pub session_id: String,
 }
 
-/// Opens a folder as a project, starts a session in it with the agent a new session there takes
+/// Opens a folder as a project, starts a session in it as a new session there starts
 /// (ADR 0039), and asks the page to show it.
 pub fn open_folder(app: &tauri::AppHandle, folder: &std::path::Path) {
     use tauri::Manager;
@@ -838,7 +775,7 @@ pub fn open_folder(app: &tauri::AppHandle, folder: &std::path::Path) {
         let claude_installed = app.state::<crate::agents::Detections>().claude_installed();
         store.create_session(
             &project.id,
-            new_session_agent(&store, &project.id, claude_installed),
+            store.new_session(&project.id, None, claude_installed),
         )
     });
     let session = match session {
@@ -903,7 +840,7 @@ mod tests {
     fn store_with_a_session_opened() -> (SessionStore, String) {
         let store = store_in(r"C:\Playground");
         let session = store
-            .create_session(PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         store.remember_open(&session.id).expect("remembered");
         (store, session.id)
@@ -932,29 +869,6 @@ mod tests {
                 state,
             },
         }
-    }
-
-    #[test]
-    fn with_no_session_at_all_a_new_session_takes_claude_when_it_is_installed() {
-        let store = store_in(r"C:Playground");
-
-        assert_eq!(
-            new_session_agent(&store, PLAYGROUND_ID, true),
-            AgentKind::Claude
-        );
-        assert_eq!(
-            new_session_agent(&store, PLAYGROUND_ID, false),
-            AgentKind::Demo
-        );
-
-        store
-            .create_session(PLAYGROUND_ID, AgentKind::Demo)
-            .expect("a session");
-        assert_eq!(
-            new_session_agent(&store, PLAYGROUND_ID, true),
-            AgentKind::Demo,
-            "the latest session's agent comes first"
-        );
     }
 
     #[test]

@@ -144,6 +144,31 @@ pub struct Choices {
     pub effort: Option<Effort>,
 }
 
+/// What a new session starts with: its agent, model, effort and permission mode (ADR 0039, 0041
+/// and 0044).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct NewSession {
+    pub agent: AgentKind,
+    /// None for the agent's own setting.
+    pub model: Option<Model>,
+    /// None for the agent's own setting.
+    pub effort: Option<Effort>,
+    pub permission_mode: PermissionMode,
+}
+
+impl From<AgentKind> for NewSession {
+    /// A new session with the agent, on its own model and effort, in Manual.
+    fn from(agent: AgentKind) -> Self {
+        Self {
+            agent,
+            model: None,
+            effort: None,
+            permission_mode: PermissionMode::default(),
+        }
+    }
+}
+
 /// What a project is. Only the Playground exists in the foundation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

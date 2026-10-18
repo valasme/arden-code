@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { page } from "vitest/browser";
 
+import type { NewSession } from "@/ipc/bindings";
 import { useLayoutStore } from "@/state/layout";
 import { useOverlayStore } from "@/state/overlays";
 import { animationsDone, menuClosed } from "@/test/animations";
@@ -13,6 +14,14 @@ import { App } from "./App";
 import "@/styles/global.css";
 
 type Options = Parameters<typeof startSessionsRust>[0];
+
+/** What a Claude session starts with when nothing was inherited or chosen. */
+const claudeAsItStarts: NewSession = {
+  agent: "claude",
+  model: null,
+  effort: null,
+  permissionMode: "manual",
+};
 
 async function welcome(options: Options = {}) {
   const rust = startSessionsRust(options);
@@ -82,7 +91,9 @@ describe("Choosing the agent and the project on the welcome screen", () => {
     await user.type(within(await main()).getByRole("textbox", { name: "Message" }), "Hello{Enter}");
 
     await waitFor(() => {
-      expect(rust.callsTo("create_session")).toEqual([{ agent: "claude", projectId: "api" }]);
+      expect(rust.callsTo("create_session")).toEqual([
+        { projectId: "api", start: claudeAsItStarts },
+      ]);
     });
     await waitFor(() => {
       expect(rust.sent()).toHaveLength(1);
@@ -116,9 +127,50 @@ describe("Choosing the agent and the project on the welcome screen", () => {
     await user.click(within(question).getByRole("button", { name: "Trust folder" }));
 
     await waitFor(() => {
-      expect(rust.callsTo("create_session")).toEqual([{ agent: "claude", projectId: "api" }]);
+      expect(rust.callsTo("create_session")).toEqual([
+        { projectId: "api", start: claudeAsItStarts },
+      ]);
     });
     expect(rust.callsTo("trust_project")).toEqual([{ projectId: "api" }]);
+  });
+
+  it("starts the session with what was chosen and what was inherited, in one call", async () => {
+    const { rust, user } = await welcome({
+      newSession: { agent: "claude", model: "opus", effort: "high", permissionMode: "plan" },
+    });
+
+    await choose(user, "Effort: High", /^Max/);
+    await choose(user, "Permission mode: Plan", /^Accept edits/);
+    await user.type(within(await main()).getByRole("textbox", { name: "Message" }), "Hello{Enter}");
+
+    await waitFor(() => {
+      expect(rust.sent()).toHaveLength(1);
+    });
+    expect(rust.callsTo("create_session")).toEqual([
+      {
+        projectId: "playground",
+        start: { agent: "claude", model: "opus", effort: "max", permissionMode: "acceptEdits" },
+      },
+    ]);
+    const changes = new Set([
+      "set_session_model",
+      "set_session_effort",
+      "set_session_permission_mode",
+    ]);
+    expect(rust.calls.filter((call) => changes.has(call.command))).toEqual([]);
+  });
+
+  it("sends nothing and keeps the message when the session cannot start", async () => {
+    const { rust, user } = await welcome({ failCreate: true });
+
+    const box = within(await main()).getByRole("textbox", { name: "Message" });
+    await user.type(box, "Hello{Enter}");
+
+    await waitFor(() => {
+      expect(rust.callsTo("create_session")).toHaveLength(1);
+    });
+    expect(rust.sent()).toEqual([]);
+    expect(box).toHaveValue("Hello");
   });
 
   it("chooses a folder opened from the menu, without starting a session", async () => {
@@ -154,9 +206,7 @@ describe("The welcome screen's message box (#127)", () => {
     const { user } = await welcome({
       folders: [folderProject("arden", "arden-code", true)],
       sessions: [sessionNamed("s1", "Earlier", "arden", "claude")],
-      newSessionAgent: "claude",
-      newSessionModel: "opus",
-      newSessionEffort: "max",
+      newSession: { agent: "claude", model: "opus", effort: "max" },
     });
     await turnOnUltrathink(user);
     await within(await main()).findByRole("button", { name: "Turn off Ultrathink" });

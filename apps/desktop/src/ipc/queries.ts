@@ -7,11 +7,9 @@ import { fallbackSystemPreferences } from "@/features/settings/systemPreferences
 
 import {
   type Catalog,
-  type Effort,
-  type PermissionMode,
-  type Model,
   type AgentKind,
   commands,
+  type NewSession,
   type SessionList,
   type UpdateStatus,
   type UsageLimits,
@@ -107,42 +105,29 @@ export const sessionListQuery = queryOptions({
 });
 
 /**
- * The agent a new session in the Playground takes (ADR 0039). It shares the key of the list of
- * sessions, so it is read again whenever the list is.
+ * Where what a new session starts with is kept. It is under the key of the list of sessions, so it
+ * is read again whenever the list is.
  */
-export const newSessionAgentQuery = queryOptions({
-  queryKey: ["sessions", "new-session-agent"],
-  queryFn: (): Promise<AgentKind> =>
-    isTauri() ? commands.agentForNewSession(null) : Promise.resolve("demo"),
-  staleTime: Number.POSITIVE_INFINITY,
-});
+export const newSessionKey = ["sessions", "new-session"] as const;
 
-/** The model a new session in a project takes (ADR 0041), null for the agent's own setting. */
-export const modelForProjectQuery = (projectId: string) =>
-  queryOptions({
-    queryKey: [...newSessionAgentQuery.queryKey, projectId, "model"],
-    queryFn: (): Promise<Model | null> =>
-      isTauri() ? commands.modelForNewSession(projectId) : Promise.resolve(null),
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+/** What a new session starts with where there is no Rust: the Demo agent, as it is. */
+export const demoSession: NewSession = {
+  agent: "demo",
+  model: null,
+  effort: null,
+  permissionMode: "manual",
+};
 
-/** The effort a new session in a project takes (ADR 0041), null for the agent's own setting. */
-export const effortForProjectQuery = (projectId: string) =>
+/**
+ * What a new session in a project starts with (ADR 0039, 0041 and 0044): the agent given, else the
+ * one the agent rule picks, with the model, effort and permission mode it inherits, never Bypass
+ * permissions. For the welcome screen's choices.
+ */
+export const newSessionQuery = (projectId: string, agent: AgentKind | null) =>
   queryOptions({
-    queryKey: [...newSessionAgentQuery.queryKey, projectId, "effort"],
-    queryFn: (): Promise<Effort | null> =>
-      isTauri() ? commands.effortForNewSession(projectId) : Promise.resolve(null),
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-
-/** The permission mode a new session in a project takes (ADR 0044): never Bypass permissions. */
-export const permissionModeForProjectQuery = (projectId: string) =>
-  queryOptions({
-    queryKey: [...newSessionAgentQuery.queryKey, projectId, "permissionMode"],
-    queryFn: (): Promise<PermissionMode> =>
-      isTauri()
-        ? commands.permissionModeForNewSession(projectId)
-        : Promise.resolve<PermissionMode>("manual"),
+    queryKey: [...newSessionKey, projectId, agent],
+    queryFn: (): Promise<NewSession> =>
+      isTauri() ? commands.newSession(projectId, agent) : Promise.resolve(demoSession),
     staleTime: Number.POSITIVE_INFINITY,
   });
 
@@ -167,15 +152,6 @@ export const claudeCatalogQuery = queryOptions({
     return known > 0 || query.state.dataUpdateCount > CATALOG_RETRIES ? false : CATALOG_RETRY_MS;
   },
 });
-
-/** The agent a new session in a project takes (ADR 0039), for the welcome screen's choice. */
-export const agentForProjectQuery = (projectId: string) =>
-  queryOptions({
-    queryKey: [...newSessionAgentQuery.queryKey, projectId],
-    queryFn: (): Promise<AgentKind> =>
-      isTauri() ? commands.agentForNewSession(projectId) : Promise.resolve("demo"),
-    staleTime: Number.POSITIVE_INFINITY,
-  });
 
 /**
  * One session with its turns. While a reply streams the cache is updated from the channel, so it
