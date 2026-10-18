@@ -2437,13 +2437,10 @@ fn bypass_permissions_starts_claude_code_again_with_the_flag_when_it_was_started
     let session = claude_session(&store);
     send(&store, &session, "First");
     store.allow_bypass_permissions(true);
-    driver.allow_bypass_permissions(true);
+    // Claude Code refuses the switch without the flag, so it is not asked (ADR 0044).
     store
         .set_permission_mode(&session, PermissionMode::BypassPermissions)
         .expect("allowed");
-
-    // Claude Code refuses the switch without the flag, so it is not asked (ADR 0044).
-    driver.set_permission_mode(&session, PermissionMode::BypassPermissions);
     send(&store, &session, "Second");
 
     scripted.assert_followed();

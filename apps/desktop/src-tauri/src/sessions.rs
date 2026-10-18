@@ -3,6 +3,7 @@
 // Tauri hands commands their arguments by value; a command that only reads one cannot borrow it.
 #![allow(clippy::needless_pass_by_value)]
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
@@ -383,11 +384,11 @@ pub fn follow_bypass_setting(settings: &SettingsService, sessions: &Sessions) {
     let allowed = settings.get().agents.allow_bypass_permissions;
     sessions.allow_bypass_permissions(allowed);
     let sessions = Arc::clone(sessions);
-    let was_allowed = std::sync::atomic::AtomicBool::new(allowed);
+    let was_allowed = AtomicBool::new(allowed);
     settings.subscribe(move |settings, _| {
         let allowed = settings.agents.allow_bypass_permissions;
         // Only a change of this setting is acted on.
-        if was_allowed.swap(allowed, std::sync::atomic::Ordering::AcqRel) != allowed {
+        if was_allowed.swap(allowed, Ordering::AcqRel) != allowed {
             sessions.allow_bypass_permissions(allowed);
         }
     });

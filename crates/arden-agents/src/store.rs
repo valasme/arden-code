@@ -1868,6 +1868,27 @@ mod tests {
     }
 
     #[test]
+    fn a_reply_to_a_session_deleted_before_it_began_reaches_no_agent() {
+        let (store, _demo, claude) = recorded();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        let turn = store.start_turn(&session.id, "hello").expect("a turn");
+        store.delete(&session.id).expect("deleted");
+
+        let mut heard = Vec::new();
+        store
+            .stream_reply(&session.id, &turn, |event| {
+                heard.push(event.clone());
+                true
+            })
+            .expect("nothing to save");
+
+        assert_eq!(heard, Vec::new());
+        assert_eq!(claude.heard(), vec![Heard::End(session.id)]);
+    }
+
+    #[test]
     fn removing_a_project_ends_the_agent_of_each_of_its_sessions_archived_ones_too() {
         let (store, demo, claude) = recorded();
         let project = store
