@@ -10,6 +10,8 @@ use std::time::Duration;
 
 use arden_agents::claude::driver::ClaudeDriver;
 use arden_agents::claude::launch::ProgramLauncher;
+use arden_agents::demo::DemoDriver;
+use arden_agents::driver::Agents;
 use arden_agents::model::{AgentKind, Item, Turn, TurnStatus};
 use arden_agents::playground;
 use arden_agents::store::SessionStore;
@@ -30,19 +32,29 @@ fn claude_on_path(settings: &Value) -> tempfile::TempDir {
     bin
 }
 
+/// A store whose Claude sessions in `project` are answered by `driver`.
+fn store_for(project: &Path, driver: Arc<ClaudeDriver>) -> SessionStore {
+    SessionStore::new(
+        vec![playground::describe(project)],
+        Agents {
+            demo: Arc::new(DemoDriver::instant()),
+            claude: driver,
+        },
+    )
+}
+
 /// Sends a message to a new Claude session in `project`, with the stand-in in `bin`.
 fn send(bin: &Path, project: &Path, prompt: &str) -> Turn {
     let logs = tempfile::tempdir().expect("a folder");
     let supervisor = Arc::new(Supervisor::new(logs.path()).expect("a supervisor"));
     let launcher = ProgramLauncher::with_search_path(supervisor, bin.as_os_str().to_owned());
-    let driver = ClaudeDriver::new(Arc::new(launcher));
-    let store = SessionStore::new(vec![playground::describe(project)]);
+    let store = store_for(project, Arc::new(ClaudeDriver::new(Arc::new(launcher))));
     let session = store
         .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
         .expect("a session");
     let turn = store.start_turn(&session.id, prompt).expect("a turn");
     store
-        .stream_reply(&driver, &session.id, &turn, |_| true)
+        .stream_reply(&session.id, &turn, |_| true)
         .expect("saved");
     store.session(&session.id).expect("the session").turns[0].clone()
 }
@@ -141,7 +153,7 @@ fn no_claude_on_path_is_not_installed() {
 
 /// A Claude driver that starts `claude` from `bin`, or from the `PATH` with none, and asks for the
 /// usage limits (ADR 0043).
-fn asking_driver(bin: Option<&Path>) -> (ClaudeDriver, tempfile::TempDir) {
+fn asking_driver(bin: Option<&Path>) -> (Arc<ClaudeDriver>, tempfile::TempDir) {
     let logs = tempfile::tempdir().expect("a folder");
     let supervisor = Arc::new(Supervisor::new(logs.path()).expect("a supervisor"));
     let launcher = match bin {
@@ -150,7 +162,7 @@ fn asking_driver(bin: Option<&Path>) -> (ClaudeDriver, tempfile::TempDir) {
     };
     let driver = ClaudeDriver::new(Arc::new(launcher));
     driver.ask_for_usage(true);
-    (driver, logs)
+    (Arc::new(driver), logs)
 }
 
 #[test]
@@ -197,7 +209,7 @@ fn a_real_signed_in_claude_code_reports_its_usage_limits() {
     println!("get_usage: {asked:#?}");
     assert_ne!(asked.report, UsageReport::Unknown, "claude answered");
 
-    let store = SessionStore::new(vec![playground::describe(project.path())]);
+    let store = store_for(project.path(), Arc::clone(&driver));
     let session = store
         .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
         .expect("a session");
@@ -205,7 +217,7 @@ fn a_real_signed_in_claude_code_reports_its_usage_limits() {
         .start_turn(&session.id, "Say hi, in one word.")
         .expect("a turn");
     store
-        .stream_reply(&driver, &session.id, &turn, |_| true)
+        .stream_reply(&session.id, &turn, |_| true)
         .expect("saved");
     std::thread::sleep(Duration::from_secs(5));
     println!("after a turn: {:#?}", driver.usage_limits());

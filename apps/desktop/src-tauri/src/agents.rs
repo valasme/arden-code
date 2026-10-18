@@ -7,7 +7,7 @@ use std::time::Duration;
 use arden_agents::claude::driver::ClaudeDriver;
 use arden_agents::claude::launch::{Connection, LaunchError, Launcher, ProgramLauncher, Start};
 use arden_agents::detect::{self, AgentCli, Detection};
-use arden_agents::driver::SessionChange;
+use arden_agents::driver::{AgentDriver, SessionChange};
 use arden_agents::model::PermissionMode;
 use arden_agents::store::SessionStore;
 use arden_agents::usage::UsageLimits;

@@ -10,7 +10,7 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::database::{Database, DatabaseError, Order};
-use crate::driver::{AgentDriver, Answer, Control, Flow, PlanAnswer, ReplyRequest};
+use crate::driver::{Agents, Answer, Control, Flow, PlanAnswer, ReplyRequest};
 use crate::model::{
     AgentKind, ApprovalState, Choices, Effort, Item, Model, PermissionMode, PlanState, Project,
     ProjectKind, ProjectListing, QuestionAnswer, QuestionState, Session, SessionList,
@@ -353,23 +353,26 @@ fn set_aside(file: &Path, now: OffsetDateTime) -> std::io::Result<PathBuf> {
 /// Every project and session the app knows.
 pub struct SessionStore {
     inner: Mutex<Inner>,
+    /// The driver of each agent, which the store hands each session's work to.
+    agents: Agents,
 }
 
 impl SessionStore {
     /// A store with the given projects and no sessions, kept in memory only: nothing is saved.
+    /// Each session's work goes to its agent's driver in `agents`.
     ///
     /// # Panics
     ///
     /// When SQLite cannot keep a database in memory, which only happens when memory runs out.
     #[must_use]
-    pub fn new(projects: Vec<Project>) -> Self {
+    pub fn new(projects: Vec<Project>, agents: Agents) -> Self {
         let mut database = Database::in_memory();
         for (position, project) in projects.iter().enumerate() {
             database
                 .save_project(project, position, 0)
                 .expect("a database in memory takes a project");
         }
-        Self::with(database, projects, Vec::new(), 0, None)
+        Self::with(database, projects, Vec::new(), 0, None, agents)
     }
 
     fn with(
@@ -378,8 +381,10 @@ impl SessionStore {
         sessions: Vec<Entry>,
         last_id: u64,
         last_open: Option<String>,
+        agents: Agents,
     ) -> Self {
         Self {
+            agents,
             inner: Mutex::new(Inner {
                 projects,
                 sessions,
@@ -398,14 +403,19 @@ impl SessionStore {
     /// read is set aside and the store starts empty, and a file that cannot be opened at all leaves
     /// the store in memory.
     #[must_use]
-    pub fn open(file: &Path, playground: &Project) -> Opened {
-        Self::open_at(file, playground, OffsetDateTime::now_utc())
+    pub fn open(file: &Path, playground: &Project, agents: Agents) -> Opened {
+        Self::open_at(file, playground, OffsetDateTime::now_utc(), agents)
     }
 
     /// [`Self::open`] with the time given, so that tests can predict the name of a file set aside.
     #[must_use]
-    pub fn open_at(file: &Path, playground: &Project, now: OffsetDateTime) -> Opened {
-        let reason = match Self::read(file, playground) {
+    pub fn open_at(
+        file: &Path,
+        playground: &Project,
+        now: OffsetDateTime,
+        agents: Agents,
+    ) -> Opened {
+        let reason = match Self::read(file, playground, agents.clone()) {
             Ok(store) => {
                 return Opened {
                     store,
@@ -415,7 +425,7 @@ impl SessionStore {
             Err(error) => error.0,
         };
         let in_memory = |reason: String| Opened {
-            store: Self::new(vec![playground.clone()]),
+            store: Self::new(vec![playground.clone()], agents.clone()),
             problem: Some(OpenProblem::NotSaving { reason }),
         };
         if !file.is_file() {
@@ -427,7 +437,7 @@ impl SessionStore {
                 return in_memory(format!("{reason}; it could not be set aside: {error}"));
             }
         };
-        match Self::read(file, playground) {
+        match Self::read(file, playground, agents.clone()) {
             Ok(store) => Opened {
                 store,
                 problem: Some(OpenProblem::SetAside { kept_as, reason }),
@@ -436,7 +446,7 @@ impl SessionStore {
         }
     }
 
-    fn read(file: &Path, playground: &Project) -> Result<Self, DatabaseError> {
+    fn read(file: &Path, playground: &Project, agents: Agents) -> Result<Self, DatabaseError> {
         let mut database = Database::open(file)?;
         let saved = database.load(playground)?;
         let mut projects = saved.projects;
@@ -459,6 +469,7 @@ impl SessionStore {
             sessions,
             saved.last_id,
             saved.last_open,
+            agents,
         ))
     }
 
@@ -1467,7 +1478,8 @@ impl SessionStore {
         self.lock().stopping.contains(turn_id)
     }
 
-    /// Has the driver answer a turn, recording each event and passing it to `on_event`. A false
+    /// Has the session's agent answer a turn, recording each event and passing it to `on_event`.
+    /// A false
     /// answer from `on_event` means nobody is listening any more, and stops the reply; the turn is
     /// then marked as failed, so the session is not left waiting for it. A reply that the person
     /// stopped ends as stopped, and `on_event` is told.
@@ -1478,7 +1490,6 @@ impl SessionStore {
     /// still reached `on_event`, and the session holds it until the app closes.
     pub fn stream_reply(
         &self,
-        driver: &dyn AgentDriver,
         session_id: &str,
         turn: &Turn,
         mut on_event: impl FnMut(&TurnEvent) -> bool,
@@ -1486,13 +1497,17 @@ impl SessionStore {
         let mut ended = false;
         let mut saved = Ok(());
         let (sender, controls) = mpsc::channel();
-        let (folder, conversation, choices, permission_mode, names) = {
+        let (agent, folder, conversation, choices, permission_mode, names) = {
             let mut inner = self.lock();
-            inner.controls.insert(turn.id.clone(), sender);
             let entry = inner
                 .sessions
                 .iter()
                 .find(|entry| entry.session.id == session_id);
+            // A session deleted before its reply began has nothing left to answer.
+            let Some(agent) = entry.map(|entry| entry.session.agent) else {
+                inner.stopping.remove(&turn.id);
+                return Ok(());
+            };
             let folder = entry
                 .and_then(|entry| {
                     inner
@@ -1502,7 +1517,8 @@ impl SessionStore {
                 })
                 .map(|project| PathBuf::from(&project.path))
                 .unwrap_or_default();
-            (
+            let chosen = (
+                agent,
                 folder,
                 entry.and_then(|entry| entry.conversation.clone()),
                 entry.map(Entry::choices).unwrap_or_default(),
@@ -1514,7 +1530,9 @@ impl SessionStore {
                     entry.session.turns.first().map(|first| &first.id) == Some(&turn.id)
                         && entry.session.title == title_of(&turn.prompt)
                 }),
-            )
+            );
+            inner.controls.insert(turn.id.clone(), sender);
+            chosen
         };
         let remember = |id: &str| {
             if let Err(error) = self.remember_conversation(session_id, id) {
@@ -1533,7 +1551,7 @@ impl SessionStore {
             remember: &remember,
             controls,
         };
-        driver.reply(request, &mut |event| {
+        self.agents.of(agent).reply(request, &mut |event| {
             if self.is_stopping(&turn.id) {
                 return Flow::Stop;
             }
@@ -1583,14 +1601,119 @@ impl SessionStore {
 mod tests {
     use std::path::Path;
 
+    use std::sync::Arc;
+
     use super::*;
     use crate::context_window::{ContextPart, ContextPartKind, ContextWindow};
     use crate::demo::DemoDriver;
+    use crate::driver::{AgentDriver, SessionChange, SessionListener};
     use crate::model::Item;
     use crate::playground;
 
     fn store() -> SessionStore {
-        SessionStore::new(vec![playground::describe(Path::new(r"C:\Playground"))])
+        store_with(
+            Arc::new(DemoDriver::instant()),
+            Arc::new(Recording::default()),
+        )
+    }
+
+    /// The Demo agent answering at once, and a Claude that answers at once and notes what it hears.
+    fn agents() -> Agents {
+        Agents {
+            demo: Arc::new(DemoDriver::instant()),
+            claude: Arc::new(Recording::default()),
+        }
+    }
+
+    /// A store kept in memory whose sessions are answered by the drivers given.
+    fn store_with(demo: Arc<dyn AgentDriver>, claude: Arc<dyn AgentDriver>) -> SessionStore {
+        SessionStore::new(
+            vec![playground::describe(Path::new(r"C:\Playground"))],
+            Agents { demo, claude },
+        )
+    }
+
+    /// What the store told a [`Recording`] driver.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum Heard {
+        Reply(String),
+        End(String),
+        Mode(String, PermissionMode),
+        Bypass(bool),
+    }
+
+    /// An agent that answers at once, notes everything the store tells it, and reports what the
+    /// test has it say about a session.
+    #[derive(Default)]
+    struct Recording {
+        heard: Mutex<Vec<Heard>>,
+        listener: Mutex<Option<SessionListener>>,
+    }
+
+    impl Recording {
+        fn heard(&self) -> Vec<Heard> {
+            self.heard.lock().expect("what it heard").clone()
+        }
+
+        fn note(&self, heard: Heard) {
+            self.heard.lock().expect("what it heard").push(heard);
+        }
+
+        /// Says something about a session, as an agent does from its own thread.
+        fn report(&self, session_id: &str, change: SessionChange) {
+            let listener = self.listener.lock().expect("the listener").clone();
+            listener.expect("the store listens")(session_id, change);
+        }
+    }
+
+    impl AgentDriver for Recording {
+        fn reply(&self, request: ReplyRequest<'_>, emit: &mut dyn FnMut(TurnEvent) -> Flow) {
+            self.note(Heard::Reply(request.session_id.to_owned()));
+            emit(TurnEvent::Finished {
+                turn_id: request.turn_id.to_owned(),
+            });
+        }
+
+        fn end(&self, session_id: &str) {
+            self.note(Heard::End(session_id.to_owned()));
+        }
+
+        fn set_permission_mode(&self, session_id: &str, mode: PermissionMode) {
+            self.note(Heard::Mode(session_id.to_owned(), mode));
+        }
+
+        fn allow_bypass_permissions(&self, allowed: bool) {
+            self.note(Heard::Bypass(allowed));
+        }
+
+        fn on_session_changes(&self, listener: SessionListener) {
+            *self.listener.lock().expect("the listener") = Some(listener);
+        }
+    }
+
+    /// A store whose Demo agent and Claude each note what they hear.
+    fn recorded() -> (SessionStore, Arc<Recording>, Arc<Recording>) {
+        let (demo, claude) = (
+            Arc::new(Recording::default()),
+            Arc::new(Recording::default()),
+        );
+        (store_with(demo.clone(), claude.clone()), demo, claude)
+    }
+
+    #[test]
+    fn a_reply_goes_to_the_driver_of_the_sessions_agent() {
+        let (store, demo, claude) = recorded();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+        let turn = store.start_turn(&session.id, "hello").expect("a turn");
+
+        store
+            .stream_reply(&session.id, &turn, |_| true)
+            .expect("saved");
+
+        assert_eq!(claude.heard(), vec![Heard::Reply(session.id.clone())]);
+        assert_eq!(demo.heard(), Vec::new());
     }
 
     #[test]
@@ -1766,7 +1889,7 @@ mod tests {
 
         let mut heard = Vec::new();
         store
-            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
+            .stream_reply(&session.id, &turn, |event| {
                 heard.push(event.clone());
                 true
             })
@@ -1806,7 +1929,7 @@ mod tests {
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
         store
-            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| false)
+            .stream_reply(&session.id, &turn, |_| false)
             .expect("saved");
 
         let saved = store.session(&session.id).expect("the session");
@@ -1824,7 +1947,7 @@ mod tests {
 
         let mut heard = Vec::new();
         store
-            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
+            .stream_reply(&session.id, &turn, |event| {
                 heard.push(event.clone());
                 // The person presses Esc while the first tool is running.
                 if matches!(
@@ -1889,7 +2012,7 @@ mod tests {
         // A reply that starts afterwards is not affected by the earlier request.
         let turn = store.start_turn(&session.id, "hi").expect("a turn");
         store
-            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| true)
+            .stream_reply(&session.id, &turn, |_| true)
             .expect("saved");
         assert_eq!(
             store.session(&session.id).expect("the session").turns[0].status,
@@ -2058,20 +2181,18 @@ mod tests {
     fn answered_with(
         answer: crate::driver::Answer,
     ) -> (Vec<Control>, Result<(), StoreError>, Turn) {
-        let store = std::sync::Arc::new(store());
+        let driver = Arc::new(Asking {
+            heard: std::sync::Mutex::new(Vec::new()),
+        });
+        let store = Arc::new(store_with(Arc::new(DemoDriver::instant()), driver.clone()));
         let session = store
             .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
             .expect("a session");
         let turn = store.start_turn(&session.id, "test it").expect("a turn");
-        let driver = std::sync::Arc::new(Asking {
-            heard: std::sync::Mutex::new(Vec::new()),
-        });
         let replying = {
-            let (store, driver, id) = (store.clone(), driver.clone(), session.id.clone());
+            let (store, id) = (store.clone(), session.id.clone());
             std::thread::spawn(move || {
-                store
-                    .stream_reply(driver.as_ref(), &id, &turn, |_| true)
-                    .expect("saved");
+                store.stream_reply(&id, &turn, |_| true).expect("saved");
             })
         };
         while store.session(&session.id).expect("the session").turns[0]
@@ -2149,21 +2270,19 @@ mod tests {
 
     #[test]
     fn stopping_reaches_a_driver_at_once_even_between_events() {
-        let store = std::sync::Arc::new(store());
+        let driver = Arc::new(Waiting {
+            heard: std::sync::Mutex::new(Vec::new()),
+            folder: std::sync::Mutex::new(None),
+        });
+        let store = Arc::new(store_with(driver.clone(), Arc::new(Recording::default())));
         let session = store
             .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
             .expect("a session");
         let turn = store.start_turn(&session.id, "hi").expect("a turn");
-        let driver = std::sync::Arc::new(Waiting {
-            heard: std::sync::Mutex::new(Vec::new()),
-            folder: std::sync::Mutex::new(None),
-        });
         let replying = {
-            let (store, driver, id) = (store.clone(), driver.clone(), session.id.clone());
+            let (store, id) = (store.clone(), session.id.clone());
             std::thread::spawn(move || {
-                store
-                    .stream_reply(driver.as_ref(), &id, &turn, |_| true)
-                    .expect("saved");
+                store.stream_reply(&id, &turn, |_| true).expect("saved");
             })
         };
         while driver.folder.lock().expect("the folder").is_none() {
@@ -2190,9 +2309,23 @@ mod tests {
 
     /// A store kept in `file`, as the app keeps one in its data folder.
     fn store_in(file: &Path) -> SessionStore {
-        let opened = SessionStore::open(file, &playground::describe(Path::new(r"C:\Playground")));
+        store_in_with(file, agents())
+    }
+
+    /// A store kept in `file` whose sessions are answered by `agents`.
+    fn store_in_with(file: &Path, agents: Agents) -> SessionStore {
+        let opened = SessionStore::open(
+            file,
+            &playground::describe(Path::new(r"C:\Playground")),
+            agents,
+        );
         assert!(opened.problem.is_none(), "{:?}", opened.problem);
         opened.store
+    }
+
+    /// Agents of which Claude is `claude`.
+    fn with_claude(claude: Arc<dyn AgentDriver>) -> Agents {
+        Agents { claude, ..agents() }
     }
 
     /// An agent that remembers a conversation when it answers, and notes the one it was given.
@@ -2229,17 +2362,15 @@ mod tests {
         }
     }
 
-    fn reply_to(store: &SessionStore, agent: &Naming, session: &str, prompt: &str) {
+    fn reply_to(store: &SessionStore, session: &str, prompt: &str) {
         let turn = store.start_turn(session, prompt).expect("a turn");
-        store
-            .stream_reply(agent, session, &turn, |_| true)
-            .expect("saved");
+        store.stream_reply(session, &turn, |_| true).expect("saved");
     }
 
     #[test]
     fn only_the_first_message_of_a_session_the_person_did_not_name_lets_the_agent_name_it() {
-        let store = store();
-        let agent = Naming::default();
+        let agent = Arc::new(Naming::default());
+        let store = store_with(Arc::new(DemoDriver::instant()), agent.clone());
         let named_by_its_message = store
             .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
             .expect("a session")
@@ -2252,9 +2383,9 @@ mod tests {
             .rename(&named_by_the_person, "Chosen")
             .expect("renamed");
 
-        reply_to(&store, &agent, &named_by_its_message, "First");
-        reply_to(&store, &agent, &named_by_its_message, "Second");
-        reply_to(&store, &agent, &named_by_the_person, "First");
+        reply_to(&store, &named_by_its_message, "First");
+        reply_to(&store, &named_by_its_message, "Second");
+        reply_to(&store, &named_by_the_person, "First");
 
         assert_eq!(
             *agent.asked.lock().expect("asked"),
@@ -2266,24 +2397,22 @@ mod tests {
     fn an_agents_conversation_is_remembered_and_handed_back_after_the_store_is_opened_again() {
         let folder = tempfile::tempdir().expect("a temporary folder");
         let file = folder.path().join("sessions.db");
-        let agent = Conversing::default();
+        let agent = Arc::new(Conversing::default());
         let id = {
-            let store = store_in(&file);
+            let store = store_in_with(&file, with_claude(agent.clone()));
             let session = store
                 .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
                 .expect("a session");
             let turn = store.start_turn(&session.id, "First").expect("a turn");
             store
-                .stream_reply(&agent, &session.id, &turn, |_| true)
+                .stream_reply(&session.id, &turn, |_| true)
                 .expect("saved");
             session.id
         };
 
-        let store = store_in(&file);
+        let store = store_in_with(&file, with_claude(agent.clone()));
         let turn = store.start_turn(&id, "Second").expect("a turn");
-        store
-            .stream_reply(&agent, &id, &turn, |_| true)
-            .expect("saved");
+        store.stream_reply(&id, &turn, |_| true).expect("saved");
 
         assert_eq!(
             *agent.given.lock().expect("given"),
@@ -2310,7 +2439,8 @@ mod tests {
                 .expect("a session of the first version");
         }
 
-        let store = store_in(&file);
+        let agent = Arc::new(Conversing::default());
+        let store = store_in_with(&file, with_claude(agent));
 
         let list = store.list();
         let sessions: Vec<_> = list
@@ -2324,10 +2454,9 @@ mod tests {
                 .any(|session| session.title.as_deref() == Some("Kept")),
             "{list:#?}"
         );
-        let agent = Conversing::default();
         let turn = store.start_turn("session-1", "Hello").expect("a turn");
         store
-            .stream_reply(&agent, "session-1", &turn, |_| true)
+            .stream_reply("session-1", &turn, |_| true)
             .expect("the conversation is saved in the new column");
         let connection = rusqlite::Connection::open(&file).expect("the file");
         let version: i64 = connection
@@ -2460,7 +2589,7 @@ mod tests {
                 .start_turn(&session.id, "Remember me")
                 .expect("a turn");
             store
-                .stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| true)
+                .stream_reply(&session.id, &turn, |_| true)
                 .expect("the reply is saved");
             session.id
         };
@@ -2615,7 +2744,11 @@ mod tests {
         let file = folder.path().join("sessions.db");
         drop(store_in(&file));
 
-        let moved = SessionStore::open(&file, &playground::describe(Path::new(r"D:\Moved")));
+        let moved = SessionStore::open(
+            &file,
+            &playground::describe(Path::new(r"D:\Moved")),
+            agents(),
+        );
 
         assert!(moved.problem.is_none());
         assert_eq!(moved.store.list().projects[0].project.path, r"D:\Moved");
@@ -2632,6 +2765,7 @@ mod tests {
             &file,
             &playground::describe(Path::new(r"C:\Playground")),
             now,
+            agents(),
         );
 
         let kept = folder.path().join("sessions.invalid-20260930-140509.db");
@@ -2666,7 +2800,11 @@ mod tests {
         let file = folder.path().join("sessions.db");
         std::fs::create_dir(&file).expect("a folder in the way");
 
-        let opened = SessionStore::open(&file, &playground::describe(Path::new(r"C:\Playground")));
+        let opened = SessionStore::open(
+            &file,
+            &playground::describe(Path::new(r"C:\Playground")),
+            agents(),
+        );
 
         assert!(
             matches!(opened.problem, Some(OpenProblem::NotSaving { .. })),
@@ -3028,7 +3166,7 @@ mod tests {
             .expect("a session");
         let turn = store.start_turn(&session.id, secret).expect("a turn");
         store
-            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| true)
+            .stream_reply(&session.id, &turn, |_| true)
             .expect("saved");
         assert!(in_the_files(), "the text was written");
 
@@ -3046,7 +3184,7 @@ mod tests {
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
         let mut heard = Vec::new();
-        let saved = store.stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
+        let saved = store.stream_reply(&session.id, &turn, |event| {
             heard.push(event.clone());
             if heard.len() == 2 {
                 store.delete(&session.id).expect("deleted");
@@ -3197,7 +3335,7 @@ mod tests {
 
         let mut heard = Vec::new();
         store
-            .stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
+            .stream_reply(&session.id, &turn, |event| {
                 heard.push(event.clone());
                 if heard.len() == 2 {
                     store.set_archived(&session.id, true).expect("archived");
@@ -3364,7 +3502,7 @@ mod tests {
         let folder = tempfile::tempdir().expect("a temporary folder");
         let file = folder.path().join("sessions.db");
         let id = {
-            let store = store_in(&file);
+            let store = store_in_with(&file, with_claude(Arc::new(Reporting(two_thirds_full()))));
             let session = store
                 .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
                 .expect("a session");
@@ -3375,7 +3513,7 @@ mod tests {
             );
             let turn = store.start_turn(&session.id, "hello").expect("a turn");
             store
-                .stream_reply(&Reporting(two_thirds_full()), &session.id, &turn, |_| true)
+                .stream_reply(&session.id, &turn, |_| true)
                 .expect("answered");
             let kept = store.session(&session.id).expect("it");
             assert_eq!(kept.context_window, Some(two_thirds_full()));
@@ -3415,7 +3553,7 @@ mod tests {
                 .expect("chosen");
             let turn = store.start_turn(&session.id, "hello").expect("a turn");
             store
-                .stream_reply(&DemoDriver::instant(), &session.id, &turn, |_| true)
+                .stream_reply(&session.id, &turn, |_| true)
                 .expect("answered");
             store
                 .set_model(&session.id, Some(Model::new("sonnet")))
@@ -3816,7 +3954,7 @@ mod tests {
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
         let mut heard = Vec::new();
-        let saved = store.stream_reply(&DemoDriver::instant(), &session.id, &turn, |event| {
+        let saved = store.stream_reply(&session.id, &turn, |event| {
             heard.push(event.clone());
             if heard.len() == 2 {
                 store.remove_project(&project.id).expect("removed");

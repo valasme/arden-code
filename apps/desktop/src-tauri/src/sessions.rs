@@ -7,7 +7,6 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
 use arden_agents::claude::catalog::Catalog;
-use arden_agents::demo::DemoDriver;
 use arden_agents::driver::{AgentDriver, Answer, PlanAnswer};
 use arden_agents::files::{FileMatch, ProjectFiles};
 use arden_agents::model::{
@@ -742,23 +741,16 @@ pub fn send_message(
     text: String,
     on_event: Channel<TurnEvent>,
     sessions: State<'_, Sessions>,
-    claude: State<'_, crate::agents::Claude>,
 ) -> Result<Session, AppError> {
     let turn = sessions.start_turn(&session_id, &text).map_err(app_error)?;
     // Taken before the reply starts, so the events that follow never overlap with it.
     let snapshot = sessions.session(&session_id).map_err(app_error)?;
 
     let store = Arc::clone(sessions.inner());
-    let claude = Arc::clone(&claude.0);
     let agent = snapshot.agent;
     let running = turn.clone();
     thread::spawn(move || {
-        let demo = DemoDriver::new();
-        let driver: &dyn AgentDriver = match agent {
-            AgentKind::Demo => &demo,
-            AgentKind::Claude => claude.as_ref(),
-        };
-        let saved = store.stream_reply(driver, &session_id, &running, |event| {
+        let saved = store.stream_reply(&session_id, &running, |event| {
             if let Some(body) = waiting_notice(agent, event) {
                 crate::notifications::notify_when_away(&app, arden_core::APP_NAME, &body);
             }
@@ -867,12 +859,26 @@ pub fn take_pending_open(pending: State<'_, PendingOpen>) -> Result<Option<Strin
 mod tests {
     use std::path::Path;
 
+    use arden_agents::demo::DemoDriver;
+    use arden_agents::driver::Agents;
     use arden_agents::playground;
 
     use super::*;
 
+    /// A store kept in memory, with its Playground in `folder`.
+    fn store_in(folder: &str) -> SessionStore {
+        let demo = Arc::new(DemoDriver::instant());
+        SessionStore::new(
+            vec![playground::describe(Path::new(folder))],
+            Agents {
+                demo: demo.clone(),
+                claude: demo,
+            },
+        )
+    }
+
     fn store_with_a_session_opened() -> (SessionStore, String) {
-        let store = SessionStore::new(vec![playground::describe(Path::new(r"C:\Playground"))]);
+        let store = store_in(r"C:\Playground");
         let session = store
             .create_session(PLAYGROUND_ID, AgentKind::Demo)
             .expect("a session");
@@ -907,7 +913,7 @@ mod tests {
 
     #[test]
     fn with_no_session_at_all_a_new_session_takes_claude_when_it_is_installed() {
-        let store = SessionStore::new(vec![playground::describe(Path::new(r"C:Playground"))]);
+        let store = store_in(r"C:Playground");
 
         assert_eq!(
             new_session_agent(&store, PLAYGROUND_ID, true),
