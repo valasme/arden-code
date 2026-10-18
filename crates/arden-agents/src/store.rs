@@ -1034,7 +1034,9 @@ impl SessionStore {
 
     /// What a new session in a project starts with (ADR 0039). Its agent is the one given, else
     /// that of the project's latest session, else of the latest session anywhere, else Claude when
-    /// Claude Code is installed, else the Demo agent.
+    /// Claude Code is installed, else the Demo agent. Its model, effort and permission mode are that
+    /// session's when it has the same agent, else Default, Default and Manual (ADR 0041), and never
+    /// Bypass permissions (ADR 0044).
     #[must_use]
     pub fn new_session(
         &self,
