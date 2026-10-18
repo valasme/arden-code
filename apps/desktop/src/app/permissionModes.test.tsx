@@ -168,9 +168,9 @@ describe("Choosing the permission mode (ADR 0044)", () => {
     });
   });
 
-  it("starts the welcome screen in the mode a new session takes, and gives the one chosen before the first message", async () => {
+  it("starts the welcome screen in the mode a new session takes, and the session in the one chosen", async () => {
     const user = userEvent.setup();
-    const rust = startSessionsRust({ newSessionAgent: "claude", newSessionPermissionMode: "plan" });
+    const rust = startSessionsRust({ newSession: { agent: "claude", permissionMode: "plan" } });
     renderApp("/");
 
     await choose(user, "Permission mode: Plan", /^Accept edits/);
@@ -179,12 +179,12 @@ describe("Choosing the permission mode (ADR 0044)", () => {
     await waitFor(() => {
       expect(rust.sent()).toHaveLength(1);
     });
-    expect(rust.callsTo("set_session_permission_mode")).toEqual([
-      { id: expect.any(String), mode: "acceptEdits" },
+    expect(rust.callsTo("create_session")).toEqual([
+      {
+        projectId: "playground",
+        start: { agent: "claude", model: null, effort: null, permissionMode: "acceptEdits" },
+      },
     ]);
-    const order = rust.calls.map((call) => call.command);
-    expect(order.indexOf("set_session_permission_mode")).toBeLessThan(
-      order.indexOf("send_message"),
-    );
+    expect(rust.callsTo("set_session_permission_mode")).toEqual([]);
   });
 });

@@ -12,8 +12,8 @@ use time::format_description::well_known::Rfc3339;
 use crate::database::{Database, DatabaseError, Order};
 use crate::driver::{Agents, Answer, Control, Flow, PlanAnswer, ReplyRequest, SessionChange};
 use crate::model::{
-    AgentKind, ApprovalState, Choices, Effort, Item, Model, PermissionMode, PlanState, Project,
-    ProjectKind, ProjectListing, QuestionAnswer, QuestionState, Session, SessionList,
+    AgentKind, ApprovalState, Choices, Effort, Item, Model, NewSession, PermissionMode, PlanState,
+    Project, ProjectKind, ProjectListing, QuestionAnswer, QuestionState, Session, SessionList,
     SessionSummary, Turn, TurnEvent, TurnStatus,
 };
 
@@ -132,6 +132,17 @@ impl Entry {
         }
     }
 
+    /// What a session passes on to one that follows it: all it has, except Bypass permissions
+    /// (ADR 0044).
+    fn passed_on(&self) -> NewSession {
+        NewSession {
+            agent: self.session.agent,
+            model: self.session.model.clone(),
+            effort: self.session.effort,
+            permission_mode: self.session.permission_mode.inherited(),
+        }
+    }
+
     fn summary(&self) -> SessionSummary {
         let session = &self.session;
         SessionSummary {
@@ -241,6 +252,28 @@ impl Inner {
         latest(true).or_else(|| latest(false))
     }
 
+    /// What a new session in a project starts with: see [`SessionStore::new_session`].
+    fn new_session(
+        &self,
+        project_id: &str,
+        agent: Option<AgentKind>,
+        claude_installed: bool,
+    ) -> NewSession {
+        let source = self.latest_for(project_id);
+        let fallback = if claude_installed {
+            AgentKind::Claude
+        } else {
+            AgentKind::Demo
+        };
+        let agent = agent
+            .or_else(|| source.map(|entry| entry.session.agent))
+            .unwrap_or(fallback);
+        // The rest comes from that session only when it has the same agent (ADR 0041).
+        source
+            .filter(|entry| entry.session.agent == agent)
+            .map_or_else(|| NewSession::from(agent), Entry::passed_on)
+    }
+
     /// Saves a session's permission mode. Answers whether it changed.
     fn keep_permission_mode(
         &mut self,
@@ -296,28 +329,26 @@ impl Inner {
         Ok(Some(name.to_owned()))
     }
 
-    /// Starts an empty session in a project, linked to the session it was started from, if any.
+    /// Starts an empty session in a project as `start` says, linked to the session it was started
+    /// from, if any.
     fn create_session(
         &mut self,
         project_id: &str,
-        agent: AgentKind,
+        start: NewSession,
         linked_from: Option<String>,
     ) -> Result<SessionSummary, StoreError> {
         if !self.projects.iter().any(|project| project.id == project_id) {
             return Err(StoreError::UnknownProject);
         }
-        // The model and effort come from the session it was started from, else from the session
-        // the agent rule follows when it has the same agent (councils Q6).
-        let source = match &linked_from {
-            Some(from) => self.sessions.iter().find(|entry| entry.session.id == *from),
-            None => self
-                .latest_for(project_id)
-                .filter(|entry| entry.session.agent == agent),
-        };
-        let Choices { model, effort } = source.map(Entry::choices).unwrap_or_default();
-        let permission_mode = source
-            .map(|entry| entry.session.permission_mode.inherited())
-            .unwrap_or_default();
+        if start.permission_mode == PermissionMode::BypassPermissions && !self.bypass_allowed {
+            return Err(StoreError::BypassNotAllowed);
+        }
+        let NewSession {
+            agent,
+            model,
+            effort,
+            permission_mode,
+        } = start;
         let now = now_utc();
         let entry = Entry {
             session: Session {
@@ -985,44 +1016,35 @@ impl SessionStore {
         Ok(())
     }
 
-    /// Starts an empty session in a project.
+    /// Starts an empty session in a project with the agent, model, effort and permission mode
+    /// given, in one write: what [`Self::new_session`] says, with what the person chose instead.
     ///
     /// # Errors
     ///
-    /// Returns [`StoreError::UnknownProject`] when there is no such project, and
-    /// [`StoreError::NotSaved`] when the session cannot be written.
+    /// Returns [`StoreError::UnknownProject`] when there is no such project,
+    /// [`StoreError::BypassNotAllowed`] for Bypass permissions while the setting that allows it is
+    /// off, and [`StoreError::NotSaved`] when the session cannot be written. No session is made.
     pub fn create_session(
         &self,
         project_id: &str,
-        agent: AgentKind,
+        start: NewSession,
     ) -> Result<SessionSummary, StoreError> {
-        self.lock().create_session(project_id, agent, None)
+        self.lock().create_session(project_id, start, None)
     }
 
-    /// The agent for a new session in a project (ADR 0039): the agent of that project's latest
-    /// session, else of the latest session anywhere. Nothing when there is no session at all.
+    /// What a new session in a project starts with (ADR 0039). Its agent is the one given, else
+    /// that of the project's latest session, else of the latest session anywhere, else Claude when
+    /// Claude Code is installed, else the Demo agent. Its model, effort and permission mode are that
+    /// session's when it has the same agent, else Default, Default and Manual (ADR 0041), and never
+    /// Bypass permissions (ADR 0044).
     #[must_use]
-    pub fn agent_for_new_session(&self, project_id: &str) -> Option<AgentKind> {
-        self.lock()
-            .latest_for(project_id)
-            .map(|entry| entry.session.agent)
-    }
-
-    /// The model a new session in a project takes (councils Q6): that of the session the agent
-    /// rule follows. Nothing for the agent's own setting, or when there is no session at all.
-    #[must_use]
-    pub fn model_for_new_session(&self, project_id: &str) -> Option<Model> {
-        self.lock()
-            .latest_for(project_id)
-            .and_then(|entry| entry.session.model.clone())
-    }
-
-    /// The effort a new session in a project takes, as [`Self::model_for_new_session`] does.
-    #[must_use]
-    pub fn effort_for_new_session(&self, project_id: &str) -> Option<Effort> {
-        self.lock()
-            .latest_for(project_id)
-            .and_then(|entry| entry.session.effort)
+    pub fn new_session(
+        &self,
+        project_id: &str,
+        agent: Option<AgentKind>,
+        claude_installed: bool,
+    ) -> NewSession {
+        self.lock().new_session(project_id, agent, claude_installed)
     }
 
     /// Changes the model of a session (ADR 0041), also after its first message. The agent takes it
@@ -1047,17 +1069,6 @@ impl SessionStore {
     /// As [`Self::set_model`].
     pub fn set_effort(&self, session_id: &str, effort: Option<Effort>) -> Result<(), StoreError> {
         self.set_choice(session_id, |session| session.effort = effort)
-    }
-
-    /// The permission mode a new session in a project takes (ADR 0044): that of the session the
-    /// agent rule follows, except Bypass permissions, which no session passes on. Manual when there
-    /// is no session at all.
-    #[must_use]
-    pub fn permission_mode_for_new_session(&self, project_id: &str) -> PermissionMode {
-        self.lock()
-            .latest_for(project_id)
-            .map(|entry| entry.session.permission_mode.inherited())
-            .unwrap_or_default()
     }
 
     /// Changes the permission mode of a session the person chose (ADR 0044). Unlike its model, it
@@ -1242,8 +1253,8 @@ impl SessionStore {
     pub fn create_linked_session(&self, from: &str) -> Result<SessionSummary, StoreError> {
         let mut inner = self.lock();
         let original = find(&mut inner.sessions, from)?;
-        let (project_id, agent) = (original.session.project_id.clone(), original.session.agent);
-        inner.create_session(&project_id, agent, Some(from.to_owned()))
+        let (project_id, start) = (original.session.project_id.clone(), original.passed_on());
+        inner.create_session(&project_id, start, Some(from.to_owned()))
     }
 
     /// A session with all of its turns.
@@ -1829,7 +1840,7 @@ mod tests {
     fn a_reply_goes_to_the_driver_of_the_sessions_agent() {
         let (store, demo, claude) = recorded();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
@@ -1845,7 +1856,7 @@ mod tests {
     fn archiving_a_session_ends_its_agent_and_unarchiving_it_does_not() {
         let (store, demo, claude) = recorded();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
 
         store.set_archived(&session.id, true).expect("archived");
@@ -1859,7 +1870,7 @@ mod tests {
     fn deleting_a_session_ends_its_agent() {
         let (store, _demo, claude) = recorded();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
 
         store.delete(&session.id).expect("deleted");
@@ -1871,7 +1882,7 @@ mod tests {
     fn a_reply_to_a_session_deleted_before_it_began_reaches_no_agent() {
         let (store, _demo, claude) = recorded();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
         store.delete(&session.id).expect("deleted");
@@ -1895,17 +1906,17 @@ mod tests {
             .open_folder(Path::new(r"C:\Work\my-app"))
             .expect("a project");
         let talking = store
-            .create_session(&project.id, AgentKind::Claude)
+            .create_session(&project.id, AgentKind::Claude.into())
             .expect("a session");
         let put_away = store
-            .create_session(&project.id, AgentKind::Claude)
+            .create_session(&project.id, AgentKind::Claude.into())
             .expect("a session");
         store.set_archived(&put_away.id, true).expect("archived");
         let trying = store
-            .create_session(&project.id, AgentKind::Demo)
+            .create_session(&project.id, AgentKind::Demo.into())
             .expect("a session");
         store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session elsewhere");
 
         store.remove_project(&project.id).expect("removed");
@@ -1945,7 +1956,7 @@ mod tests {
             .open_folder(Path::new(r"C:\Work\my-app"))
             .expect("a project");
         let session = store
-            .create_session(&project.id, AgentKind::Claude)
+            .create_session(&project.id, AgentKind::Claude.into())
             .expect("a session");
         refuse_writes(&file);
 
@@ -1994,7 +2005,7 @@ mod tests {
             .set(Arc::downgrade(&store))
             .expect("the store is set once");
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
 
         let (done, finished) = mpsc::channel();
@@ -2016,7 +2027,7 @@ mod tests {
     fn a_permission_mode_the_person_chooses_reaches_the_sessions_agent() {
         let (store, demo, claude) = recorded();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
 
         store
@@ -2047,7 +2058,7 @@ mod tests {
             .open_folder(Path::new(r"C:\Work\my-app"))
             .expect("a project");
         let session = store
-            .create_session(&project.id, AgentKind::Demo)
+            .create_session(&project.id, AgentKind::Demo.into())
             .expect("a session");
 
         assert_eq!(project.name, "my-app");
@@ -2085,10 +2096,10 @@ mod tests {
     fn new_sessions_are_listed_newest_first() {
         let store = store();
         let first = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         let second = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
 
         let ids: Vec<String> = store.list().projects[0]
@@ -2103,7 +2114,7 @@ mod tests {
     #[test]
     fn a_session_needs_a_project_that_exists() {
         assert_eq!(
-            store().create_session("nowhere", AgentKind::Demo),
+            store().create_session("nowhere", AgentKind::Demo.into()),
             Err(StoreError::UnknownProject)
         );
     }
@@ -2111,7 +2122,7 @@ mod tests {
     #[test]
     fn times_are_utc_and_in_the_rfc_3339_form() {
         let session = store()
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
 
         // 2026-09-30T14:05:09Z
@@ -2124,7 +2135,7 @@ mod tests {
     fn the_first_message_becomes_the_title_and_the_second_does_not_change_it() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
 
         let turn = store
@@ -2155,7 +2166,7 @@ mod tests {
     fn a_long_first_message_is_cut_with_an_ellipsis() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
 
         store
@@ -2175,7 +2186,7 @@ mod tests {
     fn a_second_message_waits_for_the_reply_to_the_first() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         store.start_turn(&session.id, "one").expect("a turn");
 
@@ -2197,7 +2208,7 @@ mod tests {
     fn a_streamed_reply_ends_up_whole_in_the_session_and_reaches_the_listener() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
@@ -2238,7 +2249,7 @@ mod tests {
     fn a_reply_nobody_listens_to_is_marked_failed_and_frees_the_session() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
@@ -2255,7 +2266,7 @@ mod tests {
     fn a_reply_the_person_stops_ends_as_stopped_and_says_so_to_the_listener() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
@@ -2315,7 +2326,7 @@ mod tests {
     fn stopping_when_no_reply_is_running_does_nothing_and_stopping_a_missing_session_is_an_error() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
 
         assert_eq!(store.stop_turn(&session.id), Ok(()));
@@ -2338,7 +2349,7 @@ mod tests {
     fn an_empty_sessions_agent_can_change_and_one_with_a_message_keeps_its_own() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
 
         store
@@ -2368,7 +2379,7 @@ mod tests {
             let store = store_in(&file);
             let project = store.open_folder(folder.path()).expect("a project");
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
 
             store.set_project(&session.id, &project.id).expect("moved");
@@ -2403,7 +2414,7 @@ mod tests {
         let id = {
             let store = store_in(&file);
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             store
                 .set_agent(&session.id, AgentKind::Claude)
@@ -2422,30 +2433,39 @@ mod tests {
     #[test]
     fn a_new_session_takes_the_agent_of_its_projects_latest_session_else_the_latest_anywhere() {
         let store = store();
-        assert_eq!(store.agent_for_new_session(playground::PLAYGROUND_ID), None);
+        let agent = |project: &str, claude_installed| {
+            store.new_session(project, None, claude_installed).agent
+        };
+        assert_eq!(
+            agent(playground::PLAYGROUND_ID, true),
+            AgentKind::Claude,
+            "with no session at all, Claude when Claude Code is installed"
+        );
+        assert_eq!(
+            agent(playground::PLAYGROUND_ID, false),
+            AgentKind::Demo,
+            "else the Demo agent"
+        );
 
         store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         let project = store
             .open_folder(Path::new(r"C:\Work\app"))
             .expect("a project");
         assert_eq!(
-            store.agent_for_new_session(&project.id),
-            Some(AgentKind::Claude),
+            agent(&project.id, false),
+            AgentKind::Claude,
             "the latest session anywhere"
         );
 
         store
-            .create_session(&project.id, AgentKind::Demo)
+            .create_session(&project.id, AgentKind::Demo.into())
             .expect("a session");
+        assert_eq!(agent(&project.id, true), AgentKind::Demo);
         assert_eq!(
-            store.agent_for_new_session(&project.id),
-            Some(AgentKind::Demo)
-        );
-        assert_eq!(
-            store.agent_for_new_session(playground::PLAYGROUND_ID),
-            Some(AgentKind::Claude),
+            agent(playground::PLAYGROUND_ID, false),
+            AgentKind::Claude,
             "the project's own latest session"
         );
     }
@@ -2500,7 +2520,7 @@ mod tests {
         });
         let store = Arc::new(store_with(Arc::new(DemoDriver::instant()), driver.clone()));
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         let turn = store.start_turn(&session.id, "test it").expect("a turn");
         let replying = {
@@ -2550,7 +2570,7 @@ mod tests {
     fn an_answer_to_a_request_that_does_not_wait_is_refused() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
 
         assert_eq!(
@@ -2590,7 +2610,7 @@ mod tests {
         });
         let store = Arc::new(store_with(driver.clone(), Arc::new(Recording::default())));
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         let turn = store.start_turn(&session.id, "hi").expect("a turn");
         let replying = {
@@ -2686,11 +2706,11 @@ mod tests {
         let agent = Arc::new(Naming::default());
         let store = store_with(Arc::new(DemoDriver::instant()), agent.clone());
         let named_by_its_message = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session")
             .id;
         let named_by_the_person = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session")
             .id;
         store
@@ -2715,7 +2735,7 @@ mod tests {
         let id = {
             let store = store_in_with(&file, &with_claude(agent.clone()));
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
                 .expect("a session");
             let turn = store.start_turn(&session.id, "First").expect("a turn");
             store
@@ -2788,10 +2808,10 @@ mod tests {
             let project = store.open_folder(folder.path()).expect("a project");
             assert!(!project.trusted, "a folder starts untrusted");
             let claude = store
-                .create_session(&project.id, AgentKind::Claude)
+                .create_session(&project.id, AgentKind::Claude.into())
                 .expect("a session");
             let demo = store
-                .create_session(&project.id, AgentKind::Demo)
+                .create_session(&project.id, AgentKind::Demo.into())
                 .expect("a session");
 
             assert_eq!(
@@ -2828,7 +2848,7 @@ mod tests {
         let id = {
             let store = store_in(&file);
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
                 .expect("a session");
             let turn = store
                 .start_turn(&session.id, "Run the tests")
@@ -2897,7 +2917,7 @@ mod tests {
         let id = {
             let store = store_in(&file);
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             let turn = store
                 .start_turn(&session.id, "Remember me")
@@ -2932,7 +2952,7 @@ mod tests {
         let id = {
             let store = store_in(&file);
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             store
                 .start_turn(&session.id, "Never answered")
@@ -2960,7 +2980,7 @@ mod tests {
             let store = store_in(&file);
             for _ in 0..3 {
                 let session = store
-                    .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                    .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                     .expect("a session");
                 let turn = store.start_turn(&session.id, "hi").expect("a turn");
                 earlier.push(session.id);
@@ -2970,7 +2990,7 @@ mod tests {
 
         let store = store_in(&file);
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         let turn = store.start_turn(&session.id, "hi").expect("a turn");
 
@@ -2986,10 +3006,10 @@ mod tests {
     fn the_session_written_in_last_is_listed_first() {
         let store = store();
         let older = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         let newer = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
 
         store.start_turn(&older.id, "Back to this").expect("a turn");
@@ -3011,10 +3031,10 @@ mod tests {
         let (older, newer) = {
             let store = store_in(&file);
             let older = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             let newer = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             store.start_turn(&older.id, "Back to this").expect("a turn");
             (older.id, newer.id)
@@ -3039,7 +3059,7 @@ mod tests {
                 .open_folder(Path::new(r"C:\Work\my-app"))
                 .expect("a project");
             store
-                .create_session(&project.id, AgentKind::Demo)
+                .create_session(&project.id, AgentKind::Demo.into())
                 .expect("a session");
             project
         };
@@ -3098,7 +3118,7 @@ mod tests {
         // The new file is used from now on.
         let session = opened
             .store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         drop(opened.store);
         assert_eq!(
@@ -3127,7 +3147,7 @@ mod tests {
         );
         let session = opened
             .store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session works in memory");
         assert_eq!(opened.store.list().projects[0].sessions[0].id, session.id);
     }
@@ -3139,7 +3159,7 @@ mod tests {
         let id = {
             let store = store_in(&file);
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             let replies = (1..=500)
                 .map(|number| {
@@ -3179,10 +3199,10 @@ mod tests {
             let store = store_in(&file);
             assert_eq!(store.last_open(), None, "nothing was opened yet");
             let first = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             let second = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             store.remember_open(&second.id).expect("remembered");
             store.remember_open(&first.id).expect("remembered");
@@ -3211,7 +3231,7 @@ mod tests {
         let id = {
             let store = store_in(&file);
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             store
                 .rename(&session.id, "  The build fix  ")
@@ -3236,7 +3256,7 @@ mod tests {
     fn a_renamed_session_keeps_its_name_when_its_first_message_is_sent() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         store.rename(&session.id, "Chosen name").expect("renamed");
 
@@ -3257,7 +3277,7 @@ mod tests {
     /// A session with its first message sent, and the name that message gave it.
     fn first_message(store: &SessionStore, prompt: &str) -> String {
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         store.start_turn(&session.id, prompt).expect("a turn");
         session.id
@@ -3316,7 +3336,7 @@ mod tests {
         let (store, _demo, claude) = recorded();
         let told = listen(&store);
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         store.rename(&session.id, "Chosen name").expect("renamed");
         store
@@ -3365,7 +3385,7 @@ mod tests {
     fn a_name_needs_1_to_100_characters_after_trimming() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
 
         assert_eq!(
@@ -3390,7 +3410,7 @@ mod tests {
     fn three_sessions(store: &SessionStore) -> [String; 3] {
         [(); 3].map(|()| {
             store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session")
                 .id
         })
@@ -3505,7 +3525,7 @@ mod tests {
         };
         let store = store_in(&file);
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         let turn = store.start_turn(&session.id, secret).expect("a turn");
         store
@@ -3522,7 +3542,7 @@ mod tests {
     fn deleting_a_session_stops_its_reply() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
@@ -3552,7 +3572,7 @@ mod tests {
         {
             let store = store_in(&file);
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             store.remember_open(&session.id).expect("remembered");
 
@@ -3647,7 +3667,7 @@ mod tests {
     fn an_archived_session_takes_no_message_name_or_pin_until_it_is_unarchived() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         store.set_archived(&session.id, true).expect("archived");
 
@@ -3672,7 +3692,7 @@ mod tests {
     fn archiving_a_session_stops_its_reply() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         let turn = store.start_turn(&session.id, "hello").expect("a turn");
 
@@ -3697,7 +3717,7 @@ mod tests {
     fn an_archived_session_is_not_opened_again_at_the_next_start() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         store.remember_open(&session.id).expect("remembered");
 
@@ -3713,7 +3733,7 @@ mod tests {
             .open_folder(Path::new(r"C:\Work\my-app"))
             .expect("a project");
         let original = store
-            .create_session(&project.id, AgentKind::Demo)
+            .create_session(&project.id, AgentKind::Demo.into())
             .expect("a session");
         store
             .start_turn(&original.id, "The first part")
@@ -3749,7 +3769,7 @@ mod tests {
         let (original, linked) = {
             let store = store_in(&file);
             let original = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             let linked = store
                 .create_linked_session(&original.id)
@@ -3772,7 +3792,7 @@ mod tests {
         let (first, next) = {
             let store = store_in(&file);
             let first = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
                 .expect("a session");
             assert_eq!(store.session(&first.id).expect("it").effort, None);
             store
@@ -3785,15 +3805,14 @@ mod tests {
             );
             store.stop_turn(&first.id).expect("stopped");
             let next = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .create_session(
+                    playground::PLAYGROUND_ID,
+                    store.new_session(playground::PLAYGROUND_ID, None, true),
+                )
                 .expect("a session");
             let linked = store.create_linked_session(&first.id).expect("linked");
             assert_eq!(
                 store.session(&linked.id).expect("it").effort,
-                Some(Effort::ExtraHigh)
-            );
-            assert_eq!(
-                store.effort_for_new_session(playground::PLAYGROUND_ID),
                 Some(Effort::ExtraHigh)
             );
             (first.id, next.id)
@@ -3847,7 +3866,7 @@ mod tests {
         let id = {
             let store = store_in_with(&file, &with_claude(Arc::new(Reporting(two_thirds_full()))));
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
                 .expect("a session");
             assert_eq!(
                 store.session(&session.id).expect("it").context_window,
@@ -3884,7 +3903,7 @@ mod tests {
         let id = {
             let store = store_in(&file);
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
                 .expect("a session");
             assert_eq!(
                 store.session(&session.id).expect("it").model,
@@ -3914,7 +3933,7 @@ mod tests {
     fn the_model_does_not_change_while_a_reply_runs_or_in_an_archived_session() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         store.start_turn(&session.id, "hello").expect("a turn");
 
@@ -3935,32 +3954,102 @@ mod tests {
     }
 
     #[test]
-    fn a_new_session_takes_the_model_of_the_session_its_agent_comes_from() {
+    fn a_new_session_takes_the_model_effort_and_mode_of_the_session_its_agent_comes_from() {
         let store = store();
         let earlier = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         store
             .set_model(&earlier.id, Some(Model::new("opus")))
             .expect("chosen");
+        store
+            .set_effort(&earlier.id, Some(Effort::High))
+            .expect("chosen");
+        store
+            .set_permission_mode(&earlier.id, PermissionMode::Plan)
+            .expect("chosen");
+        let project = store
+            .open_folder(Path::new(r"C:\Work\app"))
+            .expect("a project");
 
-        let next = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
-            .expect("a session");
-        let other_agent = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
-            .expect("a session");
-
+        let inherited = NewSession {
+            agent: AgentKind::Claude,
+            model: Some(Model::new("opus")),
+            effort: Some(Effort::High),
+            permission_mode: PermissionMode::Plan,
+        };
         assert_eq!(
-            store.session(&next.id).expect("it").model,
-            Some(Model::new("opus"))
+            store.new_session(playground::PLAYGROUND_ID, None, false),
+            inherited
         );
         assert_eq!(
-            store.session(&other_agent.id).expect("it").model,
-            None,
-            "another agent starts on its Default"
+            store.new_session(&project.id, Some(AgentKind::Claude), false),
+            inherited,
+            "from the latest session anywhere, when it has the agent asked for"
         );
-        assert_eq!(store.model_for_new_session(playground::PLAYGROUND_ID), None);
+        assert_eq!(
+            store.new_session(playground::PLAYGROUND_ID, Some(AgentKind::Demo), true),
+            NewSession::from(AgentKind::Demo),
+            "another agent starts on its Default, in Manual"
+        );
+    }
+
+    #[test]
+    fn a_session_starts_with_what_was_chosen_and_keeps_it_after_a_restart() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let file = folder.path().join("sessions.db");
+        let chosen = NewSession {
+            agent: AgentKind::Claude,
+            model: Some(Model::new("sonnet")),
+            effort: Some(Effort::Max),
+            permission_mode: PermissionMode::AcceptEdits,
+        };
+        let id = store_in(&file)
+            .create_session(playground::PLAYGROUND_ID, chosen.clone())
+            .expect("a session")
+            .id;
+
+        let session = store_in(&file).session(&id).expect("the session");
+
+        assert_eq!(
+            NewSession {
+                agent: session.agent,
+                model: session.model,
+                effort: session.effort,
+                permission_mode: session.permission_mode,
+            },
+            chosen
+        );
+    }
+
+    #[test]
+    fn a_session_cannot_start_in_bypass_permissions_while_it_is_not_allowed() {
+        let store = store();
+        let bypassing = NewSession {
+            permission_mode: PermissionMode::BypassPermissions,
+            ..AgentKind::Claude.into()
+        };
+
+        assert_eq!(
+            store.create_session(playground::PLAYGROUND_ID, bypassing.clone()),
+            Err(StoreError::BypassNotAllowed)
+        );
+        assert!(
+            store
+                .list()
+                .projects
+                .iter()
+                .all(|listing| listing.sessions.is_empty())
+        );
+
+        store.allow_bypass_permissions(true);
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, bypassing)
+            .expect("a session");
+        assert_eq!(
+            store.session(&session.id).expect("it").permission_mode,
+            PermissionMode::BypassPermissions
+        );
     }
 
     #[test]
@@ -3970,7 +4059,7 @@ mod tests {
         let id = {
             let store = store_in(&file);
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
                 .expect("a session");
             assert_eq!(
                 store.session(&session.id).expect("it").permission_mode,
@@ -3995,7 +4084,7 @@ mod tests {
     fn the_permission_mode_can_change_while_a_reply_runs_but_not_in_an_archived_session() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         store.start_turn(&session.id, "hello").expect("a turn");
 
@@ -4018,7 +4107,7 @@ mod tests {
     fn bypass_permissions_is_refused_while_it_is_not_allowed() {
         let store = store();
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
 
         assert_eq!(
@@ -4042,10 +4131,10 @@ mod tests {
         let (store, demo, claude) = recorded();
         let told = listen(&store);
         let bypassed = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         let planning = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("another session");
         store.allow_bypass_permissions(true);
         store
@@ -4093,18 +4182,23 @@ mod tests {
     fn a_new_session_takes_the_permission_mode_of_the_project_s_latest_session_but_never_bypass() {
         let (store, _demo, claude) = recorded();
         let first = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         store
             .set_permission_mode(&first.id, PermissionMode::Plan)
             .expect("chosen");
 
-        assert_eq!(
-            store.permission_mode_for_new_session(playground::PLAYGROUND_ID),
-            PermissionMode::Plan
-        );
+        let mode = || {
+            store
+                .new_session(playground::PLAYGROUND_ID, None, true)
+                .permission_mode
+        };
+        assert_eq!(mode(), PermissionMode::Plan);
         let second = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(
+                playground::PLAYGROUND_ID,
+                store.new_session(playground::PLAYGROUND_ID, None, true),
+            )
             .expect("a later session");
         assert_eq!(
             store.session(&second.id).expect("it").permission_mode,
@@ -4116,17 +4210,7 @@ mod tests {
             &second.id,
             SessionChange::PermissionMode(PermissionMode::BypassPermissions),
         );
-        assert_eq!(
-            store.permission_mode_for_new_session(playground::PLAYGROUND_ID),
-            PermissionMode::Manual
-        );
-        let third = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
-            .expect("a third session");
-        assert_eq!(
-            store.session(&third.id).expect("it").permission_mode,
-            PermissionMode::Manual
-        );
+        assert_eq!(mode(), PermissionMode::Manual);
         let linked = store.create_linked_session(&second.id).expect("linked");
         assert_eq!(
             store.session(&linked.id).expect("it").permission_mode,
@@ -4143,7 +4227,7 @@ mod tests {
             let store = store_in_with(&file, &with_claude(claude.clone()));
             let told = listen(&store);
             let session = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
                 .expect("a session");
             store.start_turn(&session.id, "plan it").expect("a turn");
 
@@ -4178,7 +4262,7 @@ mod tests {
         let (store, _demo, claude) = recorded();
         let told = listen(&store);
         let session = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
 
         claude.report(
@@ -4208,13 +4292,13 @@ mod tests {
     fn a_linked_session_takes_the_model_of_the_one_it_started_from() {
         let store = store();
         let original = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a session");
         store
             .set_model(&original.id, Some(Model::new("haiku")))
             .expect("chosen");
         store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
             .expect("a later session");
         store
             .set_model(
@@ -4239,13 +4323,13 @@ mod tests {
         let (kept, removed) = {
             let store = store_in(&file);
             let kept = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             let project = store.open_folder(work.path()).expect("a project");
             store.trust_project(&project.id).expect("trusted");
             let [plain, pinned, archived] = [(); 3].map(|()| {
                 store
-                    .create_session(&project.id, AgentKind::Demo)
+                    .create_session(&project.id, AgentKind::Demo.into())
                     .expect("a session")
                     .id
             });
@@ -4319,7 +4403,7 @@ mod tests {
     fn the_playground_cannot_be_removed() {
         let store = store();
         store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
 
         assert_eq!(
@@ -4340,10 +4424,10 @@ mod tests {
             .open_folder(Path::new(r"C:\Work\my-app"))
             .expect("a project");
         let session = store
-            .create_session(&project.id, AgentKind::Demo)
+            .create_session(&project.id, AgentKind::Demo.into())
             .expect("a session");
         let elsewhere = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         let linked = store
             .create_linked_session(&session.id)
@@ -4378,7 +4462,7 @@ mod tests {
         let linked = {
             let store = store_in(&file);
             let original = store
-                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+                .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
                 .expect("a session");
             let linked = store
                 .create_linked_session(&original.id)
@@ -4407,7 +4491,7 @@ mod tests {
     fn an_archived_session_can_start_a_linked_session() {
         let store = store();
         let original = store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo)
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
             .expect("a session");
         store.set_archived(&original.id, true).expect("archived");
 

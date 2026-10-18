@@ -70,9 +70,9 @@ describe("Choosing the effort (ADR 0041)", () => {
     expect(screen.queryByRole("button", { name: /^Effort:/ })).toBeNull();
   });
 
-  it("is chosen on the welcome screen too, and given to the session before its first message", async () => {
+  it("is chosen on the welcome screen too, and the session starts with it", async () => {
     const user = userEvent.setup();
-    const rust = startSessionsRust({ newSessionAgent: "claude", newSessionEffort: "low" });
+    const rust = startSessionsRust({ newSession: { agent: "claude", effort: "low" } });
     renderApp("/");
 
     await choose(user, "Effort: Low", /^Max/);
@@ -81,8 +81,13 @@ describe("Choosing the effort (ADR 0041)", () => {
     await waitFor(() => {
       expect(rust.sent()).toHaveLength(1);
     });
-    expect(rust.callsTo("set_session_effort")).toEqual([{ id: expect.any(String), effort: "max" }]);
-    expect(rust.callsTo("set_session_model")).toEqual([]);
+    expect(rust.callsTo("create_session")).toEqual([
+      {
+        projectId: "playground",
+        start: { agent: "claude", model: null, effort: "max", permissionMode: "manual" },
+      },
+    ]);
+    expect(rust.callsTo("set_session_effort")).toEqual([]);
   });
 });
 
@@ -126,9 +131,9 @@ describe("Choosing the model (ADR 0041)", () => {
     });
   });
 
-  it("is chosen on the welcome screen too, and given to the session before its first message", async () => {
+  it("is chosen on the welcome screen too, and the session starts with it", async () => {
     const user = userEvent.setup();
-    const rust = startSessionsRust({ newSessionAgent: "claude", newSessionModel: "opus" });
+    const rust = startSessionsRust({ newSession: { agent: "claude", model: "opus" } });
     renderApp("/");
 
     await choose(user, "Model: Opus", /^Sonnet/);
@@ -137,13 +142,13 @@ describe("Choosing the model (ADR 0041)", () => {
     await waitFor(() => {
       expect(rust.sent()).toHaveLength(1);
     });
-    const [created] = rust.callsTo("create_session");
-    expect(created).toEqual({ agent: "claude", projectId: "playground" });
-    expect(rust.callsTo("set_session_model")).toEqual([
-      { id: expect.any(String), model: "sonnet" },
+    expect(rust.callsTo("create_session")).toEqual([
+      {
+        projectId: "playground",
+        start: { agent: "claude", model: "sonnet", effort: null, permissionMode: "manual" },
+      },
     ]);
-    const order = rust.calls.map((call) => call.command);
-    expect(order.indexOf("set_session_model")).toBeLessThan(order.indexOf("send_message"));
+    expect(rust.callsTo("set_session_model")).toEqual([]);
   });
 });
 

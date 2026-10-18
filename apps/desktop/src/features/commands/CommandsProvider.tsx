@@ -144,13 +144,13 @@ export function CommandsProvider({ children }: { children: ReactNode }) {
         run: () => {
           const project =
             openSession === undefined ? undefined : findSession(sessionList, openSession);
-          void startSession(undefined, project?.projectId);
+          void startSession(project?.projectId);
         },
       },
       "folder.open": {
         run: () => {
           void openFolder().then(async (project) => {
-            if (project) await startSession(undefined, project.id);
+            if (project) await startSession(project.id);
           });
         },
       },

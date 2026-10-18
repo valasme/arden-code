@@ -58,7 +58,7 @@ fn claude_with(
 
 fn claude_session(store: &SessionStore) -> String {
     store
-        .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+        .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
         .expect("a session")
         .id
 }

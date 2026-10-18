@@ -9,22 +9,12 @@ import { useSettings } from "@/features/settings/useSettings";
 import { formatShortcut } from "@/features/commands/shortcuts";
 import {
   type AgentKind,
-  commands,
   type Effort,
   type Model,
   type PermissionMode,
   type Project,
 } from "@/ipc/bindings";
-import {
-  agentForProjectQuery,
-  effortForProjectQuery,
-  modelForProjectQuery,
-  noSessions,
-  permissionModeForProjectQuery,
-  sessionListQuery,
-} from "@/ipc/queries";
-import { showErrorToast } from "@/lib/errorToasts";
-import { toAppError } from "@/lib/errors";
+import { demoSession, newSessionQuery, noSessions, sessionListQuery } from "@/ipc/queries";
 import { useDraftsStore, WELCOME_DRAFT } from "@/state/drafts";
 
 import { AgentMenu } from "./AgentMenu";
@@ -108,38 +98,25 @@ export function Welcome() {
   const project: Project | undefined = list.projects.find(
     (listing) => listing.project.id === projectId,
   )?.project;
-  // Until Rust has answered, or where there is no Rust, the Demo agent.
-  const ruled = useQuery(agentForProjectQuery(projectId)).data ?? "demo";
-  const agent = chosenAgent ?? ruled;
-  // The model a new session there takes, until the person chooses one (ADR 0041).
-  const inheritedModel = useQuery(modelForProjectQuery(projectId)).data ?? null;
-  const model = chosenModel === undefined ? inheritedModel : chosenModel;
-  const inheritedEffort = useQuery(effortForProjectQuery(projectId)).data ?? null;
-  const effort = chosenEffort === undefined ? inheritedEffort : chosenEffort;
-  // The permission mode a new session takes, never Bypass permissions (ADR 0044).
-  const inheritedMode = useQuery(permissionModeForProjectQuery(projectId)).data ?? "manual";
-  const mode = chosenMode ?? inheritedMode;
+  // What a new session there with the chosen agent starts with, until the person chooses
+  // otherwise (ADR 0041 and 0044). Until Rust has answered, or where there is no Rust, the Demo
+  // agent.
+  const inherited = useQuery(newSessionQuery(projectId, chosenAgent ?? null)).data ?? demoSession;
+  const agent = chosenAgent ?? inherited.agent;
+  const model = chosenModel === undefined ? inherited.model : chosenModel;
+  const effort = chosenEffort === undefined ? inherited.effort : chosenEffort;
+  const mode = chosenMode ?? inherited.permissionMode;
   const catalog = useClaudeCatalog(agent === "claude");
   const runHandled = useHandledSlashCommands();
 
   const start = async (text: string) => {
-    const id = await startSession(agent, projectId);
+    // One call, so a session is made as the menus show it or not at all. Only Claude shows the
+    // model, effort and permission mode; another agent starts as it inherits.
+    const id = await startSession(
+      projectId,
+      agent === "claude" ? { agent, model, effort, permissionMode: mode } : { ...inherited, agent },
+    );
     if (id === undefined) return false;
-    // The session takes the inherited model, effort and permission mode by itself; one chosen here
-    // is given before the message.
-    try {
-      if (agent === "claude" && chosenModel !== undefined) {
-        await commands.setSessionModel(id, chosenModel);
-      }
-      if (agent === "claude" && chosenEffort !== undefined) {
-        await commands.setSessionEffort(id, chosenEffort);
-      }
-      if (agent === "claude" && chosenMode !== undefined) {
-        await commands.setSessionPermissionMode(id, chosenMode);
-      }
-    } catch (error) {
-      showErrorToast(toAppError(error));
-    }
     await send(id, text);
     // The next session starts from what it inherits again.
     forgetWelcomeChoices();

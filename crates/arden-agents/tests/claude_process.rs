@@ -50,7 +50,7 @@ fn send(bin: &Path, project: &Path, prompt: &str) -> Turn {
     let launcher = ProgramLauncher::with_search_path(supervisor, bin.as_os_str().to_owned());
     let store = store_for(project, Arc::new(ClaudeDriver::new(Arc::new(launcher))));
     let session = store
-        .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+        .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
         .expect("a session");
     let turn = store.start_turn(&session.id, prompt).expect("a turn");
     store
@@ -211,7 +211,7 @@ fn a_real_signed_in_claude_code_reports_its_usage_limits() {
 
     let store = store_for(project.path(), Arc::clone(&driver));
     let session = store
-        .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+        .create_session(playground::PLAYGROUND_ID, AgentKind::Claude.into())
         .expect("a session");
     let turn = store
         .start_turn(&session.id, "Say hi, in one word.")
