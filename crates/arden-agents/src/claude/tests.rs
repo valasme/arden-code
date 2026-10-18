@@ -2261,7 +2261,8 @@ fn status(mode: &str) -> Step {
     }))
 }
 
-/// What the driver says about sessions outside their replies' items, as it says it.
+/// What the driver says about sessions outside their replies' items, as it says it. The test hears
+/// it in place of the store, which no longer does: listen after the store is made.
 fn hear_changes(driver: &ClaudeDriver) -> Arc<std::sync::Mutex<Vec<(String, SessionChange)>>> {
     let heard = Arc::new(std::sync::Mutex::new(Vec::new()));
     let hearing = Arc::clone(&heard);
@@ -2328,8 +2329,8 @@ fn a_new_permission_mode_goes_to_the_running_claude_code_at_once_and_is_heard_ba
         status("plan"),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let heard = hear_changes(&driver);
     let store = store(&driver);
+    let heard = hear_changes(&driver);
     let session = claude_session(&store);
     send(&store, &session, "Hello");
 
@@ -2360,8 +2361,8 @@ fn a_permission_mode_claude_code_refuses_leaves_the_one_it_is_in() {
         })),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let heard = hear_changes(&driver);
     let store = store(&driver);
+    let heard = hear_changes(&driver);
     let session = claude_session(&store);
     send(&store, &session, "Hello");
 
@@ -2383,8 +2384,8 @@ fn a_permission_mode_claude_code_takes_itself_during_a_reply_is_heard() {
     let mut script = handshake();
     script.extend([message("Plan it"), status("plan"), success("Planned.")]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let heard = hear_changes(&driver);
     let store = store(&driver);
+    let heard = hear_changes(&driver);
     let session = claude_session(&store);
 
     send(&store, &session, "Plan it");
@@ -2408,8 +2409,8 @@ fn the_mode_claude_code_says_it_started_in_is_followed_when_it_is_not_the_one_as
     ];
     script.extend([message("Hello"), success("Hi.")]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let heard = hear_changes(&driver);
     let store = store(&driver);
+    let heard = hear_changes(&driver);
     let session = claude_session(&store);
     store
         .set_permission_mode(&session, PermissionMode::Auto)
@@ -2599,8 +2600,8 @@ fn a_plan_started_accepting_edits_is_allowed_with_the_mode_and_the_session_follo
         success("Fixed."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let heard = hear_changes(&driver);
     let store = Arc::new(store(&driver));
+    let heard = hear_changes(&driver);
     let session = claude_session(&store);
     store
         .set_permission_mode(&session, PermissionMode::Plan)
@@ -2756,8 +2757,8 @@ fn claude_code_names_a_session_from_its_first_message() {
         success("It is the clock."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let heard = hear_changes(&driver);
     let store = store(&driver);
+    let heard = hear_changes(&driver);
     let session = claude_session(&store);
 
     send(&store, &session, prompt);
@@ -2815,8 +2816,8 @@ fn a_claude_code_that_cannot_name_a_session_changes_nothing() {
         success("One."),
     ]);
     let (scripted, driver) = claude(vec![Ok(script)]);
-    let heard = hear_changes(&driver);
     let store = store(&driver);
+    let heard = hear_changes(&driver);
     let session = claude_session(&store);
 
     send(&store, &session, "First");

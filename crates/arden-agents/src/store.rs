@@ -4,13 +4,13 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::database::{Database, DatabaseError, Order};
-use crate::driver::{Agents, Answer, Control, Flow, PlanAnswer, ReplyRequest};
+use crate::driver::{Agents, Answer, Control, Flow, PlanAnswer, ReplyRequest, SessionChange};
 use crate::model::{
     AgentKind, ApprovalState, Choices, Effort, Item, Model, PermissionMode, PlanState, Project,
     ProjectKind, ProjectListing, QuestionAnswer, QuestionState, Session, SessionList,
@@ -261,6 +261,41 @@ impl Inner {
         Ok(true)
     }
 
+    /// Gives a session the name its agent suggested for its first message (ADR 0050), trimmed, but
+    /// only while its name is still the one its first message gave it: a session the person named,
+    /// before or after that message, keeps their name. Answers the name it took, if it took one.
+    fn name_from_agent(
+        &mut self,
+        session_id: &str,
+        name: &str,
+    ) -> Result<Option<String>, StoreError> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > NAME_LENGTH {
+            return Ok(None);
+        }
+        let last_id = self.last_id;
+        let Self {
+            sessions, database, ..
+        } = self;
+        let entry = find(sessions, session_id)?;
+        entry.load(database)?;
+        let given = entry
+            .session
+            .turns
+            .first()
+            .and_then(|turn| title_of(&turn.prompt));
+        if entry.session.archived_at.is_some() || given.is_none() || entry.session.title != given {
+            return Ok(None);
+        }
+        let mut header = entry.header();
+        header.title = Some(name.to_owned());
+        database
+            .save_session(&header, entry.order, last_id)
+            .map_err(not_saved)?;
+        entry.session.title = header.title;
+        Ok(Some(name.to_owned()))
+    }
+
     /// Starts an empty session in a project, linked to the session it was started from, if any.
     fn create_session(
         &mut self,
@@ -350,9 +385,101 @@ fn set_aside(file: &Path, now: OffsetDateTime) -> std::io::Result<PathBuf> {
     Ok(target)
 }
 
-/// Every project and session the app knows.
-pub struct SessionStore {
+/// What the store tells about a session that changed other than by the person's own command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionEvent {
+    /// The session's permission mode is now `mode` (ADR 0044): its agent changed it, or Bypass
+    /// permissions was turned off. When its agent refused the one chosen, `refused` holds the
+    /// agent's own words and `mode` the one it kept.
+    PermissionModeChanged {
+        session_id: String,
+        mode: PermissionMode,
+        refused: Option<String>,
+    },
+    /// The session's agent named it from its first message (ADR 0050).
+    Named { session_id: String, title: String },
+}
+
+/// Hears what the store tells about its sessions, from whichever thread it happens on.
+pub type SessionEventListener = Arc<dyn Fn(SessionEvent) + Send + Sync>;
+
+/// What the store shares with its agents, which tell it about sessions from their own threads.
+struct Shared {
     inner: Mutex<Inner>,
+    listener: Mutex<Option<SessionEventListener>>,
+}
+
+impl Shared {
+    // A panic while the lock is held cannot leave the sessions half changed in a way that matters
+    // more than losing the whole app to a poisoned lock.
+    fn lock(&self) -> MutexGuard<'_, Inner> {
+        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Tells the listener, if there is one, with no lock held.
+    fn tell(&self, event: SessionEvent) {
+        let listener = self
+            .listener
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        if let Some(listener) = listener {
+            listener(event);
+        }
+    }
+
+    /// Keeps what an agent says about a session, and tells the listener what changed.
+    fn hear(&self, session_id: &str, change: SessionChange) {
+        let event = match change {
+            SessionChange::Named(name) => match self.lock().name_from_agent(session_id, &name) {
+                Ok(Some(title)) => SessionEvent::Named {
+                    session_id: session_id.to_owned(),
+                    title,
+                },
+                Ok(None) => return,
+                Err(error) => {
+                    tracing::warn!(session = %session_id, ?error, "the name the agent gave the session was not kept");
+                    return;
+                }
+            },
+            SessionChange::PermissionMode(mode) => {
+                match self.lock().keep_permission_mode(session_id, mode) {
+                    Ok(true) => SessionEvent::PermissionModeChanged {
+                        session_id: session_id.to_owned(),
+                        mode,
+                        refused: None,
+                    },
+                    Ok(false) => return,
+                    Err(error) => {
+                        tracing::warn!(session = %session_id, ?error, "the permission mode the agent reported was not kept");
+                        return;
+                    }
+                }
+            }
+            SessionChange::PermissionModeRefused { kept, reason } => {
+                tracing::warn!(session = %session_id, %reason, "the agent refused the permission mode");
+                if let Err(error) = self.lock().keep_permission_mode(session_id, kept) {
+                    tracing::warn!(session = %session_id, ?error, "the permission mode the agent kept was not kept");
+                    return;
+                }
+                SessionEvent::PermissionModeChanged {
+                    session_id: session_id.to_owned(),
+                    mode: kept,
+                    refused: Some(reason),
+                }
+            }
+        };
+        self.tell(event);
+    }
+}
+
+/// Every project and session the app knows, and the agents that work in the sessions.
+///
+/// The store calls an agent's driver only once a change is written and its lock is let go: a change
+/// that cannot be written reaches no agent, and an agent that calls back into the store, or takes
+/// its time, holds nothing up.
+pub struct SessionStore {
+    shared: Arc<Shared>,
     /// The driver of each agent, which the store hands each session's work to.
     agents: Agents,
 }
@@ -383,8 +510,7 @@ impl SessionStore {
         last_open: Option<String>,
         agents: Agents,
     ) -> Self {
-        Self {
-            agents,
+        let shared = Arc::new(Shared {
             inner: Mutex::new(Inner {
                 projects,
                 sessions,
@@ -395,7 +521,28 @@ impl SessionStore {
                 bypass_allowed: false,
                 database,
             }),
+            listener: Mutex::new(None),
+        });
+        // An agent outliving the store tells nobody.
+        for agent in agents.all() {
+            let shared: Weak<Shared> = Arc::downgrade(&shared);
+            agent.on_session_changes(Arc::new(move |session_id: &str, change: SessionChange| {
+                if let Some(shared) = shared.upgrade() {
+                    shared.hear(session_id, change);
+                }
+            }));
         }
+        Self { shared, agents }
+    }
+
+    /// Has `listener` hear what the store tells about its sessions, in place of whoever heard it
+    /// before.
+    pub fn on_events(&self, listener: SessionEventListener) {
+        *self
+            .shared
+            .listener
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(listener);
     }
 
     /// Opens the store kept in `file`, which is made when it is not there. The Playground is the
@@ -403,7 +550,7 @@ impl SessionStore {
     /// read is set aside and the store starts empty, and a file that cannot be opened at all leaves
     /// the store in memory.
     #[must_use]
-    pub fn open(file: &Path, playground: &Project, agents: Agents) -> Opened {
+    pub fn open(file: &Path, playground: &Project, agents: &Agents) -> Opened {
         Self::open_at(file, playground, OffsetDateTime::now_utc(), agents)
     }
 
@@ -413,7 +560,7 @@ impl SessionStore {
         file: &Path,
         playground: &Project,
         now: OffsetDateTime,
-        agents: Agents,
+        agents: &Agents,
     ) -> Opened {
         let reason = match Self::read(file, playground, agents.clone()) {
             Ok(store) => {
@@ -473,10 +620,8 @@ impl SessionStore {
         ))
     }
 
-    // A panic while the lock is held cannot leave the sessions half changed in a way that matters
-    // more than losing the whole app to a poisoned lock.
     fn lock(&self) -> MutexGuard<'_, Inner> {
-        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+        self.shared.lock()
     }
 
     /// The sessions as the sidebar lists them: the pinned ones in the order they were pinned, then
@@ -583,9 +728,10 @@ impl SessionStore {
     /// Removes a folder project and deletes all of its sessions, archived and pinned ones too, with
     /// their turns, overwritten in the file as deleting a session does (#72). Its trust goes with
     /// it: the same folder opened again is a new project. Replies running in its sessions stop at
-    /// their driver's next event, and links to its sessions from other projects are dropped.
+    /// their driver's next event, their agents end, and links to its sessions from other projects
+    /// are dropped.
     ///
-    /// Returns the ids of the sessions it deleted, so that their agents can be ended.
+    /// Returns the ids of the sessions it deleted.
     ///
     /// # Errors
     ///
@@ -709,43 +855,6 @@ impl SessionStore {
         Ok(())
     }
 
-    /// Gives a session the name its agent suggested for its first message (ADR 0050), trimmed, but
-    /// only while its name is still the one its first message gave it: a session the person named,
-    /// before or after that message, keeps their name. Answers whether the name changed.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
-    /// [`StoreError::NotSaved`] when the name cannot be written.
-    pub fn name_from_agent(&self, session_id: &str, name: &str) -> Result<bool, StoreError> {
-        let name = name.trim();
-        if name.is_empty() || name.chars().count() > NAME_LENGTH {
-            return Ok(false);
-        }
-        let mut inner = self.lock();
-        let last_id = inner.last_id;
-        let Inner {
-            sessions, database, ..
-        } = &mut *inner;
-        let entry = find(sessions, session_id)?;
-        entry.load(database)?;
-        let given = entry
-            .session
-            .turns
-            .first()
-            .and_then(|turn| title_of(&turn.prompt));
-        if entry.session.archived_at.is_some() || given.is_none() || entry.session.title != given {
-            return Ok(false);
-        }
-        let mut header = entry.header();
-        header.title = Some(name.to_owned());
-        database
-            .save_session(&header, entry.order, last_id)
-            .map_err(not_saved)?;
-        entry.session.title = header.title;
-        Ok(true)
-    }
-
     /// Pins a session to the top of the sidebar, or unpins it (ADR 0036). Pinned sessions are
     /// listed in the order they were pinned; pinning a pinned session leaves it where it is.
     ///
@@ -783,8 +892,9 @@ impl SessionStore {
 
     /// Archives a session, or unarchives it (ADR 0036). An archived session leaves the sidebar's
     /// lists for the archived ones, is no longer pinned, and takes no message, name or pin until it
-    /// is unarchived; a reply that is still running stops at its driver's next event. Archiving an
-    /// archived session leaves it where it is, with its date.
+    /// is unarchived; a reply that is still running stops at its driver's next event, and its agent
+    /// ends until the session is used again (ADR 0039). Archiving an archived session leaves it
+    /// where it is, with its date.
     ///
     /// # Errors
     ///
@@ -836,7 +946,8 @@ impl SessionStore {
     }
 
     /// Deletes a session for good (ADR 0036): from the list, and from the file, where its text is
-    /// overwritten. A reply that is still running stops at its driver's next event.
+    /// overwritten. A reply that is still running stops at its driver's next event, and its agent
+    /// ends; the agent keeps its own conversation.
     ///
     /// # Errors
     ///
@@ -950,7 +1061,8 @@ impl SessionStore {
     }
 
     /// Changes the permission mode of a session the person chose (ADR 0044). Unlike its model, it
-    /// can change while a reply runs: the agent takes it at once.
+    /// can change while a reply runs: a running agent takes it at once, and what becomes of it is
+    /// told as a [`SessionEvent::PermissionModeChanged`].
     ///
     /// # Errors
     ///
@@ -968,51 +1080,56 @@ impl SessionStore {
         if entry.session.archived_at.is_some() {
             return Err(StoreError::Archived);
         }
+        let agent = entry.session.agent;
         if mode == PermissionMode::BypassPermissions && !inner.bypass_allowed {
             return Err(StoreError::BypassNotAllowed);
         }
-        inner.keep_permission_mode(session_id, mode).map(|_| ())
+        inner.keep_permission_mode(session_id, mode)?;
+        drop(inner);
+        // A running agent takes it at once, and says what became of it.
+        self.agents.of(agent).set_permission_mode(session_id, mode);
+        Ok(())
     }
 
-    /// Keeps the permission mode a session's agent says it is in, such as Plan when Claude enters
-    /// it by itself (ADR 0044). Answers whether it changed.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`StoreError::UnknownSession`] when there is no such session, and
-    /// [`StoreError::NotSaved`] when the change cannot be written.
-    pub fn follow_permission_mode(
-        &self,
-        session_id: &str,
-        mode: PermissionMode,
-    ) -> Result<bool, StoreError> {
-        self.lock().keep_permission_mode(session_id, mode)
-    }
-
-    /// Lets Bypass permissions be chosen, or not, as Settings says (ADR 0044). Turned off, every
-    /// session in it goes to Manual at once: answers which did.
-    pub fn allow_bypass_permissions(&self, allowed: bool) -> Vec<String> {
+    /// Lets Bypass permissions be chosen, or not, as Settings says (ADR 0044), and has every agent
+    /// start so that it can be chosen, or not. Turned off, every session in it goes to Manual at
+    /// once, its running agent too, and is told as a [`SessionEvent::PermissionModeChanged`].
+    pub fn allow_bypass_permissions(&self, allowed: bool) {
         let mut inner = self.lock();
         inner.bypass_allowed = allowed;
-        if allowed {
-            return Vec::new();
-        }
-        let bypassed: Vec<String> = inner
+        let bypassed: Vec<(String, AgentKind)> = inner
             .sessions
             .iter()
-            .filter(|entry| entry.session.permission_mode == PermissionMode::BypassPermissions)
-            .map(|entry| entry.session.id.clone())
+            .filter(|entry| {
+                !allowed && entry.session.permission_mode == PermissionMode::BypassPermissions
+            })
+            .map(|entry| (entry.session.id.clone(), entry.session.agent))
             .collect();
-        bypassed
+        let moved: Vec<(String, AgentKind)> = bypassed
             .into_iter()
-            .filter(|id| match inner.keep_permission_mode(id, PermissionMode::Manual) {
+            .filter(|(id, _)| match inner.keep_permission_mode(id, PermissionMode::Manual) {
                 Ok(_) => true,
                 Err(error) => {
                     tracing::warn!(session = %id, ?error, "a session in Bypass permissions could not be moved to Manual");
                     false
                 }
             })
-            .collect()
+            .collect();
+        drop(inner);
+        for agent in self.agents.all() {
+            agent.allow_bypass_permissions(allowed);
+        }
+        for (session_id, agent) in moved {
+            self.agents
+                .of(agent)
+                .set_permission_mode(&session_id, PermissionMode::Manual);
+            tracing::info!(session = %session_id, "Bypass permissions was turned off, so the session is in Manual");
+            self.shared.tell(SessionEvent::PermissionModeChanged {
+                session_id,
+                mode: PermissionMode::Manual,
+                refused: None,
+            });
+        }
     }
 
     /// Changes what a session's agent works with, between messages (ADR 0041).
@@ -1802,7 +1919,7 @@ mod tests {
         let folder = tempfile::tempdir().expect("a temporary folder");
         let file = folder.path().join("sessions.db");
         let claude = Arc::new(Recording::default());
-        let store = store_in_with(&file, with_claude(claude.clone()));
+        let store = store_in_with(&file, &with_claude(claude.clone()));
         let project = store
             .open_folder(Path::new(r"C:\Work\my-app"))
             .expect("a project");
@@ -1842,7 +1959,7 @@ mod tests {
 
         fn end(&self, _session_id: &str) {
             if let Some(store) = self.store.get().and_then(std::sync::Weak::upgrade) {
-                store.list();
+                let _ = store.list();
             }
         }
     }
@@ -1872,6 +1989,24 @@ mod tests {
                 .is_ok(),
             "the store called the agent while it held its lock"
         );
+    }
+
+    #[test]
+    fn a_permission_mode_the_person_chooses_reaches_the_sessions_agent() {
+        let (store, demo, claude) = recorded();
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+
+        store
+            .set_permission_mode(&session.id, PermissionMode::Plan)
+            .expect("chosen");
+
+        assert_eq!(
+            claude.heard(),
+            vec![Heard::Mode(session.id, PermissionMode::Plan)]
+        );
+        assert_eq!(demo.heard(), Vec::new());
     }
 
     #[test]
@@ -2467,11 +2602,11 @@ mod tests {
 
     /// A store kept in `file`, as the app keeps one in its data folder.
     fn store_in(file: &Path) -> SessionStore {
-        store_in_with(file, agents())
+        store_in_with(file, &agents())
     }
 
     /// A store kept in `file` whose sessions are answered by `agents`.
-    fn store_in_with(file: &Path, agents: Agents) -> SessionStore {
+    fn store_in_with(file: &Path, agents: &Agents) -> SessionStore {
         let opened = SessionStore::open(
             file,
             &playground::describe(Path::new(r"C:\Playground")),
@@ -2557,7 +2692,7 @@ mod tests {
         let file = folder.path().join("sessions.db");
         let agent = Arc::new(Conversing::default());
         let id = {
-            let store = store_in_with(&file, with_claude(agent.clone()));
+            let store = store_in_with(&file, &with_claude(agent.clone()));
             let session = store
                 .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
                 .expect("a session");
@@ -2568,7 +2703,7 @@ mod tests {
             session.id
         };
 
-        let store = store_in_with(&file, with_claude(agent.clone()));
+        let store = store_in_with(&file, &with_claude(agent.clone()));
         let turn = store.start_turn(&id, "Second").expect("a turn");
         store.stream_reply(&id, &turn, |_| true).expect("saved");
 
@@ -2598,7 +2733,7 @@ mod tests {
         }
 
         let agent = Arc::new(Conversing::default());
-        let store = store_in_with(&file, with_claude(agent));
+        let store = store_in_with(&file, &with_claude(agent));
 
         let list = store.list();
         let sessions: Vec<_> = list
@@ -2905,7 +3040,7 @@ mod tests {
         let moved = SessionStore::open(
             &file,
             &playground::describe(Path::new(r"D:\Moved")),
-            agents(),
+            &agents(),
         );
 
         assert!(moved.problem.is_none());
@@ -2923,7 +3058,7 @@ mod tests {
             &file,
             &playground::describe(Path::new(r"C:\Playground")),
             now,
-            agents(),
+            &agents(),
         );
 
         let kept = folder.path().join("sessions.invalid-20260930-140509.db");
@@ -2961,7 +3096,7 @@ mod tests {
         let opened = SessionStore::open(
             &file,
             &playground::describe(Path::new(r"C:\Playground")),
-            agents(),
+            &agents(),
         );
 
         assert!(
@@ -3111,16 +3246,40 @@ mod tests {
         store.session(id).expect("the session").title
     }
 
+    /// Listens to what the store tells about its sessions. The answer reads what it was told so far.
+    fn listen(store: &SessionStore) -> impl Fn() -> Vec<SessionEvent> {
+        let told = Arc::new(Mutex::new(Vec::new()));
+        let keep = told.clone();
+        store.on_events(Arc::new(move |event| {
+            keep.lock().expect("what it was told").push(event);
+        }));
+        move || told.lock().expect("what it was told").clone()
+    }
+
+    fn named(session_id: &str, title: &str) -> SessionEvent {
+        SessionEvent::Named {
+            session_id: session_id.to_owned(),
+            title: title.to_owned(),
+        }
+    }
+
+    fn mode_changed(session_id: &str, mode: PermissionMode) -> SessionEvent {
+        SessionEvent::PermissionModeChanged {
+            session_id: session_id.to_owned(),
+            mode,
+            refused: None,
+        }
+    }
+
     #[test]
     fn the_agent_names_a_session_whose_name_is_still_its_first_message() {
-        let store = store();
+        let (store, _demo, claude) = recorded();
+        let told = listen(&store);
         let id = first_message(&store, "Why does my login test time out on CI?");
 
-        let named = store
-            .name_from_agent(&id, "Login test timeout in CI")
-            .expect("named");
+        claude.report(&id, SessionChange::Named("Login test timeout in CI".into()));
 
-        assert!(named);
+        assert_eq!(told(), vec![named(&id, "Login test timeout in CI")]);
         assert_eq!(
             title(&store, &id).as_deref(),
             Some("Login test timeout in CI")
@@ -3133,7 +3292,8 @@ mod tests {
 
     #[test]
     fn a_session_the_person_named_keeps_its_name_when_the_agent_names_it() {
-        let store = store();
+        let (store, _demo, claude) = recorded();
+        let told = listen(&store);
         let session = store
             .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
             .expect("a session");
@@ -3142,23 +3302,24 @@ mod tests {
             .start_turn(&session.id, "The first message")
             .expect("a turn");
 
-        let named = store
-            .name_from_agent(&session.id, "Something else")
-            .expect("answered");
+        claude.report(&session.id, SessionChange::Named("Something else".into()));
 
-        assert!(!named);
+        assert_eq!(told(), Vec::new());
         assert_eq!(title(&store, &session.id).as_deref(), Some("Chosen name"));
     }
 
     #[test]
     fn a_session_renamed_after_its_first_message_keeps_that_name() {
-        let store = store();
+        let (store, _demo, claude) = recorded();
+        let told = listen(&store);
         let id = first_message(&store, "The first message");
         store
             .rename(&id, "Renamed while Claude thought")
             .expect("renamed");
 
-        assert!(!store.name_from_agent(&id, "Late name").expect("answered"));
+        claude.report(&id, SessionChange::Named("Late name".into()));
+
+        assert_eq!(told(), Vec::new());
         assert_eq!(
             title(&store, &id).as_deref(),
             Some("Renamed while Claude thought")
@@ -3167,12 +3328,15 @@ mod tests {
 
     #[test]
     fn a_name_from_the_agent_is_trimmed_and_an_empty_one_changes_nothing() {
-        let store = store();
+        let (store, _demo, claude) = recorded();
+        let told = listen(&store);
         let id = first_message(&store, "The first message");
 
-        assert!(!store.name_from_agent(&id, "   ").expect("answered"));
+        claude.report(&id, SessionChange::Named("   ".into()));
+        assert_eq!(told(), Vec::new());
         assert_eq!(title(&store, &id).as_deref(), Some("The first message"));
-        assert!(store.name_from_agent(&id, "  A name  ").expect("named"));
+        claude.report(&id, SessionChange::Named("  A name  ".into()));
+        assert_eq!(told(), vec![named(&id, "A name")]);
         assert_eq!(title(&store, &id).as_deref(), Some("A name"));
     }
 
@@ -3660,7 +3824,7 @@ mod tests {
         let folder = tempfile::tempdir().expect("a temporary folder");
         let file = folder.path().join("sessions.db");
         let id = {
-            let store = store_in_with(&file, with_claude(Arc::new(Reporting(two_thirds_full()))));
+            let store = store_in_with(&file, &with_claude(Arc::new(Reporting(two_thirds_full()))));
             let session = store
                 .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
                 .expect("a session");
@@ -3854,7 +4018,8 @@ mod tests {
     #[test]
     fn bypass_permissions_can_be_chosen_while_allowed_and_turning_it_off_moves_its_sessions_to_manual()
      {
-        let store = store();
+        let (store, demo, claude) = recorded();
+        let told = listen(&store);
         let bypassed = store
             .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
             .expect("a session");
@@ -3869,9 +4034,26 @@ mod tests {
             .set_permission_mode(&planning.id, PermissionMode::Plan)
             .expect("chosen");
 
-        let moved = store.allow_bypass_permissions(false);
+        store.allow_bypass_permissions(false);
 
-        assert_eq!(moved, vec![bypassed.id.clone()]);
+        assert_eq!(
+            told(),
+            vec![mode_changed(&bypassed.id, PermissionMode::Manual)]
+        );
+        assert_eq!(
+            claude.heard(),
+            vec![
+                Heard::Bypass(true),
+                Heard::Mode(bypassed.id.clone(), PermissionMode::BypassPermissions),
+                Heard::Mode(planning.id.clone(), PermissionMode::Plan),
+                Heard::Bypass(false),
+                Heard::Mode(bypassed.id.clone(), PermissionMode::Manual),
+            ]
+        );
+        assert_eq!(
+            demo.heard(),
+            vec![Heard::Bypass(true), Heard::Bypass(false)]
+        );
         assert_eq!(
             store.session(&bypassed.id).expect("it").permission_mode,
             PermissionMode::Manual
@@ -3888,7 +4070,7 @@ mod tests {
 
     #[test]
     fn a_new_session_takes_the_permission_mode_of_the_project_s_latest_session_but_never_bypass() {
-        let store = store();
+        let (store, _demo, claude) = recorded();
         let first = store
             .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
             .expect("a session");
@@ -3909,9 +4091,10 @@ mod tests {
         );
 
         // Claude Code can report Bypass permissions, but no session inherits it.
-        store
-            .follow_permission_mode(&second.id, PermissionMode::BypassPermissions)
-            .expect("followed");
+        claude.report(
+            &second.id,
+            SessionChange::PermissionMode(PermissionMode::BypassPermissions),
+        );
         assert_eq!(
             store.permission_mode_for_new_session(playground::PLAYGROUND_ID),
             PermissionMode::Manual
@@ -3935,21 +4118,28 @@ mod tests {
         let folder = tempfile::tempdir().expect("a temporary folder");
         let file = folder.path().join("sessions.db");
         let id = {
-            let store = store_in(&file);
+            let claude = Arc::new(Recording::default());
+            let store = store_in_with(&file, &with_claude(claude.clone()));
+            let told = listen(&store);
             let session = store
                 .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
                 .expect("a session");
             store.start_turn(&session.id, "plan it").expect("a turn");
 
+            claude.report(
+                &session.id,
+                SessionChange::PermissionMode(PermissionMode::Plan),
+            );
             assert_eq!(
-                store.follow_permission_mode(&session.id, PermissionMode::Plan),
-                Ok(true),
+                told(),
+                vec![mode_changed(&session.id, PermissionMode::Plan)],
                 "followed during the reply"
             );
-            assert_eq!(
-                store.follow_permission_mode(&session.id, PermissionMode::Plan),
-                Ok(false)
+            claude.report(
+                &session.id,
+                SessionChange::PermissionMode(PermissionMode::Plan),
             );
+            assert_eq!(told().len(), 1, "the same mode again changes nothing");
             session.id
         };
 
@@ -3959,6 +4149,37 @@ mod tests {
                 .expect("the session")
                 .permission_mode,
             PermissionMode::Plan
+        );
+    }
+
+    #[test]
+    fn a_mode_the_agent_refuses_is_told_with_its_reason_and_the_mode_it_kept() {
+        let (store, _demo, claude) = recorded();
+        let told = listen(&store);
+        let session = store
+            .create_session(playground::PLAYGROUND_ID, AgentKind::Claude)
+            .expect("a session");
+
+        claude.report(
+            &session.id,
+            SessionChange::PermissionModeRefused {
+                kept: PermissionMode::Manual,
+                reason: "Auto mode is not available on this plan".into(),
+            },
+        );
+
+        assert_eq!(
+            told(),
+            vec![SessionEvent::PermissionModeChanged {
+                session_id: session.id.clone(),
+                mode: PermissionMode::Manual,
+                refused: Some("Auto mode is not available on this plan".into()),
+            }],
+            "told although the mode it kept is the one the session had"
+        );
+        assert_eq!(
+            store.session(&session.id).expect("it").permission_mode,
+            PermissionMode::Manual
         );
     }
 

@@ -363,7 +363,7 @@ fn create_main_window(
 /// file (ADR 0035), keeping what went wrong with it, if anything, for the page. The session that
 /// was open last time waits for the page, when the person asked for it to be restored. Each
 /// session's work goes to its agent in `agents`.
-fn manage_sessions(app: &tauri::App, paths: &AppPaths, on_startup: OnStartup, agents: Agents) {
+fn manage_sessions(app: &tauri::App, paths: &AppPaths, on_startup: OnStartup, agents: &Agents) {
     let folder = paths.playground_dir();
     let playground = playground::ensure(&folder).unwrap_or_else(|error| {
         tracing::error!(%error, "could not create the Playground folder");
@@ -373,6 +373,8 @@ fn manage_sessions(app: &tauri::App, paths: &AppPaths, on_startup: OnStartup, ag
     app.manage(sessions::SessionsNotice::after(opened.problem.as_ref()));
     app.manage(sessions::PendingOpen::at_start(on_startup, &opened.store));
     let store: sessions::Sessions = Arc::new(opened.store);
+    sessions::report_events_to(app.handle(), &store);
+    sessions::follow_bypass_setting(&app.state::<SettingsService>(), &store);
     app.manage(store);
     app.manage(sessions::Files::default());
 }
@@ -388,16 +390,10 @@ fn make_supervisor(paths: &AppPaths) -> Option<Arc<Supervisor>> {
     }
 }
 
-/// Keeps the supervisor and the Claude driver for the commands, and has the driver report to the
-/// page.
+/// Keeps the supervisor and the Claude driver for what is not about one session, and has the
+/// driver report the usage limits to the page.
 fn manage_programs(app: &tauri::App, supervisor: Option<Arc<Supervisor>>, claude: agents::Claude) {
     claude.report_usage_to(app.handle(), &app.state::<SettingsService>());
-    claude.report_session_changes_to(app.handle(), &app.state::<sessions::Sessions>());
-    claude.follow_bypass_setting(
-        app.handle(),
-        &app.state::<SettingsService>(),
-        &app.state::<sessions::Sessions>(),
-    );
     app.manage(claude);
     let playground = sessions::playground_folder(&app.state::<sessions::Sessions>());
     app.manage(plugins::Plugins(supervisor.as_ref().zip(playground).map(
@@ -582,7 +578,7 @@ pub fn run() {
                 demo: Arc::new(DemoDriver::new()),
                 claude: claude.0.clone(),
             };
-            manage_sessions(app, &paths, started_with.general.on_startup, agents);
+            manage_sessions(app, &paths, started_with.general.on_startup, &agents);
             manage_programs(app, supervisor, claude);
             app.manage(updates::Updates::default());
             app.manage(paths);
