@@ -1219,7 +1219,7 @@
   },
   {
     "name": "clipboard-win",
-    "version": "5.4.1",
+    "version": "5.4.3",
     "license": "BSL-1.0",
     "kind": "crate"
   },
@@ -3937,7 +3937,7 @@
   },
   {
     "name": "rustls-webpki",
-    "version": "0.103.15",
+    "version": "0.103.16",
     "license": "ISC",
     "kind": "crate"
   },
