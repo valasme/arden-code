@@ -4,7 +4,7 @@ const zoom = {
   label: "Zoom",
   description: "Makes everything larger or smaller, from 80 to 200 percent.",
 };
-const theme = { label: "Theme", description: "Light or dark, or the same as Windows." };
+const theme = { label: "Theme", description: "Light or dark, or the same as the system." };
 
 describe("matchesSearch", () => {
   it("finds a setting by a part of its name, in any case", () => {
@@ -14,12 +14,12 @@ describe("matchesSearch", () => {
   });
 
   it("finds a setting by a word in its description", () => {
-    expect(matchesSearch(theme, "windows")).toBe(true);
+    expect(matchesSearch(theme, "system")).toBe(true);
     expect(matchesSearch(zoom, "larger")).toBe(true);
   });
 
   it("needs every word, wherever each one is", () => {
-    expect(matchesSearch(theme, "dark windows")).toBe(true);
+    expect(matchesSearch(theme, "dark system")).toBe(true);
     expect(matchesSearch(theme, "dark zoom")).toBe(false);
     expect(matchesSearch(theme, "  theme   light ")).toBe(true);
   });

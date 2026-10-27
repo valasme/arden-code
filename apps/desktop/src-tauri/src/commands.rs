@@ -1,14 +1,13 @@
 //! Commands the UI can call that belong to no other area: the app and the system it runs on, its
 //! window, links and pages. Each one returns a typed `AppError` on failure (ADR 0008).
 
-use crate::{notifications, restart};
+use crate::{notifications, platform, restart};
 use arden_core::AppInfo;
 use arden_core::error::{AppError, ErrorCode};
 use arden_core::links;
 use arden_core::paths::AppPaths;
 use arden_core::reset;
 use arden_settings::service::SettingsService;
-use arden_windows::preferences;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::path::PathBuf;
@@ -32,14 +31,20 @@ pub fn app_info() -> Result<AppInfo, AppError> {
 
 /// What the About page shows besides the app's own version.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct SystemInfo {
-    /// The Windows version, such as `Windows 11 24H2 (build 26100.1234)`.
-    pub windows: String,
-    /// The version of the web engine (`WebView2`) that draws the window.
-    pub webview: String,
+    /// The platform as people name it: `Windows` or `Linux`.
+    pub system_name: String,
+    /// The system's version, such as `Windows 11 24H2 (build 26100.1234)` or
+    /// `Ubuntu 24.04.5 LTS (Linux 6.8.0-45-generic)`.
+    pub system: String,
+    /// The web engine that draws the window: `WebView2` or `WebKitGTK`.
+    pub web_engine_name: String,
+    /// Its version.
+    pub web_engine: String,
 }
 
-/// The Windows and `WebView2` versions.
+/// The system's and the web engine's names and versions.
 ///
 /// # Errors
 ///
@@ -50,8 +55,10 @@ pub struct SystemInfo {
 #[specta::specta]
 pub fn get_system_info() -> Result<SystemInfo, AppError> {
     Ok(SystemInfo {
-        windows: preferences::windows_version(),
-        webview: tauri::webview_version().unwrap_or_else(|_| "unknown".to_owned()),
+        system_name: platform::SYSTEM_NAME.to_owned(),
+        system: platform::system_version(),
+        web_engine_name: platform::WEB_ENGINE_NAME.to_owned(),
+        web_engine: tauri::webview_version().unwrap_or_else(|_| "unknown".to_owned()),
     })
 }
 
@@ -60,12 +67,14 @@ pub fn get_system_info() -> Result<SystemInfo, AppError> {
 pub(crate) fn system_info_text() -> String {
     let app = arden_core::app_info();
     format!(
-        "{} {}\nBuild: {} ({})\nWindows: {}\nWebView2: {}",
+        "{} {}\nBuild: {} ({})\n{}: {}\n{}: {}",
         app.name,
         app.version,
         app.commit,
         app.build_date,
-        preferences::windows_version(),
+        platform::SYSTEM_NAME,
+        platform::system_version(),
+        platform::WEB_ENGINE_NAME,
         tauri::webview_version().unwrap_or_else(|_| "unknown".to_owned()),
     )
 }
@@ -81,19 +90,34 @@ pub struct PagePoint {
 /// the page, under the Window menu button or at the pointer, or where Windows puts it for
 /// Alt+Space when no point is given.
 ///
-/// The title bar is drawn by the UI, so Windows' own menu has to be asked for.
+/// The title bar is drawn by the UI, so Windows' own menu has to be asked for. On Linux the desktop
+/// owns the window's menu, the page offers none, and this does nothing (ADR 0060).
 ///
 /// # Errors
 ///
 /// `ARD-WIN-001` when the window handle is missing or Windows refuses the request.
-// Tauri hands commands their window by value; there is no way to ask for a reference.
+// Tauri hands commands their window by value; there is no way to ask for a reference. Every
+// command returns a `Result` (ADR 0008), even where, as on Linux, it cannot fail.
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(not(windows), allow(clippy::unnecessary_wraps))]
 #[tauri::command]
 #[specta::specta]
 pub fn show_system_menu(
     window: tauri::WebviewWindow,
     at: Option<PagePoint>,
 ) -> Result<(), AppError> {
+    #[cfg(windows)]
+    return show_windows_menu(&window, at);
+    #[cfg(not(windows))]
+    {
+        let _ = (window, at);
+        Ok(())
+    }
+}
+
+/// Opens Windows' own window menu, as [`show_system_menu`] says.
+#[cfg(windows)]
+fn show_windows_menu(window: &tauri::WebviewWindow, at: Option<PagePoint>) -> Result<(), AppError> {
     let failed = |error: &dyn std::fmt::Display| {
         AppError::new(ErrorCode::WindowsSystemMenu).with_details(error.to_string())
     };

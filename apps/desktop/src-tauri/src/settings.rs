@@ -2,12 +2,12 @@
 //! Windows' text size and regional format. Each one returns a typed `AppError` on failure (ADR 0008).
 
 use crate::commands::{FileKind, choose_file};
+use crate::platform::preferences;
 use arden_core::error::{AppError, ErrorCode};
 use arden_core::paths::AppPaths;
 use arden_settings::service::SettingsService;
 use arden_settings::settings::{SettingChange, SettingKey, Settings};
 use arden_settings::store;
-use arden_windows::preferences;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, State};

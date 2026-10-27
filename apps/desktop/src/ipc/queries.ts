@@ -62,14 +62,14 @@ export const settingsQuery = queryOptions({
   staleTime: Number.POSITIVE_INFINITY,
 });
 
-/** The Windows text size and regional format. Rust announces every change, like the settings. */
+/** The system's text size and regional format. Rust announces every change, like the settings. */
 export const systemPreferencesQuery = queryOptions({
   queryKey: ["system-preferences"],
   queryFn: () => (isTauri() ? commands.getSystemPreferences() : fallbackSystemPreferences()),
   staleTime: Number.POSITIVE_INFINITY,
 });
 
-/** The Windows and WebView2 versions. They do not change while the app runs. */
+/** The system's and the web engine's names and versions. They do not change while the app runs. */
 export const systemInfoQuery = queryOptions({
   queryKey: ["system-info"],
   queryFn: () => commands.getSystemInfo(),

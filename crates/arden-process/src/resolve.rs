@@ -1,11 +1,13 @@
-//! Finding a program on `PATH` the way Windows does, with two differences that keep it safe.
+//! Finding a program on `PATH` the way the platform does, with differences that keep it safe.
 //!
 //! Windows looks in the current folder first, so a program a project happens to contain can take
 //! the place of the one the person installed. Here only the folders of `PATH` are searched, and
-//! only absolute ones. And Windows takes the first match in the order of `PATHEXT`, which can be a
-//! `.cmd` script in one folder ahead of a real `.exe` in another; here a real program wins.
+//! only absolute ones, on every platform. And Windows takes the first match in the order of
+//! `PATHEXT`, which can be a `.cmd` script in one folder ahead of a real `.exe` in another; here a
+//! real program wins. Linux has no extensions: a program is the file with its own name that the
+//! person may run, as a shell finds it.
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 /// What a program file is, which decides how it may be started.
@@ -97,12 +99,76 @@ pub fn resolve(name: &str, search_path: &OsStr, path_ext: &OsStr) -> Option<Reso
     None
 }
 
-/// Finds `name` with the `PATH` and `PATHEXT` of this process.
+/// Finds `name` in the folders of `search_path` the way Linux does: a file with that very name,
+/// which may be a link, that the person may run. Every such file gets its arguments as they are,
+/// a script included, as no shell reads them. Returns nothing for a name that is a path.
+#[must_use]
+pub fn resolve_executable(name: &str, search_path: &OsStr) -> Option<Resolved> {
+    if !is_bare_name(name) {
+        return None;
+    }
+    std::env::split_paths(search_path)
+        .filter(|folder| folder.is_absolute())
+        .map(|folder| folder.join(name))
+        .find(|candidate| may_run(candidate))
+        .map(|path| Resolved {
+            path,
+            kind: ProgramKind::Executable,
+        })
+}
+
+/// Whether the path is a file, or a link to one, that someone may run.
+#[cfg(unix)]
+fn may_run(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::metadata(path)
+        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
+}
+
+/// Whether the path is a file. Only Unix records who may run one.
+#[cfg(not(unix))]
+fn may_run(path: &Path) -> bool {
+    path.is_file()
+}
+
+/// How the platform turns a program's name into its file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Lookup {
+    /// Windows: the name with each of the extensions `PATHEXT` lists ([`resolve`]).
+    Extensions(OsString),
+    /// Linux: the name itself, when the person may run it ([`resolve_executable`]).
+    Executable,
+}
+
+impl Lookup {
+    /// The lookup of the platform this runs on, with the `PATHEXT` of this process on Windows.
+    #[must_use]
+    pub fn of_this_platform() -> Self {
+        if cfg!(windows) {
+            Self::Extensions(
+                std::env::var_os("PATHEXT").unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into()),
+            )
+        } else {
+            Self::Executable
+        }
+    }
+
+    /// Finds `name` in the folders of `search_path`.
+    #[must_use]
+    pub fn find(&self, name: &str, search_path: &OsStr) -> Option<Resolved> {
+        match self {
+            Self::Extensions(path_ext) => resolve(name, search_path, path_ext),
+            Self::Executable => resolve_executable(name, search_path),
+        }
+    }
+}
+
+/// Finds `name` with the `PATH` of this process, the way the platform does.
 #[must_use]
 pub fn resolve_from_environment(name: &str) -> Option<Resolved> {
     let search_path = std::env::var_os("PATH").unwrap_or_default();
-    let path_ext = std::env::var_os("PATHEXT").unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
-    resolve(name, &search_path, &path_ext)
+    Lookup::of_this_platform().find(name, &search_path)
 }
 
 /// Whether the path names a script that `cmd.exe` would run.
@@ -207,6 +273,8 @@ mod tests {
         assert_eq!(found.path, first.path().join("claude.exe"));
     }
 
+    // Windows does not tell `claude.exe` from `CLAUDE.EXE`; Linux does.
+    #[cfg(windows)]
     #[test]
     fn extensions_are_read_without_regard_to_case() {
         let bin = folder_with(&["claude.exe"]);
@@ -280,5 +348,104 @@ mod tests {
         assert!(is_script(Path::new(r"C:\npm\CODEX.BAT")));
         assert!(!is_script(Path::new(r"C:\bin\codex.exe")));
         assert!(!is_script(Path::new(r"C:\bin\codex")));
+    }
+
+    /// A folder with files that may be run, and others that may not.
+    #[cfg(unix)]
+    fn folder_with_programs(programs: &[&str], others: &[&str]) -> TempDir {
+        use std::os::unix::fs::PermissionsExt;
+
+        let folder = folder_with(others);
+        for program in programs {
+            let path = folder.path().join(program);
+            fs::write(&path, "#!/bin/sh\n").expect("a program");
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).expect("runnable");
+        }
+        folder
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn linux_finds_a_program_by_its_own_name() {
+        let bin = folder_with_programs(&["claude"], &[]);
+
+        let found = resolve_executable("claude", &search(&[bin.path()]));
+
+        assert_eq!(
+            found,
+            Some(Resolved {
+                path: bin.path().join("claude"),
+                kind: ProgramKind::Executable
+            })
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn linux_skips_a_file_nobody_may_run_for_a_program_in_a_later_folder() {
+        let first = folder_with_programs(&[], &["claude"]);
+        let second = folder_with_programs(&["claude"], &[]);
+
+        let found = resolve_executable("claude", &search(&[first.path(), second.path()]));
+
+        assert_eq!(
+            found.map(|found| found.path),
+            Some(second.path().join("claude"))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn linux_follows_a_link_to_a_program_as_npm_installs_one() {
+        let package = folder_with_programs(&["cli.js"], &[]);
+        let bin = tempfile::tempdir().expect("a temporary folder");
+        std::os::unix::fs::symlink(package.path().join("cli.js"), bin.path().join("claude"))
+            .expect("a link");
+
+        let found = resolve_executable("claude", &search(&[bin.path()]));
+
+        assert_eq!(
+            found.map(|found| found.path),
+            Some(bin.path().join("claude"))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn linux_never_takes_a_folder_or_a_name_that_is_a_path() {
+        let bin = folder_with_programs(&[], &[]);
+        fs::create_dir(bin.path().join("claude")).expect("a folder");
+        let path = search(&[bin.path()]);
+
+        assert_eq!(resolve_executable("claude", &path), None);
+        for name in ["", ".", "..", "sub/claude", "../claude", "claude\n"] {
+            assert_eq!(resolve_executable(name, &path), None, "{name:?}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn linux_never_searches_a_relative_folder() {
+        assert_eq!(resolve_executable("sh", OsStr::new(".:bin")), None);
+    }
+
+    #[test]
+    fn each_platform_looks_its_own_way() {
+        let lookup = Lookup::of_this_platform();
+
+        if cfg!(windows) {
+            assert!(matches!(lookup, Lookup::Extensions(_)));
+        } else {
+            assert_eq!(lookup, Lookup::Executable);
+        }
+    }
+
+    #[test]
+    fn the_windows_lookup_uses_the_extensions_it_was_given() {
+        let bin = folder_with(&["claude.cmd"]);
+
+        let found = Lookup::Extensions(".CMD".into()).find("claude", &search(&[bin.path()]));
+
+        assert_eq!(found.map(|found| found.kind), Some(ProgramKind::Script));
     }
 }

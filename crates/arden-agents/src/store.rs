@@ -2050,19 +2050,26 @@ mod tests {
         assert!(listing[0].sessions.is_empty());
     }
 
+    /// A folder of the person's work, as the platform writes it.
+    fn work(name: &str) -> std::path::PathBuf {
+        if cfg!(windows) {
+            Path::new(r"C:\Work").join(name)
+        } else {
+            Path::new("/work").join(name)
+        }
+    }
+
     #[test]
     fn an_opened_folder_becomes_a_project_named_after_it_and_can_have_sessions() {
         let store = store();
 
-        let project = store
-            .open_folder(Path::new(r"C:\Work\my-app"))
-            .expect("a project");
+        let project = store.open_folder(&work("my-app")).expect("a project");
         let session = store
             .create_session(&project.id, AgentKind::Demo.into())
             .expect("a session");
 
         assert_eq!(project.name, "my-app");
-        assert_eq!(project.path, r"C:\Work\my-app");
+        assert_eq!(project.path, work("my-app").display().to_string());
         assert_eq!(project.kind, crate::model::ProjectKind::Folder);
         let listing = store.list().projects;
         assert_eq!(listing.len(), 2, "the Playground and the folder");
@@ -4383,16 +4390,10 @@ mod tests {
         };
         {
             let store = store_in(&file);
-            let first = store
-                .open_folder(Path::new(r"C:\Work\first"))
-                .expect("a project");
-            store
-                .open_folder(Path::new(r"C:\Work\second"))
-                .expect("a project");
+            let first = store.open_folder(&work("first")).expect("a project");
+            store.open_folder(&work("second")).expect("a project");
             store.remove_project(&first.id).expect("removed");
-            store
-                .open_folder(Path::new(r"C:\Work\third"))
-                .expect("a project");
+            store.open_folder(&work("third")).expect("a project");
             assert_eq!(names(&store), ["Playground", "second", "third"]);
         }
 

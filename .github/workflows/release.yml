@@ -1,6 +1,7 @@
 name: Release
 
-# Builds, signs and uploads a release when release-please tags a version. It is switched off: it
+# Builds, signs and uploads a release when release-please tags a version: the Windows installer and
+# the Linux packages, with one latest.json for both. It is switched off: it
 # does nothing until the repository variable RELEASES_ENABLED is "true". Try everything first with
 # the "Release trial" workflow, which publishes nothing.
 
@@ -15,8 +16,77 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # The Linux packages (ADR 0062): a .deb, an .rpm and an AppImage, each with its update signature,
+  # and the part of latest.json that lists them. Built on the oldest Ubuntu the packages support, as
+  # a program needs the C library of the machine that built it or a newer one.
+  linux:
+    name: Build the Linux packages
+    if: ${{ vars.RELEASES_ENABLED == 'true' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # sign the build provenance
+      attestations: write # store the build provenance
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The update signing key must exist
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "The TAURI_SIGNING_PRIVATE_KEY secret is not set. Without it the update signature cannot be made, and no installed copy could ever update." >&2
+            exit 1
+          fi
+
+      - name: Install the system libraries Tauri builds against
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev file
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build the packages
+        run: pnpm --filter @arden/desktop exec tauri build
+
+      - name: Find the packages and their signatures, and make the Linux part of latest.json
+        id: files
+        run: scripts/linux-release.sh "${GITHUB_REF_NAME#v}" "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}" "$(node -e 'console.log(require("./apps/desktop/src-tauri/tauri.conf.json").plugins.updater.pubkey)')"
+
+      - name: Attest where the packages came from
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            release/*.deb
+            release/*.rpm
+            release/*.AppImage
+
+      - name: Hand the packages to the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release
+          path: release
+          retention-days: 1
+          if-no-files-found: error
+
   release:
     name: Build and upload the release
+    needs: linux
     if: ${{ vars.RELEASES_ENABLED == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 60
@@ -81,6 +151,12 @@ jobs:
           Remove-Item $pfx
           pnpm --filter @arden/desktop exec tauri signer sign "${{ steps.files.outputs.installer }}"
 
+      - name: Take the Linux packages
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release
+          path: linux-release
+
       - name: Make latest.json
         shell: pwsh
         run: |
@@ -88,7 +164,7 @@ jobs:
           $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/" + [uri]::EscapeDataString("${{ steps.files.outputs.name }}")
           # Refuses a signature the app would refuse: one made with any key but the one it trusts.
           $trustedKey = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).plugins.updater.pubkey
-          node scripts/latest-json.ts --version $version --url $url --signature-file "${{ steps.files.outputs.signature }}" --trusted-key $trustedKey > latest.json
+          node scripts/latest-json.ts --version $version --url $url --signature-file "${{ steps.files.outputs.signature }}" --merge linux-release/latest-linux.json --trusted-key $trustedKey > latest.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Attest where the installer came from
@@ -100,4 +176,6 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.ref_name }}" "${{ steps.files.outputs.installer }}" "${{ steps.files.outputs.signature }}" latest.json --clobber
+        run: |
+          $linux = Get-ChildItem linux-release -File | Where-Object Name -ne "latest-linux.json" | ForEach-Object FullName
+          gh release upload "${{ github.ref_name }}" "${{ steps.files.outputs.installer }}" "${{ steps.files.outputs.signature }}" @linux latest.json --clobber

@@ -118,8 +118,10 @@ export function AboutTab() {
       version: app.version,
       commit: app.commit,
       date: app.buildDate,
-      windows: system.windows,
-      webview: system.webview,
+      systemName: system.systemName,
+      system: system.system,
+      webEngineName: system.webEngineName,
+      webEngine: system.webEngine,
     });
     writeClipboard(text)
       .then(() => {
@@ -164,8 +166,12 @@ export function AboutTab() {
               : undefined
           }
         />
-        <Fact label={t("settings.about.windows")} value={system?.windows} />
-        <Fact label={t("settings.about.webview")} value={system?.webview} />
+        {/* Product names, which are not translated: Windows and WebView2, or Linux and WebKitGTK. */}
+        <Fact label={system?.systemName ?? t("settings.about.system")} value={system?.system} />
+        <Fact
+          label={system?.webEngineName ?? t("settings.about.webEngine")}
+          value={system?.webEngine}
+        />
       </dl>
 
       <div className="flex flex-wrap gap-2 border-b border-border py-4">

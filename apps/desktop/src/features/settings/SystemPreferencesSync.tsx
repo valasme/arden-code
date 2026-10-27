@@ -5,7 +5,7 @@ import { readAgain, systemPreferencesQuery } from "@/ipc/queries";
 import { useTauriListener } from "@/lib/useTauriListener";
 
 /**
- * Keeps the Windows text size and regional format on screen in step with Windows: Rust notices a
+ * Keeps the system's text size and regional format on screen in step with the system: Rust notices a
  * change and sends it as an event, and they are read again once listening starts. Draws nothing.
  */
 export function SystemPreferencesSync() {

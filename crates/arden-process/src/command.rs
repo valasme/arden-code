@@ -39,7 +39,7 @@ pub enum SpawnError {
     UnsafeArguments,
     /// An argument holds a character that cannot be passed to a program.
     InvalidArgument,
-    /// Windows could not start it, or the log file could not be made.
+    /// The system could not start it, or the log file could not be made.
     Io(String),
 }
 

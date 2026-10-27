@@ -8,12 +8,18 @@
 use std::io;
 use std::process::Child;
 
-use arden_windows::process::Identity;
+use crate::platform::process::Identity;
 
 use crate::restart;
 
 /// The exit code with which the app asks the restarter to run it again.
+#[cfg(windows)]
 pub const RESTART_EXIT_CODE: i32 = tauri::RESTART_EXIT_CODE;
+/// The exit code with which the app asks the restarter to run it again. Linux keeps only the low
+/// eight bits of an exit code, so Tauri's (`i32::MAX`) would arrive as 255, which programs also end
+/// with on failure; 75 is "try again" (`EX_TEMPFAIL`).
+#[cfg(not(windows))]
+pub const RESTART_EXIT_CODE: i32 = 75;
 
 /// The variable that tells the app that the restarter runs it.
 const RESTARTER_VARIABLE: &str = "ARDEN_CODE_RESTARTER";
@@ -53,25 +59,38 @@ pub fn supervise(mut start: impl FnMut(Option<Identity>) -> io::Result<Child>) -
     let mut previous = None;
     loop {
         let mut app = start(previous)?;
+        // Read before the wait: once it is collected, Linux forgets when the process started.
+        let identity = Identity::of(&app);
         let code = app.wait()?.code().unwrap_or(1);
         if code != RESTART_EXIT_CODE {
             return Ok(code);
         }
-        previous = Some(Identity::of(&app)?);
+        previous = Some(identity?);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::os::windows::process::CommandExt;
     use std::process::Command;
 
     use super::*;
 
     /// A stand-in for the app that exits with `code`.
+    #[cfg(windows)]
     fn exits_with(code: i32) -> io::Result<Child> {
+        use std::os::windows::process::CommandExt;
+
         Command::new("cmd")
             .raw_arg(format!("/c exit {code}"))
+            .spawn()
+    }
+
+    /// A stand-in for the app that exits with `code`.
+    #[cfg(unix)]
+    fn exits_with(code: i32) -> io::Result<Child> {
+        Command::new("/bin/sh")
+            .arg("-c")
+            .arg(format!("exit {code}"))
             .spawn()
     }
 

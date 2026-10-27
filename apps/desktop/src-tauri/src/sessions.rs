@@ -389,7 +389,7 @@ pub fn set_session_project(
     Ok(())
 }
 
-/// Asks the person for a folder with Windows' dialog, and adds it as a project (ADR 0039). Nothing
+/// Asks the person for a folder with the system's dialog, and adds it as a project (ADR 0039). Nothing
 /// when they cancel. A folder opened before is the same project.
 ///
 /// # Errors

@@ -1,8 +1,11 @@
 import {
   buildLatestJson,
   checkSignedWith,
+  joinPlatforms,
+  list,
   minisignKeyId,
   parseArguments,
+  platformsOf,
   type Manifest,
 } from "../../../../scripts/latest-json";
 
@@ -113,5 +116,54 @@ describe("The key an installer was signed with", () => {
   it("refuses text that is not a key or a signature", () => {
     expect(() => minisignKeyId("not base64 of anything")).toThrow(/not a minisign/u);
     expect(() => minisignKeyId("")).toThrow(/not a minisign/u);
+  });
+});
+
+describe("One manifest for Windows and Linux", () => {
+  const linux = buildLatestJson({
+    ...manifest,
+    platforms: {
+      "linux-x86_64-appimage": { url: "https://example.com/a.AppImage", signature: "sig-a" },
+      "linux-x86_64": { url: "https://example.com/a.AppImage", signature: "sig-a" },
+      "linux-x86_64-deb": { url: "https://example.com/a.deb", signature: "sig-d" },
+    },
+  });
+
+  it("reads the platforms another build listed, for the same version", () => {
+    expect(Object.keys(platformsOf(linux, "1.2.3"))).toEqual([
+      "linux-x86_64-appimage",
+      "linux-x86_64",
+      "linux-x86_64-deb",
+    ]);
+    expect(platformsOf(linux, "1.2.3")["linux-x86_64-deb"]).toEqual({
+      url: "https://example.com/a.deb",
+      signature: "sig-d",
+    });
+  });
+
+  it("refuses a manifest made for another version", () => {
+    expect(() => platformsOf(linux, "1.2.4")).toThrow(/version 1.2.3/u);
+  });
+
+  it("joins them to Windows' entry, and refuses a platform listed twice", () => {
+    const joined = joinPlatforms(manifest.platforms, platformsOf(linux, "1.2.3"));
+
+    expect(Object.keys(joined)).toEqual([
+      "windows-x86_64",
+      "linux-x86_64-appimage",
+      "linux-x86_64",
+      "linux-x86_64-deb",
+    ]);
+    expect(() =>
+      joinPlatforms(joined, { "windows-x86_64": manifest.platforms["windows-x86_64"]! }),
+    ).toThrow(/twice/u);
+  });
+
+  it("reads a comma-separated list, as --platform and --merge take", () => {
+    expect(list("linux-x86_64-appimage, linux-x86_64,")).toEqual([
+      "linux-x86_64-appimage",
+      "linux-x86_64",
+    ]);
+    expect(list(undefined)).toEqual([]);
   });
 });

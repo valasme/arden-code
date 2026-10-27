@@ -2,6 +2,7 @@
 //! bug reports. Each one returns a typed `AppError` on failure (ADR 0008).
 
 use crate::commands::{FileKind, choose_file, system_info_text};
+use crate::platform::preferences;
 use arden_core::error::{AppError, ErrorCode};
 use arden_core::paths::AppPaths;
 use arden_diagnostics::logging::{self, UiLevel};
@@ -9,7 +10,6 @@ use arden_diagnostics::redact::Redactor;
 use arden_diagnostics::{bundle, crash, entries};
 use arden_settings::service::SettingsService;
 use arden_settings::store;
-use arden_windows::preferences;
 use serde::Deserialize;
 use specta::Type;
 use tauri::{AppHandle, State};
@@ -99,7 +99,7 @@ pub fn bug_report_url(system_info: &str) -> String {
 ///
 /// # Errors
 ///
-/// `ARD-APP-001` when Windows cannot open the browser.
+/// `ARD-APP-001` when the system cannot open the browser.
 // Tauri hands commands their app handle by value.
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command]

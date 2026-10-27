@@ -18,7 +18,8 @@ export const commands = {
 	 *  the page, under the Window menu button or at the pointer, or where Windows puts it for
 	 *  Alt+Space when no point is given.
 	 * 
-	 *  The title bar is drawn by the UI, so Windows' own menu has to be asked for.
+	 *  The title bar is drawn by the UI, so Windows' own menu has to be asked for. On Linux the desktop
+	 *  owns the window's menu, the page offers none, and this does nothing (ADR 0060).
 	 * 
 	 *  # Errors
 	 * 
@@ -132,7 +133,7 @@ export const commands = {
 	 */
 	getSystemPreferences: () => __TAURI_INVOKE<SystemPreferences>("get_system_preferences"),
 	/**
-	 *  The Windows and `WebView2` versions.
+	 *  The system's and the web engine's names and versions.
 	 * 
 	 *  # Errors
 	 * 
@@ -201,7 +202,7 @@ export const commands = {
 	 * 
 	 *  # Errors
 	 * 
-	 *  `ARD-APP-001` when Windows cannot open the browser.
+	 *  `ARD-APP-001` when the system cannot open the browser.
 	 */
 	openBugReport: () => __TAURI_INVOKE<null>("open_bug_report"),
 	/**
@@ -539,7 +540,7 @@ export const commands = {
 	 */
 	setSessionProject: (id: string, projectId: string) => __TAURI_INVOKE<null>("set_session_project", { id, projectId }),
 	/**
-	 *  Asks the person for a folder with Windows' dialog, and adds it as a project (ADR 0039). Nothing
+	 *  Asks the person for a folder with the system's dialog, and adds it as a project (ADR 0039). Nothing
 	 *  when they cancel. A folder opened before is the same project.
 	 * 
 	 *  # Errors
@@ -830,7 +831,7 @@ export type Appearance = {
 	theme: Theme,
 	/**  How large everything is, from 80 to 200 percent. */
 	zoom: number,
-	/**  Make the app larger or smaller with the Windows text size setting, on top of the zoom. */
+	/**  Make the app larger or smaller with the system's text size setting, on top of the zoom. */
 	followTextSize: boolean,
 	/**  The size of code text, from 11 to 20 pixels. */
 	codeFontSize: number,
@@ -1598,10 +1599,17 @@ export type StatusKind =
 
 /**  What the About page shows besides the app's own version. */
 export type SystemInfo = {
-	/**  The Windows version, such as `Windows 11 24H2 (build 26100.1234)`. */
-	windows: string,
-	/**  The version of the web engine (`WebView2`) that draws the window. */
-	webview: string,
+	/**  The platform as people name it: `Windows` or `Linux`. */
+	systemName: string,
+	/**
+	 *  The system's version, such as `Windows 11 24H2 (build 26100.1234)` or
+	 *  `Ubuntu 24.04.5 LTS (Linux 6.8.0-45-generic)`.
+	 */
+	system: string,
+	/**  The web engine that draws the window: `WebView2` or `WebKitGTK`. */
+	webEngineName: string,
+	/**  Its version. */
+	webEngine: string,
 };
 
 /**  What Windows says about the text size and the regional format. */

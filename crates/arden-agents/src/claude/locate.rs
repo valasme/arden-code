@@ -7,7 +7,7 @@ use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
 
 use arden_process::command::Arg;
-use arden_process::resolve::{self, ProgramKind, Resolved};
+use arden_process::resolve::{Lookup, ProgramKind, Resolved};
 use arden_process::supervisor::Supervisor;
 
 use crate::detect::parse_version;
@@ -39,14 +39,17 @@ fn is_program(path: &Path) -> bool {
         .is_ok_and(|()| &start == b"MZ")
 }
 
-/// Finds Claude Code in the folders of `search_path`: a real `claude.exe`, or, behind npm's
-/// `claude.cmd`, the npm package's own program. The wrapper itself is never read.
+/// Finds Claude Code in the folders of `search_path`, the way `lookup` finds programs: on Windows a
+/// real `claude.exe`, or, behind npm's `claude.cmd`, the npm package's own program, and on Linux
+/// the `claude` the person may run. The wrapper itself is never read.
 ///
 /// # Errors
 ///
 /// Says why there is none to start.
-pub fn find(search_path: &OsStr, path_ext: &OsStr) -> Result<Resolved, Missing> {
-    let found = resolve::resolve("claude", search_path, path_ext).ok_or(Missing::NotInstalled)?;
+pub fn find(search_path: &OsStr, lookup: &Lookup) -> Result<Resolved, Missing> {
+    let found = lookup
+        .find("claude", search_path)
+        .ok_or(Missing::NotInstalled)?;
     if found.kind == ProgramKind::Executable {
         return Ok(found);
     }
@@ -62,15 +65,14 @@ pub fn find(search_path: &OsStr, path_ext: &OsStr) -> Result<Resolved, Missing> 
     })
 }
 
-/// Finds Claude Code with the `PATH` and `PATHEXT` of this process.
+/// Finds Claude Code with the `PATH` of this process, the way the platform finds programs.
 ///
 /// # Errors
 ///
 /// Says why there is none to start.
 pub fn find_from_environment() -> Result<Resolved, Missing> {
     let search_path = std::env::var_os("PATH").unwrap_or_default();
-    let path_ext = std::env::var_os("PATHEXT").unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
-    find(&search_path, &path_ext)
+    find(&search_path, &Lookup::of_this_platform())
 }
 
 /// The numbers of a version such as `2.1.286` or `3.0.0-beta.1`, a missing part counting as
@@ -163,7 +165,10 @@ mod tests {
 
     use super::*;
 
-    const PATH_EXT: &str = ".COM;.EXE;.BAT;.CMD";
+    /// The way Windows finds programs, with the extensions it lists by default.
+    fn windows() -> Lookup {
+        Lookup::Extensions(".COM;.EXE;.BAT;.CMD".into())
+    }
 
     /// A file Windows would take for a program: it starts the way every Windows program does.
     fn program_at(path: &Path) {
@@ -177,7 +182,7 @@ mod tests {
         program_at(&bin.path().join("claude.exe"));
 
         assert_eq!(
-            find(bin.path().as_os_str(), OsStr::new(PATH_EXT)),
+            find(bin.path().as_os_str(), &windows()),
             Ok(Resolved {
                 path: bin.path().join("claude.exe"),
                 kind: ProgramKind::Executable
@@ -195,7 +200,7 @@ mod tests {
         program_at(&real);
 
         assert_eq!(
-            find(npm.path().as_os_str(), OsStr::new(PATH_EXT)),
+            find(npm.path().as_os_str(), &windows()),
             Ok(Resolved {
                 path: real,
                 kind: ProgramKind::Executable
@@ -209,7 +214,7 @@ mod tests {
         fs::write(npm.path().join("claude.cmd"), "@echo off\r\n").expect("the wrapper");
 
         assert_eq!(
-            find(npm.path().as_os_str(), OsStr::new(PATH_EXT)),
+            find(npm.path().as_os_str(), &windows()),
             Err(Missing::NpmWrapperOnly)
         );
 
@@ -221,7 +226,7 @@ mod tests {
         fs::write(&placeholder, "echo the install step did not run").expect("a placeholder");
 
         assert_eq!(
-            find(npm.path().as_os_str(), OsStr::new(PATH_EXT)),
+            find(npm.path().as_os_str(), &windows()),
             Err(Missing::NpmWrapperOnly)
         );
     }
@@ -231,7 +236,7 @@ mod tests {
         let empty = tempfile::tempdir().expect("a folder");
 
         assert_eq!(
-            find(empty.path().as_os_str(), OsStr::new(PATH_EXT)),
+            find(empty.path().as_os_str(), &windows()),
             Err(Missing::NotInstalled)
         );
     }
@@ -244,5 +249,40 @@ mod tests {
         for version in ["2.1.222", "2.0.999", "1.9.999", "2.1", "", "unknown"] {
             assert!(!recent_enough(version), "{version}");
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod linux_tests {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    #[test]
+    fn the_claude_the_person_may_run_is_found_as_it_is() {
+        let bin = tempfile::tempdir().expect("a folder");
+        let claude = bin.path().join("claude");
+        fs::write(&claude, "#!/bin/sh\n").expect("a program");
+        fs::set_permissions(&claude, fs::Permissions::from_mode(0o755)).expect("runnable");
+
+        assert_eq!(
+            find(bin.path().as_os_str(), &Lookup::Executable),
+            Ok(Resolved {
+                path: claude,
+                kind: ProgramKind::Executable
+            })
+        );
+    }
+
+    #[test]
+    fn a_claude_nobody_may_run_is_not_installed() {
+        let bin = tempfile::tempdir().expect("a folder");
+        fs::write(bin.path().join("claude"), "#!/bin/sh\n").expect("a file");
+
+        assert_eq!(
+            find(bin.path().as_os_str(), &Lookup::Executable),
+            Err(Missing::NotInstalled)
+        );
     }
 }

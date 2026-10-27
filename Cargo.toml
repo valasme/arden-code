@@ -5,6 +5,7 @@ members = [
   "crates/arden-cli",
   "crates/arden-core",
   "crates/arden-diagnostics",
+  "crates/arden-linux",
   "crates/arden-process",
   "crates/arden-settings",
   "crates/arden-windows",
@@ -23,6 +24,7 @@ authors = ["valasme"]
 arden-agents = { path = "crates/arden-agents" }
 arden-core = { path = "crates/arden-core" }
 arden-diagnostics = { path = "crates/arden-diagnostics" }
+arden-linux = { path = "crates/arden-linux" }
 arden-process = { path = "crates/arden-process" }
 arden-settings = { path = "crates/arden-settings" }
 arden-windows = { path = "crates/arden-windows" }

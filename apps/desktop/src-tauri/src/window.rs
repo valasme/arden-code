@@ -152,6 +152,11 @@ pub fn prepare_main_window(
 
     // If the web engine's page process stops, the page is reloaded and the person is told.
     crate::webview::recover_from_failures(&window)?;
+    crate::webview::apply_engine_settings(
+        &window,
+        settings.advanced.hardware_acceleration,
+        settings.appearance.smooth_scrolling,
+    )?;
 
     window.set_theme(native_theme(theme))?;
     let (r, g, b, a) = startup_background(starts_dark(theme, window.theme()? == Theme::Dark));

@@ -53,7 +53,7 @@ test.describe("Advanced settings in the real app", () => {
         await openAdvanced(app.page);
         await expect(app.page.getByRole("button", { name: "Close" })).toBeVisible();
 
-        await app.page.getByRole("switch", { name: "Use the Windows title bar" }).click();
+        await app.page.getByRole("switch", { name: "Use the system title bar" }).click();
 
         await expect.poll(() => frameHeight(app.pid)).toBeGreaterThan(25);
         await expect(app.page.getByRole("button", { name: "Close" })).toBeHidden();
@@ -61,7 +61,7 @@ test.describe("Advanced settings in the real app", () => {
           app.page.getByRole("button", { name: /^Search or run a command/ }),
         ).toBeVisible();
 
-        await app.page.getByRole("switch", { name: "Use the Windows title bar" }).click();
+        await app.page.getByRole("switch", { name: "Use the system title bar" }).click();
 
         await expect.poll(() => frameHeight(app.pid)).toBeLessThan(10);
         await expect(app.page.getByRole("button", { name: "Close" })).toBeVisible();

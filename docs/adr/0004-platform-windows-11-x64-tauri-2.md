@@ -1,6 +1,6 @@
 # 0004. Windows 11 x64 on Tauri 2
 
-- Status: Accepted
+- Status: Superseded by [0057](0057-linux-x64-as-a-second-platform.md)
 - Date: 2026-09-29
 
 ## Context

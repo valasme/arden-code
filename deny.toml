@@ -1,13 +1,18 @@
 # cargo-deny: security advisories, licenses, banned and duplicate crates (ADR 0020).
 
 [graph]
-targets = ["x86_64-pc-windows-msvc"]
+targets = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
 
 [advisories]
 version = 2
 yanked = "deny"
 ignore = [
   { id = "RUSTSEC-2024-0436", reason = "paste is only a compile-time macro used by specta (typed IPC); unmaintained, not vulnerable. Revisit when specta moves to pastey." },
+  # Linux only (ADR 0057): these reach the app through Tauri's own Linux stack, not a choice of ours.
+  { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is a compile-time macro of glib 0.18, which Tauri's GTK 3 windowing uses on Linux; unmaintained, not vulnerable. Goes when Tauri leaves GTK 3." },
+  { id = "RUSTSEC-2026-0370", reason = "zvariant is zbus's, used on Linux by the notification and opener plugins over D-Bus; unmaintained, not vulnerable. Revisit when the plugins move off zbus 5." },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names is zbus's, as zvariant above; unmaintained, not vulnerable." },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive is a compile-time macro of zbus, as zvariant above; unmaintained, not vulnerable." },
 ]
 
 [licenses]

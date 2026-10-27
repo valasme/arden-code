@@ -195,7 +195,7 @@ describe("General → Regional format", () => {
 
     const group = await screen.findByRole("radiogroup", { name: "Regional format" });
 
-    expect(within(group).getByRole("radio", { name: "Same as Windows" })).toBeChecked();
+    expect(within(group).getByRole("radio", { name: "Same as the system" })).toBeChecked();
     // A Greek regional format, although the text of the interface is English.
     expect(
       await screen.findByText("Example: 30/9/2026, 1.234.567,89, πριν από 5 λεπτά"),
@@ -231,12 +231,12 @@ describe("General → Regional format", () => {
   });
 });
 
-describe("Appearance → Follow Windows text size", () => {
+describe("Appearance → Follow the system text size", () => {
   it("is on by default, and saves a switch off", async () => {
     const calls = startApp();
     const user = userEvent.setup();
     renderTab("appearance");
-    const toggle = await screen.findByRole("switch", { name: "Follow Windows text size" });
+    const toggle = await screen.findByRole("switch", { name: "Follow the system text size" });
     expect(toggle).toBeChecked();
 
     await user.click(toggle);
@@ -259,7 +259,7 @@ describe("Appearance → Theme", () => {
     });
     expect(screen.getByRole("radio", { name: "Light" })).not.toBeChecked();
     const group = screen.getByRole("radiogroup", { name: "Theme" });
-    expect(within(group).getByRole("radio", { name: "Same as Windows" })).not.toBeChecked();
+    expect(within(group).getByRole("radio", { name: "Same as the system" })).not.toBeChecked();
   });
 
   it("applies a choice at once, before the save has finished, and then saves it", async () => {

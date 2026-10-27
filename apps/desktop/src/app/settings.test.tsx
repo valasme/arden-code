@@ -282,7 +282,7 @@ describe("the appearance settings", () => {
 
     expect(getComputedStyle(root).fontSize).toBe("16px");
     expect(getComputedStyle(document.body).fontSize).toBe("13px");
-    const description = screen.getByText(/Light or dark, or the same as Windows/);
+    const description = screen.getByText(/Light or dark, or the same as the system/);
     expect(getComputedStyle(description).fontSize).toBe("12px");
   });
 
@@ -383,7 +383,7 @@ describe("searching the settings", () => {
   it("finds a setting by a word in its description", async () => {
     startApp();
 
-    await search("windows");
+    await search("system");
 
     const results = await screen.findByRole("list", { name: "Search results" });
     expect(
@@ -392,10 +392,10 @@ describe("searching the settings", () => {
         .map((h) => h.textContent),
     ).toEqual([
       "Theme",
-      "Follow Windows text size",
+      "Follow the system text size",
       "Reduce motion",
       "Desktop notifications",
-      "Use the Windows title bar",
+      "Use the system title bar",
     ]);
   });
 

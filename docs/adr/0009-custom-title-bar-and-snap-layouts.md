@@ -31,3 +31,8 @@ open since 2022). Community plugins handle it, but each has only a few thousand 
 - If Windows cannot make the overlay, it is logged and the button works without Snap Layouts.
 - The window's minimum width is 500 px (it was 800): Windows asks for 500 or less, or a window does not fit the zones of a layout. The sidebar (180 px at least) and the session view (320 px at least) fit in it.
 - Tests: the overlay is driven with real Windows messages in `crates/arden-windows/tests/snap_layouts.rs`; the page's side in `TitleBar.test.tsx`, also at 150% scaling; the real app in `e2e/titlebar.spec.ts` asks Windows what is at the Maximize button and how narrow the window can be. The rest is in [the title bar checklist](../title-bar-checklist.md).
+
+## Linux (ADR 0060)
+
+Linux keeps the title bar the app draws, with Linux window buttons and no Window menu or Snap Layouts:
+see [0060](0060-the-linux-window-frame.md).

@@ -1,7 +1,7 @@
 name: Release trial
 
-# Builds everything a release needs (the installer, its update signature and latest.json) and
-# publishes none of it. Run it by hand, or let it run when a file that shapes a release changes, so a
+# Builds everything a release needs (the Windows installer, the Linux packages, their update
+# signatures and latest.json) and publishes none of it. Run it by hand, or let it run when a file that shapes a release changes, so a
 # broken release is found on a pull request and not on release day.
 
 on:
@@ -10,9 +10,11 @@ on:
     paths:
       - ".github/workflows/release*.yml"
       - "apps/desktop/src-tauri/tauri.conf.json"
+      - "apps/desktop/src-tauri/tauri.linux.conf.json"
       - "apps/desktop/src-tauri/installer/**"
       - "apps/desktop/src-tauri/Cargo.toml"
       - "scripts/latest-json.ts"
+      - "scripts/linux-release.sh"
       - "packaging/**"
       - "release-please-config.json"
 
@@ -113,5 +115,76 @@ jobs:
             ${{ steps.files.outputs.installer }}
             ${{ steps.files.outputs.signature }}
             latest.json
+          retention-days: 3
+          if-no-files-found: error
+
+  linux:
+    name: Trial Linux packages (nothing is published)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the system libraries Tauri builds against
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev file
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      # As on Windows: the real key when it is a secret, otherwise one made just now.
+      - name: Choose the update signing key
+        env:
+          REAL_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          REAL_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ -n "$REAL_KEY" ]; then
+            { echo "TAURI_SIGNING_PRIVATE_KEY<<KEY_END"; echo "$REAL_KEY"; echo "KEY_END"; } >> "$GITHUB_ENV"
+            echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$REAL_KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "TRUSTED_KEY=$(node -e 'console.log(require("./apps/desktop/src-tauri/tauri.conf.json").plugins.updater.pubkey)')" >> "$GITHUB_ENV"
+            echo "Signing with the real update key."
+          else
+            key="$RUNNER_TEMP/trial.key"
+            pnpm --filter @arden/desktop exec tauri signer generate --ci -p trial-key -w "$key"
+            echo "TAURI_SIGNING_PRIVATE_KEY=$key" >> "$GITHUB_ENV"
+            echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=trial-key" >> "$GITHUB_ENV"
+            echo "::warning::The TAURI_SIGNING_PRIVATE_KEY secret is not set, so this trial signed with a throwaway key."
+          fi
+
+      - name: Build the packages
+        run: pnpm --filter @arden/desktop exec tauri build
+
+      - name: Find the packages and their signatures, and make the Linux part of latest.json
+        run: |
+          version="$(node -e 'console.log(require("./apps/desktop/src-tauri/tauri.conf.json").version ?? "")')"
+          if [ -z "$version" ]; then version="$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"; fi
+          scripts/linux-release.sh "$version" "https://github.com/${{ github.repository }}/releases/download/v$version" "${TRUSTED_KEY:-}"
+
+      - name: Install the .deb, check the terminal command, and remove it
+        run: |
+          sudo apt-get install -y ./release/*.deb
+          test -x /usr/bin/arden-code
+          arden-code --version
+          test -f "/usr/share/applications/Arden Code.desktop"
+          sudo apt-get remove -y arden-code
+
+      - name: Keep the results for a few days
+        uses: actions/upload-artifact@v4
+        with:
+          name: trial-release-linux
+          path: release
           retention-days: 3
           if-no-files-found: error

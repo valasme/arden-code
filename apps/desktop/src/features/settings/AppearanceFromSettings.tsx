@@ -9,7 +9,7 @@ import { useSettings } from "./useSettings";
 
 /**
  * Puts the appearance settings on the page, and keeps them there as they change: the theme, the
- * zoom (with the Windows text size), the code font size and ligatures, and whether motion is
+ * zoom (with the system's text size), the code font size and ligatures, and whether motion is
  * reduced. Draws nothing.
  */
 export function AppearanceFromSettings() {

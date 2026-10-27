@@ -101,7 +101,7 @@ interface Options {
   newSession?: Partial<NewSession>;
   /** Whether Settings → Agents allows Bypass permissions (ADR 0044). */
   allowBypassPermissions?: boolean;
-  /** The folder the person picks in Windows' dialog, or null when they cancel. */
+  /** The folder the person picks in the system's dialog, or null when they cancel. */
   pickedFolder?: Project | null;
   /** What Claude Code says it can do (ADR 0042). Nothing, until it has been heard. */
   catalog?: Catalog;
@@ -109,7 +109,7 @@ interface Options {
   usageLimits?: UsageLimits;
   /** The default transcript view in the settings (ADR 0051). */
   transcriptView?: TranscriptView;
-  /** The Reduce motion setting (ADR 0023). Same as Windows by default. */
+  /** The Reduce motion setting (ADR 0023). Same as the system by default. */
   reduceMotion?: ReduceMotion;
   /** The plugins Claude Code has installed (ADR 0053). None by default. */
   installedPlugins?: InstalledPlugin[];

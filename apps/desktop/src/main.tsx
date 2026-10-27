@@ -6,7 +6,7 @@ import {
   motionIsReduced,
   paintAppearance,
   paintMotion,
-  windowsReducesMotion,
+  systemReducesMotion,
 } from "./lib/appearance";
 import { readFirstFrame } from "./lib/firstFrame";
 import { applyTheme } from "./lib/theme";
@@ -25,7 +25,7 @@ applyTheme(settings.appearance.theme);
 paintAppearance(document.documentElement, settings.appearance, systemPreferences.textScalePercent);
 paintMotion(
   document.documentElement,
-  motionIsReduced(settings.appearance.reduceMotion, windowsReducesMotion()),
+  motionIsReduced(settings.appearance.reduceMotion, systemReducesMotion()),
 );
 createRoot(container).render(
   <StrictMode>

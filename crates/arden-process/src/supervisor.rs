@@ -167,17 +167,11 @@ impl Supervisor {
             .stdin(Stdio::null())
             .stdout(Stdio::from(log))
             .stderr(Stdio::from(errors));
-        let mut child = command
-            .spawn()
-            .map_err(|error| SpawnError::Io(error.to_string()))?;
         // A program that is not in the job would outlive the app. It is not allowed to exist.
-        if let Err(error) = self.job.assign(&child) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(SpawnError::Io(format!(
-                "the program could not be put in the job: {error}"
-            )));
-        }
+        let child = self
+            .job
+            .start(command)
+            .map_err(|error| SpawnError::Io(error.to_string()))?;
         Ok(Started { child, log: path })
     }
 
@@ -210,16 +204,10 @@ impl Supervisor {
         for variable in without {
             command.env_remove(variable);
         }
-        let mut child = command
-            .spawn()
+        let mut child = self
+            .job
+            .start(command)
             .map_err(|error| SpawnError::Io(error.to_string()))?;
-        if let Err(error) = self.job.assign(&child) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(SpawnError::Io(format!(
-                "the program could not be put in the job: {error}"
-            )));
-        }
         let (Some(input), Some(output)) = (child.stdin.take(), child.stdout.take()) else {
             let _ = child.kill();
             let _ = child.wait();
@@ -360,17 +348,15 @@ impl Supervisor {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        let mut child = command
-            .spawn()
-            .map_err(|error| SpawnError::Io(error.to_string()))?;
-        if let Err(error) = self.job.assign(&child) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(SpawnError::Io(format!(
-                "the program could not be put in the job: {error}"
-            )));
-        }
-        Ok(child)
+        self.job
+            .start(command)
+            .map_err(|error| SpawnError::Io(error.to_string()))
+    }
+
+    /// Ends every program the supervisor started, with what they started, now: for when the app
+    /// is about to end, and its own end would leave some running (ADR 0058).
+    pub fn end_all(&self) {
+        self.job.end();
     }
 
     /// The folder the logs of the programs go to.

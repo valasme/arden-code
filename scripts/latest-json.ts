@@ -1,9 +1,13 @@
 // Makes the update manifest (latest.json) that the app looks for, from the installer's signature.
 //
 //   node scripts/latest-json.ts --version 1.2.3 --url https://.../setup.exe --signature-file setup.exe.sig
+//     [--platform windows-x86_64[,another-name]] [--merge other-latest.json[,another.json]]
 //     [--trusted-key <plugins.updater.pubkey from tauri.conf.json>]
 //
 // With --trusted-key it refuses a signature made with any other key: the app would refuse that update.
+// --platform names the platforms the file is for (several names may share one file, as the AppImage
+// is also what a Linux copy installed some other way finds). --merge adds the platforms of manifests
+// that other builds made for the same version, so one latest.json lists Windows and Linux (ADR 0062).
 //
 // The manifest holds only what the updater needs: the version, when it was published, notes, and for
 // each platform where to download the installer and its signature. The app checks the signature
@@ -87,6 +91,48 @@ export function checkSignedWith(signature: string, trustedKey: string): void {
   }
 }
 
+/** The platforms a `latest.json` lists, refusing one made for another version. */
+export function platformsOf(latestJson: string, version: string): Record<string, PlatformEntry> {
+  const parsed: unknown = JSON.parse(latestJson);
+  if (typeof parsed !== "object" || parsed === null) throw new Error("not an update manifest");
+  const listed: unknown = Reflect.get(parsed, "version");
+  if (listed !== version) {
+    throw new Error(`a manifest for version ${String(listed)} cannot join one for ${version}`);
+  }
+  const platforms: unknown = Reflect.get(parsed, "platforms");
+  if (typeof platforms !== "object" || platforms === null) throw new Error("it lists no platform");
+  return Object.fromEntries(
+    Object.entries(platforms).map(([name, entry]: [string, unknown]) => {
+      const url: unknown = typeof entry === "object" && entry ? Reflect.get(entry, "url") : null;
+      const signature: unknown =
+        typeof entry === "object" && entry ? Reflect.get(entry, "signature") : null;
+      if (typeof url !== "string" || typeof signature !== "string") {
+        throw new Error(`the entry for ${name} is not an address and a signature`);
+      }
+      return [name, { url, signature }];
+    }),
+  );
+}
+
+/** Adds `more` platforms to `platforms`, refusing a platform listed twice. */
+export function joinPlatforms(
+  platforms: Record<string, PlatformEntry>,
+  more: Record<string, PlatformEntry>,
+): Record<string, PlatformEntry> {
+  for (const name of Object.keys(more)) {
+    if (name in platforms) throw new Error(`${name} is listed twice`);
+  }
+  return { ...platforms, ...more };
+}
+
+/** A comma-separated list, without empty items. */
+export function list(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item !== "");
+}
+
 /** The value after each `--name` in a list of arguments. */
 export function parseArguments(argv: readonly string[]): Record<string, string> {
   const values: Record<string, string> = {};
@@ -108,20 +154,30 @@ function main() {
     if (value === undefined) throw new Error(`--${name} is missing`);
     return value;
   };
+  const version = need("version");
   const signature = readFileSync(need("signature-file"), "utf8");
   const trustedKey = options["trusted-key"];
   if (trustedKey !== undefined) checkSignedWith(signature, trustedKey);
+  const names = list(options["platform"]);
+  let platforms: Record<string, PlatformEntry> = Object.fromEntries(
+    (names.length > 0 ? names : ["windows-x86_64"]).map((name) => [
+      name,
+      { url: need("url"), signature },
+    ]),
+  );
+  for (const file of list(options["merge"])) {
+    const more = platformsOf(readFileSync(file, "utf8"), version);
+    if (trustedKey !== undefined) {
+      for (const entry of Object.values(more)) checkSignedWith(entry.signature, trustedKey);
+    }
+    platforms = joinPlatforms(platforms, more);
+  }
   process.stdout.write(
     buildLatestJson({
-      version: need("version"),
+      version,
       notes: options["notes"] ?? "",
       publishedAt: options["published-at"] ?? new Date().toISOString(),
-      platforms: {
-        [options["platform"] ?? "windows-x86_64"]: {
-          url: need("url"),
-          signature,
-        },
-      },
+      platforms,
     }),
   );
 }

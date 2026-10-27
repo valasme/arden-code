@@ -207,6 +207,18 @@ fn the_page_reads_the_first_frame_where_rust_puts_it() {
 }
 
 #[test]
+fn the_page_reads_the_platform_where_rust_puts_it() {
+    // If these drift apart, the page draws Windows' caption on Linux.
+    let source =
+        fs::read_to_string(crate_dir().join("../src/lib/platform.ts")).expect("platform.ts exists");
+    let declaration = format!(
+        "PLATFORM_GLOBAL = \"{}\"",
+        arden_desktop_lib::PLATFORM_GLOBAL
+    );
+    assert!(source.contains(&declaration), "{declaration}");
+}
+
+#[test]
 fn the_main_window_starts_hidden_until_the_ui_has_drawn() {
     let conf = read_tauri_conf();
     assert_eq!(conf["app"]["windows"][0]["visible"], false);

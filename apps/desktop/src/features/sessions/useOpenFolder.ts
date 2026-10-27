@@ -7,7 +7,7 @@ import { showErrorToast } from "@/lib/errorToasts";
 import { toAppError } from "@/lib/errors";
 
 /**
- * Asks for a folder with Windows' dialog and adds it as a project (ADR 0039). Answers the project,
+ * Asks for a folder with the system's dialog and adds it as a project (ADR 0039). Answers the project,
  * or nothing when the person cancelled or it could not be added, which they are told about.
  */
 export function useOpenFolder() {

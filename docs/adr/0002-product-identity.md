@@ -25,3 +25,7 @@ never change without orphaning user data and breaking updates.
 
 - The identifier (`…arden`) and the repository name (`arden-code`) differ on purpose. That's harmless.
 - Renaming the product later only touches display names. The identifier stays.
+
+## The tagline (ADR 0057)
+
+With Linux as a second platform, the tagline is "A desktop cockpit for Claude Code and Codex."

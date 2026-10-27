@@ -49,3 +49,10 @@ WebView2 speaks the Chrome DevTools Protocol, which means Playwright can drive t
   through the isolation frame. Rust hands the page its first settings and Windows' text size and regional
   format in an initialization script, and shows the window when the page has first loaded, by which time the
   page has drawn its first frame. [performance.md](../performance.md) has the numbers.
+
+## Linux (ADR 0057)
+
+- A `Check (Linux)` job runs the same checks as the Windows one, except the screenshot baselines and
+  the performance gates, and gates a merge as it does.
+- End-to-end tests on Linux drive the real app through WebDriver (`tauri-driver` and
+  `WebKitWebDriver`), as Playwright cannot attach to WebKitGTK ([0063](0063-the-linux-end-to-end-test.md)).

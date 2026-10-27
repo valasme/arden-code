@@ -1,0 +1,22 @@
+[package]
+name = "arden-linux"
+description = "Linux integration for Arden Code: processes, the desktop's settings and the system's name"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+arden-core.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true
