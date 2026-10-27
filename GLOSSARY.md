@@ -1,6 +1,6 @@
 # Arden Code
 
-A Windows desktop cockpit where a developer runs and supervises coding agents on their projects.
+A desktop cockpit where a developer runs and supervises coding agents on their projects.
 
 ## Language
 
@@ -160,6 +160,12 @@ _Avoid_: toast, snackbar
 **Disclosure**:
 A part of a page the user opens and closes in place to show more: a thinking item, a tool call, or the open source licenses in About.
 _Avoid_: accordion, collapsible, expander
+
+### Platforms
+
+**Platform**:
+An operating system Arden Code is supported on: Windows 11 x64 or Linux x64. What a platform does its own way, such as the window's frame, is platform behavior; the rest is the shared product.
+_Avoid_: OS, target, environment
 
 ### Control
 

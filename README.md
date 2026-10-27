@@ -5,20 +5,21 @@
   </picture>
 </h1>
 
-<p align="center">A Windows cockpit for Claude Code and Codex.</p>
+<p align="center">A desktop cockpit for Claude Code and Codex.</p>
 
 > **Status: pre-alpha, work in progress.** There is nothing to install yet.
 
 ## What it will be
 
-Arden Code is a Windows 11 desktop app for running and supervising coding agents
-from one place. The goals:
+Arden Code is a desktop app for Windows 11 and Linux for running and supervising
+coding agents from one place. The goals:
 
 - **Keyboard-first:** a command palette, rebindable shortcuts, and full keyboard navigation.
 - **Private:** no telemetry. The only automatic network request is the update check.
 - **Hands off your credentials:** Claude Code and Codex sign in through their own CLIs.
   Arden Code never reads, stores or forwards your tokens.
-- **Native to Windows 11:** Snap Layouts, regional formats, text scaling, and Windows keyboard conventions.
+- **Native to its platform:** Snap Layouts, regional formats, text scaling and keyboard conventions on
+  Windows 11; the desktop's frame, locale and text size on Linux.
 
 The first build is the app foundation: the window shell, settings, keyboard system,
 diagnostics, and a placeholder session view driven by a built-in Demo agent.
@@ -30,7 +31,7 @@ Tauri 2 (Rust) · React 19 · TypeScript 7 · TanStack Router and Query · shadc
 
 ## Requirements (planned)
 
-- Windows 11, x64
+- Windows 11, x64, or Linux x64 (any current desktop, Wayland or X11; `.deb`, `.rpm` or AppImage)
 - The Claude Code and/or Codex CLI, installed and signed in
 
 ## Development

@@ -11,7 +11,7 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [0002](0002-product-identity.md) | Product identity: Arden Code | Accepted |
 | [0003](0003-license-privacy-and-vendor-posture.md) | MIT license, zero telemetry, hands off credentials | Accepted |
-| [0004](0004-platform-windows-11-x64-tauri-2.md) | Windows 11 x64 on Tauri 2 | Accepted |
+| [0004](0004-platform-windows-11-x64-tauri-2.md) | Windows 11 x64 on Tauri 2 | Superseded by [0057](0057-linux-x64-as-a-second-platform.md) |
 | [0005](0005-repository-layout.md) | Light monorepo | Accepted |
 | [0006](0006-frontend-stack.md) | Frontend stack | Accepted; Motion added by [0054](0054-what-moves-and-how.md) |
 | [0007](0007-typescript-7-oxlint-oxfmt.md) | TypeScript 7 with Oxlint and oxfmt | Accepted; the jsx-a11y rules superseded by [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md) |
@@ -64,3 +64,10 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0054](0054-what-moves-and-how.md) | What moves, and how | Accepted |
 | [0055](0055-the-warm-start-gate-is-on-the-pages-share.md) | The warm start's gate is on the page's share | Accepted |
 | [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md) | The stock theme and a lighter accessibility bar | Accepted |
+| [0057](0057-linux-x64-as-a-second-platform.md) | Linux x64 as a second platform | Accepted |
+| [0058](0058-what-replaces-the-job-object-on-linux.md) | What replaces the Job Object on Linux | Accepted |
+| [0059](0059-where-files-live-on-linux.md) | Where files live on Linux | Accepted |
+| [0060](0060-the-linux-window-frame.md) | The Linux window frame | Accepted |
+| [0061](0061-the-desktop-settings-linux-reads.md) | The desktop settings Linux reads | Accepted |
+| [0062](0062-linux-packages-and-updates.md) | Linux packages and updates | Accepted |
+| [0063](0063-the-linux-end-to-end-test.md) | The Linux end-to-end test | Accepted |

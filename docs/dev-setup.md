@@ -1,4 +1,4 @@
-# Development setup (Windows 11)
+# Development setup (Windows 11 and Linux)
 
 Build and run instructions arrive with milestone M0. This page covers the machine setup,
 which only needs doing once.
@@ -7,7 +7,7 @@ which only needs doing once.
 
 | Tool | Version | Notes |
 |---|---|---|
-| Windows | 11, x64 | The only supported platform |
+| Windows | 11, x64 | Or Linux: see [Linux](#linux) |
 | Visual Studio Build Tools | 2026 | Workload: "Desktop development with C++" |
 | Rust | pinned in `rust-toolchain.toml` | Install via rustup, MSVC toolchain |
 | Node.js | 24 LTS | |
@@ -85,7 +85,8 @@ pnpm deny     # security advisories and licenses
 pnpm typos    # spelling
 ```
 
-`pnpm test:e2e` builds a debug app and drives it through WebView2 with Playwright.
+`pnpm test:e2e` builds a debug app and drives it through WebView2 with Playwright. On Linux, `pnpm test:e2e:linux`
+drives it through WebDriver (see [Linux](#linux)).
 
 `pnpm check:dev-restart` runs `pnpm dev` through a restart and a reset, and checks that it keeps serving the app, and
 ends when the app is closed. CI cannot run it; run it after changing how the app restarts. It builds the app in
@@ -97,6 +98,35 @@ settings change takes, against the plan's targets: see [performance.md](performa
 `pnpm test:visual` runs screenshot and interaction tests of the design system page
 (`/dev/design-system`, development builds only). After an intended visual change, update the baselines with
 `pnpm test:visual:update` and look at the new images before committing them.
+
+## Linux
+
+Linux x64 is the second platform (ADR 0057). Any current desktop works, Wayland or X11. On Ubuntu or Debian,
+install the system libraries Tauri builds against, then Rust (rustup), Node.js 24 and pnpm as above:
+
+```sh
+sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev build-essential
+```
+
+The root scripts work the same. A few things differ:
+
+- **Files** follow the XDG base directories (ADR 0059): settings in `~/.config/io.github.valasme.arden`, and
+  sessions, logs and crash reports in `~/.local/share/io.github.valasme.arden`.
+- **The terminal command** is the app itself: `target/debug/arden-code .` opens this folder in the running copy.
+- **The end-to-end test** drives the real window through WebDriver (ADR 0063). Install WebKitGTK's driver and
+  Tauri's, then run it; without a desktop, wrap it in a virtual X server:
+
+  ```sh
+  sudo apt-get install webkit2gtk-driver xvfb
+  cargo install tauri-driver --version 2.1.0 --locked
+  pnpm test:e2e:linux                                    # on a desktop
+  xvfb-run dbus-run-session -- pnpm test:e2e:linux       # without one
+  ```
+
+- **Packages:** `pnpm --filter @arden/desktop exec tauri build` makes a `.deb`, an `.rpm` and an AppImage in
+  `target/release/bundle` (ADR 0062). Signing the update needs `TAURI_SIGNING_PRIVATE_KEY`; a throwaway key from
+  `tauri signer generate` does for a try.
+- The screenshot tests, the performance gates and the installer test are Windows' own.
 
 ## Keeping test data separate
 

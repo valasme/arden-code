@@ -29,8 +29,8 @@ This is the single source of truth for the app foundation. The reasoning behind 
 
 ## 1. What we're building
 
-Arden Code is a Windows 11 desktop app for running and supervising coding agents, Claude Code and Codex,
-from one keyboard-first and private cockpit.
+Arden Code is a desktop app for Windows 11 and Linux for running and supervising coding agents, Claude
+Code and Codex, from one keyboard-first and private cockpit.
 
 The first build is the **foundation**:
 - the window shell and settings
@@ -49,17 +49,17 @@ All of it is production-grade, so real features plug into it later.
 - Agent-specific colors.
 - Languages other than English.
 - Telemetry.
-- macOS, Linux, Windows 10 and ARM64.
+- macOS, Windows 10 and ARM64. Linux x64 is the second platform ([ADR 0057](adr/0057-linux-x64-as-a-second-platform.md)).
 
 ## 2. Identity
 
 | | |
 |---|---|
 | Product name | Arden Code |
-| Tagline | A Windows cockpit for Claude Code and Codex |
+| Tagline | A desktop cockpit for Claude Code and Codex ([ADR 0057](adr/0057-linux-x64-as-a-second-platform.md)) |
 | Repository | [github.com/valasme/arden-code](https://github.com/valasme/arden-code), public |
 | App identifier | `io.github.valasme.arden`. **Permanent, never change it:** it keys the data folders, notifications and updates |
-| Executable | `arden-code.exe`. The window title and Task Manager show "Arden Code" |
+| Executable | `arden-code.exe` on Windows, `arden-code` on Linux. The window title and Task Manager show "Arden Code" |
 | Terminal command | `arden-code`, a console launcher the installer adds to the user PATH ([ADR 0021](adr/0021-terminal-command.md)) |
 | Settings file | `%APPDATA%\io.github.valasme.arden\settings.json` |
 | Logs, crash reports, cache | `%LOCALAPPDATA%\io.github.valasme.arden\` |
@@ -71,7 +71,7 @@ All of it is production-grade, so real features plug into it later.
 
 1. **Private by default.** No telemetry. The only automatic network request is the update check to GitHub.
 2. **Hands off credentials.** Vendor CLIs handle sign-in. Arden Code never reads, stores or forwards tokens.
-3. **Native to Windows 11.** Snap Layouts, Windows keyboard conventions, regional formats and text scaling.
+3. **Native to its platform.** On Windows 11, Snap Layouts, Windows keyboard conventions, regional formats and text scaling; on Linux, the desktop's frame, locale and text size ([ADR 0057](adr/0057-linux-x64-as-a-second-platform.md)).
 4. **Keyboard-first.** Everything works by keyboard. Keyboard focus is visible, never loud.
 5. **Calm.** A neutral palette, softly rounded corners, no flashy effects. The brand color appears only in brand moments.
 6. **Fail safe.** Broken state falls back to defaults and keeps a backup. Every error has a code that also appears in the logs.
@@ -80,8 +80,11 @@ All of it is production-grade, so real features plug into it later.
 
 ## 4. Platform and distribution
 
-- **Operating system:** Windows 11 (build 22000 or later), x64 only. The installer politely refuses Windows 10. We test on 24H2 and 25H2.
-- **Runtime:** Tauri 2.12 on WebView2 (evergreen, preinstalled on Windows 11). Tauri 3 is in alpha; revisit when it's stable.
+- **Platforms** ([ADR 0057](adr/0057-linux-x64-as-a-second-platform.md)):
+  - Windows 11 (build 22000 or later), x64. The installer politely refuses Windows 10. We test on 24H2 and 25H2.
+  - Linux x64: any current desktop session, Wayland or X11, with no named distribution or desktop. CI is GitHub's Ubuntu runner. Omarchy is a check before a release.
+- **Runtime:** Tauri 2.12 on WebView2 (evergreen, preinstalled on Windows 11), and on WebKitGTK 4.1 on Linux. Tauri 3 is in alpha; revisit when it's stable.
+- **Linux packages** ([ADR 0062](adr/0062-linux-packages-and-updates.md)): a `.deb`, an `.rpm` and an AppImage, built on Ubuntu 22.04, each updating through the same signed updater as Windows. The package puts the app on `PATH` as `arden-code`, the terminal command. Settings live in `~/.config/io.github.valasme.arden` and the rest in `~/.local/share/io.github.valasme.arden`, following the XDG base directories ([ADR 0059](adr/0059-where-files-live-on-linux.md)).
 - **Installer:** NSIS, per user, so no admin prompt.
   - It adds `arden-code` to the user PATH (a checkbox, on by default).
   - The uninstaller offers "Also delete my settings, sessions and logs".
@@ -118,9 +121,10 @@ arden-code/
 │  ├─ arden-core/               domain types, IDs, AppError and error codes
 │  ├─ arden-settings/           schema, defaults, migrations, persistence, file watching
 │  ├─ arden-diagnostics/        logging, redaction, crash reports, diagnostics bundle
-│  ├─ arden-process/            process supervisor (Job Objects), CLI resolution and detection
+│  ├─ arden-process/            process supervisor (Job Objects; process groups on Linux), CLI resolution
 │  ├─ arden-agents/             AgentDriver trait + Demo driver
 │  ├─ arden-windows/            Win32 integration: Snap Layouts, text scale, regional format
+│  ├─ arden-linux/              Linux integration: processes, text size, regional format, the system's name
 │  └─ arden-cli/                console launcher, installed as bin\arden-code.exe
 ├─ brand/                       @arden/brand: logo sources, fonts, build script, outputs
 ├─ docs/                        PLAN.md, adr/, dev-setup.md
@@ -230,7 +234,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 - **Process supervisor (in the foundation):**
   - Resolves executables through PATH and PATHEXT, preferring real `.exe` files.
   - Never passes untrusted arguments through `.cmd` or `.bat` wrappers, a known class of Windows argument-injection bugs.
-  - Runs child processes inside a Windows Job Object, so they close when the app closes.
+  - Runs child processes inside a Windows Job Object, so they close when the app closes. On Linux each starts in a process group of its own that the kernel and the app end with it ([ADR 0058](adr/0058-what-replaces-the-job-object-on-linux.md)).
   - Logs each child process's output to its own file.
 - **Detection:** Settings → Agents shows whether `claude` and `codex` are installed, where, and which version; for Claude Code also the minimum version and whether it is signed in. It runs once in the background after start, and again with Look again.
 - **Vendor terms:** Anthropic's rules on using subscriptions from other tools changed several times in 2026. Arden Code only ever launches the person's own CLI, which handles the person's own sign-in. [vendors.md](vendors.md) summarizes the current terms, with the date they were checked.
@@ -258,6 +262,7 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 - **The look** ([ADR 0032](adr/0032-the-redesign.md)): a quiet frame in the spirit of Linear, the session view in the spirit of Claude Desktop. New session is the sidebar's first row and Settings its last, each with its shortcut; each project is a small label over its sessions. Every enabled control shows the pointer cursor, except the window buttons, which keep the arrow as Windows' own do ([ADR 0037](adr/0037-the-window-buttons-keep-the-arrow.md)).
 - **No white flash:** the window starts hidden, with its background already in the current theme. It appears after the first frame is drawn.
 - **Window memory:** size, position, monitor and maximized state are restored. A position that would now be off-screen is corrected.
+- **The frame follows the platform** ([ADR 0060](adr/0060-the-linux-window-frame.md)): on Linux the bar keeps the logo, back and forward, the search strip and the layout controls, with Linux window buttons and no Window menu or Snap Layouts.
 - **Smallest size:** 500 × 560 px. Windows asks for 500 px or less, or the window does not fit the zones of Snap Layouts; the sidebar and the session view at their smallest fit in it. It holds on every path: a smaller saved size opens at it, and a window made smaller by another program grows back. At that size a sidebar row stays on one line with its shortcut aside, and the search strip shows only its icon and shortcut ([ADR 0047](adr/0047-holding-the-smallest-window-size.md)).
 
 ### 6.2 Title bar and Snap Layouts
@@ -722,6 +727,7 @@ Every row is measured by CI on the release build, and the ones that can fail the
 | TypeScript unit | Vitest 5 (Node) |
 | Components | Vitest browser mode on Chromium (the same engine family as WebView2) + Testing Library |
 | UI flows with a mocked backend | The same Vitest browser mode, with the calls to Rust answered by `mockIPC` |
+| End to end (the real app, Linux) | WebDriver through `tauri-driver` and `WebKitWebDriver`, under a virtual X server, with Playwright as the runner (debug builds only, [ADR 0063](adr/0063-the-linux-end-to-end-test.md)) |
 | End to end (the real app) | Playwright attached to the app's WebView2 over CDP (debug builds only). Input that must take the real path goes through Windows instead: key presses for the web engine's own shortcuts, and clicks, with Playwright detached, where timing matters (clicks while CDP is attached hid a bug that real clicks hit) |
 | Visual regression | Playwright screenshots of the design system page in light, dark and 200% zoom |
 | Contracts | Bindings drift check; hard-coded-text lint; brand outputs up to date |
@@ -743,7 +749,7 @@ Every change must pass formatting, linting, type-checking and tests. Test covera
 - **Git hooks and commits:**
   - lefthook runs formatting and linting on staged files before each commit.
   - Commit messages follow Conventional Commits, checked by commitlint.
-- **CI** (GitHub Actions, Windows x64): format → lint → type-check → unused code → hard-coded UI text → UI tests → screenshot tests → Rust tests → bindings, brand and license checks → build → end-to-end tests on the real app → performance of the release build ([performance.md](performance.md)). A Linux job checks spelling, advisories and licenses. The release trial builds the installer when a file that shapes a release changes.
+- **CI** (GitHub Actions, Windows x64): format → lint → type-check → unused code → hard-coded UI text → UI tests → screenshot tests → Rust tests → bindings, brand and license checks → build → end-to-end tests on the real app → performance of the release build ([performance.md](performance.md)). A `Check (Linux)` job on Ubuntu runs the same checks, but for the screenshots and the performance gates, with the Linux end-to-end test, and gates a merge as the Windows job does. A third job checks spelling, advisories and licenses. The release trial builds the installer and the Linux packages when a file that shapes a release changes.
 - **Releases** (built now, switched on later):
   - release-please handles versions and the changelog.
   - tauri-action builds the installer, update signatures and `latest.json`.
