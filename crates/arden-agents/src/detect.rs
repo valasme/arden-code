@@ -8,7 +8,7 @@ use std::ffi::OsStr;
 use std::time::Duration;
 
 use arden_process::command::Arg;
-use arden_process::resolve::{self, Resolved};
+use arden_process::resolve::{Lookup, Resolved};
 use arden_process::supervisor::Supervisor;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -154,9 +154,9 @@ pub fn detect(
     supervisor: &Supervisor,
     cli: AgentCli,
     search_path: &OsStr,
-    path_ext: &OsStr,
+    lookup: &Lookup,
 ) -> Detection {
-    let found = resolve::resolve(cli.program(), search_path, path_ext);
+    let found = lookup.find(cli.program(), search_path);
     let version = found
         .as_ref()
         .and_then(|program| version_of(supervisor, cli, program));
@@ -181,14 +181,15 @@ pub fn detect(
     }
 }
 
-/// Looks for every agent program with the `PATH` and `PATHEXT` of this process.
+/// Looks for every agent program with the `PATH` of this process, the way the platform finds
+/// programs.
 #[must_use]
 pub fn detect_all(supervisor: &Supervisor) -> Vec<Detection> {
     let search_path = std::env::var_os("PATH").unwrap_or_default();
-    let path_ext = std::env::var_os("PATHEXT").unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
+    let lookup = Lookup::of_this_platform();
     AgentCli::ALL
         .into_iter()
-        .map(|cli| detect(supervisor, cli, &search_path, &path_ext))
+        .map(|cli| detect(supervisor, cli, &search_path, &lookup))
         .collect()
 }
 
@@ -283,7 +284,7 @@ mod tests {
                 &supervisor,
                 AgentCli::Claude,
                 bin.path().as_os_str(),
-                OsStr::new(".EXE;.CMD"),
+                &Lookup::Extensions(".EXE;.CMD".into()),
             );
 
             assert!(found.installed);
@@ -323,7 +324,7 @@ mod tests {
                     &supervisor,
                     AgentCli::Claude,
                     bin.path().as_os_str(),
-                    OsStr::new(".EXE;.CMD"),
+                    &Lookup::Extensions(".EXE;.CMD".into()),
                 );
 
                 assert_eq!(found.version.as_deref(), Some(version));
@@ -347,7 +348,7 @@ mod tests {
                 &supervisor,
                 AgentCli::Claude,
                 empty.path().as_os_str(),
-                OsStr::new(".EXE;.CMD"),
+                &Lookup::Extensions(".EXE;.CMD".into()),
             );
 
             assert!(!found.installed);
@@ -365,7 +366,7 @@ mod tests {
                 &supervisor,
                 AgentCli::Codex,
                 empty.path().as_os_str(),
-                OsStr::new(".EXE;.CMD"),
+                &Lookup::Extensions(".EXE;.CMD".into()),
             );
 
             assert!(!found.installed);
@@ -388,7 +389,7 @@ mod tests {
                 &supervisor,
                 AgentCli::Codex,
                 bin.path().as_os_str(),
-                OsStr::new(".EXE;.CMD"),
+                &Lookup::Extensions(".EXE;.CMD".into()),
             );
 
             assert!(found.installed);
@@ -403,7 +404,8 @@ mod tests {
             fs::write(npm.path().join("claude.cmd"), "@echo off\r\necho 9.9.9\r\n")
                 .expect("a script");
             // Any real program will do as the stand-in: it is only asked for its version.
-            let stand_in = resolve::resolve_from_environment("hostname").expect("hostname exists");
+            let stand_in = arden_process::resolve::resolve_from_environment("hostname")
+                .expect("hostname exists");
             fs::copy(&stand_in.path, local.path().join("claude.exe")).expect("a copy");
             let folders = std::env::join_paths([npm.path(), local.path()]).expect("folders");
 
@@ -411,7 +413,7 @@ mod tests {
                 &supervisor,
                 AgentCli::Claude,
                 &folders,
-                OsStr::new(".EXE;.CMD"),
+                &Lookup::Extensions(".EXE;.CMD".into()),
             );
 
             assert_eq!(
@@ -427,6 +429,92 @@ mod tests {
             );
             // The wrapper says 9.9.9. Getting anything else, or nothing, shows the real program was asked.
             assert_ne!(found.version.as_deref(), Some("9.9.9"));
+        }
+    }
+
+    #[cfg(unix)]
+    mod on_linux {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+
+        use super::*;
+
+        fn supervisor() -> (Supervisor, tempfile::TempDir) {
+            let logs = tempfile::tempdir().expect("a temporary folder");
+            (
+                Supervisor::new(logs.path().join("agents")).expect("a supervisor"),
+                logs,
+            )
+        }
+
+        /// A folder with a shell script of this name that the person may run.
+        fn program(name: &str, script: &str) -> tempfile::TempDir {
+            let bin = tempfile::tempdir().expect("a temporary folder");
+            let path = bin.path().join(name);
+            fs::write(&path, format!("#!/bin/sh\n{script}")).expect("a script");
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).expect("runnable");
+            bin
+        }
+
+        #[test]
+        fn reports_claude_code_with_its_path_its_version_and_whether_it_is_signed_in() {
+            let (supervisor, logs) = supervisor();
+            let bin = program(
+                "claude",
+                "if [ \"$1\" = auth ]; then\n  echo '{\"loggedIn\": true, \"email\": \"ada@example.com\"}'\n  exit 0\nfi\necho '2.1.286 (Claude Code)'\n",
+            );
+
+            let found = detect(
+                &supervisor,
+                AgentCli::Claude,
+                bin.path().as_os_str(),
+                &Lookup::Executable,
+            );
+
+            assert!(found.installed);
+            assert_eq!(
+                found.path.as_deref(),
+                Some(bin.path().join("claude").display().to_string().as_str())
+            );
+            assert_eq!(found.version.as_deref(), Some("2.1.286"));
+            assert_eq!(found.signed_in, Some(true));
+            assert!(!found.too_old);
+            for entry in fs::read_dir(logs.path().join("agents")).expect("the logs") {
+                let log = fs::read_to_string(entry.expect("a log").path()).expect("a log");
+                assert!(!log.contains("ada@example.com"), "{log}");
+            }
+        }
+
+        #[test]
+        fn reports_an_agent_that_is_not_installed() {
+            let (supervisor, _logs) = supervisor();
+            let empty = tempfile::tempdir().expect("a temporary folder");
+
+            let found = detect(
+                &supervisor,
+                AgentCli::Codex,
+                empty.path().as_os_str(),
+                &Lookup::Executable,
+            );
+
+            assert!(!found.installed);
+            assert_eq!(found.path, None);
+        }
+
+        #[test]
+        fn reads_codexs_version() {
+            let (supervisor, _logs) = supervisor();
+            let bin = program("codex", "echo 'codex-cli 0.98.0'\n");
+
+            let found = detect(
+                &supervisor,
+                AgentCli::Codex,
+                bin.path().as_os_str(),
+                &Lookup::Executable,
+            );
+
+            assert!(found.installed);
+            assert_eq!(found.version.as_deref(), Some("0.98.0"));
         }
     }
 }

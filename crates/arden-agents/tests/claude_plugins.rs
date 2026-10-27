@@ -1,7 +1,7 @@
 //! Claude's plugins through the person's own Claude Code (ADR 0053): the workspace's stand-in for
 //! Claude Code, found on a `PATH` of its own and run through the supervisor, as the app runs it.
 
-#![cfg(windows)]
+#![cfg(any(windows, target_os = "linux"))]
 
 use std::path::Path;
 use std::sync::Arc;
@@ -13,12 +13,14 @@ use arden_agents::claude::plugins::{
 use arden_process::supervisor::Supervisor;
 use serde_json::{Value, json};
 
-/// A folder that holds the stand-in as `claude.exe`, with its settings beside it.
+/// A folder that holds the stand-in as `claude` (`claude.exe` on Windows), with its settings beside
+/// it.
 fn claude_on_path(settings: &Value) -> tempfile::TempDir {
     let bin = tempfile::tempdir().expect("a folder");
     std::fs::copy(
         env!("CARGO_BIN_EXE_claude-stand-in"),
-        bin.path().join("claude.exe"),
+        bin.path()
+            .join(format!("claude{}", std::env::consts::EXE_SUFFIX)),
     )
     .expect("the stand-in");
     std::fs::write(bin.path().join("stand-in.json"), settings.to_string()).expect("its settings");

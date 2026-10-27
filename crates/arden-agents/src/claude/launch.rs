@@ -8,7 +8,7 @@ use std::process::Child;
 use std::sync::Arc;
 
 use arden_process::command::Arg;
-use arden_process::resolve::Resolved;
+use arden_process::resolve::{Lookup, Resolved};
 use arden_process::supervisor::Supervisor;
 
 use super::locate::{self, Missing, VersionCache};
@@ -124,7 +124,7 @@ impl ProgramLauncher {
 
     fn find(&self) -> Result<Resolved, Missing> {
         match &self.search_path {
-            Some(search_path) => locate::find(search_path, ".COM;.EXE;.BAT;.CMD".as_ref()),
+            Some(search_path) => locate::find(search_path, &Lookup::of_this_platform()),
             None => locate::find_from_environment(),
         }
     }

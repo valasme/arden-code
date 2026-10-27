@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use arden_process::command::Arg;
-use arden_process::resolve::Resolved;
+use arden_process::resolve::{Lookup, Resolved};
 use arden_process::supervisor::{Separated, Supervisor};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -727,7 +727,7 @@ impl ClaudePlugins {
     /// The person's Claude Code, when it is there and `minimum` or later.
     fn program(&self, minimum: &str) -> Result<Resolved, PluginError> {
         let found = match &self.search_path {
-            Some(search_path) => locate::find(search_path, ".COM;.EXE;.BAT;.CMD".as_ref()),
+            Some(search_path) => locate::find(search_path, &Lookup::of_this_platform()),
             None => locate::find_from_environment(),
         };
         let program = found.map_err(|missing| match missing {
