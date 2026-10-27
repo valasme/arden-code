@@ -1,11 +1,16 @@
 //! The `arden-code` terminal command (ADR 0021).
 //!
-//! The app is a window program: started from a terminal it cannot print to it. This small console
-//! program can. Installed as `bin\arden-code.exe` and put on the user's `PATH`, it opens the app
-//! (or brings the open one forward), opens a folder as a project, and prints its version and help.
+//! On Windows the app is a window program: started from a terminal it cannot print to it. This
+//! small console program can. Installed as `bin\arden-code.exe` and put on the user's `PATH`, it
+//! opens the app (or brings the open one forward), opens a folder as a project, and prints its
+//! version and help.
 //!
-//! It never does the work itself: it starts the app with `--open <folder>`, and the app's
-//! single-instance mechanism hands that to the copy that is already running, if there is one.
+//! On Linux a program can be both, and the package puts the app itself on `PATH` as `arden-code`,
+//! so the app runs this library when it is started as the command ([`is_terminal_request`]).
+//!
+//! It never does the work itself: it starts the app with `--open <folder>`, apart from the
+//! terminal, and the app's single-instance mechanism hands that to the copy that is already
+//! running, if there is one.
 
 pub mod path_env;
 pub mod path_list;
@@ -144,12 +149,21 @@ pub fn parse(
     Ok(request)
 }
 
+/// Whether the arguments the app was started with ask for the terminal command rather than the
+/// window: any arguments at all, except the `--open <folder>` the command itself starts the app
+/// with. Only Linux starts the app this way.
+#[must_use]
+pub fn is_terminal_request(arguments: &[OsString]) -> bool {
+    arguments.first().is_some_and(|first| first != "--open")
+}
+
 /// Where the app is: next to the folder this command lives in (`bin\arden-code.exe` and
 /// `arden-code.exe`), or where [`APP_VARIABLE`] says.
 ///
 /// # Errors
 ///
 /// Returns an error when the command cannot tell where it is.
+#[cfg(windows)]
 pub fn app_path() -> io::Result<PathBuf> {
     if let Some(path) = std::env::var_os(APP_VARIABLE) {
         return Ok(PathBuf::from(path));
@@ -159,6 +173,19 @@ pub fn app_path() -> io::Result<PathBuf> {
         .and_then(Path::parent)
         .map(|install| install.join("arden-code.exe"))
         .ok_or_else(|| io::Error::other("the command is not inside the app's folder"))
+}
+
+/// Where the app is: this very program, which is the command too, or where [`APP_VARIABLE`] says.
+///
+/// # Errors
+///
+/// Returns an error when the program cannot tell where it is.
+#[cfg(not(windows))]
+pub fn app_path() -> io::Result<PathBuf> {
+    match std::env::var_os(APP_VARIABLE) {
+        Some(path) => Ok(PathBuf::from(path)),
+        None => std::env::current_exe(),
+    }
 }
 
 /// Starts the app, apart from this terminal, with a folder to open when there is one. A copy that
@@ -179,6 +206,18 @@ pub fn launch(app: &Path, folder: Option<&Path>) -> io::Result<()> {
         const DETACHED_PROCESS: u32 = 0x0000_0008;
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        use std::process::Stdio;
+        // The app must outlive the terminal: it is in a group of its own, which the terminal's
+        // Ctrl+C does not reach, and it does not write to the terminal.
+        command
+            .process_group(0)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
     }
     command.spawn().map(drop)
 }
@@ -348,6 +387,47 @@ mod tests {
     }
 
     #[test]
+    fn the_app_is_asked_for_the_command_by_any_arguments_but_the_ones_the_command_gives_it() {
+        assert!(!is_terminal_request(&args(&[])));
+        assert!(!is_terminal_request(&args(&["--open", "/home/ada/app"])));
+        assert!(is_terminal_request(&args(&["."])));
+        assert!(is_terminal_request(&args(&["--version"])));
+        assert!(is_terminal_request(&args(&["-h"])));
+        assert!(is_terminal_request(&args(&["/home/ada/app", "--open"])));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_command_starts_the_app_apart_from_the_terminal_with_the_folder_to_open() {
+        let root = tempfile::tempdir().expect("a temporary folder");
+        let said = root.path().join("arguments");
+        let app = root.path().join("app");
+        fs::write(
+            &app,
+            format!("#!/bin/sh\necho \"$@\" > '{}'\n", said.display()),
+        )
+        .expect("a stand-in for the app");
+        fs::set_permissions(
+            &app,
+            <fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o755),
+        )
+        .expect("runnable");
+
+        launch(&app, Some(Path::new("/home/ada/project"))).expect("the app starts");
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !said.exists() {
+            assert!(std::time::Instant::now() < deadline, "the app was started");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert_eq!(
+            fs::read_to_string(&said).expect("what it was given").trim(),
+            "--open /home/ada/project"
+        );
+    }
+
+    #[test]
     fn help_and_version_say_what_the_command_is() {
         assert!(help().contains("arden-code <FOLDER>"));
         assert!(help().contains("--version"));
@@ -375,6 +455,7 @@ mod tests {
         assert!(outcome.stderr.contains("unknown option"));
     }
 
+    #[cfg(windows)]
     #[test]
     fn the_verbatim_prefix_is_taken_off_local_and_network_paths() {
         assert_eq!(
