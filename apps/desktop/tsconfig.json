@@ -25,9 +25,11 @@
   "include": [
     "src",
     "e2e",
+    "e2e-linux",
     "visual",
     "vite.config.ts",
     "playwright.config.ts",
+    "playwright.linux.config.ts",
     "playwright.visual.config.ts",
     "i18next.config.ts"
   ]
