@@ -15,7 +15,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use arden_windows::process::{self, Identity};
+use crate::platform::process::{self, Identity};
 use tauri::AppHandle;
 
 use crate::restarter;

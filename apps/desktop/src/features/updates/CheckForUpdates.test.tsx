@@ -24,7 +24,13 @@ function startApp(result: CheckResult | "fail") {
           buildDate: "2026-09-30",
         };
       }
-      if (command === "get_system_info") return { windows: "Windows 11", webview: "130" };
+      if (command === "get_system_info")
+        return {
+          systemName: "Windows",
+          system: "Windows 11",
+          webEngineName: "WebView2",
+          webEngine: "130",
+        };
       if (command === "check_for_updates") {
         if (result === "fail") {
           throw JSON.stringify({

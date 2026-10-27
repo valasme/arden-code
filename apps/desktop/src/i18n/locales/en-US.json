@@ -751,10 +751,10 @@
       },
       "releaseNotes": "Release notes",
       "reportBug": "Report a bug",
-      "systemInfoTemplate": "{{name}} {{version}}\nBuild: {{commit}} ({{date}})\nWindows: {{windows}}\nWebView2: {{webview}}",
+      "system": "System",
+      "systemInfoTemplate": "{{name}} {{version}}\nBuild: {{commit}} ({{date}})\n{{systemName}}: {{system}}\n{{webEngineName}}: {{webEngine}}",
       "version": "Version",
-      "webview": "WebView2",
-      "windows": "Windows"
+      "webEngine": "Web engine"
     },
     "advanced": {
       "developerMode": {

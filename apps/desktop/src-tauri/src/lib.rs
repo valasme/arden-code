@@ -6,6 +6,7 @@ mod diagnostics;
 mod launch;
 mod navigation;
 mod notifications;
+mod platform;
 mod plugins;
 mod restart;
 mod restarter;
@@ -17,6 +18,7 @@ mod webview;
 mod window;
 mod window_state;
 
+pub use platform::PLATFORM_GLOBAL;
 pub use window::{FIRST_FRAME_GLOBAL, startup_background};
 
 use std::path::{Path, PathBuf};
@@ -35,7 +37,7 @@ use arden_diagnostics::{crash, logging};
 use arden_process::supervisor::Supervisor;
 use arden_settings::service::SettingsService;
 use arden_settings::settings::{LogLevel, OnStartup, Settings};
-use arden_windows::preferences;
+use platform::preferences;
 use specta_typescript::Typescript;
 use tauri::Manager;
 use tauri_specta::Event;
@@ -293,14 +295,16 @@ fn start_diagnostics(app: &tauri::App, paths: &AppPaths, level: UiLevel) -> Reda
     redactor
 }
 
-/// The variable that sets the port of the web engine's debugging endpoint. Debug builds only.
-#[cfg(debug_assertions)]
+/// The variable that sets the port of the web engine's debugging endpoint. Debug builds only, and
+/// Windows only: WebKitGTK has no such endpoint (ADR 0063).
+#[cfg(all(debug_assertions, windows))]
 const DEBUG_PORT_VARIABLE: &str = "ARDEN_CODE_DEBUG_PORT";
 
-/// The arguments the web engine starts with: the ones Tauri gives every window, the choices about
+/// The arguments `WebView2` starts with: the ones Tauri gives every window, the choices about
 /// hardware acceleration and smooth scrolling, and in a debug build the port of its debugging
-/// endpoint.
+/// endpoint. WebKitGTK takes no arguments; the same choices are its settings (`webview`).
 #[must_use]
+#[cfg_attr(not(windows), allow(dead_code))]
 fn browser_arguments(settings: &Settings, debug_port: Option<&str>) -> String {
     let mut arguments =
         String::from("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection");
@@ -334,15 +338,19 @@ fn create_main_window(
         .iter()
         .find(|window| window.label == "main")
         .ok_or(tauri::Error::WindowNotFound)?;
-    #[cfg(debug_assertions)]
-    let debug_port = std::env::var(DEBUG_PORT_VARIABLE).ok();
-    #[cfg(not(debug_assertions))]
-    let debug_port: Option<String> = None;
-    let arguments = browser_arguments(settings, debug_port.as_deref());
-    tracing::info!(%arguments, "the web engine's arguments");
     let mut builder = tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
-        .additional_browser_args(&arguments)
-        .data_directory(paths.local.clone());
+        .data_directory(paths.local.clone())
+        .initialization_script(platform::platform_script());
+    #[cfg(windows)]
+    {
+        #[cfg(debug_assertions)]
+        let debug_port = std::env::var(DEBUG_PORT_VARIABLE).ok();
+        #[cfg(not(debug_assertions))]
+        let debug_port: Option<String> = None;
+        let arguments = browser_arguments(settings, debug_port.as_deref());
+        tracing::info!(%arguments, "the web engine's arguments");
+        builder = builder.additional_browser_args(&arguments);
+    }
     let system_preferences = preferences::read().into();
     if let Some(script) = window::first_frame_script(settings, &system_preferences) {
         builder = builder
@@ -373,7 +381,8 @@ fn manage_sessions(app: &tauri::App, paths: &AppPaths, on_startup: OnStartup, ag
     app.manage(sessions::Files::default());
 }
 
-/// Makes the supervisor that keeps the agent programs in a job with the app, when Windows lets it.
+/// Makes the supervisor that keeps the agent programs in a job with the app, when the system lets
+/// it.
 fn make_supervisor(paths: &AppPaths) -> Option<Arc<Supervisor>> {
     match Supervisor::new(paths.logs_dir().join("agents")) {
         Ok(supervisor) => Some(Arc::new(supervisor)),
@@ -404,10 +413,14 @@ fn manage_programs(app: &tauri::App, supervisor: Option<Arc<Supervisor>>, claude
 #[cfg(debug_assertions)]
 const STAND_IN_INTERVAL: std::time::Duration = std::time::Duration::from_millis(1500);
 
-/// The watch on Windows' text size and regional format, kept for as long as the app runs.
+/// The watch on the system's text size and regional format, kept for as long as the app runs.
 enum PreferencesWatch {
     /// Windows says when one of them changes; nothing runs in between.
+    #[cfg(windows)]
     Windows(#[allow(dead_code)] arden_windows::registry::KeyWatcher),
+    /// GTK says when the text size changes, for as long as it runs; nothing runs in between.
+    #[cfg(target_os = "linux")]
+    Linux,
     /// A debug build that stands a file in for Windows looks at the file on a timer.
     #[cfg(debug_assertions)]
     StandIn(#[allow(dead_code)] preferences::Watcher),
@@ -415,7 +428,7 @@ enum PreferencesWatch {
     Off,
 }
 
-/// Tells the UI when the person changes the text size or the regional format in Windows.
+/// Tells the UI when the person changes the text size or the regional format in the system.
 fn watch_system_preferences(handle: tauri::AppHandle) -> PreferencesWatch {
     let tell = move |now: &preferences::SystemPreferences| {
         let _ = settings::SystemPreferencesChanged {
@@ -433,9 +446,12 @@ fn watch_system_preferences(handle: tauri::AppHandle) -> PreferencesWatch {
         ));
     }
     match preferences::watch(preferences::read(), tell) {
+        #[cfg(windows)]
         Ok(watcher) => PreferencesWatch::Windows(watcher),
+        #[cfg(target_os = "linux")]
+        Ok(()) => PreferencesWatch::Linux,
         Err(error) => {
-            tracing::warn!(%error, "could not watch Windows' text size and regional format");
+            tracing::warn!(%error, "could not watch the system's text size and regional format");
             PreferencesWatch::Off
         }
     }
@@ -453,6 +469,7 @@ const fn ui_level(level: LogLevel) -> UiLevel {
 
 /// The folders of the app's files, worked out from Windows' environment. The window does not exist
 /// yet when this is needed, so Tauri cannot be asked.
+#[cfg(windows)]
 fn early_paths() -> AppPaths {
     let folder =
         |name: &str| std::env::var_os(name).map_or_else(|| PathBuf::from("."), PathBuf::from);
@@ -463,6 +480,78 @@ fn early_paths() -> AppPaths {
         &folder("APPDATA"),
         &folder("LOCALAPPDATA"),
     )
+}
+
+/// The folders of the app's files, worked out from the XDG base directories, as Tauri's path API
+/// does on Linux (ADR 0059). The window does not exist yet when this is needed, so Tauri cannot be
+/// asked.
+#[cfg(not(windows))]
+fn early_paths() -> AppPaths {
+    use arden_core::paths::xdg_folder;
+
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    AppPaths::resolve(
+        std::env::var_os(DATA_DIR_VARIABLE)
+            .map(PathBuf::from)
+            .as_deref(),
+        &xdg_folder(
+            std::env::var_os("XDG_CONFIG_HOME"),
+            home.as_deref(),
+            ".config",
+        ),
+        &xdg_folder(
+            std::env::var_os("XDG_DATA_HOME"),
+            home.as_deref(),
+            ".local/share",
+        ),
+    )
+}
+
+/// Ends every agent program, with what each one started, as the app ends (ADR 0058).
+fn end_programs(app: &tauri::AppHandle) {
+    if let Some(programs) = app.try_state::<agents::Programs>()
+        && let Some(supervisor) = &programs.0
+    {
+        supervisor.end_all();
+    }
+}
+
+/// On Linux, a request to stop (`SIGTERM`, as at log out, `SIGINT` and `SIGHUP`) ends the app the
+/// way closing the window does, so its programs end with it. By default those signals would end
+/// the process at once.
+#[cfg(target_os = "linux")]
+fn stop_on_signals(app: &tauri::AppHandle) {
+    use gtk::glib;
+
+    for signal in [libc::SIGTERM, libc::SIGINT, libc::SIGHUP] {
+        let handle = app.clone();
+        glib::unix_signal_add_local(signal, move || {
+            tracing::info!(signal, "Arden Code was asked to stop");
+            handle.exit(0);
+            glib::ControlFlow::Break
+        });
+    }
+}
+
+/// When the app was started as the `arden-code` terminal command rather than as the window, does
+/// what the command was asked and ends (ADR 0021). Only Linux starts the app this way.
+#[cfg(target_os = "linux")]
+fn answer_the_terminal_command() {
+    use std::io::Write;
+
+    let arguments: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    if !arden_cli::is_terminal_request(&arguments) {
+        return;
+    }
+    let working_dir = std::env::current_dir().unwrap_or_default();
+    let outcome = arden_cli::run(arguments, &working_dir);
+    if !outcome.stdout.is_empty() {
+        let _ = writeln!(std::io::stdout(), "{}", outcome.stdout.trim_end());
+    }
+    if !outcome.stderr.is_empty() {
+        let _ = writeln!(std::io::stderr(), "{}", outcome.stderr.trim_end());
+    }
+    std::process::exit(outcome.exit_code);
 }
 
 /// How long a reset keeps trying a file that another program has open for a moment.
@@ -510,6 +599,8 @@ fn prepare_before_start() -> BeforeStart {
 ///
 /// Panics when the Tauri runtime fails to start.
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    answer_the_terminal_command();
     if restarter::wanted() {
         restarter::run();
     }
@@ -577,6 +668,8 @@ pub fn run() {
             app.manage(updates::Updates::default());
             app.manage(paths);
             app.manage(watch_system_preferences(app.handle().clone()));
+            #[cfg(target_os = "linux")]
+            stop_on_signals(app.handle());
             updates::start(app.handle().clone());
             // The terminal command starts the app with a folder to open.
             let arguments: Vec<String> = std::env::args().collect();
@@ -589,7 +682,11 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("failed to run Arden Code");
-    let code = app.run_return(|_, _| {});
+    let code = app.run_return(|app, event| {
+        if let tauri::RunEvent::Exit = event {
+            end_programs(app);
+        }
+    });
     restart::finish(code);
 }
 

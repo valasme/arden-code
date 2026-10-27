@@ -12,7 +12,7 @@ import licenses from "./licenses.gen.json";
 
 import "@/styles/global.css";
 
-function startApp() {
+function startApp(platform: "windows" | "linux" = "windows") {
   Object.assign(globalThis, { isTauri: true });
   const calls: { command: string; payload: unknown }[] = [];
   let clipboard = "";
@@ -28,7 +28,19 @@ function startApp() {
         };
       }
       if (command === "get_system_info") {
-        return { windows: "Windows 11 24H2 (build 26100.1234)", webview: "130.0.2849.80" };
+        return platform === "linux"
+          ? {
+              systemName: "Linux",
+              system: "Ubuntu 24.04.5 LTS (Linux 6.8.0-45-generic)",
+              webEngineName: "WebKitGTK",
+              webEngine: "2.52.6",
+            }
+          : {
+              systemName: "Windows",
+              system: "Windows 11 24H2 (build 26100.1234)",
+              webEngineName: "WebView2",
+              webEngine: "130.0.2849.80",
+            };
       }
       if (command === "plugin:clipboard-manager|write_text") {
         clipboard = z.object({ text: z.string() }).parse(payload).text;
@@ -87,6 +99,28 @@ describe("About", () => {
       );
     });
     expect(await screen.findByText("System information copied")).toBeInTheDocument();
+  });
+
+  it("names Linux and WebKitGTK on Linux, in the facts and in the copy", async () => {
+    const app = startApp("linux");
+    const user = userEvent.setup();
+    renderTab();
+
+    expect(await screen.findByText("Ubuntu 24.04.5 LTS (Linux 6.8.0-45-generic)")).toBeVisible();
+    expect(screen.getByText("Linux")).toBeVisible();
+    expect(screen.getByText("WebKitGTK")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Copy system info" }));
+
+    await waitFor(() => {
+      expect(app.clipboard()).toBe(
+        [
+          "Arden Code 0.1.0",
+          "Build: abc123def456 (2026-09-30)",
+          "Linux: Ubuntu 24.04.5 LTS (Linux 6.8.0-45-generic)",
+          "WebKitGTK: 2.52.6",
+        ].join("\n"),
+      );
+    });
   });
 
   it("cannot copy before the information is there", () => {

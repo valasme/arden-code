@@ -69,7 +69,7 @@ export const systemPreferencesQuery = queryOptions({
   staleTime: Number.POSITIVE_INFINITY,
 });
 
-/** The Windows and WebView2 versions. They do not change while the app runs. */
+/** The system's and the web engine's names and versions. They do not change while the app runs. */
 export const systemInfoQuery = queryOptions({
   queryKey: ["system-info"],
   queryFn: () => commands.getSystemInfo(),

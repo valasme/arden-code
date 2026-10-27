@@ -1,6 +1,6 @@
 [package]
 name = "arden-desktop"
-description = "Arden Code: a Windows cockpit for Claude Code and Codex"
+description = "Arden Code: a desktop cockpit for Claude Code and Codex"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -44,6 +44,13 @@ tauri-plugin-updater = { version = "2", default-features = false, features = [
 ] }
 tracing = "0.1"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+arden-cli = { path = "../../../crates/arden-cli" }
+arden-linux.workspace = true
+gtk = "0.18"
+libc = "0.2"
+webkit2gtk = { version = "2.0", features = ["v2_40"] }
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39"

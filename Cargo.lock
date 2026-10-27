@@ -150,11 +150,15 @@ name = "arden-desktop"
 version = "0.1.0"
 dependencies = [
  "arden-agents",
+ "arden-cli",
  "arden-core",
  "arden-diagnostics",
+ "arden-linux",
  "arden-process",
  "arden-settings",
  "arden-windows",
+ "gtk",
+ "libc",
  "serde",
  "serde_json",
  "specta",
@@ -171,6 +175,7 @@ dependencies = [
  "tauri-specta",
  "tempfile",
  "tracing",
+ "webkit2gtk",
  "webview2-com",
  "windows",
 ]
@@ -191,9 +196,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "arden-linux"
+version = "0.1.0"
+dependencies = [
+ "arden-core",
+ "gtk",
+ "tempfile",
+]
+
+[[package]]
 name = "arden-process"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "tempfile",
  "windows",
 ]
@@ -217,6 +232,7 @@ dependencies = [
 name = "arden-windows"
 version = "0.1.0"
 dependencies = [
+ "arden-core",
  "serde",
  "serde_json",
  "tempfile",

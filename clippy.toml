@@ -3,3 +3,5 @@ disallowed-methods = [
   { path = "tauri::AppHandle::restart", reason = "start the app again through `restart::request`, so the new start waits for this one to end (ADR 0031)" },
   { path = "tauri::process::restart", reason = "start the app again through `restart::request`, so the new start waits for this one to end (ADR 0031)" },
 ]
+# Product names that are written as they are, not as code.
+doc-valid-idents = ["WebKitGTK", ".."]

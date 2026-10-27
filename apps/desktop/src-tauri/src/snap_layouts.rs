@@ -2,16 +2,28 @@
 //! button is; an overlay from `arden-windows` covers it and tells Windows that it is a Maximize
 //! button. The overlay takes the button's pointer input, so it also says how the button should look
 //! and when it was clicked.
+//!
+//! Linux has no Snap Layouts: the desktop owns the window's place (ADR 0060). There is no overlay,
+//! and the command does nothing.
 
 use arden_core::error::AppError;
+#[cfg(windows)]
 use arden_windows::snap_layouts::{Area, Event, Look, MaximizeOverlay};
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use tauri::{Manager, State, WebviewWindow};
+use tauri::State;
+#[cfg(windows)]
+use tauri::{Manager, WebviewWindow};
+#[cfg(windows)]
 use tauri_specta::Event as _;
 
 /// The overlay over the main window's Maximize button, when Windows made one.
+#[cfg(windows)]
 pub struct MaximizeButton(Option<MaximizeOverlay>);
+
+/// Linux has no overlay over the Maximize button.
+#[cfg(not(windows))]
+pub struct MaximizeButton;
 
 /// Where the page's Maximize button is, in physical pixels from the top left of the page.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
@@ -31,6 +43,7 @@ pub enum MaximizeButtonLook {
     Pressed,
 }
 
+#[cfg(windows)]
 impl From<Look> for MaximizeButtonLook {
     fn from(look: Look) -> Self {
         match look {
@@ -50,6 +63,7 @@ pub struct MaximizeButtonChanged {
 
 /// Makes the overlay in the main window, hidden until the page says where its button is. Without it
 /// the page's button still works, only without Snap Layouts, so a failure is logged and no more.
+#[cfg(windows)]
 pub fn add_overlay(app: &tauri::App) -> MaximizeButton {
     let Some(window) = app.get_webview_window("main") else {
         return MaximizeButton(None);
@@ -71,8 +85,15 @@ pub fn add_overlay(app: &tauri::App) -> MaximizeButton {
     }
 }
 
+/// Linux has no Snap Layouts to add.
+#[cfg(not(windows))]
+pub fn add_overlay(_app: &tauri::App) -> MaximizeButton {
+    MaximizeButton
+}
+
 /// Passes on what the overlay says: a look for the page to draw, or a click that maximizes or
 /// restores the window, as the button's own click does.
+#[cfg(windows)]
 fn on_event(window: &WebviewWindow, event: Event) {
     match event {
         Event::Look(look) => {
@@ -106,8 +127,18 @@ pub fn set_maximize_button(
     area: Option<MaximizeButtonArea>,
     button: State<'_, MaximizeButton>,
 ) -> Result<(), AppError> {
+    #[cfg(not(windows))]
+    let _ = (area, button);
+    #[cfg(windows)]
+    place(area, &button);
+    Ok(())
+}
+
+/// Moves the overlay over the button, or hides it.
+#[cfg(windows)]
+fn place(area: Option<MaximizeButtonArea>, button: &MaximizeButton) {
     let Some(overlay) = &button.0 else {
-        return Ok(());
+        return;
     };
     let area = area.map(|area| Area {
         x: area.x,
@@ -118,5 +149,4 @@ pub fn set_maximize_button(
     if let Err(error) = overlay.place(area) {
         tracing::warn!(%error, "could not move the Snap Layouts overlay");
     }
-    Ok(())
 }

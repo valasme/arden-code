@@ -18,7 +18,8 @@ export const commands = {
 	 *  the page, under the Window menu button or at the pointer, or where Windows puts it for
 	 *  Alt+Space when no point is given.
 	 * 
-	 *  The title bar is drawn by the UI, so Windows' own menu has to be asked for.
+	 *  The title bar is drawn by the UI, so Windows' own menu has to be asked for. On Linux the desktop
+	 *  owns the window's menu, the page offers none, and this does nothing (ADR 0060).
 	 * 
 	 *  # Errors
 	 * 
@@ -132,7 +133,7 @@ export const commands = {
 	 */
 	getSystemPreferences: () => __TAURI_INVOKE<SystemPreferences>("get_system_preferences"),
 	/**
-	 *  The Windows and `WebView2` versions.
+	 *  The system's and the web engine's names and versions.
 	 * 
 	 *  # Errors
 	 * 
@@ -1598,10 +1599,17 @@ export type StatusKind =
 
 /**  What the About page shows besides the app's own version. */
 export type SystemInfo = {
-	/**  The Windows version, such as `Windows 11 24H2 (build 26100.1234)`. */
-	windows: string,
-	/**  The version of the web engine (`WebView2`) that draws the window. */
-	webview: string,
+	/**  The platform as people name it: `Windows` or `Linux`. */
+	systemName: string,
+	/**
+	 *  The system's version, such as `Windows 11 24H2 (build 26100.1234)` or
+	 *  `Ubuntu 24.04.5 LTS (Linux 6.8.0-45-generic)`.
+	 */
+	system: string,
+	/**  The web engine that draws the window: `WebView2` or `WebKitGTK`. */
+	webEngineName: string,
+	/**  Its version. */
+	webEngine: string,
 };
 
 /**  What Windows says about the text size and the regional format. */

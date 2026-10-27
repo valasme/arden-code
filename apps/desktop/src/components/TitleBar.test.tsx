@@ -318,6 +318,96 @@ describe("TitleBar with the title bar of Windows", () => {
   });
 });
 
+describe("TitleBar on Linux", () => {
+  it("has the bar's own buttons and the three window buttons, and no window menu", () => {
+    startWindow();
+    render(<TitleBar {...navigation} platform="linux" />);
+
+    for (const name of [
+      "Back",
+      "Forward",
+      "Search or run a command",
+      "Minimize",
+      "Maximize",
+      "Close",
+    ]) {
+      expect(screen.getByRole("button", { name: new RegExp(`^${name}`) }), name).toBeVisible();
+    }
+    expect(screen.queryByRole("button", { name: "Window menu" })).toBeNull();
+    expect(screen.getByRole("img", { name: "Arden Code" })).toBeInTheDocument();
+    expect(screen.getByRole("banner")).toHaveAttribute("data-tauri-drag-region");
+  });
+
+  it("minimizes, maximizes and closes the window", async () => {
+    const window = startWindow();
+    const user = userEvent.setup();
+    render(<TitleBar {...navigation} platform="linux" />);
+
+    await user.click(screen.getByRole("button", { name: "Minimize" }));
+    await user.click(screen.getByRole("button", { name: "Maximize" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(window.commands).toEqual(
+      expect.arrayContaining([
+        "plugin:window|minimize",
+        "plugin:window|toggle_maximize",
+        "plugin:window|close",
+      ]),
+    );
+  });
+
+  it("offers Restore instead of Maximize while the window is maximized", async () => {
+    startWindow({ maximized: true });
+    render(<TitleBar {...navigation} platform="linux" />);
+
+    expect(await screen.findByRole("button", { name: "Restore" })).toBeVisible();
+  });
+
+  it("has no Snap Layouts: Rust is told there is no Maximize button to cover", async () => {
+    const window = startWindow();
+    render(<TitleBar {...navigation} platform="linux" />);
+
+    await waitFor(() => {
+      expect(window.maximizeButtonAreas).toContain(null);
+    });
+    expect(window.maximizeButtonAreas.every((area) => area === null)).toBe(true);
+  });
+
+  it("opens no window menu, for Alt+Space or a right click on the bar", async () => {
+    const window = startWindow();
+    const user = userEvent.setup();
+    render(<TitleBar {...navigation} platform="linux" />);
+
+    await user.keyboard("{Alt>} {/Alt}");
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByRole("banner") });
+
+    expect(window.commands).not.toContain("show_system_menu");
+  });
+
+  it("draws window buttons as square as the bar's own, and Close does not turn red", async () => {
+    startWindow();
+    const user = userEvent.setup();
+    render(<TitleBar {...navigation} platform="linux" />);
+    const close = screen.getByRole("button", { name: "Close" });
+    const back = screen.getByRole("button", { name: "Back" });
+
+    await user.hover(close);
+
+    expect(close.getBoundingClientRect().width).toBe(back.getBoundingClientRect().width);
+    expect(getComputedStyle(close).backgroundColor).not.toBe("rgb(196, 43, 28)");
+    expect(getComputedStyle(close).cursor).toBe("default");
+  });
+
+  it("leaves everything of the frame to the desktop with its title bar", () => {
+    startWindow();
+    render(<TitleBar {...navigation} platform="linux" native />);
+
+    for (const name of ["Minimize", "Maximize", "Close", "Window menu"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+  });
+});
+
 describe("The pointer", () => {
   it("shows on the bar's own buttons, and not on a disabled one", () => {
     startWindow();

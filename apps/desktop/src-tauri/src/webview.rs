@@ -1,21 +1,28 @@
-//! Settings of the web engine (`WebView2`) that make the window behave like an app and not like a
-//! browser: no reload, print, find or zoom keys, no browser context menu, no autofill.
+//! Settings of the web engine that make the window behave like an app and not like a browser.
+//!
+//! `WebView2`, on Windows: no reload, print, find or zoom keys, no browser context menu, no
+//! autofill. WebKitGTK, on Linux, has none of those keys or autofill when it is built into an app,
+//! so only its context menu and its developer tools follow developer mode there.
 //!
 //! Release builds only. A debug build keeps the browser's shortcuts and menu, which developers use.
 //! The code is built in both, so that it is checked and linted every time.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use tauri::{Manager, WebviewWindow};
+#[cfg(windows)]
+use tauri::Manager;
+use tauri::WebviewWindow;
 
-/// Whether developer mode is on. The key handler reads it on every key press.
+/// Whether developer mode is on. The key handler, and on Linux the context menu, read it each time.
 static DEVELOPER_MODE: AtomicBool = AtomicBool::new(false);
 /// Set when the web engine failed and the page was reloaded; the page asks for it once.
 static FAILED: AtomicBool = AtomicBool::new(false);
-/// Whether the key handler has been added to the web engine. It is added once.
+/// Whether the key handler, or on Linux the context menu's, has been added to the web engine. It
+/// is added once.
 static KEYS_CAUGHT: AtomicBool = AtomicBool::new(false);
 
 /// Virtual key codes of the keys in [`is_browser_shortcut`].
+#[cfg_attr(not(windows), allow(dead_code))]
 mod key {
     pub const F3: u32 = 0x72;
     pub const F5: u32 = 0x74;
@@ -40,6 +47,7 @@ mod key {
 /// Keys the app uses itself (Ctrl+K, Ctrl+B, Ctrl+J, Ctrl+L, zoom, F6, F11 ...) are not in this
 /// list, and neither are the keys that edit text (Ctrl+A, C, V, X, Z, Y).
 #[must_use]
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn is_browser_shortcut(key: u32, ctrl: bool, shift: bool, alt: bool) -> bool {
     match (ctrl, shift, alt) {
         // Reload, find next, caret browsing and the developer tools, alone.
@@ -94,11 +102,68 @@ pub fn harden(window: &WebviewWindow, developer_mode: bool) -> tauri::Result<()>
     })
 }
 
-/// Only Windows has a web engine to configure.
-#[cfg(not(windows))]
-#[allow(clippy::unnecessary_wraps)]
+/// Turns WebKitGTK's developer tools and its own context menu (Reload, Inspect Element ...) on in
+/// developer mode and off otherwise. It can be called again whenever developer mode changes.
+///
+/// # Errors
+///
+/// Returns an error when the window's web engine cannot be reached.
+#[cfg(target_os = "linux")]
 #[cfg_attr(debug_assertions, allow(dead_code))]
-pub fn harden(_window: &WebviewWindow, _developer_mode: bool) -> tauri::Result<()> {
+pub fn harden(window: &WebviewWindow, developer_mode: bool) -> tauri::Result<()> {
+    use webkit2gtk::{SettingsExt, WebViewExt};
+
+    DEVELOPER_MODE.store(developer_mode, Ordering::Relaxed);
+    window.with_webview(move |webview| {
+        let view = webview.inner();
+        if let Some(settings) = view.settings() {
+            settings.set_enable_developer_extras(developer_mode);
+        }
+        if !KEYS_CAUGHT.swap(true, Ordering::Relaxed) {
+            // Returning true says the menu was handled, so WebKitGTK shows none of its own. The
+            // page's own menus are drawn by the page.
+            view.connect_context_menu(|_, _, _, _| !DEVELOPER_MODE.load(Ordering::Relaxed));
+        }
+        tracing::info!(
+            developer_mode,
+            "set up the browser features of the web engine"
+        );
+    })
+}
+
+/// Gives WebKitGTK the choices that `WebView2` gets as its arguments on Windows: hardware
+/// acceleration and smooth scrolling.
+///
+/// # Errors
+///
+/// Returns an error when the window's web engine cannot be reached.
+#[cfg(target_os = "linux")]
+pub fn apply_engine_settings(
+    window: &WebviewWindow,
+    hardware_acceleration: bool,
+    smooth_scrolling: bool,
+) -> tauri::Result<()> {
+    use webkit2gtk::{HardwareAccelerationPolicy, SettingsExt, WebViewExt};
+
+    window.with_webview(move |webview| {
+        let Some(settings) = webview.inner().settings() else {
+            return;
+        };
+        if !hardware_acceleration {
+            settings.set_hardware_acceleration_policy(HardwareAccelerationPolicy::Never);
+        }
+        settings.set_enable_smooth_scrolling(smooth_scrolling);
+    })
+}
+
+/// `WebView2` gets these choices as its arguments, when it starts (`browser_arguments`).
+#[cfg(windows)]
+#[allow(clippy::unnecessary_wraps)]
+pub fn apply_engine_settings(
+    _window: &WebviewWindow,
+    _hardware_acceleration: bool,
+    _smooth_scrolling: bool,
+) -> tauri::Result<()> {
     Ok(())
 }
 
@@ -208,11 +273,27 @@ pub fn recover_from_failures(window: &WebviewWindow) -> tauri::Result<()> {
     })
 }
 
-/// Only Windows has a web engine to recover.
-#[cfg(not(windows))]
-#[allow(clippy::unnecessary_wraps)]
-pub fn recover_from_failures(_window: &WebviewWindow) -> tauri::Result<()> {
-    Ok(())
+/// Reloads the page when WebKitGTK's page process ends without being asked to, as when it crashed
+/// or used more memory than it may. The person is told once the page is back.
+///
+/// # Errors
+///
+/// Returns an error when the window's web engine cannot be reached.
+#[cfg(target_os = "linux")]
+pub fn recover_from_failures(window: &WebviewWindow) -> tauri::Result<()> {
+    use webkit2gtk::{WebProcessTerminationReason, WebViewExt};
+
+    window.with_webview(|webview| {
+        webview
+            .inner()
+            .connect_web_process_terminated(|view, reason| {
+                tracing::error!(?reason, "the web engine failed");
+                if reason != WebProcessTerminationReason::TerminatedByApi {
+                    FAILED.store(true, Ordering::Relaxed);
+                    view.reload();
+                }
+            });
+    })
 }
 
 #[cfg(windows)]

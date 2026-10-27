@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { commands, type PagePoint } from "@/ipc/bindings";
 import { reportFailure } from "@/lib/errorToasts";
+import { currentPlatform, type Platform } from "@/lib/platform";
 import { useSnapLayouts } from "@/lib/snapLayouts";
 import { cn } from "@/lib/utils";
 import { useWindowMaximized, windowControls } from "@/lib/useWindowControls";
@@ -24,10 +25,15 @@ interface TitleBarProps {
   onForward: () => void;
   /** Opens the command palette. */
   onSearch: () => void;
-  /** Windows draws the title bar's frame, its window buttons and its menu, so the bar keeps only what is the app's. */
+  /** The system draws the title bar's frame, its window buttons and its menu, so the bar keeps only what is the app's. */
   native?: boolean;
   /** Drawn before the window buttons: the layout controls (ADR 0033). */
   controls?: ReactNode;
+  /**
+   * The frame follows the platform (ADR 0060): Windows' caption, with its window menu and Snap
+   * Layouts, or on Linux plain window buttons, as the desktop owns the window's menu and place.
+   */
+  platform?: Platform;
 }
 
 /**
@@ -68,17 +74,20 @@ export function TitleBar({
   onSearch,
   native = false,
   controls,
+  platform = currentPlatform(),
 }: TitleBarProps) {
   const { t } = useTranslation();
   const maximized = useWindowMaximized();
   const maximizeButton = useRef<HTMLButtonElement>(null);
-  const maximizeLook = useSnapLayouts(maximizeButton, !native);
+  // Windows' caption: its window menu and Snap Layouts. Linux has neither in a bar the app draws.
+  const caption = !native && platform === "windows";
+  const maximizeLook = useSnapLayouts(maximizeButton, caption);
   const [paletteShortcut] = useShortcutsOf("palette.open");
 
   // Alt+Space opens the system menu, as in every Windows app. With the title bar of Windows,
-  // Windows does it.
+  // Windows does it, and on Linux the desktop does what it does with it.
   useEffect(() => {
-    if (native) return undefined;
+    if (!caption) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (
         event.altKey &&
@@ -95,11 +104,11 @@ export function TitleBar({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [native]);
+  }, [caption]);
 
   // A right click on the bar's empty space also opens it, at the pointer, as on a bar Windows draws.
   const onContextMenu = (event: MouseEvent<HTMLElement>) => {
-    if (!native && event.target === event.currentTarget) {
+    if (caption && event.target === event.currentTarget) {
       event.preventDefault();
       showSystemMenu({ x: event.clientX, y: event.clientY });
     }
@@ -118,18 +127,20 @@ export function TitleBar({
           <div className="pointer-events-none grid w-8 shrink-0 place-items-center">
             <Mark className="size-4" />
           </div>
-          <BarButton
-            aria-label={t("titleBar.menu")}
-            aria-haspopup="menu"
-            className="w-8"
-            onClick={(event) => {
-              // Under the button, as a menu button opens its menu.
-              const button = event.currentTarget.getBoundingClientRect();
-              showSystemMenu({ x: button.left, y: button.bottom });
-            }}
-          >
-            <MenuIcon aria-hidden className="size-5" strokeWidth={1.5} />
-          </BarButton>
+          {caption ? (
+            <BarButton
+              aria-label={t("titleBar.menu")}
+              aria-haspopup="menu"
+              className="w-8"
+              onClick={(event) => {
+                // Under the button, as a menu button opens its menu.
+                const button = event.currentTarget.getBoundingClientRect();
+                showSystemMenu({ x: button.left, y: button.bottom });
+              }}
+            >
+              <MenuIcon aria-hidden className="size-5" strokeWidth={1.5} />
+            </BarButton>
+          ) : null}
         </>
       )}
 
@@ -179,7 +190,34 @@ export function TitleBar({
 
       {/* The window buttons keep the arrow, as Windows' own do (ADR 0037); every other control in
           the bar shows the pointer. */}
-      {native ? null : (
+      {!native && platform === "linux" ? (
+        // Linux: the desktop's usual three buttons, square as the bar's own and quiet as GTK's,
+        // with no Snap Layouts and no red Close (ADR 0060).
+        <div className="flex">
+          <BarButton
+            aria-label={t("titleBar.minimize")}
+            className="w-8 cursor-default"
+            onClick={() => void windowControls.minimize()}
+          >
+            <MinimizeGlyph />
+          </BarButton>
+          <BarButton
+            aria-label={maximized ? t("titleBar.restore") : t("titleBar.maximize")}
+            className="w-8 cursor-default"
+            onClick={() => void windowControls.toggleMaximize()}
+          >
+            {maximized ? <RestoreGlyph /> : <MaximizeGlyph />}
+          </BarButton>
+          <BarButton
+            aria-label={t("titleBar.close")}
+            className="w-8 cursor-default"
+            onClick={() => void windowControls.close()}
+          >
+            <CloseGlyph />
+          </BarButton>
+        </div>
+      ) : null}
+      {caption ? (
         <div className="flex">
           <BarButton
             aria-label={t("titleBar.minimize")}
@@ -207,7 +245,7 @@ export function TitleBar({
             <CloseGlyph />
           </BarButton>
         </div>
-      )}
+      ) : null}
     </header>
   );
 }
