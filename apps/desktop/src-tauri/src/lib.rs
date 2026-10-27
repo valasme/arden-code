@@ -533,6 +533,24 @@ fn stop_on_signals(app: &tauri::AppHandle) {
     }
 }
 
+/// The variable with which Tauri lets WebDriver drive the window on Linux, in any build.
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+const AUTOMATION_VARIABLE: &str = "TAURI_WEBVIEW_AUTOMATION";
+
+/// Only a debug build can be driven by a test (ADR 0063), as only a debug build opens `WebView2`'s
+/// debugging port on Windows. A release build forgets the variable before Tauri reads it.
+#[cfg(all(target_os = "linux", not(debug_assertions)))]
+fn refuse_automation() {
+    if std::env::var_os(AUTOMATION_VARIABLE).is_some() {
+        // SAFETY: this runs first in `main`, before the app has started any thread, so nothing can
+        // read the environment while it changes.
+        #[allow(unsafe_code)]
+        unsafe {
+            std::env::remove_var(AUTOMATION_VARIABLE);
+        }
+    }
+}
+
 /// When the app was started as the `arden-code` terminal command rather than as the window, does
 /// what the command was asked and ends (ADR 0021). Only Linux starts the app this way.
 #[cfg(target_os = "linux")]
@@ -599,6 +617,8 @@ fn prepare_before_start() -> BeforeStart {
 ///
 /// Panics when the Tauri runtime fails to start.
 pub fn run() {
+    #[cfg(all(target_os = "linux", not(debug_assertions)))]
+    refuse_automation();
     #[cfg(target_os = "linux")]
     answer_the_terminal_command();
     if restarter::wanted() {
