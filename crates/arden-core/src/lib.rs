@@ -3,6 +3,7 @@
 pub mod error;
 pub mod links;
 pub mod paths;
+pub mod preferences;
 pub mod reset;
 
 use serde::Serialize;
