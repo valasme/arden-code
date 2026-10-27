@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-import { motionIsReduced, subscribeToWindowsMotion, windowsReducesMotion } from "@/lib/appearance";
+import { motionIsReduced, subscribeToSystemMotion, systemReducesMotion } from "@/lib/appearance";
 
 import { useSettings } from "./useSettings";
 
@@ -10,6 +10,6 @@ import { useSettings } from "./useSettings";
  */
 export function useMotionReduced() {
   const { reduceMotion } = useSettings().appearance;
-  const systemReduces = useSyncExternalStore(subscribeToWindowsMotion, windowsReducesMotion);
+  const systemReduces = useSyncExternalStore(subscribeToSystemMotion, systemReducesMotion);
   return motionIsReduced(reduceMotion, systemReduces);
 }

@@ -202,7 +202,7 @@ export const commands = {
 	 * 
 	 *  # Errors
 	 * 
-	 *  `ARD-APP-001` when Windows cannot open the browser.
+	 *  `ARD-APP-001` when the system cannot open the browser.
 	 */
 	openBugReport: () => __TAURI_INVOKE<null>("open_bug_report"),
 	/**
@@ -540,7 +540,7 @@ export const commands = {
 	 */
 	setSessionProject: (id: string, projectId: string) => __TAURI_INVOKE<null>("set_session_project", { id, projectId }),
 	/**
-	 *  Asks the person for a folder with Windows' dialog, and adds it as a project (ADR 0039). Nothing
+	 *  Asks the person for a folder with the system's dialog, and adds it as a project (ADR 0039). Nothing
 	 *  when they cancel. A folder opened before is the same project.
 	 * 
 	 *  # Errors
@@ -831,7 +831,7 @@ export type Appearance = {
 	theme: Theme,
 	/**  How large everything is, from 80 to 200 percent. */
 	zoom: number,
-	/**  Make the app larger or smaller with the Windows text size setting, on top of the zoom. */
+	/**  Make the app larger or smaller with the system's text size setting, on top of the zoom. */
 	followTextSize: boolean,
 	/**  The size of code text, from 11 to 20 pixels. */
 	codeFontSize: number,

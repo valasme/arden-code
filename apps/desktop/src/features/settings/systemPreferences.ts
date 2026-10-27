@@ -11,7 +11,7 @@ export function fallbackSystemPreferences(): SystemPreferences {
   return { textScalePercent: 100, locale: globalThis.navigator?.language ?? "en-US" };
 }
 
-/** The Windows text size and regional format now. They change while the app runs. */
+/** The system's text size and regional format now. They change while the app runs. */
 export function useSystemPreferences(): SystemPreferences {
   return useQuery(systemPreferencesQuery).data ?? fallbackSystemPreferences();
 }

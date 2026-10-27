@@ -99,7 +99,7 @@ pub fn bug_report_url(system_info: &str) -> String {
 ///
 /// # Errors
 ///
-/// `ARD-APP-001` when Windows cannot open the browser.
+/// `ARD-APP-001` when the system cannot open the browser.
 // Tauri hands commands their app handle by value.
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command]

@@ -7,14 +7,14 @@ export type Appearance = Pick<
 >;
 
 /**
- * How much larger than normal the whole interface is: the zoom setting, times the Windows text size
+ * How much larger than normal the whole interface is: the zoom setting, times the system's text size
  * when the person follows it. Both are percentages; the result is a factor, 1 being normal.
  */
 export function interfaceScale(
   { zoom, followTextSize }: Pick<Appearance, "zoom" | "followTextSize">,
-  windowsTextScalePercent: number,
+  systemTextScalePercent: number,
 ): number {
-  const factor = (zoom / 100) * (followTextSize ? windowsTextScalePercent / 100 : 1);
+  const factor = (zoom / 100) * (followTextSize ? systemTextScalePercent / 100 : 1);
   // Multiplying percentages leaves float noise such as 1.6500000000000001.
   return Math.round(factor * 10_000) / 10_000;
 }
@@ -26,10 +26,10 @@ export function interfaceScale(
 export function paintAppearance(
   root: HTMLElement,
   appearance: Appearance,
-  windowsTextScalePercent: number,
+  systemTextScalePercent: number,
 ) {
   const { codeFontSize, codeLigatures } = appearance;
-  root.style.setProperty("--zoom", String(interfaceScale(appearance, windowsTextScalePercent)));
+  root.style.setProperty("--zoom", String(interfaceScale(appearance, systemTextScalePercent)));
   // Code sizes are set in pixels; rem makes them follow the zoom like everything else.
   root.style.setProperty("--code-font-size", `${codeFontSize / 16}rem`);
   root.style.setProperty("--code-ligatures", codeLigatures ? "normal" : "none");
@@ -37,10 +37,10 @@ export function paintAppearance(
 
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
 
-/** Whether Windows asks for fewer animations. */
-export const windowsReducesMotion = () => window.matchMedia(reducedMotionQuery).matches;
+/** Whether the system asks for fewer animations. */
+export const systemReducesMotion = () => window.matchMedia(reducedMotionQuery).matches;
 
-export function subscribeToWindowsMotion(onChange: () => void) {
+export function subscribeToSystemMotion(onChange: () => void) {
   const query = window.matchMedia(reducedMotionQuery);
   query.addEventListener("change", onChange);
   return () => {
@@ -48,7 +48,7 @@ export function subscribeToWindowsMotion(onChange: () => void) {
   };
 }
 
-/** Whether motion is reduced, given the setting and what Windows asks for. */
+/** Whether motion is reduced, given the setting and what the system asks for. */
 export function motionIsReduced(
   setting: Settings["appearance"]["reduceMotion"],
   systemReduces: boolean,

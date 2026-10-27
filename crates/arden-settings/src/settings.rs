@@ -111,7 +111,7 @@ pub struct Appearance {
     pub theme: Theme,
     /// How large everything is, from 80 to 200 percent.
     pub zoom: u16,
-    /// Make the app larger or smaller with the Windows text size setting, on top of the zoom.
+    /// Make the app larger or smaller with the system's text size setting, on top of the zoom.
     pub follow_text_size: bool,
     /// The size of code text, from 11 to 20 pixels.
     pub code_font_size: u8,

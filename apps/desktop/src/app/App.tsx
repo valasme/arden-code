@@ -28,7 +28,7 @@ interface AppProps {
   history?: RouterHistory;
   /** The settings, when they were already read before the first render. */
   initialSettings?: Settings;
-  /** The Windows text size and regional format, when they were already read before the first render. */
+  /** The system's text size and regional format, when they were already read before the first render. */
   initialSystemPreferences?: SystemPreferences;
 }
 

@@ -101,7 +101,7 @@ interface Options {
   newSession?: Partial<NewSession>;
   /** Whether Settings → Agents allows Bypass permissions (ADR 0044). */
   allowBypassPermissions?: boolean;
-  /** The folder the person picks in Windows' dialog, or null when they cancel. */
+  /** The folder the person picks in the system's dialog, or null when they cancel. */
   pickedFolder?: Project | null;
   /** What Claude Code says it can do (ADR 0042). Nothing, until it has been heard. */
   catalog?: Catalog;

@@ -10,7 +10,7 @@ import { defaultSettings } from "@/ipc/defaults.gen";
  */
 export const FIRST_FRAME_GLOBAL = "__ARDEN_FIRST_FRAME__";
 
-/** What the first frame is drawn with: the settings, and Windows' text size and regional format. */
+/** What the first frame is drawn with: the settings, and the system's text size and regional format. */
 export interface FirstFrame {
   settings: Settings;
   systemPreferences: SystemPreferences;

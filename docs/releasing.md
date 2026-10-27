@@ -1,15 +1,17 @@
 # Releasing Arden Code
 
 How a release is made, what is switched off until you switch it on, and the steps only a person can
-do. The decisions behind it are in ADR 0018 (distribution, updates and signing) and ADR 0030 (updates).
+do. The decisions behind it are in ADR 0018 (distribution, updates and signing), ADR 0030 (updates)
+and, for Linux, ADR 0062 (Linux packages and updates).
 
 ## What exists
 
 | Piece | Where | State |
 |---|---|---|
 | The installer | `apps/desktop/src-tauri/installer/` and `tauri.conf.json` | Per-user (no administrator), Windows 11 only, "Also delete my settings and logs" on uninstall |
-| The update signature | `tauri build` with the update key in the environment | Made for every installer |
-| `latest.json` | `scripts/latest-json.ts` | Made from the installer's signature |
+| The Linux packages | `tauri.linux.conf.json`, built on Ubuntu 22.04 | A `.deb`, an `.rpm` and an AppImage; the app is `arden-code` on `PATH` |
+| The update signature | `tauri build` with the update key in the environment | Made for every installer and package |
+| `latest.json` | `scripts/latest-json.ts`, and `scripts/linux-release.sh` for Linux's part | One manifest: `windows-x86_64` and each Linux package, the AppImage also as `linux-x86_64` |
 | Trial release | `.github/workflows/release-trial.yml` | **On.** Builds all of it, publishes nothing |
 | Release | `.github/workflows/release.yml` | **Off** until `RELEASES_ENABLED` is `true` |
 | Version and changelog | `.github/workflows/release-please.yml`, `release-please-config.json` | **Off** until `RELEASES_ENABLED` is `true` |
@@ -21,7 +23,8 @@ do. The decisions behind it are in ADR 0018 (distribution, updates and signing) 
 
 Run **Release trial** from the Actions tab, or open a pull request that changes a file that shapes a
 release. It builds the installer, its update signature and `latest.json`, checks that they exist, and
-keeps them as a build artifact for three days. It signs with a throwaway key until the real key is a
+keeps them as a build artifact for three days. Its Linux job builds the three packages and Linux's part
+of `latest.json`, installs the `.deb`, checks the terminal command and the desktop entry, and removes it. It signs with a throwaway key until the real key is a
 secret, and says so as a warning.
 
 ## Steps only a person can do
@@ -41,14 +44,17 @@ secret, and says so as a warning.
    "Signing with the real update key". If it warns that the secret is not set, the secret is empty.
    Signed with the real key, the trial and the release both check that the signature was made with the
    key the app trusts (`plugins.updater.pubkey` in `tauri.conf.json`), and fail if it was not.
-3. **Switch releases on** when the trial is green: add the repository variable `RELEASES_ENABLED` with
+3. **Check the AppImage on Omarchy** before each release (ADR 0057): it is the check for a desktop
+   that is not Ubuntu's. Start it, open a project, run a Claude session, and close it.
+4. **Switch releases on** when the trial is green: add the repository variable `RELEASES_ENABLED` with
    the value `true`. From then on, release-please keeps a release pull request open. Merging it tags
-   the version and the release workflow uploads the installer, its signature and `latest.json`.
-4. **Code signing (optional, later).** Buy or get a certificate, and add
+   the version and the release workflow uploads the installer, the Linux packages, their signatures and
+   `latest.json`.
+5. **Code signing (optional, later).** Buy or get a certificate, and add
    `WINDOWS_CODE_SIGNING_CERTIFICATE` (the .pfx file as base64) and `WINDOWS_CODE_SIGNING_PASSWORD`.
    The step in the release workflow then signs the installer and remakes its update signature. Without
    it Windows SmartScreen warns about an unknown publisher.
-5. **winget (optional, later).** For each release, fill in the three files in `packaging/winget/`
+6. **winget (optional, later).** For each release, fill in the three files in `packaging/winget/`
    (`{{version}}`, `{{installerUrl}}` and `{{sha256}}` of the installer) and send them to
    `microsoft/winget-pkgs`, or use `wingetcreate`.
 

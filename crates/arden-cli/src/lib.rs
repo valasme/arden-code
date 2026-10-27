@@ -399,6 +399,9 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn the_command_starts_the_app_apart_from_the_terminal_with_the_folder_to_open() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::time::{Duration, Instant};
+
         let root = tempfile::tempdir().expect("a temporary folder");
         let said = root.path().join("arguments");
         let app = root.path().join("app");
@@ -407,24 +410,21 @@ mod tests {
             format!("#!/bin/sh\necho \"$@\" > '{}'\n", said.display()),
         )
         .expect("a stand-in for the app");
-        fs::set_permissions(
-            &app,
-            <fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o755),
-        )
-        .expect("runnable");
+        fs::set_permissions(&app, fs::Permissions::from_mode(0o755)).expect("runnable");
 
         launch(&app, Some(Path::new("/home/ada/project"))).expect("the app starts");
 
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while !said.exists() {
-            assert!(std::time::Instant::now() < deadline, "the app was started");
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        assert_eq!(
-            fs::read_to_string(&said).expect("what it was given").trim(),
-            "--open /home/ada/project"
-        );
+        // The stand-in writes its line in one go; the line is whole once it ends.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let given = loop {
+            let text = fs::read_to_string(&said).unwrap_or_default();
+            if text.ends_with('\n') {
+                break text;
+            }
+            assert!(Instant::now() < deadline, "the app was started");
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        assert_eq!(given.trim(), "--open /home/ada/project");
     }
 
     #[test]

@@ -62,7 +62,7 @@ export const settingsQuery = queryOptions({
   staleTime: Number.POSITIVE_INFINITY,
 });
 
-/** The Windows text size and regional format. Rust announces every change, like the settings. */
+/** The system's text size and regional format. Rust announces every change, like the settings. */
 export const systemPreferencesQuery = queryOptions({
   queryKey: ["system-preferences"],
   queryFn: () => (isTauri() ? commands.getSystemPreferences() : fallbackSystemPreferences()),
