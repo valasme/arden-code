@@ -181,7 +181,7 @@ test.describe("settings in the real app", () => {
       await expect(
         app.page
           .getByRole("radiogroup", { name: "Theme" })
-          .getByRole("radio", { name: "Same as Windows" }),
+          .getByRole("radio", { name: "Same as the system" }),
       ).toBeChecked();
       expect(invalidCopies(app.dataDir)).toHaveLength(1);
     } finally {

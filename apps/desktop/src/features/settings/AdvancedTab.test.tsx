@@ -103,7 +103,7 @@ describe("Advanced → the switches", () => {
     renderTab();
 
     expect(await screen.findByRole("switch", { name: "Developer mode" })).not.toBeChecked();
-    expect(screen.getByRole("switch", { name: "Use the Windows title bar" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "Use the system title bar" })).not.toBeChecked();
     expect(screen.getByRole("switch", { name: "Hardware acceleration" })).toBeChecked();
   });
 
@@ -113,7 +113,7 @@ describe("Advanced → the switches", () => {
     renderTab();
 
     await user.click(await screen.findByRole("switch", { name: "Developer mode" }));
-    await user.click(screen.getByRole("switch", { name: "Use the Windows title bar" }));
+    await user.click(screen.getByRole("switch", { name: "Use the system title bar" }));
 
     await waitFor(() => {
       expect(asked(calls, "change_setting").map((call) => call.payload)).toEqual([

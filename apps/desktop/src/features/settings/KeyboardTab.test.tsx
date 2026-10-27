@@ -209,7 +209,7 @@ describe("Settings → Keyboard", () => {
   });
 
   it.each([
-    ["{Alt>}{F4}{/Alt}", "Windows keeps Alt+F4 for itself"],
+    ["{Alt>}{F4}{/Alt}", "The system keeps Alt+F4 for itself"],
     ["{Control>}c{/Control}", "Ctrl+C edits text in every text field"],
     [
       "{Control>}{Alt>}k{/Alt}{/Control}",

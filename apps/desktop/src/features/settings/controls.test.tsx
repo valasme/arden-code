@@ -7,7 +7,7 @@ import { ChoiceControl } from "./controls";
 import "@/styles/global.css";
 
 const options = [
-  { value: "system", label: "Same as Windows" },
+  { value: "system", label: "Same as the system" },
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
 ] as const;
@@ -31,7 +31,7 @@ describe("ChoiceControl", () => {
       .map((radio) => radio.getBoundingClientRect());
 
     expect(group).toBeVisible();
-    expect(screen.getByRole("radio", { name: "Same as Windows" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Same as the system" })).toBeChecked();
     // Side by side, each starting where the one before ends.
     expect(second?.top).toBe(first?.top);
     expect(second?.left).toBeCloseTo(first?.right ?? 0, 0);
@@ -58,7 +58,7 @@ describe("ChoiceControl", () => {
 
     it("keeps the chosen option's label visible under the pointer", async () => {
       renderChoice();
-      const chosen = screen.getByRole("radio", { name: "Same as Windows" });
+      const chosen = screen.getByRole("radio", { name: "Same as the system" });
 
       // The browser's own pointer, so that :hover applies.
       await pointer.hover(chosen);

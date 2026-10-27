@@ -88,7 +88,7 @@ test.describe("following Windows in the real app", () => {
         await expect.poll(() => rootFontSize(app.page), { timeout: 10_000 }).toBe("24px");
 
         await openSettings(app.page, "Appearance");
-        await app.page.getByRole("switch", { name: "Follow Windows text size" }).click();
+        await app.page.getByRole("switch", { name: "Follow the system text size" }).click();
 
         await expect.poll(() => rootFontSize(app.page)).toBe("16px");
         expect(JSON.parse(readFileSync(file, "utf8")).textScalePercent).toBe(150);

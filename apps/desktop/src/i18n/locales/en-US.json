@@ -214,12 +214,12 @@
     "ARD-APP-004": {
       "action": "Copy the address and open it yourself if you trust it.",
       "what": "That link was not opened.",
-      "why": "Arden Code does not open some kinds of link, such as programs and scripts, or Windows could not open it."
+      "why": "Arden Code does not open some kinds of link, such as programs and scripts, or the system could not open it."
     },
     "ARD-APP-005": {
-      "action": "Check that notifications are allowed for Arden Code in Windows settings, and that Focus assist is off.",
+      "action": "Check that notifications are allowed for Arden Code in the system's settings, and that Do not disturb is off.",
       "what": "The notification was not shown.",
-      "why": "Windows would not show it."
+      "why": "The system would not show it."
     },
     "ARD-APP-006": {
       "action": "Close any program that may be using Arden Code's folders, such as an Explorer window or a terminal, then restart Arden Code to finish the reset.",
@@ -229,7 +229,7 @@
     "ARD-LOG-001": {
       "action": "Open it yourself in Explorer, at %LOCALAPPDATA%\\io.github.valasme.arden\\logs.",
       "what": "The logs folder could not be opened.",
-      "why": "Windows refused, or the folder could not be created."
+      "why": "The system refused, or the folder could not be created."
     },
     "ARD-LOG-002": {
       "action": "Choose another folder, and check that it is writable.",
@@ -239,7 +239,7 @@
     "ARD-PROC-001": {
       "action": "Restart Arden Code. If it keeps happening, report it.",
       "what": "Arden Code cannot start other programs on this computer.",
-      "why": "Windows did not let it make the group that keeps agent programs together with the app."
+      "why": "The system did not let it make the group that keeps agent programs together with the app."
     },
     "ARD-SET-001": {
       "action": "Check that the folder is writable, then change the setting again.",
@@ -264,7 +264,7 @@
     "ARD-SET-005": {
       "action": "Open it yourself in Explorer, at %APPDATA%\\io.github.valasme.arden\\settings.json.",
       "what": "settings.json could not be opened.",
-      "why": "Windows refused, or no program is set to open JSON files."
+      "why": "The system refused, or no program is set to open JSON files."
     },
     "ARD-UPD-001": {
       "action": "Try again. If it keeps happening, download the newest version from the releases page.",
@@ -404,7 +404,7 @@
     },
     "link": {
       "blocked": "link not opened",
-      "confirmDescription": "This link is not a web address, so Windows would open it in another program: {{url}}",
+      "confirmDescription": "This link is not a web address, so the system would open it in another program: {{url}}",
       "confirmTitle": "Open this link?",
       "open": "Open link"
     },
@@ -807,8 +807,8 @@
         }
       },
       "nativeTitleBar": {
-        "description": "Lets Windows draw the title bar and the window buttons. Use it if the window does not behave well on your setup.",
-        "label": "Use the Windows title bar"
+        "description": "Lets the system draw the title bar and the window buttons. Use it if the window does not behave well on your setup.",
+        "label": "Use the system title bar"
       },
       "openFile": {
         "button": "Open",
@@ -889,15 +889,15 @@
       },
       "codePreview": "Code preview",
       "followTextSize": {
-        "description": "Make everything larger when the Windows text size is larger.",
-        "label": "Follow Windows text size"
+        "description": "Make everything larger when the system's text size is larger.",
+        "label": "Follow the system text size"
       },
       "reduceMotion": {
-        "description": "Play fewer animations. Follows the Windows Show animations setting by default.",
+        "description": "Play fewer animations. Follows the system's animation setting by default.",
         "label": "Reduce motion",
         "off": "Do not reduce",
         "on": "Reduce",
-        "system": "Same as Windows"
+        "system": "Same as the system"
       },
       "showStatusBar": {
         "description": "The bar along the bottom of the window.",
@@ -910,10 +910,10 @@
       },
       "theme": {
         "dark": "Dark",
-        "description": "Light or dark, or the same as Windows.",
+        "description": "Light or dark, or the same as the system.",
         "label": "Theme",
         "light": "Light",
-        "system": "Same as Windows"
+        "system": "Same as the system"
       },
       "transcriptView": {
         "description": "How much of a reply sessions show. Thinking opens the agent's thinking; Verbose also shows each tool's input and output in full. Picking a view from a session's menu changes only that session.",
@@ -942,7 +942,7 @@
         "english": "English (US)",
         "label": "Regional format",
         "preview": "Example: {{date}}, {{number}}, {{relative}}",
-        "windows": "Same as Windows"
+        "windows": "Same as the system"
       }
     },
     "keyboard": {
@@ -958,7 +958,7 @@
         "altgr": "Many keyboards type characters with Ctrl and Alt together, so a shortcut cannot use both. Press another shortcut.",
         "editing": "{{shortcut}} edits text in every text field. Press another shortcut.",
         "needsModifier": "{{shortcut}} would take over typing. Hold Ctrl or Alt as well, or use a function key.",
-        "reserved": "Windows keeps {{shortcut}} for itself. Press another shortcut."
+        "reserved": "The system keeps {{shortcut}} for itself. Press another shortcut."
       },
       "recording": "Press the new shortcut, or Esc to cancel.",
       "remove": "Remove shortcut {{shortcut}} from {{command}}",
@@ -973,7 +973,7 @@
     },
     "notifications": {
       "desktop": {
-        "description": "Show a Windows notification when something needs you, such as an agent asking a question. With this off, Arden Code shows none.",
+        "description": "Show a system notification when something needs you, such as an agent asking a question. With this off, Arden Code shows none.",
         "label": "Desktop notifications"
       },
       "off": "Notifications are off, so none was shown.",
