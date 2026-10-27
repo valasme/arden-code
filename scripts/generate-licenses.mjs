@@ -73,7 +73,11 @@ function cratesFor(target) {
   for (const line of tree.split(/\r?\n/u)) {
     const match = /^(\S+) v(\S+)(?: \(([^)]*)\))?(?: \(\*\))?\|(.*)$/u.exec(line.trim());
     if (!match) continue;
-    const [, name, version, source, license] = match;
+    const [, name, version, source, rawLicense] = match;
+    // Cargo marks a package it has shown already with "(*)" at the end of the line, after the
+    // format, so the mark lands in the license. Which entry gets it depends on the order the trees
+    // are walked, which differs between machines: it is left out.
+    const license = rawLicense.replace(/ \(\*\)$/u, "");
     // Packages of this repository show their folder; packages from a registry do not.
     if (source && /[\\/]/u.test(source)) continue;
     found.push({ name, version, license: license.trim() || "See the package", kind: "crate" });
