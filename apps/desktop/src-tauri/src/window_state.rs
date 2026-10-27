@@ -100,9 +100,10 @@ pub fn restore_window(
 
 /// Gives the window an outer size of exactly `width` x `height`.
 ///
-/// Tauri's `set_size` sets the inner size, and a window without a title bar has an invisible border
-/// whose size Tauri does not account for consistently. So this sets the size, measures what came out,
-/// and corrects for the difference until the outer size is right.
+/// Tauri's `set_size` sets the inner size, and on Windows a window without a title bar has an
+/// invisible border whose size Tauri does not account for consistently. So this sets the size,
+/// measures what came out, and corrects for the difference until the outer size is right.
+#[cfg(windows)]
 fn set_outer_size(window: &WebviewWindow, width: u32, height: u32) -> tauri::Result<()> {
     window.set_size(PhysicalSize::new(width, height))?;
     for _ in 0..3 {
@@ -121,6 +122,14 @@ fn set_outer_size(window: &WebviewWindow, width: u32, height: u32) -> tauri::Res
         ))?;
     }
     Ok(())
+}
+
+/// Gives the window a size of exactly `width` x `height`. Linux draws no invisible border, and a
+/// window that is not shown yet has no outer size to measure: its outer size reads as nothing, and
+/// correcting by it would double the window.
+#[cfg(not(windows))]
+fn set_outer_size(window: &WebviewWindow, width: u32, height: u32) -> tauri::Result<()> {
+    window.set_size(PhysicalSize::new(width, height))
 }
 
 /// Reads the window's current place. Returns `None` while it is minimized, because Windows then

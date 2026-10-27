@@ -15,8 +15,8 @@ pub use arden_core::preferences::{
 /// The font resolution GTK uses when nothing changed it: 96 dots per inch.
 const NORMAL_DPI: f64 = 96.0;
 
-/// The text size from GTK's font resolution (`gtk-xft-dpi`), which is in 1024ths of a dot per
-/// inch: 96 dots per inch is the normal size. Nothing set (zero or less) means the normal size.
+/// The text size from GTK's font resolution (`gtk-xft-dpi`), which counts dots per inch times 1024:
+/// 96 dots per inch is the normal size. Nothing set (zero or less) means the normal size.
 #[must_use]
 pub fn text_scale_from_xft_dpi(xft_dpi: i32) -> u16 {
     if xft_dpi <= 0 {
