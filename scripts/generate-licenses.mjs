@@ -39,8 +39,19 @@ function npmPackages() {
   return found;
 }
 
-/** The crates the app is built with, from Cargo. The app's own crates are left out. */
+/** The platforms the app is built for (ADR 0057). Each has crates of its own, such as GTK's on Linux. */
+const targets = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"];
+
+/**
+ * The crates the app is built with, from Cargo, on every platform it is built for. The app's own
+ * crates are left out.
+ */
 function crates() {
+  return targets.flatMap(cratesFor);
+}
+
+/** The crates the app is built with for one target. */
+function cratesFor(target) {
   const tree = run("cargo", [
     "tree",
     "-p",
@@ -50,7 +61,7 @@ function crates() {
     "--prefix",
     "none",
     "--target",
-    "x86_64-pc-windows-msvc",
+    target,
     "--format",
     "{p}|{l}",
     "--locked",

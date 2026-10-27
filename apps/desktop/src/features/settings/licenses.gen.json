@@ -948,6 +948,78 @@
     "kind": "npm"
   },
   {
+    "name": "async-broadcast",
+    "version": "0.7.2",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "async-channel",
+    "version": "2.5.0",
+    "license": "Apache-2.0 OR MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "async-executor",
+    "version": "1.14.0",
+    "license": "Apache-2.0 OR MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "async-io",
+    "version": "2.6.0",
+    "license": "Apache-2.0 OR MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "async-lock",
+    "version": "3.4.2",
+    "license": "Apache-2.0 OR MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "async-process",
+    "version": "2.5.0",
+    "license": "Apache-2.0 OR MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "async-recursion",
+    "version": "1.1.1",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "async-signal",
+    "version": "0.2.14",
+    "license": "Apache-2.0 OR MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "async-task",
+    "version": "4.7.1",
+    "license": "Apache-2.0 OR MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "async-trait",
+    "version": "0.1.92",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "atk",
+    "version": "0.18.2",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "atk-sys",
+    "version": "0.18.2",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
     "name": "atomic-waker",
     "version": "1.1.2",
     "license": "Apache-2.0 OR MIT",
@@ -1017,6 +1089,12 @@
     "name": "block-buffer",
     "version": "0.10.4",
     "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "blocking",
+    "version": "1.7.0",
+    "license": "Apache-2.0 OR MIT",
     "kind": "crate"
   },
   {
@@ -1102,6 +1180,18 @@
     "version": "3.1.2",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "cairo-rs",
+    "version": "0.18.5",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "cairo-sys-rs",
+    "version": "0.18.2",
+    "license": "MIT (*)",
+    "kind": "crate"
   },
   {
     "name": "call-bind-apply-helpers",
@@ -1270,6 +1360,12 @@
     "version": "14.0.3",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "concurrent-queue",
+    "version": "2.5.0",
+    "license": "Apache-2.0 OR MIT (*)",
+    "kind": "crate"
   },
   {
     "name": "conf",
@@ -1452,6 +1548,12 @@
     "kind": "crate"
   },
   {
+    "name": "dbus",
+    "version": "0.9.12",
+    "license": "Apache-2.0/MIT",
+    "kind": "crate"
+  },
+  {
     "name": "debounce-fn",
     "version": "4.0.0",
     "license": "MIT",
@@ -1562,7 +1664,7 @@
   {
     "name": "dirs",
     "version": "7.0.0",
-    "license": "MIT OR Apache-2.0",
+    "license": "MIT OR Apache-2.0 (*)",
     "kind": "crate"
   },
   {
@@ -1575,6 +1677,18 @@
     "name": "displaydoc",
     "version": "0.2.7",
     "license": "MIT OR Apache-2.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "dlopen2",
+    "version": "0.8.2",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "dlopen2_derive",
+    "version": "0.4.3",
+    "license": "MIT",
     "kind": "crate"
   },
   {
@@ -1594,6 +1708,12 @@
     "version": "17.4.2",
     "license": "BSD-2-Clause",
     "kind": "npm"
+  },
+  {
+    "name": "downcast-rs",
+    "version": "1.2.1",
+    "license": "MIT/Apache-2.0",
+    "kind": "crate"
   },
   {
     "name": "dpi",
@@ -1656,6 +1776,12 @@
     "kind": "npm"
   },
   {
+    "name": "endi",
+    "version": "1.1.1",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
     "name": "enquirer",
     "version": "2.4.1",
     "license": "MIT",
@@ -1666,6 +1792,18 @@
     "version": "6.0.1",
     "license": "BSD-2-Clause",
     "kind": "npm"
+  },
+  {
+    "name": "enumflags2",
+    "version": "0.7.12",
+    "license": "MIT OR Apache-2.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "enumflags2_derive",
+    "version": "0.7.12",
+    "license": "MIT OR Apache-2.0 (*)",
+    "kind": "crate"
   },
   {
     "name": "env-paths",
@@ -1682,6 +1820,12 @@
   {
     "name": "erased-serde",
     "version": "0.4.10",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "errno",
+    "version": "0.3.14",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
@@ -1750,6 +1894,18 @@
     "version": "1.8.1",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "event-listener",
+    "version": "5.4.2",
+    "license": "Apache-2.0 OR MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "event-listener-strategy",
+    "version": "0.5.4",
+    "license": "Apache-2.0 OR MIT (*)",
+    "kind": "crate"
   },
   {
     "name": "eventsource",
@@ -1848,6 +2004,12 @@
     "kind": "npm"
   },
   {
+    "name": "field-offset",
+    "version": "0.3.6",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "figures",
     "version": "6.1.0",
     "license": "MIT",
@@ -1872,6 +2034,12 @@
     "kind": "npm"
   },
   {
+    "name": "fixedbitset",
+    "version": "0.5.7",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "flate2",
     "version": "1.1.10",
     "license": "MIT OR Apache-2.0 (*)",
@@ -1881,6 +2049,12 @@
     "name": "fnv",
     "version": "1.0.7",
     "license": "Apache-2.0 / MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "foldhash",
+    "version": "0.1.5",
+    "license": "Zlib",
     "kind": "crate"
   },
   {
@@ -1938,6 +2112,24 @@
     "kind": "crate"
   },
   {
+    "name": "futures-executor",
+    "version": "0.3.34",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "futures-io",
+    "version": "0.3.34",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "futures-lite",
+    "version": "2.6.1",
+    "license": "Apache-2.0 OR MIT (*)",
+    "kind": "crate"
+  },
+  {
     "name": "futures-macro",
     "version": "0.3.34",
     "license": "MIT OR Apache-2.0",
@@ -1966,6 +2158,48 @@
     "version": "3.1.0",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "gdk",
+    "version": "0.18.2",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "gdk-pixbuf",
+    "version": "0.18.5",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "gdk-pixbuf-sys",
+    "version": "0.18.0",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "gdk-sys",
+    "version": "0.18.2",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "gdkwayland-sys",
+    "version": "0.18.2",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "gdkx11",
+    "version": "0.18.2",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "gdkx11-sys",
+    "version": "0.18.2",
+    "license": "MIT (*)",
+    "kind": "crate"
   },
   {
     "name": "generic-array",
@@ -2022,6 +2256,12 @@
     "kind": "npm"
   },
   {
+    "name": "gethostname",
+    "version": "1.1.0",
+    "license": "Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "getrandom",
     "version": "0.2.17",
     "license": "MIT OR Apache-2.0 (*)",
@@ -2046,6 +2286,36 @@
     "kind": "crate"
   },
   {
+    "name": "gio",
+    "version": "0.18.4",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "gio-sys",
+    "version": "0.18.1",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "glib",
+    "version": "0.18.5",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "glib-macros",
+    "version": "0.18.5",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "glib-sys",
+    "version": "0.18.1",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
     "name": "glob",
     "version": "0.3.4",
     "license": "MIT OR Apache-2.0",
@@ -2064,6 +2334,12 @@
     "kind": "crate"
   },
   {
+    "name": "gobject-sys",
+    "version": "0.18.0",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
     "name": "gopd",
     "version": "1.2.0",
     "license": "MIT",
@@ -2076,6 +2352,24 @@
     "kind": "npm"
   },
   {
+    "name": "gtk",
+    "version": "0.18.2",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "gtk-sys",
+    "version": "0.18.2",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "gtk3-macros",
+    "version": "0.18.2",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
     "name": "has-symbols",
     "version": "1.1.0",
     "license": "MIT",
@@ -2084,6 +2378,12 @@
   {
     "name": "hashbrown",
     "version": "0.12.3",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "hashbrown",
+    "version": "0.15.5",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
@@ -2161,7 +2461,19 @@
   },
   {
     "name": "heck",
+    "version": "0.4.1",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "heck",
     "version": "0.5.0",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "hex",
+    "version": "0.4.3",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
@@ -2394,6 +2706,18 @@
     "kind": "npm"
   },
   {
+    "name": "inotify",
+    "version": "0.11.5",
+    "license": "ISC",
+    "kind": "crate"
+  },
+  {
+    "name": "inotify-sys",
+    "version": "0.1.8",
+    "license": "ISC",
+    "kind": "crate"
+  },
+  {
     "name": "inout",
     "version": "0.1.4",
     "license": "MIT OR Apache-2.0",
@@ -2440,6 +2764,12 @@
     "version": "2.0.1",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "is-docker",
+    "version": "0.2.0",
+    "license": "MIT",
+    "kind": "crate"
   },
   {
     "name": "is-docker",
@@ -2551,6 +2881,12 @@
   },
   {
     "name": "is-wsl",
+    "version": "0.4.0",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "is-wsl",
     "version": "2.2.0",
     "license": "MIT",
     "kind": "npm"
@@ -2583,6 +2919,18 @@
     "name": "itoa",
     "version": "1.0.18",
     "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "javascriptcore-rs",
+    "version": "1.1.2",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "javascriptcore-rs-sys",
+    "version": "1.1.1",
+    "license": "MIT (*)",
     "kind": "crate"
   },
   {
@@ -2688,6 +3036,12 @@
     "kind": "crate"
   },
   {
+    "name": "libdbus-sys",
+    "version": "0.2.7",
+    "license": "Apache-2.0/MIT",
+    "kind": "crate"
+  },
+  {
     "name": "libsqlite3-sys",
     "version": "0.38.2",
     "license": "MIT",
@@ -2698,6 +3052,12 @@
     "version": "1.2.4",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "linux-raw-sys",
+    "version": "0.12.1",
+    "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+    "kind": "crate"
   },
   {
     "name": "litemap",
@@ -2877,6 +3237,12 @@
     "name": "memchr",
     "version": "2.8.3",
     "license": "Unlicense OR MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "memoffset",
+    "version": "0.9.1",
+    "license": "MIT",
     "kind": "crate"
   },
   {
@@ -3146,7 +3512,7 @@
   {
     "name": "mio",
     "version": "1.2.3",
-    "license": "MIT",
+    "license": "MIT (*)",
     "kind": "crate"
   },
   {
@@ -3208,6 +3574,12 @@
     "version": "2.0.57",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "nom",
+    "version": "8.0.0",
+    "license": "MIT",
+    "kind": "crate"
   },
   {
     "name": "notify",
@@ -3342,6 +3714,12 @@
     "kind": "npm"
   },
   {
+    "name": "openssl-probe",
+    "version": "0.2.1",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "option-ext",
     "version": "0.2.0",
     "license": "MPL-2.0",
@@ -3352,6 +3730,18 @@
     "version": "8.2.0",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "ordered-stream",
+    "version": "0.2.0",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "os_pipe",
+    "version": "1.2.3",
+    "license": "MIT",
+    "kind": "crate"
   },
   {
     "name": "p-limit",
@@ -3372,15 +3762,33 @@
     "kind": "npm"
   },
   {
+    "name": "pango",
+    "version": "0.18.3",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "pango-sys",
+    "version": "0.18.0",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
     "name": "parent-module",
     "version": "1.0.1",
     "license": "MIT",
     "kind": "npm"
   },
   {
+    "name": "parking",
+    "version": "2.2.1",
+    "license": "Apache-2.0 OR MIT",
+    "kind": "crate"
+  },
+  {
     "name": "parking_lot",
     "version": "0.12.5",
-    "license": "MIT OR Apache-2.0",
+    "license": "MIT OR Apache-2.0 (*)",
     "kind": "crate"
   },
   {
@@ -3462,6 +3870,12 @@
     "kind": "crate"
   },
   {
+    "name": "petgraph",
+    "version": "0.8.3",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "phf",
     "version": "0.13.1",
     "license": "MIT",
@@ -3510,6 +3924,12 @@
     "kind": "crate"
   },
   {
+    "name": "piper",
+    "version": "0.2.5",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "pkce-challenge",
     "version": "5.0.1",
     "license": "MIT",
@@ -3537,6 +3957,12 @@
     "name": "png",
     "version": "0.18.1",
     "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "polling",
+    "version": "3.11.0",
+    "license": "Apache-2.0 OR MIT",
     "kind": "crate"
   },
   {
@@ -3600,6 +4026,36 @@
     "kind": "npm"
   },
   {
+    "name": "proc-macro-crate",
+    "version": "1.3.1",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "proc-macro-crate",
+    "version": "2.0.2",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "proc-macro-crate",
+    "version": "3.5.0",
+    "license": "MIT OR Apache-2.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "proc-macro-error",
+    "version": "1.0.4",
+    "license": "MIT OR Apache-2.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "proc-macro-error-attr",
+    "version": "1.0.4",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "proc-macro2",
     "version": "1.0.107",
     "license": "MIT OR Apache-2.0 (*)",
@@ -3640,6 +4096,12 @@
     "version": "1.2.3",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "quick-xml",
+    "version": "0.41.0",
+    "license": "MIT",
+    "kind": "crate"
   },
   {
     "name": "quick-xml",
@@ -3918,9 +4380,21 @@
     "kind": "crate"
   },
   {
+    "name": "rustix",
+    "version": "1.1.5",
+    "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT (*)",
+    "kind": "crate"
+  },
+  {
     "name": "rustls",
     "version": "0.23.46",
     "license": "Apache-2.0 OR ISC OR MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "rustls-native-certs",
+    "version": "0.8.4",
+    "license": "Apache-2.0 OR ISC OR MIT",
     "kind": "crate"
   },
   {
@@ -3938,7 +4412,7 @@
   {
     "name": "rustls-webpki",
     "version": "0.103.16",
-    "license": "ISC",
+    "license": "ISC (*)",
     "kind": "crate"
   },
   {
@@ -4059,6 +4533,12 @@
     "name": "serde_repr",
     "version": "0.1.21",
     "license": "MIT OR Apache-2.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "serde_spanned",
+    "version": "0.6.9",
+    "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
   {
@@ -4200,6 +4680,12 @@
     "kind": "npm"
   },
   {
+    "name": "signal-hook-registry",
+    "version": "1.4.8",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "simd-adler32",
     "version": "0.3.10",
     "license": "MIT",
@@ -4258,6 +4744,18 @@
     "version": "2.0.8",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "soup3",
+    "version": "0.5.0",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "soup3-sys",
+    "version": "0.5.0",
+    "license": "MIT (*)",
+    "kind": "crate"
   },
   {
     "name": "source-map",
@@ -4423,6 +4921,12 @@
   },
   {
     "name": "syn",
+    "version": "1.0.109",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "syn",
     "version": "2.0.119",
     "license": "MIT OR Apache-2.0 (*)",
     "kind": "crate"
@@ -4430,7 +4934,7 @@
   {
     "name": "syn",
     "version": "3.0.6",
-    "license": "MIT OR Apache-2.0 (*)",
+    "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
   {
@@ -4573,8 +5077,20 @@
   },
   {
     "name": "thiserror",
+    "version": "1.0.69",
+    "license": "MIT OR Apache-2.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "thiserror",
     "version": "2.0.21",
     "license": "MIT OR Apache-2.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "thiserror-impl",
+    "version": "1.0.69",
+    "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
   {
@@ -4657,14 +5173,38 @@
   },
   {
     "name": "toml_datetime",
+    "version": "0.6.3",
+    "license": "MIT OR Apache-2.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "toml_datetime",
     "version": "1.1.1+spec-1.1.0",
+    "license": "MIT OR Apache-2.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "toml_edit",
+    "version": "0.19.15",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "toml_edit",
+    "version": "0.20.2",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "toml_edit",
+    "version": "0.25.15+spec-1.1.0",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
   {
     "name": "toml_parser",
     "version": "1.1.3+spec-1.1.0",
-    "license": "MIT OR Apache-2.0",
+    "license": "MIT OR Apache-2.0 (*)",
     "kind": "crate"
   },
   {
@@ -4730,6 +5270,12 @@
   {
     "name": "tracing-subscriber",
     "version": "0.3.23",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "tree_magic_mini",
+    "version": "3.2.2",
     "license": "MIT",
     "kind": "crate"
   },
@@ -4980,6 +5526,42 @@
     "kind": "crate"
   },
   {
+    "name": "wayland-backend",
+    "version": "0.3.17",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "wayland-client",
+    "version": "0.31.15",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "wayland-protocols",
+    "version": "0.32.13",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "wayland-protocols-wlr",
+    "version": "0.3.12",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "wayland-scanner",
+    "version": "0.31.11",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "wayland-sys",
+    "version": "0.31.11",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
     "name": "web_atoms",
     "version": "0.2.6",
     "license": "MIT OR Apache-2.0",
@@ -4995,6 +5577,18 @@
     "name": "web-time",
     "version": "1.1.0",
     "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "webkit2gtk",
+    "version": "2.0.2",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "webkit2gtk-sys",
+    "version": "2.0.2",
+    "license": "MIT (*)",
     "kind": "crate"
   },
   {
@@ -5143,8 +5737,20 @@
   },
   {
     "name": "winnow",
+    "version": "0.5.40",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "winnow",
     "version": "1.0.4",
     "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "wl-clipboard-rs",
+    "version": "0.9.4",
+    "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
   {
@@ -5170,6 +5776,30 @@
     "version": "1.0.0",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "x11",
+    "version": "2.21.0",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "x11-dl",
+    "version": "2.21.0",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "x11rb",
+    "version": "0.13.2",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
+    "name": "x11rb-protocol",
+    "version": "0.13.2",
+    "license": "MIT OR Apache-2.0",
+    "kind": "crate"
   },
   {
     "name": "yallist",
@@ -5199,6 +5829,30 @@
     "name": "yoke-derive",
     "version": "0.8.4",
     "license": "Unicode-3.0 (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "zbus",
+    "version": "5.19.0",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "zbus_macros",
+    "version": "5.19.0",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "zbus_names",
+    "version": "4.3.4",
+    "license": "MIT",
+    "kind": "crate"
+  },
+  {
+    "name": "zcheapstr",
+    "version": "1.1.0",
+    "license": "MIT",
     "kind": "crate"
   },
   {
@@ -5290,6 +5944,24 @@
     "version": "5.0.15",
     "license": "MIT",
     "kind": "npm"
+  },
+  {
+    "name": "zvariant",
+    "version": "5.15.0",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "zvariant_derive",
+    "version": "5.15.0",
+    "license": "MIT (*)",
+    "kind": "crate"
+  },
+  {
+    "name": "zvariant_utils",
+    "version": "4.2.0",
+    "license": "MIT",
+    "kind": "crate"
   },
   {
     "name": "zwitch",
