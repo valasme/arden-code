@@ -251,8 +251,9 @@ mod linux {
             let parent = std::process::id();
             command.process_group(0);
             // SAFETY: the function runs in the new process between `fork` and `exec`, where only
-            // calls that are safe in a signal handler may be made. `prctl` and `getppid` are such
-            // calls, and the function touches no memory but its own copy of `parent`.
+            // calls that are safe in a signal handler may be made: `prctl` and `getppid` are such
+            // calls, and the function allocates nothing and touches no memory but its own copy of
+            // `parent`.
             #[allow(unsafe_code)]
             unsafe {
                 command.pre_exec(move || die_with_parent(parent));
@@ -280,20 +281,15 @@ mod linux {
 
         /// Kills every group, and starts no more programs.
         pub fn end(&self) {
-            let ids = std::mem::take(&mut *self.ids.lock().unwrap_or_else(PoisonError::into_inner));
-            for id in ids {
-                kill_group(id);
-            }
-        }
-    }
-
-    impl Drop for Groups {
-        fn drop(&mut self) {
             // The thread ends once nothing can send to it.
             self.starter
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .take();
+            let ids = std::mem::take(&mut *self.ids.lock().unwrap_or_else(PoisonError::into_inner));
+            for id in ids {
+                kill_group(id);
+            }
         }
     }
 
@@ -318,7 +314,8 @@ mod linux {
     }
 
     /// Asks the kernel to kill this process when the thread that started it ends, and ends it now
-    /// if the app ended already, before the request was made.
+    /// if the app ended already, before the request was made. It runs between `fork` and `exec`,
+    /// so it allocates nothing, not even for an error: both errors are plain error numbers.
     fn die_with_parent(parent: u32) -> io::Result<()> {
         // SAFETY: plain system calls, safe between `fork` and `exec`. `prctl` reads no memory.
         #[allow(unsafe_code)]
@@ -327,7 +324,7 @@ mod linux {
                 return Err(io::Error::last_os_error());
             }
             if u32::try_from(libc::getppid()).ok() != Some(parent) {
-                return Err(io::Error::other("the app has ended"));
+                return Err(io::Error::from_raw_os_error(libc::ESRCH));
             }
         }
         Ok(())
@@ -453,6 +450,10 @@ mod linux_tests {
 
         assert!(ends(started));
         let _ = shell.wait();
+        assert!(
+            job.start(Command::new("true")).is_err(),
+            "nothing starts after the end"
+        );
     }
 
     #[test]

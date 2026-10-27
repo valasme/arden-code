@@ -525,10 +525,12 @@ fn stop_on_signals(app: &tauri::AppHandle) {
 
     for signal in [libc::SIGTERM, libc::SIGINT, libc::SIGHUP] {
         let handle = app.clone();
+        // The handler stays: once GLib has taken a signal it keeps it, and a source that ended
+        // would leave a second request with nothing to answer it.
         glib::unix_signal_add_local(signal, move || {
             tracing::info!(signal, "Arden Code was asked to stop");
             handle.exit(0);
-            glib::ControlFlow::Break
+            glib::ControlFlow::Continue
         });
     }
 }
