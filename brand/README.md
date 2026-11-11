@@ -1,6 +1,6 @@
 # Arden Code brand
 
-Every logo file is generated from code. Do not edit the files in `assets/` by hand: change the
+Every Arden Code logo file is generated from code. Do not edit the files in `assets/` by hand: change the
 generator in `src/` and run:
 
 ```powershell
@@ -88,7 +88,19 @@ copy it into `brand/affinity/`. Through Affinity's MCP server (Settings › Mode
 
 ## Licenses
 
-The brand assets are released under the repository's [MIT license](../LICENSE).
+Arden Code's own brand assets are released under the repository's [MIT license](../LICENSE).
+The third-party vendor logos in [reference/agents](reference/agents/README.md) are excluded from that
+grant. Claude's source artwork is imported for agent identification; the OpenAI originals are kept
+for the forthcoming Codex driver.
 The wordmark is set in **Lora**, © The Lora Project Authors, under the
 [SIL Open Font License 1.1](fonts/OFL.txt). The logo files contain outlines of the letters, not the font,
 and the font is not shipped with the app.
+
+## Third-party agent artwork
+
+The supplied Claude and OpenAI artwork in [reference/agents](reference/agents/README.md) is an exception
+to Arden Code's generated-asset pipeline. Keep these source originals unchanged. They are eligible for
+agent identification under [ADR 0064](../docs/adr/0064-vendor-logos-for-agent-identification.md),
+which replaces the old internal no-vendor-logo rule. This does not establish vendor permission or add
+the third-party artwork to the MIT grant. Claude's controls and session identity now render its
+original artwork; the Codex renderer will join them with its driver.
