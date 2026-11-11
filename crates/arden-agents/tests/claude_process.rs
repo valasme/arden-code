@@ -41,6 +41,7 @@ fn store_for(project: &Path, driver: Arc<ClaudeDriver>) -> SessionStore {
         Agents {
             demo: Arc::new(DemoDriver::instant()),
             claude: driver,
+            codex: Arc::new(DemoDriver::instant()),
         },
     )
 }

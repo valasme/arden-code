@@ -221,6 +221,7 @@ mod tests {
             prompt,
             folder: std::path::Path::new(r"C:Playground"),
             conversation: None,
+            has_reply_history: false,
             choices: crate::model::Choices::default(),
             permission_mode: crate::model::PermissionMode::default(),
             names: false,

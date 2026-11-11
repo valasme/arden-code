@@ -5,7 +5,7 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -40,6 +40,21 @@ pub struct Piped {
     pub output: ChildStdout,
     /// The file that holds what the program wrote as errors.
     pub log: PathBuf,
+    /// An optional per-connection lifetime. Retain it until the process and its readers close.
+    pub scope: Option<ProcessScope>,
+}
+
+/// Ends a connection's process tree when its owner closes, without ending another agent's job.
+#[derive(Debug)]
+pub struct ProcessScope {
+    job: Arc<Job>,
+}
+
+impl Drop for ProcessScope {
+    fn drop(&mut self) {
+        self.job.end();
+        // On Windows the final Arc closes the kill-on-close Job Object. The app holds only Weak.
+    }
 }
 
 /// What a program did, when it was run to its end.
@@ -66,10 +81,11 @@ pub struct Separated {
     pub log: PathBuf,
 }
 
-/// Starts programs for the app, all in one job so that they end when the app ends.
+/// Starts programs in the app job or a registered connection scope, so they end with their owner.
 #[derive(Debug)]
 pub struct Supervisor {
     job: Job,
+    scopes: Mutex<Vec<Weak<Job>>>,
     log_folder: PathBuf,
     sequence: AtomicU64,
 }
@@ -102,6 +118,7 @@ impl Supervisor {
     pub fn new(log_folder: impl Into<PathBuf>) -> io::Result<Self> {
         Ok(Self {
             job: Job::new()?,
+            scopes: Mutex::new(Vec::new()),
             log_folder: log_folder.into(),
             sequence: AtomicU64::new(0),
         })
@@ -192,6 +209,43 @@ impl Supervisor {
         folder: &Path,
         without: &[&str],
     ) -> Result<Piped, SpawnError> {
+        self.spawn_piped_in(&self.job, name, program, args, folder, without)
+    }
+
+    /// Starts a piped program in its own lifetime scope, also registered for app shutdown. Dropping
+    /// `Piped::scope` ends the whole tree before a protocol client joins its I/O workers.
+    ///
+    /// # Errors
+    ///
+    /// Returns the failures of [`Self::spawn_piped`], or an error creating the scoped job.
+    pub fn spawn_piped_scoped(
+        &self,
+        name: &str,
+        program: &Resolved,
+        args: &[Arg],
+        folder: &Path,
+        without: &[&str],
+    ) -> Result<Piped, SpawnError> {
+        let job = Arc::new(Job::new().map_err(|error| SpawnError::Io(error.to_string()))?);
+        {
+            let mut scopes = self.scopes.lock().unwrap_or_else(PoisonError::into_inner);
+            scopes.retain(|scope| scope.strong_count() > 0);
+            scopes.push(Arc::downgrade(&job));
+        }
+        let mut piped = self.spawn_piped_in(&job, name, program, args, folder, without)?;
+        piped.scope = Some(ProcessScope { job });
+        Ok(piped)
+    }
+
+    fn spawn_piped_in(
+        &self,
+        job: &Job,
+        name: &str,
+        program: &Resolved,
+        args: &[Arg],
+        folder: &Path,
+        without: &[&str],
+    ) -> Result<Piped, SpawnError> {
         let mut command = command::build(program, args)?;
         let (log, path) = self
             .open_log(name, program, args)
@@ -204,8 +258,7 @@ impl Supervisor {
         for variable in without {
             command.env_remove(variable);
         }
-        let mut child = self
-            .job
+        let mut child = job
             .start(command)
             .map_err(|error| SpawnError::Io(error.to_string()))?;
         let (Some(input), Some(output)) = (child.stdin.take(), child.stdout.take()) else {
@@ -220,6 +273,7 @@ impl Supervisor {
             input,
             output,
             log: path,
+            scope: None,
         })
     }
 
@@ -357,6 +411,16 @@ impl Supervisor {
     /// is about to end, and its own end would leave some running (ADR 0058).
     pub fn end_all(&self) {
         self.job.end();
+        let jobs: Vec<_> = self
+            .scopes
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .filter_map(Weak::upgrade)
+            .collect();
+        for job in jobs {
+            job.end();
+        }
     }
 
     /// The folder the logs of the programs go to.

@@ -15,6 +15,7 @@ import "@/styles/global.css";
 const claude: Detection = {
   cli: "claude",
   installed: true,
+  readiness: "ready",
   path: String.raw`C:\Users\Ada\.local\bin\claude.exe`,
   version: "2.1.286",
   minimumVersion: "2.1.223",
@@ -26,6 +27,7 @@ const claude: Detection = {
 const codex: Detection = {
   cli: "codex",
   installed: false,
+  readiness: "missing",
   path: null,
   version: null,
   minimumVersion: null,
@@ -89,6 +91,40 @@ afterEach(() => {
 const section = (name: string) => screen.getByRole("region", { name });
 
 describe("Settings → Agents", () => {
+  it.each([
+    ["ready", "Ready"],
+    ["incompatible", "Not compatible"],
+    ["unknown", "Could not check readiness"],
+  ] as const)(
+    "shows Codex readiness %s separately from its installed version",
+    async (readiness, label) => {
+      startApp([claude, { ...codex, installed: true, version: "0.167.1", readiness }]);
+      renderTab();
+      const agent = await screen.findByRole("region", { name: "Codex" });
+      expect(within(agent).getByText(label)).toBeVisible();
+    },
+  );
+
+  it.each(["incompatible", "unknown"] as const)(
+    "gives actionable coded guidance for Codex readiness %s",
+    async (readiness) => {
+      startApp([claude, { ...codex, installed: true, version: "0.167.1", readiness }]);
+      renderTab();
+      const agent = await screen.findByRole("region", { name: "Codex" });
+      expect(within(agent).getByText(/codex login status/u)).toBeVisible();
+      expect(within(agent).getByText(/ARD-AGT-028/u)).toBeVisible();
+    },
+  );
+
+  it("gives Codex its own CLI sign-in guidance instead of Claude's login command", async () => {
+    startApp([claude, { ...codex, installed: true, version: "0.167.1", signedIn: false }]);
+    renderTab();
+
+    const agent = await screen.findByRole("region", { name: "Codex" });
+    expect(within(agent).getByText(/run codex login/u)).toBeVisible();
+    expect(within(agent).queryByText(/run claude/u)).toBeNull();
+  });
+
   it("says that it only looks, and nothing about an integration to come", async () => {
     startApp();
     renderTab();

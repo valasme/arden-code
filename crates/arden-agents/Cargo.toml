@@ -30,6 +30,13 @@ path = "src/bin/claude_stand_in.rs"
 test = false
 doc = false
 
+# Protocol fixture only; the application starts the person's own installed Codex.
+[[bin]]
+name = "codex-stand-in"
+path = "src/bin/codex_stand_in.rs"
+test = false
+doc = false
+
 [dev-dependencies]
 tempfile = "3"
 time = { version = "0.3", features = ["formatting", "parsing"] }

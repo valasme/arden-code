@@ -10,14 +10,14 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 |---|---|---|
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [0002](0002-product-identity.md) | Product identity: Arden Code | Accepted |
-| [0003](0003-license-privacy-and-vendor-posture.md) | MIT license, zero telemetry, hands off credentials | Accepted |
+| [0003](0003-license-privacy-and-vendor-posture.md) | MIT license, zero telemetry, hands off credentials | Accepted; vendor-logo policy and third-party artwork licensing clarified by [0064](0064-vendor-logos-for-agent-identification.md) |
 | [0004](0004-platform-windows-11-x64-tauri-2.md) | Windows 11 x64 on Tauri 2 | Superseded by [0057](0057-linux-x64-as-a-second-platform.md) |
 | [0005](0005-repository-layout.md) | Light monorepo | Accepted |
 | [0006](0006-frontend-stack.md) | Frontend stack | Accepted; Motion added by [0054](0054-what-moves-and-how.md) |
 | [0007](0007-typescript-7-oxlint-oxfmt.md) | TypeScript 7 with Oxlint and oxfmt | Accepted; the jsx-a11y rules superseded by [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md) |
 | [0008](0008-typed-ipc-and-error-codes.md) | Typed IPC and error codes | Accepted |
 | [0009](0009-custom-title-bar-and-snap-layouts.md) | Custom title bar with our own Snap Layouts module | Accepted |
-| [0010](0010-visual-design-system.md) | Visual design system | Accepted; motion superseded by [0054](0054-what-moves-and-how.md), tokens and radius by [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md) |
+| [0010](0010-visual-design-system.md) | Visual design system | Accepted; motion superseded by [0054](0054-what-moves-and-how.md), tokens and radius by [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md); agent-artwork exception added by [0064](0064-vendor-logos-for-agent-identification.md) |
 | [0011](0011-brand-assets-from-code.md) | Brand assets generated from code | Accepted |
 | [0012](0012-settings-service.md) | Settings service | Accepted |
 | [0013](0013-logging-diagnostics-crash-handling.md) | Logging, diagnostics and crash handling | Accepted |
@@ -51,7 +51,7 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0041](0041-choosing-how-a-session-starts.md) | Choosing how a session starts: agent, project, model and effort | Accepted |
 | [0042](0042-slash-commands-and-exact-models.md) | Slash commands, exact models and Ultrathink | Accepted |
 | [0043](0043-usage-limits.md) | Usage limits | Accepted |
-| [0044](0044-permission-modes-the-context-window-and-the-agents-icon.md) | Permission modes, the context window and the agent's icon | Accepted |
+| [0044](0044-permission-modes-the-context-window-and-the-agents-icon.md) | Permission modes, the context window and the agent's icon | Accepted; logo rule superseded by [0064](0064-vendor-logos-for-agent-identification.md) |
 | [0045](0045-the-message-box-on-one-row.md) | The message box on one row | Accepted |
 | [0046](0046-the-message-box-keeps-its-draft.md) | The message box keeps its draft | Accepted |
 | [0047](0047-holding-the-smallest-window-size.md) | Holding the smallest window size | Accepted |
@@ -60,7 +60,7 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0050](0050-claude-names-its-sessions.md) | Claude names its sessions | Accepted |
 | [0051](0051-transcript-views.md) | Transcript views | Accepted |
 | [0052](0052-several-slash-commands-and-file-mentions.md) | Several slash commands and file mentions in a message | Accepted |
-| [0053](0053-plugins-through-the-agent-cli.md) | Plugins through the agent CLI | Accepted |
+| [0053](0053-plugins-through-the-agent-cli.md) | Plugins through the agent CLI | Accepted; Codex plugin delivery gated by [0065](0065-codex-as-a-first-class-agent.md) |
 | [0054](0054-what-moves-and-how.md) | What moves, and how | Accepted |
 | [0055](0055-the-warm-start-gate-is-on-the-pages-share.md) | The warm start's gate is on the page's share | Accepted |
 | [0056](0056-the-stock-theme-and-a-lighter-accessibility-bar.md) | The stock theme and a lighter accessibility bar | Accepted |
@@ -71,3 +71,6 @@ To add a record, copy [the template](0000-template.md) and give it the next numb
 | [0061](0061-the-desktop-settings-linux-reads.md) | The desktop settings Linux reads | Accepted |
 | [0062](0062-linux-packages-and-updates.md) | Linux packages and updates | Accepted |
 | [0063](0063-the-linux-end-to-end-test.md) | The Linux end-to-end test | Accepted |
+| [0064](0064-vendor-logos-for-agent-identification.md) | Vendor logos for agent identification | Accepted |
+| [0065](0065-codex-as-a-first-class-agent.md) | Codex as a first-class local coding agent | Accepted |
+| [0066](0066-scoped-noninteractive-codex-processes.md) | Scoped, noninteractive read-only Codex processes | Accepted |

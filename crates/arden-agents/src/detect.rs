@@ -51,12 +51,24 @@ impl AgentCli {
     }
 }
 
+/// Whether an installation can start the protocol Arden Code needs. Unknown is not signed out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum Readiness {
+    Missing,
+    Incompatible,
+    SignedOut,
+    Ready,
+    Unknown,
+}
+
 /// What was found about one agent program.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Detection {
     pub cli: AgentCli,
     pub installed: bool,
+    pub readiness: Readiness,
     /// The file that would be started.
     pub path: Option<String>,
     /// Its version, when it could be read.
@@ -156,27 +168,56 @@ pub fn detect(
     search_path: &OsStr,
     lookup: &Lookup,
 ) -> Detection {
-    let found = lookup.find(cli.program(), search_path);
+    let entry = lookup.find(cli.program(), search_path);
+    let codex = (cli == AgentCli::Codex)
+        .then(|| crate::codex::locate::find(search_path, lookup).ok())
+        .flatten();
+    let found = if cli == AgentCli::Codex {
+        codex.as_ref().map(|located| located.program.clone())
+    } else {
+        entry.clone()
+    };
     let version = found
         .as_ref()
         .and_then(|program| version_of(supervisor, cli, program));
     let claude = cli == AgentCli::Claude;
+    let too_old = claude
+        && version
+            .as_deref()
+            .is_some_and(|version| !recent_enough(version));
+    let (readiness, signed_in) = if entry.is_none() {
+        (Readiness::Missing, None)
+    } else if claude {
+        let signed_in = found
+            .as_ref()
+            .and_then(|program| signed_in_of(supervisor, program));
+        let readiness = if too_old {
+            Readiness::Incompatible
+        } else {
+            match signed_in {
+                Some(true) => Readiness::Ready,
+                Some(false) => Readiness::SignedOut,
+                None => Readiness::Unknown,
+            }
+        };
+        (readiness, signed_in)
+    } else if let Some(located) = &codex {
+        crate::codex::probe(supervisor, located, version.as_deref())
+    } else {
+        (Readiness::Incompatible, None)
+    };
     Detection {
         cli,
-        installed: found.is_some(),
+        installed: entry.is_some(),
+        readiness,
         path: found
             .as_ref()
+            .or(entry.as_ref())
             .map(|program| program.path.display().to_string()),
-        too_old: claude
-            && version
-                .as_deref()
-                .is_some_and(|version| !recent_enough(version)),
+        too_old,
         version,
         minimum_version: claude.then(|| MINIMUM_VERSION.to_owned()),
-        signed_in: found
-            .as_ref()
-            .filter(|_| claude)
-            .and_then(|program| signed_in_of(supervisor, program)),
+        signed_in,
         install_url: cli.install_url().to_owned(),
     }
 }
@@ -502,7 +543,7 @@ mod tests {
         }
 
         #[test]
-        fn reads_codexs_version() {
+        fn a_script_entry_is_installed_but_is_not_a_launchable_native_codex() {
             let (supervisor, _logs) = supervisor();
             let bin = program("codex", "echo 'codex-cli 0.98.0'\n");
 
@@ -514,7 +555,8 @@ mod tests {
             );
 
             assert!(found.installed);
-            assert_eq!(found.version.as_deref(), Some("0.98.0"));
+            assert_eq!(found.version, None);
+            assert_eq!(found.readiness, Readiness::Incompatible);
         }
     }
 }

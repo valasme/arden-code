@@ -41,7 +41,7 @@ do), and add a row here. Never reuse or renumber a code.
 | `ARD-AGT-013` | Claude could not answer, for a reason Claude Code gave | A reply from Claude |
 | `ARD-AGT-014` | A session's agent or project was to change after its first message | The agent or project menu of a session |
 | `ARD-AGT-015` | An approval request was answered when it no longer waited | Answering an approval request |
-| `ARD-AGT-016` | Claude was asked to work in a project whose folder is not trusted | Sending a message to Claude |
+| `ARD-AGT-016` | A local coding agent was asked to work in a project whose folder is not trusted | Sending a message to a coding agent |
 | `ARD-AGT-017` | The Playground was to be removed; it always stays | Removing a project |
 | `ARD-AGT-018` | The agent refused the permission mode chosen, and kept the one it was in | Choosing a permission mode |
 | `ARD-AGT-019` | Bypass permissions was chosen while Settings does not allow it | Choosing a permission mode |
@@ -50,6 +50,14 @@ do), and add a row here. Never reuse or renumber a code.
 | `ARD-AGT-022` | A plugin command answered in a way Arden Code does not understand | The Plugins page |
 | `ARD-AGT-023` | A plugin command took too long, and was ended | The Plugins page |
 | `ARD-AGT-024` | Arden Code did not run a plugin command: what it names is not one it passes on | The Plugins page |
+| `ARD-AGT-025` | No native Codex is installed | Sending a message to Codex |
+| `ARD-AGT-026` | Codex reported that sign-in is needed | Starting a Codex reply |
+| `ARD-AGT-027` | Codex could not start, disconnected or stopped responding | A Codex reply |
+| `ARD-AGT-028` | Codex did not confirm the expected protocol or native read-only policy | Starting or resuming Codex |
+| `ARD-AGT-029` | Codex reported a failed turn | A Codex reply |
+| `ARD-AGT-030` | Codex's saved conversation could not be confirmed or resumed | Saving or resuming Codex history |
+| `ARD-AGT-031` | An unsupported authority-bearing request was refused | A Codex server request |
+| `ARD-AGT-032` | Codex's wrapper has no supported native program behind it | Resolving an npm or shell installation |
 | `ARD-PROC-001` | Programs cannot be started and supervised on this computer | Settings → Agents; starting an agent |
 | `ARD-UPD-001` | The update could not be installed | Choosing "Update ready: restart" |
 | `ARD-WIN-001` | Windows' window menu could not be opened | The title bar's Window menu button and Alt+Space |
