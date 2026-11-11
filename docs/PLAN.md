@@ -46,7 +46,7 @@ All of it is production-grade, so real features plug into it later.
 - Real agent sessions. Claude followed the foundation as the first real agent (§5.8, §6.12); Codex is still to come.
 - Tray icon and background mode.
 - App links and Explorer integration.
-- Agent-specific colors.
+- Agent-specific color themes. Supplied vendor artwork for agent identification is a narrow exception ([ADR 0064](adr/0064-vendor-logos-for-agent-identification.md)).
 - Languages other than English.
 - Telemetry.
 - macOS, Windows 10 and ARM64. Linux x64 is the second platform ([ADR 0057](adr/0057-linux-x64-as-a-second-platform.md)).
@@ -65,7 +65,7 @@ All of it is production-grade, so real features plug into it later.
 | Logs, crash reports, cache | `%LOCALAPPDATA%\io.github.valasme.arden\` |
 | Internal names | Rust crates `arden-*`, private JS workspace packages `@arden/*` |
 | Version | SemVer from `0.1.0`, kept in one place and bumped by release-please |
-| License | MIT, brand assets included. Bundled fonts keep the SIL Open Font License 1.1 |
+| License | MIT, Arden Code's own brand assets included. Third-party vendor artwork is excluded ([ADR 0064](adr/0064-vendor-logos-for-agent-identification.md)); bundled fonts keep the SIL Open Font License 1.1 |
 
 ## 3. Principles
 
@@ -212,7 +212,10 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
 - **Common interface:** an `AgentDriver` trait with these operations: start or resume a session, send a turn, stream items, answer approval requests, cancel, end what it keeps running for a session, apply a permission mode at once, allow Bypass permissions or not, and report what it says about a session outside its replies (the mode it applies, a mode it refused, the name it suggests).
 - **The session store holds the agents** ([#172](https://github.com/valasme/arden-code/issues/172)): one driver per agent, and it calls the session's own. A reply goes to the driver of the session's agent; archiving, deleting and removing a project end the agents of the sessions they touch; a chosen permission mode and the Bypass permissions setting reach the agents. It decides what a new session starts with, its agent, model, effort and permission mode, in one place ([#174](https://github.com/valasme/arden-code/issues/174)), and writes it in one go. It keeps what the agents report and tells one listener, which the app turns into its events. It calls a driver only once the change is written and its lock is let go. What is not about one session, such as the slash commands, the usage limits and plugins, the app asks of the Claude driver itself.
 - **Demo driver (in the foundation):** streams realistic fake output through the real pipeline.
-- **Codex (later):** `codex app-server`, JSON-RPC over stdio. This is the protocol OpenAI's own clients use.
+- **Codex (accepted design; driver not implemented):** `codex app-server`, JSON-RPC over stdio, through the person's own CLI and the existing driver/store seam ([ADR 0065](adr/0065-codex-as-a-first-class-agent.md), [the councils](research/codex-support-councils.md)).
+  - First-class sessions in the Playground and trusted folder projects: save/resume, streamed text and exposed reasoning, tool calls/file changes, approvals and supported questions, Stop, native model/effort and permission controls, install/version/sign-in guidance, reported context-window/usage-limit figures, and supported skills.
+  - Shared UI patterns, agent-specific capabilities: no Claude-only Ultrathink or unverified mapping of Claude's permission modes. Preserve project trust, CLI-owned credentials, fail-closed approvals and the default-off, never-inherited Bypass permissions guard. Keep the CLI's returned conversation id; never silently replace a missing conversation. Keep the existing default-agent precedence, with available Codex before Demo when no session supplies a choice and Claude is unavailable.
+  - Plugin management belongs on the shared Plugins page but is gated on production API availability and a release-matched probe; it does not block core sessions. Skills have separate capability checks. Establish the supported CLI version, schema and real handshake before claiming protocol verification. Raw mode, attachments and importing existing CLI conversations remain outside this build.
 - **Claude** ([ADR 0038](adr/0038-claude-through-its-own-protocol.md), from [the research](research/claude-agent.md) and [the councils](research/claude-agent-councils.md)):
   - Arden Code runs the person's installed `claude` in headless streaming mode (`-p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode <the session's mode>`) and speaks Claude Code's control protocol itself, in Rust.
   - The session's permission mode is passed at start (Manual as `default`) and changed in a running Claude Code with `set_permission_mode`; its `system/status` frames report every change, which the session follows ([ADR 0044](adr/0044-permission-modes-the-context-window-and-the-agents-icon.md), [the research](research/permission-modes-and-context.md)). `--allow-dangerously-skip-permissions` is passed only while Allow Bypass permissions is on.
@@ -226,6 +229,14 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
   - Claude Code's error output goes to the child's log; the conversation on its standard output does not.
   - Claude's plugins change only through the person's own `claude plugin … --json`, run like the driver's `claude`, one command at a time, its answers kept to what the Plugins page shows and never logged ([ADR 0053](adr/0053-plugins-through-the-agent-cli.md), [the research](research/plugins-skills-and-mentions.md)). After a change, each running Claude Code gets `reload_plugins`, held when it would cost the conversation's prompt cache. The page needs Claude Code 2.1.268 or later.
 - **Raw mode (later):** an embedded terminal (ConPTY + xterm.js) running the vendor's own terminal UI.
+- **Initial Codex driver (local #195–#196 slice):** the installed native `codex app-server` over
+  bounded JSON-line stdio, with its own account and confirmed read-only/network-disabled sandbox.
+  Native `never` approval pacing does not grant escalation; unsupported interactive requests fail
+  closed. Text and exposed reasoning stream into saved sessions; confirmed rollouts resume after
+  restart, and missing history never silently becomes a new conversation. Each connection owns a
+  process-tree scope ([ADR 0066](adr/0066-scoped-noninteractive-codex-processes.md)). The native
+  [verification report](reviews/0195-0196-codex-sessions.md) is Windows-local evidence, not completion
+  of the broader Codex release gates or Linux PR CI.
 - **Deliberately not used:**
   - The Agent Client Protocol: it mainly helped with Cursor, which is out of scope.
   - Anthropic's TypeScript Agent SDK: it needs a bundled JavaScript runtime and speaks the same protocol to the same CLI.
@@ -235,8 +246,10 @@ The sidebar lists the pinned sessions, then each project's other sessions, the m
   - Resolves executables through PATH and PATHEXT, preferring real `.exe` files.
   - Never passes untrusted arguments through `.cmd` or `.bat` wrappers, a known class of Windows argument-injection bugs.
   - Runs child processes inside a Windows Job Object, so they close when the app closes. On Linux each starts in a process group of its own that the kernel and the app end with it ([ADR 0058](adr/0058-what-replaces-the-job-object-on-linux.md)).
+  - Protocol connections can have their own registered lifetime scope. Closing it ends descendants
+    before readers are joined, without ending another agent's app-wide job (ADR 0066).
   - Logs each child process's output to its own file.
-- **Detection:** Settings → Agents shows whether `claude` and `codex` are installed, where, and which version; for Claude Code also the minimum version and whether it is signed in. It runs once in the background after start, and again with Look again.
+- **Detection:** Settings → Agents shows whether `claude` and `codex` are installed, where, and which version; Claude Code also has its minimum version, and each reports sign-in when known. Codex distinguishes missing, incompatible, signed-out, ready and unknown startup checks; it resolves npm's native program without running wrapper text. It runs once in the background after start, and again with Look again. Ready Codex is the final fallback before Demo only where the existing inheritance rules have no explicit/prior agent and Claude is unavailable.
 - **Vendor terms:** Anthropic's rules on using subscriptions from other tools changed several times in 2026. Arden Code only ever launches the person's own CLI, which handles the person's own sign-in. [vendors.md](vendors.md) summarizes the current terms, with the date they were checked.
 
 ## 6. User experience
@@ -451,7 +464,7 @@ The decisions and the options turned down are in [ADR 0053](adr/0053-plugins-thr
 - **Installed:** each plugin with its scope, version, an on/off switch, Update, Uninstall and its load errors. Synced plugins can be turned off, and are removed on claude.ai; an organization's show no actions.
 - **Marketplaces:** Add (GitHub `owner/repo`, a git address, a folder or a `marketplace.json` address), Update and Remove, which says how many plugins it uninstalls.
 - **After a change,** running sessions reload their plugins unless that would cost the conversation's prompt cache; then they get it when their Claude Code next starts, and the result says so.
-- **Not here (later):** skills that are not in a plugin, and Codex's plugins, which come with its driver.
+- **Not here (later):** installing skills that are not in a plugin. Codex's plugin controls join this page only when its production API and a release-matched probe support them; core Codex sessions do not wait for that gate ([ADR 0065](adr/0065-codex-as-a-first-class-agent.md)).
 
 ## 7. Visual design
 
@@ -551,7 +564,7 @@ This is the maintainer's neutral OKLCH theme, as supplied and weighed by [the co
 
 - **The UI stays neutral.**
 - **Brand orange appears only** in the logo, the app icon, the welcome state and About, plus a subtle tint on selected text.
-- **No agent colors yet.**
+- **No agent color themes.** The supplied vendor artwork keeps its own colors only where it identifies an agent; this does not color the surrounding UI ([ADR 0064](adr/0064-vendor-logos-for-agent-identification.md)).
 
 ### 7.4 Focus, motion and density
 
@@ -566,7 +579,7 @@ This is the maintainer's neutral OKLCH theme, as supplied and weighed by [the co
 
 ### 7.5 Icons
 
-Lucide icons are 16 px with a 1.5 stroke in the UI, and 20 px in the title bar, at the color of the text beside them. Every icon-only button has a name, which its tooltip shows. The message box's menus use a bot for Claude (a flask for the Demo agent), a folder, a brain, rising bars and a shield for the permission mode; Ultrathink is a lightbulb. No vendor's logo is shown without its written permission ([ADR 0044](adr/0044-permission-modes-the-context-window-and-the-agents-icon.md)).
+Lucide icons are 16 px with a 1.5 stroke in the UI, and 20 px in the title bar, at the color of the text beside them. Every icon-only button has a name, which its tooltip shows. The message box's menus use a folder, a brain, rising bars and a shield for the permission mode; Ultrathink is a lightbulb. Agent identification uses the maintainer-supplied Claude symbol and OpenAI artwork for Codex, with visible names and accessible control labels; Demo keeps its flask. Preserve the supplied artwork and its colors, using a contrasting neutral surface where needed, without recoloring or inversion. This policy replaces ADR 0044's internal no-logo/written-permission prerequisite; it does not assert that a vendor granted permission ([ADR 0064](adr/0064-vendor-logos-for-agent-identification.md)). Claude's controls and session identity render the original SVG as an image; Codex's artwork will join them with its driver.
 
 ## 8. Brand
 
@@ -605,7 +618,7 @@ The mark is a graphic, not text. It contrasts 2.4:1 against white and 8.2:1 agai
 
 ### 8.3 Asset pipeline
 
-`pnpm brand:build` (package `@arden/brand`) generates every asset from code. The outputs are committed, and CI fails if they are out of date.
+`pnpm brand:build` (package `@arden/brand`) generates Arden Code's own brand assets from code. The outputs are committed, and CI fails if they are out of date. The supplied third-party agent artwork in `brand/reference/agents/` is kept unchanged and outside that generator ([ADR 0064](adr/0064-vendor-logos-for-agent-identification.md)).
 
 1. **The mark** is generated from the parameters above and merged into a single clean vector shape. A pixel test compares it against the reference image and requires at least 0.95 overlap.
 2. **The wordmark:** "Arden Code" set in Lora Regular (OFL) and converted to outlines with opentype.js.

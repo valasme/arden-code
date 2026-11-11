@@ -1,0 +1,43 @@
+{
+  "stats": {
+    "startTime": "2026-11-11T18:55:49.085Z",
+    "duration": 511613.011,
+    "expected": 122,
+    "skipped": 6,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "skipped": [
+    {
+      "file": "performance.spec.ts",
+      "title": "starts, cold and warm, in the time the plan allows"
+    },
+    {
+      "file": "performance.spec.ts",
+      "title": "sits idle without using much memory or the processor"
+    },
+    {
+      "file": "release.spec.ts",
+      "title": "F5 does not reload the page, although Windows sends it to the web engine"
+    },
+    {
+      "file": "release.spec.ts",
+      "title": "Ctrl+P, Ctrl+F and F12 open nothing that takes the focus away"
+    },
+    {
+      "file": "release.spec.ts",
+      "title": "the browser's own context menu is never left to open"
+    },
+    {
+      "file": "release.spec.ts",
+      "title": "developer mode gives the browser's shortcuts back, and turning it off takes them away"
+    }
+  ],
+  "excludedForThisRun": [
+    "real clicks on the title bar toggles",
+    "Window menu positioning requiring foreground ownership",
+    "real corner dragging"
+  ],
+  "retries": 0,
+  "nativeBuildSha256": "913b88708f9ff54017431d916bf1f59896b9033190445b43cb60786ca6c24f94"
+}

@@ -11,12 +11,13 @@ import { TrustDialog } from "./TrustDialog";
 /** A message that waits for the person to trust its folder, and how to say what became of it. */
 interface Waiting {
   project: Project;
+  agent: AgentKind;
   go: () => boolean | Promise<boolean>;
   sent: (sent: boolean) => void;
 }
 
 /**
- * Claude first works in a folder only once the person trusts it (ADR 0039). `gate` sends at once,
+ * A local coding agent works in a folder only once the person trusts it (ADRs 0039, 0065). `gate` sends at once,
  * or first asks with the trust dialog, which `dialog` draws: Trust saves the trust and sends,
  * Cancel answers `false` so the message stays in the box.
  */
@@ -36,14 +37,15 @@ export function useTrustGate(): {
     project: Project | undefined,
     go: () => boolean | Promise<boolean>,
   ) => {
-    if (agent !== "claude" || project?.kind !== "folder" || project.trusted) return go();
+    if (agent === "demo" || project?.kind !== "folder" || project.trusted) return go();
     return new Promise<boolean>((sent) => {
-      setWaiting({ project, go, sent });
+      setWaiting({ project, agent, go, sent });
     });
   };
 
   const dialog = waiting ? (
     <TrustDialog
+      agent={waiting.agent}
       name={waiting.project.name}
       path={waiting.project.path}
       onAnswer={(trusted) => {

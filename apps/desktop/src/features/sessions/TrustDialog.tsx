@@ -2,17 +2,20 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import type { AgentKind } from "@/ipc/bindings";
 
 /**
- * Asks whether the person trusts a folder before Claude first works in it (ADR 0039): Claude Code
+ * Asks whether the person trusts a folder before a local agent works in it: Claude Code
  * runs a project's own hooks, MCP servers and environment without asking. `onAnswer` hears the
  * answer once; closing the dialog any other way is Cancel.
  */
 export function TrustDialog({
+  agent = "claude",
   name,
   path,
   onAnswer,
 }: {
+  agent?: AgentKind;
   name: string;
   path: string;
   onAnswer: (trusted: boolean) => void;
@@ -34,7 +37,10 @@ export function TrustDialog({
         if (!open) answer(false);
       }}
       title={t("sessions.trust.title", { name })}
-      description={t("sessions.trust.description", { path })}
+      description={t(
+        agent === "codex" ? "sessions.trust.codexDescription" : "sessions.trust.description",
+        { path },
+      )}
       confirmLabel={t("sessions.trust.confirm")}
       onConfirm={() => {
         answer(true);

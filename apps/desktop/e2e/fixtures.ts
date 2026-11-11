@@ -25,6 +25,10 @@ export const executable =
 const standIn =
   process.env["ARDEN_E2E_CLAUDE"] ?? path.join(repoRoot, "target", "debug", "claude-stand-in.exe");
 
+/** The native Codex protocol stand-in; it never contacts a vendor or reads credentials. */
+export const codexStandIn =
+  process.env["ARDEN_E2E_CODEX"] ?? path.join(repoRoot, "target", "debug", "codex-stand-in.exe");
+
 /**
  * A folder that holds the stand-in as `claude.exe`, with its settings beside it, and the
  * environment that puts it first on the app's `PATH`. Windows spells the variable as it likes, so
