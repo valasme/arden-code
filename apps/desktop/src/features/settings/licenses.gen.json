@@ -961,7 +961,7 @@
   },
   {
     "name": "async-executor",
-    "version": "1.14.0",
+    "version": "1.14.1",
     "license": "Apache-2.0 OR MIT",
     "kind": "crate"
   },
@@ -3043,7 +3043,7 @@
   },
   {
     "name": "libsqlite3-sys",
-    "version": "0.38.2",
+    "version": "0.39.1",
     "license": "MIT",
     "kind": "crate"
   },
@@ -4369,7 +4369,7 @@
   },
   {
     "name": "rusqlite",
-    "version": "0.40.2",
+    "version": "0.41.1",
     "license": "MIT",
     "kind": "crate"
   },

@@ -63,47 +63,13 @@ impl Client {
             .map_err(|_| Error::Disconnected)?;
         let (send, output) = mpsc::sync_channel(QUEUE_LIMIT);
         let (input, receive) = mpsc::sync_channel::<Vec<u8>>(QUEUE_LIMIT);
-        let mut writer = piped.input;
-        let failed = send.clone();
-        let writing = thread::spawn(move || {
-            while let Ok(frame) = receive.recv() {
-                if writer
-                    .write_all(&frame)
-                    .and_then(|()| writer.flush())
-                    .is_err()
-                {
-                    let _ = failed.send(Err(Error::Disconnected));
-                    break;
-                }
-            }
-        });
-        let reading = thread::spawn(move || {
-            let mut reader = BufReader::new(piped.output);
-            loop {
-                let mut line = Vec::new();
-                let read = reader
-                    .by_ref()
-                    .take((FRAME_LIMIT + 1) as u64)
-                    .read_until(b'\n', &mut line);
-                let value = match read {
-                    Ok(0) | Err(_) => Err(Error::Disconnected),
-                    Ok(_) if line.len() > FRAME_LIMIT || !line.ends_with(b"\n") => {
-                        Err(Error::Protocol)
-                    }
-                    Ok(_) => serde_json::from_slice::<Value>(&line).map_err(|_| Error::Protocol),
-                };
-                let ended = value.is_err();
-                if send.send(value).is_err() || ended {
-                    break;
-                }
-            }
-        });
+        let workers = start_workers(piped.input, piped.output, receive, send);
         Ok(Self {
             input: Some(input),
             output: Some(output),
             child: piped.child,
             scope: piped.scope,
-            workers: vec![writing, reading],
+            workers,
             next_id: 0,
             pending: VecDeque::new(),
         })
@@ -224,6 +190,48 @@ impl Client {
     }
 }
 
+fn start_workers(
+    writer: impl Write + Send + 'static,
+    reader: impl Read + Send + 'static,
+    receive: Receiver<Vec<u8>>,
+    send: SyncSender<Result<Value, Error>>,
+) -> Vec<JoinHandle<()>> {
+    let writing = thread::spawn(move || {
+        let mut writer = Some(writer);
+        while let Ok(frame) = receive.recv() {
+            if let Some(pipe) = writer.as_mut()
+                && pipe.write_all(&frame).and_then(|()| pipe.flush()).is_err()
+            {
+                // Only stdout determines the terminal response: a broken stdin may race a
+                // buffered protocol error. Close stdin but keep its bounded queue connected
+                // until Client drops, so a later send cannot overtake that response either.
+                // In-flight calls still obey their deadline and cancellation polling.
+                writer = None;
+            }
+        }
+    });
+    let reading = thread::spawn(move || {
+        let mut reader = BufReader::new(reader);
+        loop {
+            let mut line = Vec::new();
+            let read = reader
+                .by_ref()
+                .take((FRAME_LIMIT + 1) as u64)
+                .read_until(b'\n', &mut line);
+            let value = match read {
+                Ok(0) | Err(_) => Err(Error::Disconnected),
+                Ok(_) if line.len() > FRAME_LIMIT || !line.ends_with(b"\n") => Err(Error::Protocol),
+                Ok(_) => serde_json::from_slice::<Value>(&line).map_err(|_| Error::Protocol),
+            };
+            let ended = value.is_err();
+            if send.send(value).is_err() || ended {
+                break;
+            }
+        }
+    });
+    vec![writing, reading]
+}
+
 impl Drop for Client {
     fn drop(&mut self) {
         // Kill descendants first: one may otherwise keep stdout open after the server dies.
@@ -234,6 +242,81 @@ impl Drop for Client {
         self.output.take();
         for worker in self.workers.drain(..) {
             let _ = worker.join();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{self, Cursor};
+
+    struct BrokenInput(mpsc::Sender<()>);
+
+    impl Write for BrokenInput {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(io::ErrorKind::BrokenPipe.into())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Drop for BrokenInput {
+        fn drop(&mut self) {
+            let _ = self.0.send(());
+        }
+    }
+
+    struct BufferedOutput {
+        gate: Option<Receiver<()>>,
+        bytes: Cursor<Vec<u8>>,
+    }
+
+    impl Read for BufferedOutput {
+        fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+            if let Some(gate) = self.gate.take() {
+                gate.recv_timeout(Duration::from_secs(2))
+                    .map_err(|_| io::ErrorKind::TimedOut)?;
+            }
+            self.bytes.read(bytes)
+        }
+    }
+
+    #[test]
+    fn buffered_stdout_determines_failure_even_when_stdin_breaks_first() {
+        for (bytes, expected) in [
+            (b"not a JSON frame\n".as_slice(), Error::Protocol),
+            (b"".as_slice(), Error::Disconnected),
+        ] {
+            let (broken, observed) = mpsc::channel();
+            let (release, gate) = mpsc::channel();
+            let (input, receive) = mpsc::sync_channel(QUEUE_LIMIT);
+            let (send, output) = mpsc::sync_channel(QUEUE_LIMIT);
+            let workers = start_workers(
+                BrokenInput(broken),
+                BufferedOutput {
+                    gate: Some(gate),
+                    bytes: Cursor::new(bytes.to_vec()),
+                },
+                receive,
+                send,
+            );
+            input
+                .send(b"initialize\n".to_vec())
+                .expect("a queued request");
+            observed
+                .recv_timeout(Duration::from_secs(2))
+                .expect("the stdin writer has already failed");
+            release.send(()).expect("read the buffered stdout now");
+            let actual = output.recv_timeout(Duration::from_secs(2));
+            drop(input);
+            drop(output);
+            for worker in workers {
+                worker.join().expect("the I/O worker ends");
+            }
+            assert_eq!(actual.expect("a terminal output result"), Err(expected));
         }
     }
 }
