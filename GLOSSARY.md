@@ -112,7 +112,7 @@ A vendor's own command-line program through which Arden Code runs an agent: Clau
 _Avoid_: SDK, backend
 
 **Agent conversation**:
-The agent CLI's own record of a session, kept in its own folder under an id Arden Code makes. It lets a session carry on where it left off after a restart. It belongs to the agent CLI, not to the session: deleting the session leaves it.
+The agent CLI's own record of a session, kept under an agent-specific id. It lets a session carry on where it left off after a restart. It belongs to the agent CLI, not to the session: deleting the session leaves it.
 _Avoid_: using "conversation" alone for a session
 
 **Raw mode**:

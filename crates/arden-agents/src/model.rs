@@ -6,7 +6,7 @@ use specta::Type;
 
 use crate::context_window::ContextWindow;
 
-/// Which agent answers in a session. Codex arrives with its driver.
+/// Which agent answers in a session, through its own driver.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum AgentKind {
@@ -14,6 +14,8 @@ pub enum AgentKind {
     Demo,
     /// Claude, through the person's own Claude Code (ADR 0038).
     Claude,
+    /// Codex, through the person's own app-server (ADR 0065).
+    Codex,
 }
 
 /// The model Claude works with in a session: the value Claude Code lists for it, an alias such as

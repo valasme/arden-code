@@ -14,7 +14,7 @@ arden-core.workspace = true
 arden-process.workspace = true
 # Lists a project's files for file mentions with its ignore rules (ADR 0052).
 ignore = "0.4"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 serde.workspace = true
 serde_json.workspace = true
 specta.workspace = true
@@ -27,6 +27,13 @@ uuid = { version = "1", features = ["v4"] }
 [[bin]]
 name = "claude-stand-in"
 path = "src/bin/claude_stand_in.rs"
+test = false
+doc = false
+
+# Protocol fixture only; the application starts the person's own installed Codex.
+[[bin]]
+name = "codex-stand-in"
+path = "src/bin/codex_stand_in.rs"
 test = false
 doc = false
 

@@ -133,7 +133,7 @@ pub fn new_session(
     Ok(sessions.new_session(
         project_id.as_deref().unwrap_or(PLAYGROUND_ID),
         agent,
-        detections.claude_installed(),
+        detections.default_agent(),
     ))
 }
 
@@ -346,7 +346,7 @@ pub fn create_session(
 ) -> Result<SessionSummary, AppError> {
     let project = project_id.as_deref().unwrap_or(PLAYGROUND_ID);
     let start =
-        start.unwrap_or_else(|| sessions.new_session(project, None, detections.claude_installed()));
+        start.unwrap_or_else(|| sessions.new_session(project, None, detections.default_agent()));
     let agent = start.agent;
     let session = sessions.create_session(project, start).map_err(app_error)?;
     tracing::info!(session = %session.id, ?agent, "session created");
@@ -615,6 +615,7 @@ fn waiting_notice(agent: AgentKind, event: &TurnEvent) -> Option<String> {
     };
     let name = match agent {
         AgentKind::Claude => "Claude",
+        AgentKind::Codex => "Codex",
         AgentKind::Demo => "The Demo agent",
     };
     let action = match item {
@@ -772,11 +773,8 @@ pub fn open_folder(app: &tauri::AppHandle, folder: &std::path::Path) {
 
     let store = app.state::<Sessions>();
     let session = store.open_folder(folder).and_then(|project| {
-        let claude_installed = app.state::<crate::agents::Detections>().claude_installed();
-        store.create_session(
-            &project.id,
-            store.new_session(&project.id, None, claude_installed),
-        )
+        let fallback = app.state::<crate::agents::Detections>().default_agent();
+        store.create_session(&project.id, store.new_session(&project.id, None, fallback))
     });
     let session = match session {
         Ok(session) => session,
@@ -832,6 +830,7 @@ mod tests {
             vec![playground::describe(Path::new(folder))],
             Agents {
                 demo: demo.clone(),
+                codex: demo.clone(),
                 claude: demo,
             },
         )

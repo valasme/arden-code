@@ -103,6 +103,27 @@ for (const { name, colorScheme } of themes) {
     await expect(page.locator("[data-message-choices-sample]")).toHaveScreenshot(
       `choices-${name}.png`,
     );
+    // Agent artwork is small enough to disappear inside the whole sample's tolerance.
+    await expect(
+      page.locator("[data-message-choices-sample]").getByRole("button", { name: "Agent: Claude" }),
+    ).toHaveScreenshot(`claude-agent-${name}.png`, { maxDiffPixels: 0, maxDiffPixelRatio: 0 });
+  });
+
+  test(`the agent menu includes readable Codex artwork in ${name}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme });
+    await openDesignSystem(page);
+    await page
+      .locator("[data-message-choices-sample]")
+      .getByRole("button", { name: "Agent: Claude" })
+      .click();
+    const menu = page.getByRole("menu");
+    const codex = menu.getByRole("menuitemradio", { name: "Codex", exact: true });
+    await expect(codex).toBeVisible();
+    await expect(codex.locator("svg:has(image)")).toHaveScreenshot(`codex-logo-${name}.png`, {
+      maxDiffPixels: 0,
+      maxDiffPixelRatio: 0,
+    });
+    await expect(menu).toHaveScreenshot(`agent-menu-codex-${name}.png`);
   });
 }
 

@@ -7,18 +7,19 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { AgentKind } from "@/ipc/bindings";
+import type { AgentKind, Readiness } from "@/ipc/bindings";
 
 import { agentIcons } from "./agentIcons";
 import { ChoiceButton } from "./ChoiceButton";
 
 /** The agents a session can have, in the order the menu lists them (ADR 0039). */
-export const agentKinds = ["claude", "demo"] as const satisfies readonly AgentKind[];
+export const agentKinds = ["claude", "codex", "demo"] as const satisfies readonly AgentKind[];
 
 interface AgentMenuProps {
   agent: AgentKind;
-  /** Agents whose agent CLI is not installed: listed, but not offered. */
+  /** Agents that are not ready: listed with the reason, but not offered. */
   unavailable?: readonly AgentKind[];
+  unavailableReasons?: Partial<Record<AgentKind, Exclude<Readiness, "ready">>>;
   onChoose: (agent: AgentKind) => void;
 }
 
@@ -28,10 +29,23 @@ interface AgentMenuProps {
  */
 /** No agent is missing. */
 const none: readonly AgentKind[] = [];
+const noReasons = {};
 
-export function AgentMenu({ agent, unavailable = none, onChoose }: AgentMenuProps) {
+export function AgentMenu({
+  agent,
+  unavailable = none,
+  unavailableReasons = noReasons,
+  onChoose,
+}: AgentMenuProps) {
   const { t } = useTranslation();
   const name = t(`agents.${agent}.name`);
+  // Literal calls keep every reason visible to the translation extractor as well as to the UI.
+  const unavailableLabels: Record<Exclude<Readiness, "ready">, string> = {
+    missing: t("sessions.agentMenu.unavailable.missing"),
+    incompatible: t("sessions.agentMenu.unavailable.incompatible"),
+    signedOut: t("sessions.agentMenu.unavailable.signedOut"),
+    unknown: t("sessions.agentMenu.unavailable.unknown"),
+  };
 
   return (
     <DropdownMenu>
@@ -59,7 +73,7 @@ export function AgentMenu({ agent, unavailable = none, onChoose }: AgentMenuProp
                 {t(`agents.${kind}.name`)}
                 {missing ? (
                   <span className="ms-auto ps-4 text-xs text-muted-foreground">
-                    {t("sessions.agentMenu.notInstalled")}
+                    {unavailableLabels[unavailableReasons[kind] ?? "missing"]}
                   </span>
                 ) : null}
               </DropdownMenuRadioItem>
