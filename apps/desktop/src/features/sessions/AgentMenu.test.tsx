@@ -1,11 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { FlaskConicalIcon } from "lucide-react";
+import { BotIcon, FlaskConicalIcon } from "lucide-react";
 
 import type { AgentKind } from "@/ipc/bindings";
 import { drawingIn, drawingOf, drawingsIn } from "@/test/icons";
 
-import claudeSymbol from "../../../../../brand/reference/agents/claude-symbol.svg";
 import { AgentMenu } from "./AgentMenu";
 
 import "@/styles/global.css";
@@ -25,14 +24,6 @@ function renderMenu(agent: AgentKind, unavailable: AgentKind[] = []) {
 }
 
 describe("AgentMenu", () => {
-  it("offers Codex as a distinct agent and passes that choice to the session", async () => {
-    const user = userEvent.setup();
-    const { chosen } = renderMenu("demo");
-    await user.click(screen.getByRole("button", { name: "Agent: Demo agent" }));
-    await user.click(await screen.findByRole("menuitemradio", { name: "Codex" }));
-    expect(chosen).toEqual(["codex"]);
-  });
-
   it("names the session's agent, and says it is where the agent is chosen", () => {
     renderMenu("claude");
 
@@ -47,11 +38,11 @@ describe("AgentMenu", () => {
     expect(button.querySelectorAll("svg")).toHaveLength(2);
   });
 
-  it("draws the supplied Claude artwork and keeps the Demo agent's flask", () => {
+  it("draws Claude as a bot of Arden Code's own, not a vendor's logo, and the Demo agent as a flask", () => {
     const claude = renderMenu("claude");
-    const button = screen.getByRole("button", { name: "Agent: Claude" });
-    expect(button.querySelector("svg image")).toHaveAttribute("href", claudeSymbol);
-    expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(drawingIn(screen.getByRole("button", { name: "Agent: Claude" }))).toBe(
+      drawingOf(BotIcon),
+    );
     claude.unmount();
 
     renderMenu("demo");
@@ -61,15 +52,18 @@ describe("AgentMenu", () => {
   });
 
   it("shows each agent's icon in the list too", async () => {
-    const flask = drawingOf(FlaskConicalIcon);
     const user = userEvent.setup();
     renderMenu("claude");
 
     await user.click(screen.getByRole("button", { name: "Agent: Claude" }));
 
-    const claude = await screen.findByRole("menuitemradio", { name: "Claude" });
-    expect(claude.querySelector("svg image")).toHaveAttribute("href", claudeSymbol);
-    expect(drawingsIn(screen.getByRole("menuitemradio", { name: "Demo agent" }))).toContain(flask);
+    // The chosen item's check mark is an icon too.
+    expect(drawingsIn(await screen.findByRole("menuitemradio", { name: "Claude" }))).toContain(
+      drawingOf(BotIcon),
+    );
+    expect(drawingsIn(screen.getByRole("menuitemradio", { name: "Demo agent" }))).toContain(
+      drawingOf(FlaskConicalIcon),
+    );
   });
 
   it("offers an agent whose agent CLI is not installed only as disabled, saying so", async () => {
@@ -89,7 +83,7 @@ describe("AgentMenu", () => {
 
     await user.click(screen.getByRole("button", { name: "Agent: Claude" }));
     const items = screen.getAllByRole("menuitemradio");
-    expect(items.map((item) => item.textContent)).toEqual(["Claude", "Codex", "Demo agent"]);
+    expect(items.map((item) => item.textContent)).toEqual(["Claude", "Demo agent"]);
     expect(screen.getByRole("menuitemradio", { name: "Claude" })).toHaveAttribute(
       "aria-checked",
       "true",

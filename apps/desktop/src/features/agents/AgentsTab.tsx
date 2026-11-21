@@ -93,11 +93,7 @@ function AgentRow({ agent }: { agent: Detection }) {
           {name}
         </h3>
         <span className="text-xs font-medium">
-          {agent.cli === "codex" && agent.installed
-            ? t(`settings.agents.readiness.${agent.readiness ?? "unknown"}`)
-            : agent.installed
-              ? t("settings.agents.installed")
-              : t("settings.agents.notInstalled")}
+          {agent.installed ? t("settings.agents.installed") : t("settings.agents.notInstalled")}
         </span>
       </div>
       {agent.installed ? (
@@ -144,21 +140,7 @@ function AgentRow({ agent }: { agent: Detection }) {
         </p>
       ) : null}
       {agent.installed && agent.signedIn === false ? (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            agent.cli === "codex"
-              ? "settings.agents.codexHowToSignIn"
-              : "settings.agents.howToSignIn",
-          )}
-        </p>
-      ) : null}
-      {agent.cli === "codex" &&
-      agent.installed &&
-      agent.readiness !== "ready" &&
-      agent.signedIn !== false ? (
-        <p className="text-xs text-muted-foreground">
-          {t("settings.agents.codexReadinessAction", { code: "ARD-AGT-028" })}
-        </p>
+        <p className="text-xs text-muted-foreground">{t("settings.agents.howToSignIn")}</p>
       ) : null}
       <NextStep agent={agent} name={name} />
     </section>
@@ -166,7 +148,7 @@ function AgentRow({ agent }: { agent: Detection }) {
 }
 
 /**
- * Settings → Agents: which agent programs are installed and whether their startup checks pass.
+ * Settings → Agents: which agent programs are installed, and whether Claude Code can work (ADR 0039).
  * It only looks; it changes nothing. What Arden Code found after it started is shown, and Look
  * again looks afresh.
  */

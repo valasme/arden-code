@@ -7,15 +7,6 @@
       "question": "What should Claude work on?",
       "replying": "Claude is replying…"
     },
-    "codex": {
-      "empty": "Write a message to start. Codex works read-only in this project's folder, with your own Codex CLI.",
-      "name": "Codex",
-      "placeholder": "Message Codex",
-      "policyLabel": "Codex sandbox: read-only",
-      "question": "What should Codex work on?",
-      "readOnly": "Read-only",
-      "replying": "Codex is replying…"
-    },
     "demo": {
       "empty": "Write a message to start. The Demo agent answers with a made-up reply.",
       "name": "Demo agent",
@@ -162,8 +153,8 @@
     },
     "ARD-AGT-016": {
       "action": "Send the message again and choose Trust folder, if you trust what is in it.",
-      "what": "The agent cannot work in this folder until you trust it.",
-      "why": "Local coding agents can load a project's own instructions, configuration and connected tools."
+      "what": "Claude cannot work in this folder until you trust it.",
+      "why": "Claude Code runs a project's own hooks, MCP servers and environment settings without asking."
     },
     "ARD-AGT-017": {
       "action": "Archive or delete its sessions instead.",
@@ -204,46 +195,6 @@
       "action": "Check what you chose or typed, then try again.",
       "what": "Arden Code did not run this.",
       "why": "The plugin, marketplace or scope it names is not one Arden Code passes on to Claude Code, so nothing was run."
-    },
-    "ARD-AGT-025": {
-      "action": "Install the Codex CLI, then use Look again in Settings → Agents.",
-      "what": "Codex is not installed.",
-      "why": "Arden Code could not find a native Codex program on PATH."
-    },
-    "ARD-AGT-026": {
-      "action": "Run codex login in a terminal, complete the browser sign-in, then look again in Settings → Agents.",
-      "what": "Codex is not signed in.",
-      "why": "Codex's own account check reported that sign-in is needed."
-    },
-    "ARD-AGT-027": {
-      "action": "Check Codex in a terminal and try again. If conversation recovery fails, keep this transcript and start a new session.",
-      "what": "Codex could not continue the reply.",
-      "why": "Its supervised process could not start, disconnected or stopped responding."
-    },
-    "ARD-AGT-028": {
-      "action": "Check the native Codex installation and version in Settings → Agents. Update or repair Codex, then look again.",
-      "what": "This Codex did not confirm the protocol or read-only policy Arden Code needs.",
-      "why": "Arden Code refused an incompatible response rather than assume permissions or run a shell wrapper."
-    },
-    "ARD-AGT-029": {
-      "action": "Check codex login status and whether Codex can answer in a terminal, then try again.",
-      "what": "Codex could not answer this message.",
-      "why": "Codex reported that its turn failed; installation alone does not establish model access."
-    },
-    "ARD-AGT-030": {
-      "action": "Keep this transcript for reference and start a new session. Arden Code will not silently replace its conversation.",
-      "what": "Codex's saved conversation could not be confirmed or resumed.",
-      "why": "The CLI could not find a saved rollout, or earlier output has no confirmed conversation checkpoint."
-    },
-    "ARD-AGT-031": {
-      "action": "Keep this transcript and start a new session for a task that fits the current read-only integration, or use Codex directly in a terminal for this operation.",
-      "what": "Codex requested an operation this integration does not support yet.",
-      "why": "Arden Code refused the request and ended the reply rather than grant unknown authority or leave it waiting."
-    },
-    "ARD-AGT-032": {
-      "action": "Repair the Codex CLI installation so its native platform package is present, then look again in Settings → Agents.",
-      "what": "The Codex entry point has no native program Arden Code can start safely.",
-      "why": "A shell or npm wrapper is not allowed to receive a session's prompt or project arguments."
     },
     "ARD-APP-001": {
       "action": "Try again. If it keeps happening, copy the details and report it.",
@@ -620,12 +571,7 @@
     },
     "agentMenu": {
       "label": "Agent: {{agent}}",
-      "unavailable": {
-        "incompatible": "Not compatible",
-        "missing": "Not installed",
-        "signedOut": "Sign in required",
-        "unknown": "Not ready"
-      }
+      "notInstalled": "Not installed"
     },
     "announce": {
       "done": "Reply finished.",
@@ -765,7 +711,6 @@
     "stopped": "The reply stopped.",
     "transcript": "Session",
     "trust": {
-      "codexDescription": "Codex can load this folder's instructions, configuration and connected tools. Trust {{path}} only if you know what's in it, even when using the read-only sandbox.",
       "confirm": "Trust folder",
       "description": "Claude Code runs a project's own hooks, MCP servers and environment settings without asking. Trust {{path}} only if you know what is in it. You are asked once for each folder.",
       "title": "Trust “{{name}}”?"
@@ -895,8 +840,6 @@
         "description": "Lets a Claude session run commands and edit files without asking. Use it only in a folder you can afford to lose.",
         "label": "Allow Bypass permissions"
       },
-      "codexHowToSignIn": "Open a terminal, run codex login, complete sign-in in your browser, then look again. Check it with codex login status.",
-      "codexReadinessAction": "Check codex --version and codex login status in a fresh terminal, then look again. Repair or update Codex if readiness still cannot be confirmed. ({{code}})",
       "description": "Claude Code and Codex are separate programs. Arden Code looks for them on this computer. It never installs them, updates them or signs in to them.",
       "howToSignIn": "Open a terminal, run claude, and sign in with /login.",
       "install": "How to install",
@@ -913,13 +856,6 @@
       "notFound": "{{name}} was not found. Install it, then look again.",
       "notInstalled": "Not installed",
       "path": "Location",
-      "readiness": {
-        "incompatible": "Not compatible",
-        "missing": "Not installed",
-        "ready": "Ready",
-        "signedOut": "Sign in required",
-        "unknown": "Could not check readiness"
-      },
       "showUsageLimits": {
         "description": "Ask Claude Code for your 5-hour and weekly limits, and show them in the status bar and here. Claude Code asks Anthropic with your own sign-in.",
         "label": "Show usage limits"

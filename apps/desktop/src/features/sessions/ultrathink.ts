@@ -35,12 +35,12 @@ export function useUltrathink(draft: string) {
   };
 
   const carrying =
-    (send: (text: string) => boolean | Promise<boolean>, enabled = true) =>
+    (send: (text: string) => boolean | Promise<boolean>) =>
     (text: string): boolean | Promise<boolean> => {
-      const sent = send(enabled && ultrathink ? withUltrathink(text) : text);
+      const sent = send(ultrathink ? withUltrathink(text) : text);
       void Promise.resolve(sent).then((done) => {
-        // Another agent must neither apply nor consume a hidden Claude choice.
-        if (done && enabled && !text.startsWith("/")) setUltrathink(false);
+        // A slash command takes no word, so it leaves the switch for the next message.
+        if (done && !text.startsWith("/")) setUltrathink(false);
       });
       return sent;
     };

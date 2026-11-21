@@ -25,7 +25,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use arden_agents::claude::plugins::ClaudePlugins;
-use arden_agents::codex::driver::CodexDriver;
 use arden_agents::demo::DemoDriver;
 use arden_agents::driver::Agents;
 use arden_agents::playground;
@@ -685,7 +684,6 @@ pub fn run() {
             let agents = Agents {
                 demo: Arc::new(DemoDriver::new()),
                 claude: claude.0.clone(),
-                codex: Arc::new(CodexDriver::new(supervisor.clone())),
             };
             manage_sessions(app, &paths, started_with.general.on_startup, &agents);
             manage_programs(app, supervisor, claude);

@@ -71,8 +71,6 @@ pub struct ReplyRequest<'a> {
     pub folder: &'a Path,
     /// The agent's own conversation for the session, once it has answered in it, to carry on in.
     pub conversation: Option<&'a str>,
-    /// Earlier agent output without a confirmed conversation must never be silently replaced.
-    pub has_reply_history: bool,
     /// The model and effort the session works with (ADR 0041).
     pub choices: Choices,
     /// How freely the agent may act before it asks (ADR 0044).
@@ -134,7 +132,6 @@ pub trait AgentDriver: Send + Sync {
 pub struct Agents {
     pub demo: Arc<dyn AgentDriver>,
     pub claude: Arc<dyn AgentDriver>,
-    pub codex: Arc<dyn AgentDriver>,
 }
 
 impl Agents {
@@ -144,17 +141,11 @@ impl Agents {
         match agent {
             AgentKind::Demo => self.demo.as_ref(),
             AgentKind::Claude => self.claude.as_ref(),
-            AgentKind::Codex => self.codex.as_ref(),
         }
     }
 
     /// Every agent's driver.
     pub fn all(&self) -> impl Iterator<Item = &dyn AgentDriver> {
-        [
-            self.demo.as_ref(),
-            self.claude.as_ref(),
-            self.codex.as_ref(),
-        ]
-        .into_iter()
+        [self.demo.as_ref(), self.claude.as_ref()].into_iter()
     }
 }

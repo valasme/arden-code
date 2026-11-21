@@ -122,30 +122,6 @@ pub enum ErrorCode {
     /// Arden Code did not run a plugin command: what it names is not one it passes on.
     #[serde(rename = "ARD-AGT-024")]
     PluginCommandRefused,
-    /// Codex was not found on PATH.
-    #[serde(rename = "ARD-AGT-025")]
-    CodexNotInstalled,
-    /// Codex's own account check reports signed out.
-    #[serde(rename = "ARD-AGT-026")]
-    CodexSignedOut,
-    /// The supervised Codex process could not continue.
-    #[serde(rename = "ARD-AGT-027")]
-    CodexStopped,
-    /// Codex's protocol or confirmed native policy is incompatible.
-    #[serde(rename = "ARD-AGT-028")]
-    CodexNotUnderstood,
-    /// Codex could not complete the turn.
-    #[serde(rename = "ARD-AGT-029")]
-    CodexCouldNotAnswer,
-    /// The earlier conversation cannot be confirmed or resumed. It is never silently replaced.
-    #[serde(rename = "ARD-AGT-030")]
-    CodexConversationMissing,
-    /// An authority-bearing request is not supported in the initial read-only integration.
-    #[serde(rename = "ARD-AGT-031")]
-    CodexRequestUnsupported,
-    /// An npm entry point has no supported native Codex behind it.
-    #[serde(rename = "ARD-AGT-032")]
-    CodexNpmWrapper,
     /// Programs cannot be started and supervised on this computer.
     #[serde(rename = "ARD-PROC-001")]
     ProcessSupervisor,
@@ -202,14 +178,6 @@ impl ErrorCode {
             Self::PluginAnswerNotUnderstood => "ARD-AGT-022",
             Self::PluginCommandTooLong => "ARD-AGT-023",
             Self::PluginCommandRefused => "ARD-AGT-024",
-            Self::CodexNotInstalled => "ARD-AGT-025",
-            Self::CodexSignedOut => "ARD-AGT-026",
-            Self::CodexStopped => "ARD-AGT-027",
-            Self::CodexNotUnderstood => "ARD-AGT-028",
-            Self::CodexCouldNotAnswer => "ARD-AGT-029",
-            Self::CodexConversationMissing => "ARD-AGT-030",
-            Self::CodexRequestUnsupported => "ARD-AGT-031",
-            Self::CodexNpmWrapper => "ARD-AGT-032",
             Self::ProcessSupervisor => "ARD-PROC-001",
             Self::UpdateInstall => "ARD-UPD-001",
             Self::WindowsSystemMenu => "ARD-WIN-001",

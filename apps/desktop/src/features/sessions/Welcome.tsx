@@ -18,7 +18,6 @@ import { demoSession, newSessionQuery, noSessions, sessionListQuery } from "@/ip
 import { useDraftsStore, WELCOME_DRAFT } from "@/state/drafts";
 
 import { AgentMenu } from "./AgentMenu";
-import { CodexPolicy } from "./CodexPolicy";
 import { EffortMenu } from "./EffortMenu";
 import { Figures } from "./Figures";
 import { MessageBox } from "./MessageBox";
@@ -59,7 +58,7 @@ export function Welcome() {
   const startSession = useStartSession();
   const send = useSendMessage();
   const openFolder = useOpenFolder();
-  const { unavailable, reasons } = useUnavailableAgents();
+  const unavailable = useUnavailableAgents();
   const { data: list = noSessions } = useQuery(sessionListQuery);
   // What the menus were set to stays while the person is away (ADR 0046).
   const {
@@ -137,16 +136,10 @@ export function Welcome() {
         ownArea={false}
         agent={agent}
         busy={false}
-        {...(agent !== "codex" ? { files: { projectId } } : {})}
+        files={{ projectId }}
         choices={
           <>
-            <AgentMenu
-              agent={agent}
-              unavailable={unavailable}
-              unavailableReasons={reasons}
-              onChoose={setChosenAgent}
-            />
-            {agent === "codex" ? <CodexPolicy /> : null}
+            <AgentMenu agent={agent} unavailable={unavailable} onChoose={setChosenAgent} />
             <ProjectMenu
               projectId={projectId}
               projects={projectsByUse(list)}
@@ -199,7 +192,7 @@ export function Welcome() {
               clear: () => undefined,
             });
           return ran || gate(agent, project, () => start(text));
-        }, agent === "claude")}
+        })}
         onStop={() => {}}
       />
       <ul className="flex flex-wrap justify-center gap-x-5 gap-y-2">

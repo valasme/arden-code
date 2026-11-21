@@ -164,17 +164,7 @@ jobs:
         run: pnpm test
 
       - name: Rust tests
-        shell: bash
-        run: pnpm test:rust 2>&1 | tee rust-tests.log
-
-      - name: Keep the Rust test failure output
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rust-test-results-linux
-          path: rust-tests.log
-          if-no-files-found: ignore
-          retention-days: 14
+        run: pnpm test:rust
 
       - name: Bindings drift check
         run: |

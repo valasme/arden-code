@@ -1,13 +1,9 @@
-import { FlaskConicalIcon, type LucideIcon } from "lucide-react";
+import { BotIcon, FlaskConicalIcon, type LucideIcon } from "lucide-react";
 
 import type { AgentKind } from "@/ipc/bindings";
 
-import { ClaudeLogo } from "./ClaudeLogo";
-import { CodexLogo } from "./CodexLogo";
-
-/** Supplied artwork identifies Claude; the Demo agent keeps its flask (ADR 0064). */
+/** Each agent's icon: one of Arden Code's own, never a vendor's logo (ADR 0044). */
 export const agentIcons: Record<AgentKind, LucideIcon> = {
-  claude: ClaudeLogo,
-  codex: CodexLogo,
+  claude: BotIcon,
   demo: FlaskConicalIcon,
 };

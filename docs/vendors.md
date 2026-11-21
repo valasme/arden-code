@@ -1,8 +1,8 @@
 # Vendors
 
-Recorded checks of vendor terms and Arden Code's integration policies. Each external check names its date;
-an internal policy change does not refresh that check or establish a vendor's permission. Check again before
-a release, and when a vendor announces a change.
+What the vendors' terms say about a tool like Arden Code, and how Arden Code keeps to them. The terms changed several
+times in 2026, so each section names the date it was checked. Check again before a release, and when a vendor
+announces a change.
 
 ## Anthropic: Claude
 
@@ -34,32 +34,15 @@ page and the [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/over
   against the terms on 2026-10-09. The terms bar products from offering Claude.ai usage limits, that is, letting people
   spend a plan through them; Arden Code offers no plan of its own, asks only its own Claude Code, and never sees a
   token. Check this line again before a release.
-- It bundles no Anthropic SDK or copy of Claude Code. The supplied agent artwork is a separate policy decision below.
-- The agent is called **Claude**. **Claude Code** names the program, in plain sentences. About keeps the statement that
-  Arden Code is not affiliated with Anthropic or OpenAI.
-
-### Agent artwork: policy changed on 2026-11-11
-
-The maintainer explicitly replaced the internal no-vendor-logo rule, including its written-permission prerequisite,
-with [ADR 0064](adr/0064-vendor-logos-for-agent-identification.md). The supplied Claude symbol is eligible for the agent
-menu and session identity, unchanged, as a narrow exception to the neutral palette. The app now renders that
-original SVG as an image in those places; it does not reconstruct or recolor its paths.
-
-The earlier policy followed a check on 2026-10-10 of
-[Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance) and the
-[Trademark Guidelines](https://www.anthropic.com/legal/trademark-guidelines); ADR 0044 and its council report preserve
-that historical reasoning. This override changes Arden Code's policy, not those external terms. No vendor permission
-grant or original download URL was supplied or verified. The artwork is excluded from the repository's MIT grant,
-and external branding rights remain a separate release consideration.
+- It ships nothing of Anthropic's: no SDK and no copy of Claude Code.
+- The agent is called **Claude**. **Claude Code** names the program, in plain sentences. There is no Anthropic logo or
+  brand color in the app (ADR 0003), and About says Arden Code is not affiliated with Anthropic or OpenAI.
+- Claude's icon in the agent menu is Lucide's bot, not Anthropic's mark (ADR 0044). Checked on 2026-10-10 against the
+  [Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance) page ("Any other use of Anthropic's
+  names or logos … requires our written permission") and the
+  [Trademark Guidelines](https://www.anthropic.com/legal/trademark-guidelines) (only in materials Anthropic approved
+  beforehand, unchanged). The mark comes in only with Anthropic's written permission.
 
 ## OpenAI: Codex
 
-The session driver is not implemented yet. The accepted design uses the person's own `codex app-server`, with
-CLI-owned sign-in and no credential-file access by Arden Code
-([ADR 0065](adr/0065-codex-as-a-first-class-agent.md), [the councils](research/codex-support-councils.md)). This is not a
-claim that a real Codex handshake or signed-in reply has been verified, or a fresh check of OpenAI's terms.
-
-The maintainer-supplied `chatgpt-logo.svg` and PNG are eligible to identify Codex under ADR 0064. The agent remains
-named Codex; the supplied filename does not establish an official Codex-specific logo. Its original download URL
-and permission status have not been verified. Keep the artwork unchanged and outside the MIT grant, and retain the
-non-affiliation disclaimer.
+Not integrated yet. This section is written with the Codex driver.

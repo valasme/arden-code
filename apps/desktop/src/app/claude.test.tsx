@@ -2,7 +2,7 @@ import { createMemoryHistory } from "@tanstack/react-router";
 import { emit } from "@tauri-apps/api/event";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { FolderIcon } from "lucide-react";
+import { BotIcon, FolderIcon } from "lucide-react";
 import { page } from "vitest/browser";
 
 import type { ContextWindow, Item, Session, UsageLimits } from "@/ipc/bindings";
@@ -12,7 +12,6 @@ import { animationsDone } from "@/test/animations";
 import { drawingOf, drawingsIn } from "@/test/icons";
 import { folderProject, sessionNamed, startSessionsRust } from "@/test/sessions";
 
-import claudeSymbol from "../../../../brand/reference/agents/claude-symbol.svg";
 import { App } from "./App";
 
 import "@/styles/global.css";
@@ -77,7 +76,6 @@ describe("Choosing the agent of a session (ADR 0039)", () => {
   });
 
   it("names the agent and the project of a session that has had a message in its header, under its reply too", async () => {
-    const folder = drawingOf(FolderIcon);
     startSessionsRust({ sessions: [answeredClaudeSession()] });
     renderApp("/session/session-1");
 
@@ -86,9 +84,9 @@ describe("Choosing the agent of a session (ADR 0039)", () => {
     if (!header) throw new Error("the title is not in a header");
     expect(within(header).getByText("Claude")).toBeVisible();
     expect(within(header).getByText("Playground")).toBeVisible();
-    expect(header.querySelector("svg image")).toHaveAttribute("href", claudeSymbol);
-    expect(header.querySelector("svg:has(image)")).toHaveAttribute("aria-hidden", "true");
-    expect(drawingsIn(header)).toContain(folder);
+    expect(drawingsIn(header)).toEqual(
+      expect.arrayContaining([drawingOf(BotIcon), drawingOf(FolderIcon)]),
+    );
     expect(screen.queryByRole("button", { name: /^Agent:/u })).toBeNull();
     // The message box's lower line holds only what the next message can change.
     const area = document.querySelector("[data-area=messagebox]");

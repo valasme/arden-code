@@ -25,7 +25,6 @@ import { useRepliesStore } from "@/state/replies";
 import { useSessionDialogsStore } from "@/state/sessionDialogs";
 
 import { agentIcons } from "./agentIcons";
-import { CodexPolicy } from "./CodexPolicy";
 import { AgentMenu } from "./AgentMenu";
 import { ArchivedBar } from "./ArchivedBar";
 import { MessageBox } from "./MessageBox";
@@ -71,7 +70,7 @@ export function SessionView({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const send = useSendMessage();
   const openFolder = useOpenFolder();
-  const { unavailable, reasons } = useUnavailableAgents();
+  const unavailable = useUnavailableAgents();
   const transcript = useRef<HTMLElement>(null);
   const stuck = useRef(true);
   /** Where the view was last held at the end. Only a scroll above it is the person leaving the end. */
@@ -281,12 +280,7 @@ export function SessionView({ id }: { id: string }) {
     <>
       {count === 0 ? (
         <>
-          <AgentMenu
-            agent={agent}
-            unavailable={unavailable}
-            unavailableReasons={reasons}
-            onChoose={chooseAgent}
-          />
+          <AgentMenu agent={agent} unavailable={unavailable} onChoose={chooseAgent} />
           <ProjectMenu
             projectId={session.projectId}
             projects={projectsByUse(list)}
@@ -299,7 +293,6 @@ export function SessionView({ id }: { id: string }) {
           />
         </>
       ) : null}
-      {agent === "codex" ? <CodexPolicy /> : null}
       {agent === "claude" ? (
         <>
           <ModelMenu
@@ -430,7 +423,7 @@ export function SessionView({ id }: { id: string }) {
           agent={agent}
           busy={busy}
           choices={choices}
-          {...(agent !== "codex" ? { files: { projectId: session.projectId } } : {})}
+          files={{ projectId: session.projectId }}
           figures={
             agent === "claude" ? <Figures contextWindow={session.contextWindow ?? null} /> : null
           }
@@ -469,7 +462,7 @@ export function SessionView({ id }: { id: string }) {
               void send(id, text);
               return true;
             });
-          }, agent === "claude")}
+          })}
         />
       ) : (
         <ArchivedBar sessionId={id} />
