@@ -7,7 +7,6 @@ import type {
   AppError,
   AvailablePlugin,
   Catalog,
-  Detection,
   ErrorCode,
   FileMatch,
   InstalledPlugin,
@@ -82,7 +81,6 @@ export function folderProject(id: string, name: string, trusted = false): Projec
 }
 
 interface Options {
-  detections?: Detection[];
   regionalFormat?: "windows" | "english";
   /** Events sent before the answer to send_message, as a fast reply can. */
   emitBeforeAnswering?: TurnEvent[];
@@ -133,7 +131,6 @@ interface Options {
  * lists them, and a way to stream a reply by hand.
  */
 export function startSessionsRust({
-  detections = [],
   emitBeforeAnswering = [],
   failCreate = false,
   regionalFormat = "windows",
@@ -204,9 +201,6 @@ export function startSessionsRust({
       const fails = failing[command];
       if (fails) throw failure(fails);
       switch (command) {
-        case "detect_agents": {
-          return structuredClone(detections);
-        }
         case "app_info": {
           return { name: "Arden Code", version: "0.1.0" };
         }
@@ -227,7 +221,7 @@ export function startSessionsRust({
         }
         case "new_session": {
           const { agent } = z
-            .object({ agent: z.enum(["demo", "claude", "codex"]).nullable().optional() })
+            .object({ agent: z.enum(["demo", "claude"]).nullable().optional() })
             .parse(payload ?? {});
           if (!agent || agent === newSession.agent) return newSession;
           return { agent, model: null, effort: null, permissionMode: "manual" };
@@ -239,7 +233,7 @@ export function startSessionsRust({
               projectId: z.string().nullable().optional(),
               start: z
                 .object({
-                  agent: z.enum(["demo", "claude", "codex"]),
+                  agent: z.enum(["demo", "claude"]),
                   model: z.string().nullable(),
                   effort: z.enum(["low", "medium", "high", "extraHigh", "max"]).nullable(),
                   permissionMode: z.enum([
@@ -341,7 +335,7 @@ export function startSessionsRust({
         }
         case "set_session_agent": {
           const { id, agent } = z
-            .object({ id: z.string(), agent: z.enum(["demo", "claude", "codex"]) })
+            .object({ id: z.string(), agent: z.enum(["demo", "claude"]) })
             .parse(payload);
           const session = find(id);
           if (session.archivedAt !== null) throw failure("ARD-AGT-005");

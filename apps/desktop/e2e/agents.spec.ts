@@ -1,19 +1,11 @@
 import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  existsSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { Page } from "@playwright/test";
 
-import { codexStandIn, expect, launchApp, openDevPage, pathKey, test } from "./fixtures";
+import { expect, launchApp, openDevPage, pathKey, test } from "./fixtures";
 
 /** A folder with a fake agent program in it, so detection does not depend on this computer. */
 function fakeBin(files: Record<string, string> = {}) {
@@ -67,22 +59,12 @@ test.describe("agents in the real app", () => {
       await expect(codex.getByText("Not installed")).toBeVisible();
       await expect(codex.getByRole("button", { name: "How to install Codex" })).toBeVisible();
 
-      // A shell entry point alone is installed, but cannot receive session prompts safely.
+      // The person installs Codex, and asks again.
       writeFileSync(path.join(bin, "codex.cmd"), "@echo off\r\necho codex-cli 0.46.0\r\n");
       await app.page.getByRole("button", { name: "Look again" }).click();
 
-      await expect(codex.getByText("Not compatible", { exact: true })).toBeVisible();
-      await expect(codex.getByText("Unknown", { exact: true })).toBeVisible();
-      await expect(codex.getByText(/ARD-AGT-028/u)).toBeVisible();
-
-      // A native installation can actually initialize its server and report account readiness.
-      copyFileSync(codexStandIn, path.join(bin, "codex.exe"));
-      writeFileSync(path.join(bin, "stand-in.json"), JSON.stringify({ signedIn: true }));
-      await app.page.getByRole("button", { name: "Look again" }).click();
-      await expect(codex.getByText("Ready", { exact: true })).toBeVisible();
-      await expect(codex.getByText("0.167.1", { exact: true })).toBeVisible();
-      await expect(codex.getByText(path.join(bin, "codex.exe"))).toBeVisible();
-      await expect(codex.getByText("Signed in", { exact: true })).toBeVisible();
+      await expect(codex.getByText("Installed")).toBeVisible();
+      await expect(codex.getByText("0.46.0", { exact: true })).toBeVisible();
       // Each program that was asked for its version has a log of its own.
       const logs = readdirSync(path.join(app.dataDir, "local", "logs", "agents"));
       expect(logs.some((name) => name.startsWith("claude-version-"))).toBe(true);
@@ -98,11 +80,6 @@ test.describe("agents in the real app", () => {
         ).not.toContain("ada@example.com");
       }
       expect(logs.some((name) => name.startsWith("claude-auth-status-"))).toBe(true);
-      for (const name of logs.filter((log) => log.startsWith("codex"))) {
-        expect(
-          readFileSync(path.join(app.dataDir, "local", "logs", "agents", name), "utf8"),
-        ).not.toContain("private-account-field@example.invalid");
-      }
     } finally {
       app.kill();
       rmSync(bin, { recursive: true, force: true });

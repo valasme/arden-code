@@ -1,10 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { BrainIcon, ChartNoAxesColumnIcon, FolderIcon, ShieldIcon } from "lucide-react";
+import { BotIcon, BrainIcon, ChartNoAxesColumnIcon, FolderIcon, ShieldIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { agentIcons } from "./agentIcons";
 import { ChoiceButton } from "./ChoiceButton";
 import { MessageBox } from "./MessageBox";
 import { useUltrathink } from "./ultrathink";
@@ -111,7 +110,7 @@ function ClaudeBox({
   ultrathink?: boolean;
 }) {
   const choices = [
-    ["Agent", agentIcons.claude, "Claude"],
+    ["Agent", BotIcon, "Claude"],
     ["Project", FolderIcon, "arden-code"],
     ["Model", BrainIcon, "Opus"],
     ["Effort", ChartNoAxesColumnIcon, "Default"],
@@ -145,9 +144,6 @@ function middle(name: string) {
 describe("The message box's lower line (ADR 0045)", () => {
   it("keeps Send on the row of the last menu, and the figures under the box", () => {
     const { container } = render(<ClaudeBox />, { wrapper: Queries });
-    expect(
-      screen.getByRole("button", { name: "Agent: Claude" }).querySelector("image"),
-    ).not.toBeNull();
     const frame = container.querySelector("[data-message-frame]");
     if (!frame) throw new Error("no message frame");
 

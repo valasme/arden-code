@@ -76,16 +76,6 @@ async function framesOf(id: string, arrived: (row: HTMLElement | null) => boolea
   return frames;
 }
 
-/** Records the row around an interaction, including while its promise settles. */
-async function framesDuring(
-  id: string,
-  arrived: (row: HTMLElement | null) => boolean,
-  action: () => Promise<void>,
-) {
-  const [frames] = await Promise.all([framesOf(id, arrived), action()]);
-  return frames;
-}
-
 /**
  * A row fading out rather than going at once, out of reach and unread while it fades, and gone at
  * the end. On a busy machine, as few as one frame may be drawn during the 120ms fade.
@@ -134,9 +124,9 @@ afterEach(() => {
 describe("A sidebar row", () => {
   it("moves up to Pinned from where it was when its session is pinned", async () => {
     const user = await twoSessions();
-    const frames = await framesDuring("session-1", restingInPinned, () =>
-      actOn(user, "Fix the build", /^Pin/),
-    );
+    await actOn(user, "Fix the build", /^Pin/);
+
+    const frames = await framesOf("session-1", restingInPinned);
 
     expect(
       frames.some(({ y }) => y > 1),
@@ -149,20 +139,16 @@ describe("A sidebar row", () => {
   it("fades out of the sidebar, out of reach at once, when its session is archived", async () => {
     const user = await twoSessions();
     await user.click(await screen.findByRole("button", { name: "Session actions" }));
-    const frames = await framesDuring("session-1", gone, async () => {
-      await user.click(await shownItem(/^Archive/));
-    });
+    await user.click(await shownItem(/^Archive/));
 
-    expectFadedOut(frames, "session-1");
+    expectFadedOut(await framesOf("session-1", gone), "session-1");
   });
 
   it("fades out of the Playground before the Playground says it has no sessions", async () => {
     const user = await showSidebar([sessionNamed("session-1", "Fix the build")]);
-    const frames = await framesDuring("session-1", gone, () =>
-      actOn(user, "Fix the build", /^Archive/),
-    );
+    await actOn(user, "Fix the build", /^Archive/);
 
-    expectFadedOut(frames, "session-1");
+    expectFadedOut(await framesOf("session-1", gone), "session-1");
     expect(within(sidebar()).getByText("No sessions yet.")).toBeVisible();
   });
 
@@ -171,11 +157,9 @@ describe("A sidebar row", () => {
       sessionNamed("session-1", "Fix the build"),
       sessionNamed("session-2", "In the folder", "folder-1"),
     ]);
-    const frames = await framesDuring("session-2", gone, () =>
-      actOn(user, "In the folder", /^Archive/),
-    );
+    await actOn(user, "In the folder", /^Archive/);
 
-    expectFadedOut(frames, "session-2");
+    expectFadedOut(await framesOf("session-2", gone), "session-2");
     expect(within(sidebar()).queryByRole("heading", { name: "my-app" })).toBeNull();
   });
 
@@ -184,22 +168,10 @@ describe("A sidebar row", () => {
     await actOn(user, "Write the docs", /^Pin/);
     await within(sidebar()).findByRole("heading", { name: "Pinned" });
     await motionDone(sidebar());
-    const frames = await framesDuring("session-2", gone, () =>
-      actOn(user, "Write the docs", /^Archive/),
-    );
+    await actOn(user, "Write the docs", /^Archive/);
 
-    expectFadedOut(frames, "session-2");
+    expectFadedOut(await framesOf("session-2", gone), "session-2");
     expect(within(sidebar()).queryByRole("heading", { name: "Pinned" })).toBeNull();
-  });
-
-  it("records a fade even when the interaction settles after the row has left", async () => {
-    const user = await twoSessions();
-    const frames = await framesDuring("session-1", gone, async () => {
-      await actOn(user, "Fix the build", /^Archive/);
-      await waitFor(() => expect(sessionRow("session-1")).toBeNull());
-    });
-
-    expectFadedOut(frames, "session-1");
   });
 
   it("fades out with its project when the project is removed", async () => {
@@ -211,18 +183,16 @@ describe("A sidebar row", () => {
     await user.click(await shownItem(/^Remove project/));
     const question = await screen.findByRole("alertdialog", { name: "Remove “my-app”?" });
     await animationsDone(question);
-    const frames = await framesDuring("session-2", gone, () =>
-      user.click(within(question).getByRole("button", { name: "Remove project" })),
-    );
+    await user.click(within(question).getByRole("button", { name: "Remove project" }));
 
-    expectFadedOut(frames, "session-2");
+    expectFadedOut(await framesOf("session-2", gone), "session-2");
   });
 
   it("moves to its place at once, and leaves at once, with reduced motion", async () => {
     const user = await twoSessions("on");
-    const pinning = await framesDuring("session-1", restingInPinned, () =>
-      actOn(user, "Fix the build", /^Pin/),
-    );
+    await actOn(user, "Fix the build", /^Pin/);
+
+    const pinning = await framesOf("session-1", restingInPinned);
     expect(pinning.every(({ y }) => y === 0)).toBe(true);
     expect(
       within(sidebar()).getByRole("heading", { name: "Pinned" }),
@@ -230,9 +200,9 @@ describe("A sidebar row", () => {
     ).toBeVisible();
 
     await user.click(await screen.findByRole("button", { name: "Session actions" }));
-    const archiving = await framesDuring("session-1", gone, async () => {
-      await user.click(await shownItem(/^Archive/));
-    });
+    await user.click(await shownItem(/^Archive/));
+
+    const archiving = await framesOf("session-1", gone);
     expect(archiving.every(({ opacity }) => opacity === 0 || opacity === 1)).toBe(true);
     expect(sessionRow("session-1"), "archived by now").toBeNull();
   });

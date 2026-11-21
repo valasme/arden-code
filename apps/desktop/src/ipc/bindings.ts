@@ -573,9 +573,7 @@ export const commands = {
 /**  The built-in demonstration agent. */
 "demo" | 
 /**  Claude, through the person's own Claude Code (ADR 0038). */
-"claude" | 
-/**  Codex, through the person's own app-server (ADR 0065). */
-"codex" | null) => __TAURI_INVOKE<NewSession>("new_session", { projectId, agent }),
+"claude" | null) => __TAURI_INVOKE<NewSession>("new_session", { projectId, agent }),
 	/**
 	 *  The slash commands and models of the person's Claude Code, as it last said them (ADR 0042):
 	 *  nothing yet before it has been heard. When nothing is known and Claude Code is installed, one
@@ -599,7 +597,7 @@ export const commands = {
 	findFiles: (projectId: string, query: string) => __TAURI_INVOKE<FileMatch[]>("find_files", { projectId, query }),
 	/**
 	 *  What was found about the Claude Code and Codex programs: where they are, which version, and
-	 *  their startup readiness and sign-in state. It changes nothing. What was found is kept; `fresh` looks
+	 *  whether Claude Code is signed in. It changes nothing. What was found is kept; `fresh` looks
 	 *  again, as Look again does.
 	 * 
 	 *  # Errors
@@ -771,14 +769,12 @@ export type AgentCli =
 /**  The Codex program, `codex`. */
 "codex";
 
-/**  Which agent answers in a session, through its own driver. */
+/**  Which agent answers in a session. Codex arrives with its driver. */
 export type AgentKind = 
 /**  The built-in demonstration agent. */
 "demo" | 
 /**  Claude, through the person's own Claude Code (ADR 0038). */
-"claude" | 
-/**  Codex, through the person's own app-server (ADR 0065). */
-"codex";
+"claude";
 
 /**  How Arden Code works with the agents. */
 export type Agents = {
@@ -943,7 +939,6 @@ export type ContextWindow = {
 export type Detection = {
 	cli: AgentCli,
 	installed: boolean,
-	readiness: Readiness,
 	/**  The file that would be started. */
 	path: string | null,
 	/**  Its version, when it could be read. */
@@ -1057,22 +1052,6 @@ export type ErrorCode =
 "ARD-AGT-023" | 
 /**  Arden Code did not run a plugin command: what it names is not one it passes on. */
 "ARD-AGT-024" | 
-/**  Codex was not found on PATH. */
-"ARD-AGT-025" | 
-/**  Codex's own account check reports signed out. */
-"ARD-AGT-026" | 
-/**  The supervised Codex process could not continue. */
-"ARD-AGT-027" | 
-/**  Codex's protocol or confirmed native policy is incompatible. */
-"ARD-AGT-028" | 
-/**  Codex could not complete the turn. */
-"ARD-AGT-029" | 
-/**  The earlier conversation cannot be confirmed or resumed. It is never silently replaced. */
-"ARD-AGT-030" | 
-/**  An authority-bearing request is not supported in the initial read-only integration. */
-"ARD-AGT-031" | 
-/**  An npm entry point has no supported native Codex behind it. */
-"ARD-AGT-032" | 
 /**  Programs cannot be started and supervised on this computer. */
 "ARD-PROC-001" | 
 /**  The update could not be installed. */
@@ -1448,9 +1427,6 @@ export type QuestionState =
 "waiting" | "answered" | 
 /**  No answer is needed any more: the reply stopped, or the agent gave up on asking. */
 "cancelled";
-
-/**  Whether an installation can start the protocol Arden Code needs. Unknown is not signed out. */
-export type Readiness = "missing" | "incompatible" | "signedOut" | "ready" | "unknown";
 
 /**  Whether animations play. */
 export type ReduceMotion = 

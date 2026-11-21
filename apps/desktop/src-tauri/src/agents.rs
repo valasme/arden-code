@@ -7,16 +7,12 @@ use std::time::Duration;
 use arden_agents::claude::driver::ClaudeDriver;
 use arden_agents::claude::launch::{Connection, LaunchError, Launcher, ProgramLauncher, Start};
 use arden_agents::detect::{self, AgentCli, Detection};
-use arden_agents::model::AgentKind;
 use arden_agents::usage::UsageLimits;
 use arden_core::error::{AppError, ErrorCode};
 use arden_process::supervisor::Supervisor;
 use arden_settings::service::SettingsService;
 use tauri::{AppHandle, Manager, State};
 use tauri_specta::Event;
-
-#[cfg(test)]
-mod tests;
 
 /// The supervisor that starts programs for the app, when Windows let it be made.
 pub struct Programs(pub Option<Arc<Supervisor>>);
@@ -126,26 +122,6 @@ impl Detections {
         *self.0.lock().unwrap_or_else(PoisonError::into_inner) = Some(found);
     }
 
-    /// Only the final fallback when there is no inherited or explicitly chosen agent. Preserve
-    /// Claude's existing preference; never prefer an unready Codex over Demo (ADR 0065).
-    pub fn default_agent(&self) -> AgentKind {
-        let found = self.kept().unwrap_or_default();
-        if found
-            .iter()
-            .any(|agent| agent.cli == AgentCli::Claude && agent.installed)
-        {
-            AgentKind::Claude
-        } else if found.iter().any(|agent| {
-            agent.cli == AgentCli::Codex
-                && agent.installed
-                && agent.readiness == detect::Readiness::Ready
-        }) {
-            AgentKind::Codex
-        } else {
-            AgentKind::Demo
-        }
-    }
-
     /// Whether Claude Code was found, the last time the agent programs were looked for.
     pub fn claude_installed(&self) -> bool {
         self.kept()
@@ -197,7 +173,7 @@ pub fn detect_after_start(app: &AppHandle) {
 }
 
 /// What was found about the Claude Code and Codex programs: where they are, which version, and
-/// their startup readiness and sign-in state. It changes nothing. What was found is kept; `fresh` looks
+/// whether Claude Code is signed in. It changes nothing. What was found is kept; `fresh` looks
 /// again, as Look again does.
 ///
 /// # Errors

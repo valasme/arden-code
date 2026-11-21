@@ -31,7 +31,6 @@ fn store_in(folder: &Path, driver: &Arc<ClaudeDriver>) -> SessionStore {
         Agents {
             demo: Arc::new(DemoDriver::instant()),
             claude: driver.clone(),
-            codex: Arc::new(DemoDriver::instant()),
         },
     )
 }

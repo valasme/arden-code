@@ -38,7 +38,7 @@ pub enum StoreError {
     NotEmpty,
     /// The approval request that was answered no longer waits for an answer.
     NotWaiting,
-    /// A local agent was asked to work in a project whose folder has not been trusted (ADRs 0039, 0065).
+    /// Claude was asked to work in a project whose folder the person has not trusted (ADR 0039).
     NotTrusted,
     /// Bypass permissions was chosen while the setting that allows it is off (ADR 0044).
     BypassNotAllowed,
@@ -103,17 +103,6 @@ struct Entry {
 }
 
 impl Entry {
-    /// A missing conversation must not erase earlier visible agent work on a later send.
-    fn has_reply_history(&self, current_turn: &str) -> bool {
-        self.session.turns.iter().any(|previous| {
-            previous.id != current_turn
-                && previous
-                    .items
-                    .iter()
-                    .any(|item| !matches!(item, Item::Error { .. }))
-        })
-    }
-
     /// The session without its turns: what the file keeps of it, apart from them. The turns are not
     /// copied, however many there are.
     fn header(&self) -> Session {
@@ -268,9 +257,14 @@ impl Inner {
         &self,
         project_id: &str,
         agent: Option<AgentKind>,
-        fallback: AgentKind,
+        claude_installed: bool,
     ) -> NewSession {
         let source = self.latest_for(project_id);
+        let fallback = if claude_installed {
+            AgentKind::Claude
+        } else {
+            AgentKind::Demo
+        };
         let agent = agent
             .or_else(|| source.map(|entry| entry.session.agent))
             .unwrap_or(fallback);
@@ -1039,8 +1033,8 @@ impl SessionStore {
     }
 
     /// What a new session in a project starts with (ADR 0039). Its agent is the one given, else
-    /// that of the project's latest session, else of the latest session anywhere, else the available
-    /// fallback supplied by discovery (Claude, ready Codex, then Demo). Model, effort and permission mode are that
+    /// that of the project's latest session, else of the latest session anywhere, else Claude when
+    /// Claude Code is installed, else the Demo agent. Its model, effort and permission mode are that
     /// session's when it has the same agent, else Default, Default and Manual (ADR 0041), and never
     /// Bypass permissions (ADR 0044).
     #[must_use]
@@ -1048,9 +1042,9 @@ impl SessionStore {
         &self,
         project_id: &str,
         agent: Option<AgentKind>,
-        fallback: AgentKind,
+        claude_installed: bool,
     ) -> NewSession {
-        self.lock().new_session(project_id, agent, fallback)
+        self.lock().new_session(project_id, agent, claude_installed)
     }
 
     /// Changes the model of a session (ADR 0041), also after its first message. The agent takes it
@@ -1308,7 +1302,7 @@ impl SessionStore {
         let trusted = projects
             .iter()
             .any(|project| project.id == entry.session.project_id && project.trusted);
-        if entry.session.agent != AgentKind::Demo && !trusted {
+        if entry.session.agent == AgentKind::Claude && !trusted {
             return Err(StoreError::NotTrusted);
         }
         if entry
@@ -1639,7 +1633,7 @@ impl SessionStore {
         let mut ended = false;
         let mut saved = Ok(());
         let (sender, controls) = mpsc::channel();
-        let (agent, folder, conversation, choices, permission_mode, names, has_reply_history) = {
+        let (agent, folder, conversation, choices, permission_mode, names) = {
             let mut inner = self.lock();
             let entry = inner
                 .sessions
@@ -1672,7 +1666,6 @@ impl SessionStore {
                     entry.session.turns.first().map(|first| &first.id) == Some(&turn.id)
                         && entry.session.title == title_of(&turn.prompt)
                 }),
-                entry.is_some_and(|entry| entry.has_reply_history(&turn.id)),
             );
             inner.controls.insert(turn.id.clone(), sender);
             chosen
@@ -1688,7 +1681,6 @@ impl SessionStore {
             prompt: &turn.prompt,
             folder: &folder,
             conversation: conversation.as_deref(),
-            has_reply_history,
             choices,
             permission_mode,
             names,
@@ -1766,7 +1758,6 @@ mod tests {
         Agents {
             demo: Arc::new(DemoDriver::instant()),
             claude: Arc::new(Recording::default()),
-            codex: Arc::new(Recording::default()),
         }
     }
 
@@ -1774,11 +1765,7 @@ mod tests {
     fn store_with(demo: Arc<dyn AgentDriver>, claude: Arc<dyn AgentDriver>) -> SessionStore {
         SessionStore::new(
             vec![playground::describe(Path::new(r"C:\Playground"))],
-            Agents {
-                demo,
-                claude,
-                codex: Arc::new(DemoDriver::instant()),
-            },
+            Agents { demo, claude },
         )
     }
 
@@ -2451,50 +2438,10 @@ mod tests {
     }
 
     #[test]
-    fn codex_can_be_the_available_fallback_but_never_overrides_session_inheritance() {
-        let store = store();
-        assert_eq!(
-            store
-                .new_session(playground::PLAYGROUND_ID, None, AgentKind::Codex)
-                .agent,
-            AgentKind::Codex
-        );
-        store
-            .create_session(playground::PLAYGROUND_ID, AgentKind::Demo.into())
-            .expect("a chosen agent");
-        assert_eq!(
-            store
-                .new_session(playground::PLAYGROUND_ID, None, AgentKind::Codex)
-                .agent,
-            AgentKind::Demo
-        );
-        assert_eq!(
-            store
-                .new_session(
-                    playground::PLAYGROUND_ID,
-                    Some(AgentKind::Codex),
-                    AgentKind::Claude
-                )
-                .agent,
-            AgentKind::Codex
-        );
-    }
-
-    #[test]
     fn a_new_session_takes_the_agent_of_its_projects_latest_session_else_the_latest_anywhere() {
         let store = store();
         let agent = |project: &str, claude_installed| {
-            store
-                .new_session(
-                    project,
-                    None,
-                    if claude_installed {
-                        AgentKind::Claude
-                    } else {
-                        AgentKind::Demo
-                    },
-                )
-                .agent
+            store.new_session(project, None, claude_installed).agent
         };
         assert_eq!(
             agent(playground::PLAYGROUND_ID, true),
@@ -3867,7 +3814,7 @@ mod tests {
             let next = store
                 .create_session(
                     playground::PLAYGROUND_ID,
-                    store.new_session(playground::PLAYGROUND_ID, None, AgentKind::Claude),
+                    store.new_session(playground::PLAYGROUND_ID, None, true),
                 )
                 .expect("a session");
             let linked = store.create_linked_session(&first.id).expect("linked");
@@ -4039,20 +3986,16 @@ mod tests {
             permission_mode: PermissionMode::Plan,
         };
         assert_eq!(
-            store.new_session(playground::PLAYGROUND_ID, None, AgentKind::Demo),
+            store.new_session(playground::PLAYGROUND_ID, None, false),
             inherited
         );
         assert_eq!(
-            store.new_session(&project.id, Some(AgentKind::Claude), AgentKind::Demo),
+            store.new_session(&project.id, Some(AgentKind::Claude), false),
             inherited,
             "from the latest session anywhere, when it has the agent asked for"
         );
         assert_eq!(
-            store.new_session(
-                playground::PLAYGROUND_ID,
-                Some(AgentKind::Demo),
-                AgentKind::Claude
-            ),
+            store.new_session(playground::PLAYGROUND_ID, Some(AgentKind::Demo), true),
             NewSession::from(AgentKind::Demo),
             "another agent starts on its Default, in Manual"
         );
@@ -4254,14 +4197,14 @@ mod tests {
 
         let mode = || {
             store
-                .new_session(playground::PLAYGROUND_ID, None, AgentKind::Claude)
+                .new_session(playground::PLAYGROUND_ID, None, true)
                 .permission_mode
         };
         assert_eq!(mode(), PermissionMode::Plan);
         let second = store
             .create_session(
                 playground::PLAYGROUND_ID,
-                store.new_session(playground::PLAYGROUND_ID, None, AgentKind::Claude),
+                store.new_session(playground::PLAYGROUND_ID, None, true),
             )
             .expect("a later session");
         assert_eq!(
