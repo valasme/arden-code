@@ -961,7 +961,7 @@
   },
   {
     "name": "async-executor",
-    "version": "1.14.0",
+    "version": "1.14.1",
     "license": "Apache-2.0 OR MIT",
     "kind": "crate"
   },
@@ -1374,6 +1374,12 @@
     "kind": "npm"
   },
   {
+    "name": "constant_time_eq",
+    "version": "0.6.2",
+    "license": "CC0-1.0 OR MIT-0 OR Apache-2.0",
+    "kind": "crate"
+  },
+  {
     "name": "content-disposition",
     "version": "1.1.0",
     "license": "MIT",
@@ -1405,7 +1411,7 @@
   },
   {
     "name": "cookie",
-    "version": "0.18.2",
+    "version": "0.18.3",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
@@ -2065,7 +2071,7 @@
   },
   {
     "name": "form_urlencoded",
-    "version": "1.2.2",
+    "version": "1.2.3",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
@@ -3043,7 +3049,7 @@
   },
   {
     "name": "libsqlite3-sys",
-    "version": "0.38.2",
+    "version": "0.39.1",
     "license": "MIT",
     "kind": "crate"
   },
@@ -4369,7 +4375,7 @@
   },
   {
     "name": "rusqlite",
-    "version": "0.40.2",
+    "version": "0.41.1",
     "license": "MIT",
     "kind": "crate"
   },
@@ -5329,7 +5335,7 @@
   },
   {
     "name": "typed-path",
-    "version": "0.12.3",
+    "version": "0.13.0",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
@@ -5437,7 +5443,7 @@
   },
   {
     "name": "url",
-    "version": "2.5.8",
+    "version": "2.5.9",
     "license": "MIT OR Apache-2.0",
     "kind": "crate"
   },
@@ -5880,6 +5886,12 @@
     "kind": "crate"
   },
   {
+    "name": "zeroize_derive",
+    "version": "1.5.0",
+    "license": "Apache-2.0 OR MIT",
+    "kind": "crate"
+  },
+  {
     "name": "zerotrie",
     "version": "0.2.5",
     "license": "Unicode-3.0",
@@ -5899,7 +5911,7 @@
   },
   {
     "name": "zip",
-    "version": "9.0.3",
+    "version": "9.8.2",
     "license": "MIT",
     "kind": "crate"
   },
