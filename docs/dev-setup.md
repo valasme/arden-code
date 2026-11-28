@@ -117,7 +117,7 @@ The root scripts work the same. A few things differ:
   Tauri's, then run it; without a desktop, wrap it in a virtual X server:
 
   ```sh
-  sudo apt-get install webkit2gtk-driver xvfb
+  sudo apt-get install webkitgtk-webdriver xvfb           # webkit2gtk-driver before Ubuntu 26.04
   cargo install tauri-driver --version 2.1.0 --locked
   pnpm test:e2e:linux                                    # on a desktop
   xvfb-run dbus-run-session -- pnpm test:e2e:linux       # without one
